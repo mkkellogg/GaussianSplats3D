@@ -30,6 +30,7 @@ export class PlyLoader {
             const parsedData = plyParser.parse();
             console.log(parsedData);
         });
+        return loadPromise;
     }
 
 }
