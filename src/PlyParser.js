@@ -1,12 +1,11 @@
 export class PlyParser {
 
-    constructor(data) {
-        this.data = data
+    constructor(plyBuffer) {
+        this.plyBuffer = plyBuffer
     }
 
     parseToSplatBuffer(){
-        const inputBuffer = this.data;
-        const ubuf = new Uint8Array(inputBuffer);
+        const ubuf = new Uint8Array(this.plyBuffer);
 		// 10KB ought to be enough for a header...
 		const header = new TextDecoder().decode(ubuf.slice(0, 1024 * 10));
 		const header_end = "end_header\n";
@@ -40,7 +39,7 @@ export class PlyParser {
 		console.log("Bytes per row", row_offset, types, offsets);
 
 		let dataView = new DataView(
-			inputBuffer,
+			plyBuffer,
 			header_end_index + header_end.length,
 		);
 		let row = 0;
