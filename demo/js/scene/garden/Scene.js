@@ -13,6 +13,9 @@ export class Scene {
         plyLoader.load('assets/data/garden.splat')
         .then((data) => {
             
-        });
+        })
+        .catch((err) => {
+            console.err(err);
+        })
     }
 }
