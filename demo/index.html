@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>3D Gaussian Splat Viewer Examples</title>
+  <script>
+
+    function openDemo(demoName) {
+      window.location = demoName + '.html';
+    }
+
+  </script>
+  <style>
+
+    .body {
+      background-color: #c8d0de;
+      height: 100vh;
+    }
+
+    .table-of-contents-container {
+      height: 100%;
+      width: 100%;
+      text-align: center;
+      margin: auto;
+    }
+
+    .table-of-contents-inner-container {
+      text-align: center;
+      margin: 0;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 1175px;
+      border-radius: 5px;
+      border: #a8b0bd 1px solid;
+      background-color: #e6eefc;
+      box-shadow: 5px 5px 10px #888888;
+    }
+
+    .table-of-contents {
+      padding-left: 20px;
+      padding-right: 20px;
+      padding-top: 10px;
+      padding-bottom: 10px;
+      display: flex;
+      flex-direction: row;
+      flex-wrap:wrap;
+      text-align: center;
+    }
+
+    .table-of-contents-entry {
+      margin-top: 10px;
+      margin-bottom: 10px;
+      padding: 10px;
+      color: #111111;
+      font-size: 14pt;
+      font-weight: bold;
+      font-family: arial;
+      border-radius: 5px;
+      border: #bbbbbb 1px solid;
+      background-color: #eeeeee;
+      width: 340px;
+      margin-left: 8px;
+      margin-right: 8px;
+    }
+
+    .table-of-contents-entry:hover {
+      color: #333333;
+      border-color: #8a9ba8;
+      background-color: #c7def0;
+      cursor: pointer;
+    }
+
+    .table-of-contents-entry-image {
+      width: 330px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+    }
+
+    @media (max-width: 1100px){
+
+      .table-of-contents-inner-container {
+        width: 800px;
+      }
+
+    }
+
+    @media (max-width: 800px){
+
+      .table-of-contents-inner-container {
+        width: 400px;
+        top: 0%;
+        left: 50%;
+        transform: translate(-50%, 0%);
+      }
+
+      .table-of-contents {
+        padding-left: 15px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+      }
+
+    }
+
+  </style>
+</head>
+
+<body class="body">
+  <div class="table-of-contents-container">
+    <div class="table-of-contents-inner-container">
+      <div class="table-of-contents">
+        <div class="table-of-contents-entry" onclick="openDemo('graveyardtorch')">
+          <img src="assets/images/graveyardtorch.png" class="table-of-contents-entry-image">
+          Example 1
+        </div>
+        <div class="table-of-contents-entry" onclick="openDemo('flamethrowers')">
+          <img src="assets/images/flamethrowers.png" class="table-of-contents-entry-image">
+         Example 2
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

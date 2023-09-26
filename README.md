@@ -1,1 +1,1 @@
-# 3D Gaussian splat view for for Three.js
+# 3D Gaussian splat viewer for for Three.js
