@@ -3,6 +3,7 @@ import { PlyParser } from './PlyParser.js';
 export class PlyLoader {
 
     constructor() {
+        this.splatBuffer = null;
     }
 
     fetchFile(fileName){
@@ -23,14 +24,20 @@ export class PlyLoader {
         });
     }
 
-    load(fileName){
-        const loadPromise = this.fetchFile(fileName);
-        loadPromise.then((fileData) => {
-            const plyParser = new PlyParser(fileData);
-            const parsedData = plyParser.parse();
-            console.log(parsedData);
+    loadFromFile(fileName){
+        return new Promise((resolve, reject) => {
+            const loadPromise = this.fetchFile(fileName);
+            loadPromise
+            .then((plyFileData) => {
+                const plyParser = new PlyParser(plyFileData);
+                const splatBuffer = plyParser.parseToSplatBuffer();
+                this.splatBuffer = splatBuffer;
+                resolve(splatBuffer);                
+            })
+            .catch((err) => {
+                reject(err);
+            });
         });
-        return loadPromise;
     }
 
 }

@@ -9,13 +9,10 @@ export class Scene {
     }
 
     load() {
-        const plyLoader = new GaussianSplat3D.PlyLoader();
-        plyLoader.load('assets/data/garden.splat')
-        .then((data) => {
-            
-        })
-        .catch((err) => {
-            console.err(err);
-        })
+        const viewer = new GaussianSplat3D.Viewer();
+        viewer.loadFile('assets/data/truck/truck.splat')
+        .then(() => {
+            viewer.start();
+        });
     }
 }

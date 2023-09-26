@@ -4,7 +4,7 @@ export class PlyParser {
         this.data = data
     }
 
-    parse(){
+    parseToSplatBuffer(){
         const inputBuffer = this.data;
         const ubuf = new Uint8Array(inputBuffer);
 		// 10KB ought to be enough for a header...
