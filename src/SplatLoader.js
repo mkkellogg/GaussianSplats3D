@@ -1,3 +1,5 @@
+import { SplatBuffer } from './SplatBuffer.js';
+
 export class SplatLoader {
 
     constructor(splatBuffer = null) {
@@ -9,13 +11,11 @@ export class SplatLoader {
         return new Promise((resolve, reject) => {
             fetch(fileName)
             .then((res) => {
-                res.arrayBuffer()
-                .then((data) => {
-                    resolve(data);
-                })
-                .catch((err) => {
-                    reject(err);
-                });
+                return res.arrayBuffer()
+            })
+            .then((bufferData) => {
+                const splatBuffer = new SplatBuffer(bufferData);
+                resolve(splatBuffer);
             })
             .catch((err) => {
                 reject(err);
@@ -28,7 +28,7 @@ export class SplatLoader {
     }
 
     saveToFile(fileName) {
-        const splatData = new Uint8Array(this.splatBuffer);
+        const splatData = new Uint8Array(this.splatBuffer.getBufferData());
         const blob = new Blob([splatData.buffer], {
             type: "application/octet-stream",
         });

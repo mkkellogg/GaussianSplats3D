@@ -1,3 +1,5 @@
+import { SplatBuffer } from './SplatBuffer.js';
+
 export class PlyParser {
 
     constructor(plyBuffer) {
@@ -148,6 +150,6 @@ export class PlyParser {
 			}
 		}
 		console.timeEnd("build buffer");
-		return buffer;
+		return new SplatBuffer(buffer);
     }
 }

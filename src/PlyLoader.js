@@ -10,13 +10,10 @@ export class PlyLoader {
         return new Promise((resolve, reject) => {
             fetch(fileName)
             .then((res) => {
-                res.arrayBuffer()
-                .then((data) => {
-                    resolve(data);
-                })
-                .catch((err) => {
-                    reject(err);
-                });
+                return res.arrayBuffer()
+            })
+            .then((data) => {
+                resolve(data);
             })
             .catch((err) => {
                 reject(err);
