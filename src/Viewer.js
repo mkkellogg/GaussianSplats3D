@@ -3,6 +3,172 @@ import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
 
+
+function createWorker(self) {
+	let buffer;
+	let vertexCount = 0;
+	let viewProj;
+	// 6*4 + 4 + 4 = 8*4
+	// XYZ - Position (Float32)
+	// XYZ - Scale (Float32)
+	// RGBA - colors (uint8)
+	// IJKL - quaternion/rot (uint8)
+	const rowLength = 3 * 4 + 3 * 4 + 4 + 4;
+	let depthMix = new BigInt64Array();
+	let lastProj = [];
+
+	const runSort = (viewProj) => {
+
+		if (!buffer) return;
+
+		const f_buffer = new Float32Array(buffer);
+		const u_buffer = new Uint8Array(buffer);
+
+		const covA = new Float32Array(3 * vertexCount);
+		const covB = new Float32Array(3 * vertexCount);
+
+		const center = new Float32Array(3 * vertexCount);
+		const color = new Float32Array(4 * vertexCount);
+
+		if (depthMix.length !== vertexCount) {
+			depthMix = new BigInt64Array(vertexCount);
+			const indexMix = new Uint32Array(depthMix.buffer);
+			for (let j = 0; j < vertexCount; j++) {
+				indexMix[2 * j] = j;
+			}
+		} else {
+			let dot =
+				lastProj[2] * viewProj[2] +
+				lastProj[6] * viewProj[6] +
+				lastProj[10] * viewProj[10];
+			if (Math.abs(dot - 1) < 0.01) {
+				return;
+			}
+		}
+		// console.time("sort");
+
+		const floatMix = new Float32Array(depthMix.buffer);
+		const indexMix = new Uint32Array(depthMix.buffer);
+
+		for (let j = 0; j < vertexCount; j++) {
+			let i = indexMix[2 * j];
+			floatMix[2 * j + 1] =
+				10000 +
+				viewProj[2] * f_buffer[8 * i + 0] +
+				viewProj[6] * f_buffer[8 * i + 1] +
+				viewProj[10] * f_buffer[8 * i + 2];
+		}
+
+		lastProj = viewProj;
+
+		depthMix.sort();
+
+		for (let j = 0; j < vertexCount; j++) {
+			const i = indexMix[2 * j];
+
+			center[3 * j + 0] = f_buffer[8 * i + 0];
+			center[3 * j + 1] = f_buffer[8 * i + 1];
+			center[3 * j + 2] = f_buffer[8 * i + 2];
+
+			color[4 * j + 0] = u_buffer[32 * i + 24 + 0] / 255;
+			color[4 * j + 1] = u_buffer[32 * i + 24 + 1] / 255;
+			color[4 * j + 2] = u_buffer[32 * i + 24 + 2] / 255;
+			color[4 * j + 3] = u_buffer[32 * i + 24 + 3] / 255;
+
+			let scale = [
+				f_buffer[8 * i + 3 + 0],
+				f_buffer[8 * i + 3 + 1],
+				f_buffer[8 * i + 3 + 2],
+			];
+			let rot = [
+				(u_buffer[32 * i + 28 + 0] - 128) / 128,
+				(u_buffer[32 * i + 28 + 1] - 128) / 128,
+				(u_buffer[32 * i + 28 + 2] - 128) / 128,
+				(u_buffer[32 * i + 28 + 3] - 128) / 128,
+			];
+
+			const R = [
+				1.0 - 2.0 * (rot[2] * rot[2] + rot[3] * rot[3]),
+				2.0 * (rot[1] * rot[2] + rot[0] * rot[3]),
+				2.0 * (rot[1] * rot[3] - rot[0] * rot[2]),
+
+				2.0 * (rot[1] * rot[2] - rot[0] * rot[3]),
+				1.0 - 2.0 * (rot[1] * rot[1] + rot[3] * rot[3]),
+				2.0 * (rot[2] * rot[3] + rot[0] * rot[1]),
+
+				2.0 * (rot[1] * rot[3] + rot[0] * rot[2]),
+				2.0 * (rot[2] * rot[3] - rot[0] * rot[1]),
+				1.0 - 2.0 * (rot[1] * rot[1] + rot[2] * rot[2]),
+			];
+
+			// Compute the matrix product of S and R (M = S * R)
+			const M = [
+				scale[0] * R[0],
+				scale[0] * R[1],
+				scale[0] * R[2],
+				scale[1] * R[3],
+				scale[1] * R[4],
+				scale[1] * R[5],
+				scale[2] * R[6],
+				scale[2] * R[7],
+				scale[2] * R[8],
+			];
+
+			covA[3 * j + 0] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
+			covA[3 * j + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
+			covA[3 * j + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
+			covB[3 * j + 0] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
+			covB[3 * j + 1] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
+			covB[3 * j + 2] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
+		}
+
+		self.postMessage({ covA, center, color, covB, viewProj }, [
+			covA.buffer,
+			center.buffer,
+			color.buffer,
+			covB.buffer,
+		]);
+
+		// console.timeEnd("sort");
+	};
+
+	const throttledSort = () => {
+		if (!sortRunning) {
+			sortRunning = true;
+			let lastView = viewProj;
+			runSort(lastView);
+			setTimeout(() => {
+				sortRunning = false;
+				if (lastView !== viewProj) {
+					throttledSort();
+				}
+			}, 0);
+		}
+	};
+
+	let sortRunning;
+	self.onmessage = (e) => {
+		/*if (e.data.ply) {
+			vertexCount = 0;
+			runSort(viewProj);
+			buffer = processPlyBuffer(e.data.ply);
+			vertexCount = Math.floor(buffer.byteLength / rowLength);
+			postMessage({ buffer: buffer });
+		} else*/
+
+        if (e.data.buffer) {
+			buffer = e.data.buffer;
+			vertexCount = e.data.vertexCount;
+		} else if (e.data.vertexCount) {
+			vertexCount = e.data.vertexCount;
+		} else if (e.data.view) {
+			viewProj = e.data.view;
+			throttledSort();
+		}
+
+	};
+}
+
 export class Viewer {
 
     constructor(rootElement = null, controls = null, selfDrivenMode = true) {
@@ -16,6 +182,7 @@ export class Viewer {
         this.splatMesh = null;
         this.selfDrivenUpdateFunc = this.update.bind(this);
         this.resizeFunc = this.onResize.bind(this);
+        this.worker = null;
     }
 
     onResize() {
@@ -61,6 +228,43 @@ export class Viewer {
         window.addEventListener('resize', this.resizeFunc, false);
     
         this.rootElement.appendChild(this.renderer.domElement);
+
+        this.worker = new Worker(
+            URL.createObjectURL(
+                new Blob(["(", createWorker.toString(), ")(self)"], {
+                    type: "application/javascript",
+                }),
+            ),
+        );
+
+        let lastData, lastProj;
+        this.worker.onmessage = (e) => {
+            if (e.data.buffer) {
+
+            } else {
+                let { covA, covB, center, color, viewProj } = e.data;
+                lastData = e.data;
+    
+                lastProj = viewProj;
+                const vertexCount = center.length / 3;
+
+                const geometry  = this.splatMesh.geometry;
+
+
+    
+    /*            gl.bindBuffer(gl.ARRAY_BUFFER, centerBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, center, gl.DYNAMIC_DRAW);
+    
+                gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, color, gl.DYNAMIC_DRAW);
+    
+                gl.bindBuffer(gl.ARRAY_BUFFER, covABuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, covA, gl.DYNAMIC_DRAW);
+    
+                gl.bindBuffer(gl.ARRAY_BUFFER, covBBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, covB, gl.DYNAMIC_DRAW);*/
+            }
+        };
     }
 
     loadFile(fileName) {
@@ -106,6 +310,8 @@ export class Viewer {
             this.scene.add(sphereMesh);
             sphereMesh.position.set(0, 0, 50);
 
+            this.updateWorkerBuffer();
+
         });
     }
 
@@ -122,8 +328,32 @@ export class Viewer {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.controls.update();
+        this.updateView();
         this.renderer.render(this.scene, this.camera);
     }
+
+    updateView = function () {
+
+        const tempMatrix = new THREE.Matrix4();
+
+        return function () {
+            tempMatrix.copy(this.camera.matrixWorld).invert();
+            tempMatrix.premultiply(this.camera.projectionMatrix);
+            this.worker.postMessage({view: tempMatrix.elements});
+        };
+
+    }();
+
+    updateWorkerBuffer = function () {
+
+        return function () {
+            this.worker.postMessage({
+                buffer: this.splatBuffer.getBufferData(),
+                vertexCount: this.splatBuffer.getVertexCount()
+            });
+        };
+
+    }();
 
     buildMaterial(useLogarithmicDepth) {
 
