@@ -250,6 +250,37 @@ export class Viewer {
 
                 const geometry  = this.splatMesh.geometry;
 
+                geometry.attributes.splatCenter.set(center);
+                geometry.attributes.splatCenter.needsUpdate = true;
+
+                geometry.attributes.splatColor.set(color);
+                geometry.attributes.splatColor.needsUpdate = true;
+
+                geometry.attributes.splatCovarianceX.set(covA);
+                geometry.attributes.splatCovarianceX.needsUpdate = true;
+
+                geometry.attributes.splatCovarianceY.set(covB);
+                geometry.attributes.splatCovarianceY.needsUpdate = true;
+
+                this.splatMesh.material.uniforms.focal.value.set(1164.6601287484507, 1159.5880733038064);
+                this.splatMesh.material.uniforms.viewport.value.set(this.rootElement.offsetWidth, this.rootElement.offsetHeight);
+                this.splatMesh.material.uniformsNeedUpdate = true;
+
+                /*
+                fy: 1164.6601287484507,
+                fx: 1159.5880733038064,
+                */
+
+                /*// viewport
+                const u_viewport = gl.getUniformLocation(program, "viewport");
+                gl.uniform2fv(u_viewport, new Float32Array([canvas.width, canvas.height]));
+
+                // focal
+                const u_focal = gl.getUniformLocation(program, "focal");
+                gl.uniform2fv(
+                    u_focal,
+                    new Float32Array([camera.fx / downsample, camera.fy / downsample]),
+                );*/
 
     
     /*            gl.bindBuffer(gl.ARRAY_BUFFER, centerBuffer);
@@ -263,6 +294,8 @@ export class Viewer {
     
                 gl.bindBuffer(gl.ARRAY_BUFFER, covBBuffer);
                 gl.bufferData(gl.ARRAY_BUFFER, covB, gl.DYNAMIC_DRAW);*/
+
+                geometry.instanceCount = vertexCount;
             }
         };
     }
@@ -329,6 +362,7 @@ export class Viewer {
         }
         this.controls.update();
         this.updateView();
+        this.renderer.autoClear = false;
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -510,23 +544,23 @@ export class Viewer {
 
         const geometry  = new THREE.InstancedBufferGeometry().copy(baseGeometry);
 
-        const splatCentersArray = new Float32Array(splatBuffer.getVertexCount());
-        const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 2, false);
+        const splatCentersArray = new Float32Array(splatBuffer.getVertexCount() * 3);
+        const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 3, false);
         splatCenters.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatCenter', splatCenters);
 
-        const splatColorsArray = new Float32Array(splatBuffer.getVertexCount());
+        const splatColorsArray = new Float32Array(splatBuffer.getVertexCount() * 4);
         const splatColors = new THREE.InstancedBufferAttribute(splatColorsArray, 4, false);
         splatColors.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatColor', splatColors);
 
-        const splatCovariancesXArray = new Float32Array(splatBuffer.getVertexCount());
-        const splatCovariancesX = new THREE.InstancedBufferAttribute(splatCovariancesXArray, 1, false);
+        const splatCovariancesXArray = new Float32Array(splatBuffer.getVertexCount() * 3);
+        const splatCovariancesX = new THREE.InstancedBufferAttribute(splatCovariancesXArray, 3, false);
         splatCovariancesX.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatCovarianceX', splatCovariancesX);
 
-        const splatCovariancesYArray = new Float32Array(splatBuffer.getVertexCount());
-        const splatCovariancesY = new THREE.InstancedBufferAttribute(splatCovariancesYArray, 1, false);
+        const splatCovariancesYArray = new Float32Array(splatBuffer.getVertexCount() * 3);
+        const splatCovariancesY = new THREE.InstancedBufferAttribute(splatCovariancesYArray, 3, false);
         splatCovariancesY.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatCovarianceY', splatCovariancesY);
 

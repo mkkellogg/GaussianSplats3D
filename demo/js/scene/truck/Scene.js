@@ -8,7 +8,7 @@ export class Scene {
     load() {
         const viewer = new GaussianSplat3D.Viewer();
         viewer.init();
-        viewer.loadFile('assets/data/truck/truck.splat')
+        viewer.loadFile('assets/data/garden.splat')
         .then(() => {
             viewer.start();
         });
