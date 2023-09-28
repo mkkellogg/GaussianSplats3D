@@ -58,16 +58,16 @@ function createWorker(self) {
 		for (let j = 0; j < vertexCount; j++) {
 			const i = indexMix[2 * j];
 
-			centerCov[9 * j + 0] = f_buffer[8 * i + 0]; 
+			centerCov[9 * j] = f_buffer[8 * i]; 
 			centerCov[9 * j + 1] = f_buffer[8 * i + 1]; 
 			centerCov[9 * j + 2] = f_buffer[8 * i + 2];
 
-			color[4 * j + 0] = u_buffer[32 * i + 24 + 0] / 255;
+			color[4 * j] = u_buffer[32 * i + 24] / 255;
 			color[4 * j + 1] = u_buffer[32 * i + 24 + 1] / 255;
 			color[4 * j + 2] = u_buffer[32 * i + 24 + 2] / 255;
 			color[4 * j + 3] = u_buffer[32 * i + 24 + 3] / 255;
 
-            centerCov[9 * j + 3 + 0] = pc_buffer[6 * i + 0]; 
+            centerCov[9 * j + 3] = pc_buffer[6 * i]; 
 			centerCov[9 * j + 3 + 1] = pc_buffer[6 * i + 1]; 
 			centerCov[9 * j + 3 + 2] = pc_buffer[6 * i + 2]; 
 			centerCov[9 * j + 6 + 0] = pc_buffer[6 * i + 3]; 
@@ -75,7 +75,7 @@ function createWorker(self) {
 			centerCov[9 * j + 6 + 2] = pc_buffer[6 * i + 5]; 
 		}
 
-		self.postMessage({ color, centerCov, viewProj }, [
+		self.postMessage({color, centerCov, viewProj}, [
 			color.buffer,
 			centerCov.buffer,
 		]);
@@ -118,9 +118,11 @@ const DEFAULT_CAMERA_SPECS = {
 
 export class Viewer {
 
-    constructor(rootElement = null, cameraUp = [0, 1, 0], cameraSpecs = null, controls = null, selfDrivenMode = true) {
+    constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0], cameraSpecs = null, controls = null, selfDrivenMode = true) {
         this.rootElement = rootElement;
         this.cameraUp = new THREE.Vector3().fromArray(cameraUp);
+        this.initialCameraPos = new THREE.Vector3().fromArray(initialCameraPos);
+        this.initialCameraLookAt = new THREE.Vector3().fromArray(initialCameraLookAt);
         this.cameraSpecs = cameraSpecs || DEFAULT_CAMERA_SPECS;
         this.controls = controls;
         this.selfDrivenMode = selfDrivenMode;
@@ -176,7 +178,8 @@ export class Viewer {
         this.getRenderDimensions(renderDimensions);
 
         this.camera = new THREE.PerspectiveCamera(70, renderDimensions.x / renderDimensions.y, 0.1, 500);
-        this.camera.position.set(0, 10, 15);
+        this.camera.position.copy(this.initialCameraPos);
+        this.camera.lookAt(this.initialCameraLookAt);
         this.camera.up.copy(this.cameraUp).normalize();
         this.updateRealProjectionMatrix(renderDimensions);
     
@@ -194,6 +197,7 @@ export class Viewer {
             this.controls.maxPolarAngle = (0.9 * Math.PI) / 2;
             this.controls.enableDamping = true;
             this.controls.dampingFactor = 0.15;
+            this.controls.target.copy(this.initialCameraLookAt);
         }
     
         window.addEventListener('resize', this.resizeFunc, false);
@@ -263,28 +267,29 @@ export class Viewer {
             this.splatMesh = this.buildMesh(this.splatBuffer);
             this.splatMesh.frustumCulled = false;
             this.scene.add(this.splatMesh);
-
-            const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-
-            let sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
-            this.scene.add(sphereMesh);
-            sphereMesh.position.set(-50, 0, 0);
-
-            sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
-            this.scene.add(sphereMesh);
-            sphereMesh.position.set(50, 0, 0);
-
-            sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
-            this.scene.add(sphereMesh);
-            sphereMesh.position.set(0, 0, -50);
-
-            sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
-            this.scene.add(sphereMesh);
-            sphereMesh.position.set(0, 0, 50);
-
             this.updateWorkerBuffer();
 
         });
+    }
+
+    addDebugMeshesToScene() {
+        const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+
+        let sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
+        this.scene.add(sphereMesh);
+        sphereMesh.position.set(-50, 0, 0);
+
+        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
+        this.scene.add(sphereMesh);
+        sphereMesh.position.set(50, 0, 0);
+
+        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
+        this.scene.add(sphereMesh);
+        sphereMesh.position.set(0, 0, -50);
+
+        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
+        this.scene.add(sphereMesh);
+        sphereMesh.position.set(0, 0, 50);
     }
 
     start() {
