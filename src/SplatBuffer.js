@@ -7,18 +7,18 @@ export class SplatBuffer {
     // RGBA - colors (uint8)
     // IJKL - quaternion/rot (uint8)
     static RowSize = 32;
-    static CovariancePositionSizeFloat = 9;
-    static CovariancePositionSizeBytes = 36;
+    static CenterCovarianceSizeFloat = 9;
+    static CenterCovarianceSizeBytes = 36;
 
     constructor(bufferData) {
         this.bufferData = bufferData;
-        this.covariancePositionBuffer = null;
+        this.centerCovarianceBuffer = null;
     }
 
     initPreComputedBuffers(){
         const vertexCount = this.getVertexCount();
-        this.covariancePositionBuffer = new ArrayBuffer(SplatBuffer.CovariancePositionSizeBytes * vertexCount);
-        const covariancePositionArray = new Float32Array(this.covariancePositionBuffer);
+        this.centerCovarianceBuffer = new ArrayBuffer(SplatBuffer.CenterCovarianceSizeBytes * vertexCount);
+        const centerCovarianceArray = new Float32Array(this.centerCovarianceBuffer);
 
         const f_buffer = new Float32Array(this.bufferData);
 		const u_buffer = new Uint8Array(this.bufferData);
@@ -29,9 +29,9 @@ export class SplatBuffer {
 			///center[3 * j + 1] = f_buffer[8 * i + 1];
 			///center[3 * j + 2] = f_buffer[8 * i + 2];
 
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i] = f_buffer[8 * i];
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 1] = f_buffer[8 * i + 1];
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 2] = f_buffer[8 * i + 2];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i] = f_buffer[8 * i];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 1] = f_buffer[8 * i + 1];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 2] = f_buffer[8 * i + 2];
 
 			let scale = [
 				f_buffer[8 * i + 3 + 0],
@@ -79,17 +79,21 @@ export class SplatBuffer {
 			//covB[3 * j + 1] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
 			//covB[3 * j + 2] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
 
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 3] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 4] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 5] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 6] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 7] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
-            covariancePositionArray[SplatBuffer.CovariancePositionSizeFloat * i + 8] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 3] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 4] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 5] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 6] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 7] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
+            centerCovarianceArray[SplatBuffer.CenterCovarianceSizeFloat * i + 8] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
 		}
     }
 
     getBufferData() {
         return this.bufferData;
+    }
+
+    getCenterCovarianceBufferData() {
+        return this.centerCovarianceBuffer
     }
 
     getVertexCount() {

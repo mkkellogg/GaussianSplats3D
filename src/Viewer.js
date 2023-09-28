@@ -6,14 +6,9 @@ import { SplatLoader } from './SplatLoader.js';
 
 function createWorker(self) {
 	let buffer;
+    let precomputedCenterCovariance;
 	let vertexCount = 0;
 	let viewProj;
-	// 6*4 + 4 + 4 = 8*4
-	// XYZ - Position (Float32)
-	// XYZ - Scale (Float32)
-	// RGBA - colors (uint8)
-	// IJKL - quaternion/rot (uint8)
-	const rowLength = 3 * 4 + 3 * 4 + 4 + 4;
 	let depthMix = new BigInt64Array();
 	let lastProj = [];
 
@@ -23,12 +18,10 @@ function createWorker(self) {
 
 		const f_buffer = new Float32Array(buffer);
 		const u_buffer = new Uint8Array(buffer);
-
-		const covA = new Float32Array(3 * vertexCount);
-		const covB = new Float32Array(3 * vertexCount);
-		const center = new Float32Array(3 * vertexCount);
+        const pcc_buffer = new Float32Array(precomputedCenterCovariance);
 
 		const color = new Float32Array(4 * vertexCount);
+        const centerCov = new Float32Array(9 * vertexCount);
 
 		if (depthMix.length !== vertexCount) {
 			depthMix = new BigInt64Array(vertexCount);
@@ -45,7 +38,6 @@ function createWorker(self) {
 				return;
 			}
 		}
-		// console.time("sort");
 
 		const floatMix = new Float32Array(depthMix.buffer);
 		const indexMix = new Uint32Array(depthMix.buffer);
@@ -66,70 +58,28 @@ function createWorker(self) {
 		for (let j = 0; j < vertexCount; j++) {
 			const i = indexMix[2 * j];
 
-			center[3 * j + 0] = f_buffer[8 * i + 0];
-			center[3 * j + 1] = f_buffer[8 * i + 1];
-			center[3 * j + 2] = f_buffer[8 * i + 2];
+			centerCov[9 * j + 0] = pcc_buffer[9 * i + 0]; 
+			centerCov[9 * j + 1] = pcc_buffer[9 * i + 1]; 
+			centerCov[9 * j + 2] =  pcc_buffer[9 * i + 2];
 
 			color[4 * j + 0] = u_buffer[32 * i + 24 + 0] / 255;
 			color[4 * j + 1] = u_buffer[32 * i + 24 + 1] / 255;
 			color[4 * j + 2] = u_buffer[32 * i + 24 + 2] / 255;
 			color[4 * j + 3] = u_buffer[32 * i + 24 + 3] / 255;
 
-			let scale = [
-				f_buffer[8 * i + 3 + 0],
-				f_buffer[8 * i + 3 + 1],
-				f_buffer[8 * i + 3 + 2],
-			];
-			let rot = [
-				(u_buffer[32 * i + 28 + 0] - 128) / 128,
-				(u_buffer[32 * i + 28 + 1] - 128) / 128,
-				(u_buffer[32 * i + 28 + 2] - 128) / 128,
-				(u_buffer[32 * i + 28 + 3] - 128) / 128,
-			];
-
-			const R = [
-				1.0 - 2.0 * (rot[2] * rot[2] + rot[3] * rot[3]),
-				2.0 * (rot[1] * rot[2] + rot[0] * rot[3]),
-				2.0 * (rot[1] * rot[3] - rot[0] * rot[2]),
-
-				2.0 * (rot[1] * rot[2] - rot[0] * rot[3]),
-				1.0 - 2.0 * (rot[1] * rot[1] + rot[3] * rot[3]),
-				2.0 * (rot[2] * rot[3] + rot[0] * rot[1]),
-
-				2.0 * (rot[1] * rot[3] + rot[0] * rot[2]),
-				2.0 * (rot[2] * rot[3] - rot[0] * rot[1]),
-				1.0 - 2.0 * (rot[1] * rot[1] + rot[2] * rot[2]),
-			];
-
-			// Compute the matrix product of S and R (M = S * R)
-			const M = [
-				scale[0] * R[0],
-				scale[0] * R[1],
-				scale[0] * R[2],
-				scale[1] * R[3],
-				scale[1] * R[4],
-				scale[1] * R[5],
-				scale[2] * R[6],
-				scale[2] * R[7],
-				scale[2] * R[8],
-			];
-
-			covA[3 * j + 0] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
-			covA[3 * j + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
-			covA[3 * j + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
-			covB[3 * j + 0] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
-			covB[3 * j + 1] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
-			covB[3 * j + 2] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
+			centerCov[9 * j + 3 + 0] = pcc_buffer[9 * i + 3]; 
+			centerCov[9 * j + 3 + 1] = pcc_buffer[9 * i + 4]; 
+			centerCov[9 * j + 3 + 2] = pcc_buffer[9 * i + 5]; 
+			centerCov[9 * j + 6 + 0] = pcc_buffer[9 * i + 6]; 
+			centerCov[9 * j + 6 + 1] = pcc_buffer[9 * i + 7]; 
+			centerCov[9 * j + 6 + 2] = pcc_buffer[9 * i + 8]; 
 		}
 
-		self.postMessage({ covA, center, color, covB, viewProj }, [
-			covA.buffer,
-			center.buffer,
+		self.postMessage({ color, centerCov, viewProj }, [
 			color.buffer,
-			covB.buffer,
+			centerCov.buffer,
 		]);
 
-		// console.timeEnd("sort");
 	};
 
 	const throttledSort = () => {
@@ -150,6 +100,7 @@ function createWorker(self) {
 	self.onmessage = (e) => {
         if (e.data.bufferUpdate) {
 			buffer = e.data.bufferUpdate.buffer;
+            precomputedCenterCovariance = e.data.bufferUpdate.precomputedCenterCovariance;
 			vertexCount = e.data.bufferUpdate.vertexCount;
 		} else if (e.data.sort) {
 			viewProj = e.data.sort.view;
@@ -253,27 +204,21 @@ export class Viewer {
             } else {
                 this.getRenderDimensions(renderDimensions);
 
-                let { covA, covB, center, color, viewProj } = e.data;
+                let { color, centerCov, viewProj } = e.data;
                 lastData = e.data;
     
                 lastProj = viewProj;
-                const vertexCount = center.length / 3;
+                const vertexCount = centerCov.length / 9;
 
                 const geometry  = this.splatMesh.geometry;
 
-                geometry.attributes.splatCenter.set(center);
-                geometry.attributes.splatCenter.needsUpdate = true;
+                geometry.attributes.splatCenterCovariance.set(centerCov);
+                geometry.attributes.splatCenterCovariance.needsUpdate = true;
 
                 geometry.attributes.splatColor.set(color);
                 geometry.attributes.splatColor.needsUpdate = true;
 
-                geometry.attributes.splatCovarianceX.set(covA);
-                geometry.attributes.splatCovarianceX.needsUpdate = true;
-
-                geometry.attributes.splatCovarianceY.set(covB);
-                geometry.attributes.splatCovarianceY.needsUpdate = true;
-
-                this.splatMesh.material.uniforms.focal.value.set(renderDimensions.x, renderDimensions.y);
+                this.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
                 this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
                 this.splatMesh.material.uniformsNeedUpdate = true;
 
@@ -296,7 +241,7 @@ export class Viewer {
             .then((splatBuffer) => {
                 resolve(splatBuffer);
             })
-            .catch(() => {
+            .catch((e) => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
             })
         });
@@ -384,6 +329,7 @@ export class Viewer {
             this.worker.postMessage({
                 bufferUpdate: {
                     buffer: this.splatBuffer.getBufferData(),
+                    precomputedCenterCovariance: this.splatBuffer.getCenterCovarianceBufferData(),
                     vertexCount: this.splatBuffer.getVertexCount()
                 }
             });
@@ -407,9 +353,7 @@ export class Viewer {
             precision mediump float;
         
             attribute vec4 splatColor;
-            attribute vec3 splatCenter;
-            attribute vec3 splatCovarianceX;
-            attribute vec3 splatCovarianceY;
+            attribute mat3 splatCenterCovariance;
         
             uniform vec2 focal;
             uniform vec2 viewport;
@@ -425,6 +369,10 @@ export class Viewer {
             float zFar = 500.0;
             float zNear = 0.1; 
             mat4 projMat;
+
+            vec3 splatCenter = vec3(splatCenterCovariance[0][0], splatCenterCovariance[0][1], splatCenterCovariance[0][2]);
+            vec3 covA = vec3(splatCenterCovariance[1][0], splatCenterCovariance[1][1], splatCenterCovariance[1][2]);
+            vec3 covB = vec3(splatCenterCovariance[2][0], splatCenterCovariance[2][1], splatCenterCovariance[2][2]);
             
             projMat = mat4(
                 (2.0 * localFocal.x) / localViewport.x, 0, 0, 0,
@@ -444,8 +392,6 @@ export class Viewer {
                 return;
             }
         
-            vec3 covA = splatCovarianceX;
-            vec3 covB = splatCovarianceY;
             mat3 Vrk = mat3(
                 covA.x, covA.y, covA.z, 
                 covA.y, covB.x, covB.y,
@@ -590,22 +536,11 @@ export class Viewer {
         splatColors.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatColor', splatColors);
 
-        
-        const splatCentersArray = new Float32Array(splatBuffer.getVertexCount() * 3);
-        const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 3, false);
+        const splatCentersArray = new Float32Array(splatBuffer.getVertexCount() * 9);
+        const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 9, false);
         splatCenters.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('splatCenter', splatCenters);
+        geometry.setAttribute('splatCenterCovariance', splatCenters);
 
-      
-        const splatCovariancesXArray = new Float32Array(splatBuffer.getVertexCount() * 3);
-        const splatCovariancesX = new THREE.InstancedBufferAttribute(splatCovariancesXArray, 3, false);
-        splatCovariancesX.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('splatCovarianceX', splatCovariancesX);
-
-        const splatCovariancesYArray = new Float32Array(splatBuffer.getVertexCount() * 3);
-        const splatCovariancesY = new THREE.InstancedBufferAttribute(splatCovariancesYArray, 3, false);
-        splatCovariancesY.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('splatCovarianceY', splatCovariancesY);
 
         return geometry;
     }
