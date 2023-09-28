@@ -3,7 +3,6 @@ import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
 
-
 function createWorker(self) {
 	let buffer;
     let precomputedCovariance;
@@ -161,6 +160,7 @@ export class Viewer {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
             this.updateRealProjectionMatrix(renderDimensions);
+            this.updateSplatMeshUniforms();
         };
 
     }();
@@ -212,36 +212,39 @@ export class Viewer {
             ),
         );
 
-        let lastData, lastProj;
         this.worker.onmessage = (e) => {
-            if (e.data.buffer) {
-
-            } else {
-                this.getRenderDimensions(renderDimensions);
-
-                let { color, centerCov, viewProj } = e.data;
-                lastData = e.data;
-    
-                lastProj = viewProj;
-                const vertexCount = centerCov.length / 9;
-
-                const geometry  = this.splatMesh.geometry;
-
-                geometry.attributes.splatCenterCovariance.set(centerCov);
-                geometry.attributes.splatCenterCovariance.needsUpdate = true;
-
-                geometry.attributes.splatColor.set(color);
-                geometry.attributes.splatColor.needsUpdate = true;
-
-                this.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
-                this.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
-                this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
-                this.splatMesh.material.uniformsNeedUpdate = true;
-
-                geometry.instanceCount = vertexCount;
-            }
+            let {color, centerCov} = e.data;
+            this.updateSplatMeshAttributes(color, centerCov);
+            this.updateSplatMeshUniforms();
         };
     }
+
+    updateSplatMeshAttributes(colors, centerCovariances) {
+        const vertexCount = centerCovariances.length / 9;
+        const geometry  = this.splatMesh.geometry;
+
+        geometry.attributes.splatCenterCovariance.set(centerCovariances);
+        geometry.attributes.splatCenterCovariance.needsUpdate = true;
+
+        geometry.attributes.splatColor.set(colors);
+        geometry.attributes.splatColor.needsUpdate = true;
+
+        geometry.instanceCount = vertexCount;
+    }
+
+    updateSplatMeshUniforms = function () {
+
+        const renderDimensions = new THREE.Vector2();
+
+        return function() {
+            this.getRenderDimensions(renderDimensions);
+            this.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
+            this.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
+            this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
+            this.splatMesh.material.uniformsNeedUpdate = true;
+        };
+
+    }();
 
     loadFile(fileName) {
         const loadPromise = new Promise((resolve, reject) => {
