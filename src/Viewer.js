@@ -218,6 +218,7 @@ export class Viewer {
     
         this.camera = new THREE.PerspectiveCamera(70, renderDimensions.x / renderDimensions.y, 0.1, 500);
         this.camera.position.set(0, 10, 15);
+        this.camera.up.set(0, -1, -0.6).normalize();
     
         this.scene = new THREE.Scene();
     
@@ -388,17 +389,33 @@ export class Viewer {
             this.getRenderDimensions(tempVector2);
             const zFar = 500.0;
             const zNear = 0.1;
-            tempProjectionMatrix.elements = [
+
+            /*tempProjectionMatrix.elements = [
                 [(2 * 1164.6601287484507) / tempVector2.x, 0, 0, 0],
                 [0, -(2 * 1159.5880733038064) / tempVector2.y, 0, 0],
                 [0, 0, zFar / (zFar - zNear), 1],
                 [0, 0, -(zFar * zNear) / (zFar - zNear), 0],
-            ].flat();
+            ].flat();*/
 
+           /* tempProjectionMatrix.elements = [
+                [(2 * 1164.6601287484507) / tempVector2.x, 0, 0, 0],
+                [0, -(2 * 1159.5880733038064) / tempVector2.y, 0, 0],
+                [0, 0, zFar / (zFar - zNear), -1],
+                [0, 0, -(zFar * zNear) / (zFar - zNear), 0],
+            ].flat();*/
+
+
+            tempProjectionMatrix.elements = [
+                [(2 * 1164.6601287484507) / tempVector2.x, 0, 0, 0],
+                [0, (2 * 1159.5880733038064) / tempVector2.y, 0, 0],
+                [0, 0, -zFar / (zFar - zNear), -1],
+                [0, 0, -(2.0 * zFar * zNear) / (zFar - zNear), 0],
+            ].flat();
+           
             //tempProjectionMatrix.copy(this.camera.projectionMatrix);
 
             tempMatrix.copy(this.camera.matrixWorld).invert();
-          //  tempMatrix.premultiply(tempProjectionMatrix);
+            tempMatrix.premultiply(tempProjectionMatrix);
             this.worker.postMessage({view: tempMatrix.elements});
         };
 
@@ -448,14 +465,14 @@ export class Viewer {
             mat4 localViewMatrix = viewMatrix;
 
             
-            localViewMatrix = inverse(transpose(mat4(1, 0, 0, 0,
+         /*   localViewMatrix = inverse(transpose(mat4(1, 0, 0, 0,
                                                      0, 1, 0, 0,
-                                                     0, 0, 1, -2,
-                                                     0, 0, 0, 1)));
+                                                     0, 0, 1, -5,
+                                                     0, 0, 0, 1)));*/
 
 
-           /* mat3 flip =  mat3(1, 0, 0,
-                              0, 1, 0,
+            mat3 flip =  mat3(1, 0, 0,
+                              0, -1, 0,
                               0, 0, 1);
             mat3 rotMat = flip * mat3(localViewMatrix);
             vec3 offset = vec3(localViewMatrix[3][0], localViewMatrix[3][1], localViewMatrix[3][2]);
@@ -463,23 +480,33 @@ export class Viewer {
             localViewMatrix = mat4(rotMat);
             localViewMatrix[3][0] = offset.x;
             localViewMatrix[3][1] = offset.y;
-            localViewMatrix[3][2] = offset.z;*/
+            localViewMatrix[3][2] = offset.z;
 
             float zFar = 500.0;
             float zNear = 0.1; 
-            mat4 projMat = mat4(
+            mat4 projMat;
+            
+            
+           /* projMat= mat4(
                 (2.0 * localFocal.x) / localViewport.x, 0, 0, 0,
                 0, -(2.0 * localFocal.y) / localViewport.y, 0, 0,
                 0, 0, zFar / (zFar - zNear), 1,
                 0, 0, -(zFar * zNear) / (zFar - zNear), 0
-            );
+            );*/
 
-            /*projMat = transpose(mat4(
-                (2.0 * zNear) / localViewport.x, 0, 0, 0,
-                0, (2.0 * zNear) / localViewport.y, 0, 0,
-                0, 0, -zFar / (zFar - zNear), -zFar * zNear / (zFar - zNear),
-                0, 0, 1.0, 0
-            ));*/
+            /*projMat = mat4(
+                (2.0 * localFocal.x) / localViewport.x, 0, 0, 0,
+                0, -(2.0 * localFocal.y) / localViewport.y, 0, 0,
+                0, 0, -zFar / (zFar - zNear), -1,
+                0, 0, -(zFar * zNear) / (zFar - zNear), 0
+            );*/
+
+            projMat = mat4(
+                (2.0 * localFocal.x) / localViewport.x, 0, 0, 0,
+                0, -(2.0 * localFocal.y) / localViewport.y, 0, 0,
+                0, 0, -(zFar + zNear) / (zFar - zNear), -1,
+                0, 0, -(2.0 * zFar * zNear) / (zFar - zNear), 0
+            );
 
             mat4 flip4 =  mat4(1, 0, 0, 0,
                                0, 1, 0, 0,
@@ -535,7 +562,14 @@ export class Viewer {
              gl_Position = vec4(
                  vCenter
                      + position.x * v1 / localViewport * 2.0
-                     + position.y * v2 / localViewport * 2.0, 0.0, 1.0);`;
+                     + position.y * v2 / localViewport * 2.0, 0.0, 1.0);
+                     
+                     
+           /* gl_Position = vec4(
+            vCenter + position.xy * 0.0025, 0.0, 1.0);*/
+        
+            /*gl_Position = projMat * vec4(vec3(viewMatrix * vec4(splatCenter, 1)) +
+               position.xyz * 0.0025, 1.0);*/`;
 
         if (useLogarithmicDepth) {
             vertexShaderSource += `
@@ -612,12 +646,12 @@ export class Viewer {
         const positionsArray = new Float32Array(18);
         const positions = new THREE.BufferAttribute(positionsArray, 3);
         baseGeometry.setAttribute('position', positions);
-        positions.setXYZ(0, -2.0, 2.0, 0.0);
+        positions.setXYZ(2, -2.0, 2.0, 0.0);
         positions.setXYZ(1, -2.0, -2.0, 0.0);
-        positions.setXYZ(2, 2.0, 2.0, 0.0);
-        positions.setXYZ(3, -2.0, -2.0, 0.0);
+        positions.setXYZ(0, 2.0, 2.0, 0.0);
+        positions.setXYZ(5, -2.0, -2.0, 0.0);
         positions.setXYZ(4, 2.0, -2.0, 0.0);
-        positions.setXYZ(5, 2.0, 2.0, 0.0);
+        positions.setXYZ(3, 2.0, 2.0, 0.0);
 
         positions.needsUpdate = true;
 
