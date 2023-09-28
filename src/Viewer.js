@@ -60,7 +60,7 @@ function createWorker(self) {
 
 			centerCov[9 * j + 0] = pcc_buffer[9 * i + 0]; 
 			centerCov[9 * j + 1] = pcc_buffer[9 * i + 1]; 
-			centerCov[9 * j + 2] =  pcc_buffer[9 * i + 2];
+			centerCov[9 * j + 2] = pcc_buffer[9 * i + 2];
 
 			color[4 * j + 0] = u_buffer[32 * i + 24 + 0] / 255;
 			color[4 * j + 1] = u_buffer[32 * i + 24 + 1] / 255;
@@ -126,6 +126,7 @@ export class Viewer {
         this.selfDrivenMode = selfDrivenMode;
         this.scene = null;
         this.camera = null;
+        this.realProjectionMatrix = new THREE.Matrix4();
         this.renderer = null;
         this.splatBuffer = null;
         this.splatMesh = null;
@@ -139,6 +140,14 @@ export class Viewer {
         outDimensions.y = this.rootElement.offsetHeight;
     }
 
+    updateRealProjectionMatrix(renderDimensions) {
+        this.realProjectionMatrix.elements = [
+            [(2 * this.cameraSpecs.fx) / renderDimensions.x, 0, 0, 0],
+            [0, (2 * this.cameraSpecs.fy) / renderDimensions.y, 0, 0],
+            [0, 0, -(this.cameraSpecs.far + this.cameraSpecs.near) / (this.cameraSpecs.far - this.cameraSpecs.near), -1],
+            [0, 0, -(2.0 * this.cameraSpecs.far * this.cameraSpecs.near) / (this.cameraSpecs.far - this.cameraSpecs.near), 0],
+        ].flat();
+    }
     onResize = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -149,6 +158,7 @@ export class Viewer {
             this.camera.aspect = renderDimensions.x / renderDimensions.y;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+            this.updateRealProjectionMatrix(renderDimensions);
         };
 
     }();
@@ -168,6 +178,7 @@ export class Viewer {
         this.camera = new THREE.PerspectiveCamera(70, renderDimensions.x / renderDimensions.y, 0.1, 500);
         this.camera.position.set(0, 10, 15);
         this.camera.up.copy(this.cameraUp).normalize();
+        this.updateRealProjectionMatrix(renderDimensions);
     
         this.scene = new THREE.Scene();
     
@@ -218,6 +229,7 @@ export class Viewer {
                 geometry.attributes.splatColor.set(color);
                 geometry.attributes.splatColor.needsUpdate = true;
 
+                this.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
                 this.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
                 this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
                 this.splatMesh.material.uniformsNeedUpdate = true;
@@ -296,24 +308,12 @@ export class Viewer {
     updateView = function () {
 
         const tempMatrix = new THREE.Matrix4();
-        const tempProjectionMatrix = new THREE.Matrix4();
         const tempVector2 = new THREE.Vector2();
 
         return function () {
             this.getRenderDimensions(tempVector2);
-            const zFar = this.cameraSpecs.far;
-            const zNear = this.cameraSpecs.near;
-
-            tempProjectionMatrix.elements = [
-                [(2 * 1159.5880733038064) / tempVector2.x, 0, 0, 0],
-                [0, (2 * 1164.6601287484507) / tempVector2.y, 0, 0],
-                [0, 0, -(zFar + zNear) / (zFar - zNear), -1],
-                [0, 0, -(2.0 * zFar * zNear) / (zFar - zNear), 0],
-            ].flat();
-
             tempMatrix.copy(this.camera.matrixWorld).invert();
-            tempMatrix.premultiply(tempProjectionMatrix);
-           // tempMatrix.premultiply(this.camera.projectionMatrix);
+            tempMatrix.premultiply(this.realProjectionMatrix);
             this.worker.postMessage({
                 sort: {
                     'view': tempMatrix.elements
@@ -355,6 +355,7 @@ export class Viewer {
             attribute vec4 splatColor;
             attribute mat3 splatCenterCovariance;
         
+            uniform mat4 realProjectionMatrix;
             uniform vec2 focal;
             uniform vec2 viewport;
         
@@ -363,28 +364,13 @@ export class Viewer {
         
             void main () {
 
-            vec2 localViewport = viewport;
-            vec2 localFocal = vec2(1159.5880733038064, 1164.6601287484507);
-
-            float zFar = 500.0;
-            float zNear = 0.1; 
-            mat4 projMat;
-
             vec3 splatCenter = vec3(splatCenterCovariance[0][0], splatCenterCovariance[0][1], splatCenterCovariance[0][2]);
             vec3 covA = vec3(splatCenterCovariance[1][0], splatCenterCovariance[1][1], splatCenterCovariance[1][2]);
             vec3 covB = vec3(splatCenterCovariance[2][0], splatCenterCovariance[2][1], splatCenterCovariance[2][2]);
-            
-            projMat = mat4(
-                (2.0 * localFocal.x) / localViewport.x, 0, 0, 0,
-                0, (2.0 * localFocal.y) / localViewport.y, 0, 0,
-                0, 0, -(zFar + zNear) / (zFar - zNear), -1,
-                0, 0, -(2.0 * zFar * zNear) / (zFar - zNear), 0
-            );
 
             vec4 camspace = viewMatrix * vec4(splatCenter, 1);
-            vec4 pos2d = projMat * camspace;
+            vec4 pos2d = realProjectionMatrix * camspace;
 
-        
             float bounds = 1.2 * pos2d.w;
             if (pos2d.z < -pos2d.w || pos2d.x < -bounds || pos2d.x > bounds
                 || pos2d.y < -bounds || pos2d.y > bounds) {
@@ -399,8 +385,8 @@ export class Viewer {
             );
             
             mat3 J = mat3(
-                localFocal.x / camspace.z, 0., -(localFocal.x * camspace.x) / (camspace.z * camspace.z), 
-                0., localFocal.y / camspace.z, -(localFocal.y * camspace.y) / (camspace.z * camspace.z), 
+                focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z), 
+                0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z), 
                 0., 0., 0.
             );
 
@@ -440,8 +426,8 @@ export class Viewer {
         
              gl_Position = vec4(
                  vCenter
-                     + position.x * v1 / localViewport * 2.0
-                     + position.y * v2 / localViewport * 2.0, 0.0, 1.0);
+                     + position.x * v1 / viewport * 2.0
+                     + position.y * v2 / viewport * 2.0, 0.0, 1.0);
                      `;
 
         if (useLogarithmicDepth) {
@@ -484,6 +470,10 @@ export class Viewer {
         }`;
 
         const uniforms = {
+            'realProjectionMatrix': {
+                'type': 'v4v',
+                'value': new THREE.Matrix4()
+            },
             'focal': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
