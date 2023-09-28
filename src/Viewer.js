@@ -169,10 +169,19 @@ function createWorker(self) {
 	};
 }
 
+const DEFAULT_CAMERA_SPECS = {
+    'fx': 1159.5880733038064,
+    'fy': 1164.6601287484507,
+    'near': 0.1,
+    'far': 500
+}
+
 export class Viewer {
 
-    constructor(rootElement = null, controls = null, selfDrivenMode = true) {
+    constructor(rootElement = null, cameraUp = [0, 1, 0], cameraSpecs = null, controls = null, selfDrivenMode = true) {
         this.rootElement = rootElement;
+        this.cameraUp = new THREE.Vector3().fromArray(cameraUp);
+        this.cameraSpecs = cameraSpecs || DEFAULT_CAMERA_SPECS;
         this.controls = controls;
         this.selfDrivenMode = selfDrivenMode;
         this.scene = null;
@@ -215,10 +224,10 @@ export class Viewer {
 
         const renderDimensions = new THREE.Vector2();
         this.getRenderDimensions(renderDimensions);
-    
+
         this.camera = new THREE.PerspectiveCamera(70, renderDimensions.x / renderDimensions.y, 0.1, 500);
         this.camera.position.set(0, 10, 15);
-        this.camera.up.set(0, -1, -0.6).normalize();
+        this.camera.up.copy(this.cameraUp).normalize();
     
         this.scene = new THREE.Scene();
     
@@ -278,35 +287,6 @@ export class Viewer {
                 this.splatMesh.material.uniforms.focal.value.set(renderDimensions.x, renderDimensions.y);
                 this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
                 this.splatMesh.material.uniformsNeedUpdate = true;
-
-                /*
-                fy: 1164.6601287484507,
-                fx: 1159.5880733038064,
-                */
-
-                /*// viewport
-                const u_viewport = gl.getUniformLocation(program, "viewport");
-                gl.uniform2fv(u_viewport, new Float32Array([canvas.width, canvas.height]));
-
-                // focal
-                const u_focal = gl.getUniformLocation(program, "focal");
-                gl.uniform2fv(
-                    u_focal,
-                    new Float32Array([camera.fx / downsample, camera.fy / downsample]),
-                );*/
-
-    
-    /*            gl.bindBuffer(gl.ARRAY_BUFFER, centerBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, center, gl.DYNAMIC_DRAW);
-    
-                gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, color, gl.DYNAMIC_DRAW);
-    
-                gl.bindBuffer(gl.ARRAY_BUFFER, covABuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, covA, gl.DYNAMIC_DRAW);
-    
-                gl.bindBuffer(gl.ARRAY_BUFFER, covBBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER, covB, gl.DYNAMIC_DRAW);*/
 
                 geometry.instanceCount = vertexCount;
             }
@@ -387,35 +367,19 @@ export class Viewer {
 
         return function () {
             this.getRenderDimensions(tempVector2);
-            const zFar = 500.0;
-            const zNear = 0.1;
-
-            /*tempProjectionMatrix.elements = [
-                [(2 * 1164.6601287484507) / tempVector2.x, 0, 0, 0],
-                [0, -(2 * 1159.5880733038064) / tempVector2.y, 0, 0],
-                [0, 0, zFar / (zFar - zNear), 1],
-                [0, 0, -(zFar * zNear) / (zFar - zNear), 0],
-            ].flat();*/
-
-           /* tempProjectionMatrix.elements = [
-                [(2 * 1164.6601287484507) / tempVector2.x, 0, 0, 0],
-                [0, -(2 * 1159.5880733038064) / tempVector2.y, 0, 0],
-                [0, 0, zFar / (zFar - zNear), -1],
-                [0, 0, -(zFar * zNear) / (zFar - zNear), 0],
-            ].flat();*/
-
+            const zFar = this.cameraSpecs.far;
+            const zNear = this.cameraSpecs.near;
 
             tempProjectionMatrix.elements = [
                 [(2 * 1159.5880733038064) / tempVector2.x, 0, 0, 0],
                 [0, (2 * 1164.6601287484507) / tempVector2.y, 0, 0],
-                [0, 0, -zFar / (zFar - zNear), -1],
+                [0, 0, -(zFar + zNear) / (zFar - zNear), -1],
                 [0, 0, -(2.0 * zFar * zNear) / (zFar - zNear), 0],
             ].flat();
-           
-            //tempProjectionMatrix.copy(this.camera.projectionMatrix);
 
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(tempProjectionMatrix);
+           // tempMatrix.premultiply(this.camera.projectionMatrix);
             this.worker.postMessage({view: tempMatrix.elements});
         };
 
@@ -498,6 +462,19 @@ export class Viewer {
                 0., localFocal.y / camspace.z, -(localFocal.y * camspace.y) / (camspace.z * camspace.z), 
                 0., 0., 0.
             );
+
+           /* float limx = 1.3f * .00001;
+            float limy = 1.3f * .00001;
+            float txtz = camspace.x / camspace.z;
+            float tytz = camspace.y / camspace.z;
+            camspace.x = min(limx, max(-limx, txtz)) * camspace.z;
+            camspace.y = min(limy, max(-limy, tytz)) * camspace.z;
+
+            mat3 J = mat3(
+                500.0 / camspace.z, 0., -(500.0  * camspace.x) / (camspace.z * camspace.z), 
+                0., 500.0  / camspace.z, -(500.0 * camspace.y) / (camspace.z * camspace.z), 
+                0., 0., 0.
+            );*/
         
             mat3 W = transpose(mat3(viewMatrix));
             mat3 T = W * J;

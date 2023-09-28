@@ -41,7 +41,7 @@ export class PlyParser {
 		console.log("Bytes per row", row_offset, types, offsets);
 
 		let dataView = new DataView(
-			plyBuffer,
+			this.plyBuffer,
 			header_end_index + header_end.length,
 		);
 		let row = 0;

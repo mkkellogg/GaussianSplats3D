@@ -15,14 +15,6 @@ export class SplatLoader {
             })
             .then((bufferData) => {
                 const splatBuffer = new SplatBuffer(bufferData);
-                const fBuffer = new Float32Array(bufferData);
-                for (let i = 0 ; i < splatBuffer.getVertexCount(); i++) {
-                    const offset = i * 8;
-                    const z = fBuffer[offset + 2];
-                    const y = fBuffer[offset + 1];
-                   // fBuffer[offset + 2] = y;
-                   // fBuffer[offset + 1] = z;
-                }
                 resolve(splatBuffer);
             })
             .catch((err) => {
