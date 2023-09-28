@@ -26,8 +26,8 @@ function createWorker(self) {
 
 		const covA = new Float32Array(3 * vertexCount);
 		const covB = new Float32Array(3 * vertexCount);
-
 		const center = new Float32Array(3 * vertexCount);
+
 		const color = new Float32Array(4 * vertexCount);
 
 		if (depthMix.length !== vertexCount) {
@@ -148,24 +148,13 @@ function createWorker(self) {
 
 	let sortRunning;
 	self.onmessage = (e) => {
-		/*if (e.data.ply) {
-			vertexCount = 0;
-			runSort(viewProj);
-			buffer = processPlyBuffer(e.data.ply);
-			vertexCount = Math.floor(buffer.byteLength / rowLength);
-			postMessage({ buffer: buffer });
-		} else*/
-
-        if (e.data.buffer) {
-			buffer = e.data.buffer;
-			vertexCount = e.data.vertexCount;
-		} else if (e.data.vertexCount) {
-			vertexCount = e.data.vertexCount;
-		} else if (e.data.view) {
-			viewProj = e.data.view;
+        if (e.data.bufferUpdate) {
+			buffer = e.data.bufferUpdate.buffer;
+			vertexCount = e.data.bufferUpdate.vertexCount;
+		} else if (e.data.sort) {
+			viewProj = e.data.sort.view;
 			throttledSort();
 		}
-
 	};
 }
 
@@ -380,7 +369,11 @@ export class Viewer {
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(tempProjectionMatrix);
            // tempMatrix.premultiply(this.camera.projectionMatrix);
-            this.worker.postMessage({view: tempMatrix.elements});
+            this.worker.postMessage({
+                sort: {
+                    'view': tempMatrix.elements
+                }
+            });
         };
 
     }();
@@ -389,8 +382,10 @@ export class Viewer {
 
         return function () {
             this.worker.postMessage({
-                buffer: this.splatBuffer.getBufferData(),
-                vertexCount: this.splatBuffer.getVertexCount()
+                bufferUpdate: {
+                    buffer: this.splatBuffer.getBufferData(),
+                    vertexCount: this.splatBuffer.getVertexCount()
+                }
             });
         };
 
@@ -590,16 +585,18 @@ export class Viewer {
 
         const geometry  = new THREE.InstancedBufferGeometry().copy(baseGeometry);
 
-        const splatCentersArray = new Float32Array(splatBuffer.getVertexCount() * 3);
-        const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 3, false);
-        splatCenters.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('splatCenter', splatCenters);
-
         const splatColorsArray = new Float32Array(splatBuffer.getVertexCount() * 4);
         const splatColors = new THREE.InstancedBufferAttribute(splatColorsArray, 4, false);
         splatColors.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatColor', splatColors);
 
+        
+        const splatCentersArray = new Float32Array(splatBuffer.getVertexCount() * 3);
+        const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 3, false);
+        splatCenters.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute('splatCenter', splatCenters);
+
+      
         const splatCovariancesXArray = new Float32Array(splatBuffer.getVertexCount() * 3);
         const splatCovariancesX = new THREE.InstancedBufferAttribute(splatCovariancesXArray, 3, false);
         splatCovariancesX.setUsage(THREE.DynamicDrawUsage);

@@ -149,7 +149,13 @@ export class PlyParser {
 				rgba[3] = 255;
 			}
 		}
-		console.timeEnd("build buffer");
-		return new SplatBuffer(buffer);
+		console.timeEnd("end buffer");
+
+		console.timeEnd("start splat buffer");
+		const splatBuffer = new SplatBuffer(buffer);
+		splatBuffer.initPreComputedBuffers();
+		console.timeEnd("end splat buffer");
+
+		return splatBuffer;
     }
 }

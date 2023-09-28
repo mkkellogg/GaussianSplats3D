@@ -15,6 +15,7 @@ export class SplatLoader {
             })
             .then((bufferData) => {
                 const splatBuffer = new SplatBuffer(bufferData);
+                splatBuffer.initPreComputedBuffers();
                 resolve(splatBuffer);
             })
             .catch((err) => {
