@@ -4,108 +4,116 @@ import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
 
 function createWorker(self) {
-	let buffer;
+    let splatBuffer;
     let precomputedCovariance;
-	let vertexCount = 0;
-	let viewProj;
-	let depthMix = new BigInt64Array();
-	let lastProj = [];
+    let precomputedColor;
+    let vertexCount = 0;
+    let viewProj;
+    let depthMix = new BigInt64Array();
+    let lastProj = [];
 
-	const runSort = (viewProj) => {
+    const runSort = (viewProj) => {
 
-		if (!buffer) return;
+        if (!splatBuffer) return;
 
-		const f_buffer = new Float32Array(buffer);
-		const u_buffer = new Uint8Array(buffer);
-        const pc_buffer = new Float32Array(precomputedCovariance);
-
-		const color = new Float32Array(4 * vertexCount);
+        const splatArray = new Float32Array(splatBuffer);
+        const pCovarianceArray = new Float32Array(precomputedCovariance);
+        const pColorArray = new Float32Array(precomputedColor);
+        const color = new Float32Array(4 * vertexCount);
         const centerCov = new Float32Array(9 * vertexCount);
 
-		if (depthMix.length !== vertexCount) {
-			depthMix = new BigInt64Array(vertexCount);
-			const indexMix = new Uint32Array(depthMix.buffer);
-			for (let j = 0; j < vertexCount; j++) {
-				indexMix[2 * j] = j;
-			}
-		} else {
-			let dot =
-				lastProj[2] * viewProj[2] +
-				lastProj[6] * viewProj[6] +
-				lastProj[10] * viewProj[10];
-			if (Math.abs(dot - 1) < 0.01) {
-				return;
-			}
-		}
+        if (depthMix.length !== vertexCount) {
+            depthMix = new BigInt64Array(vertexCount);
+            const indexMix = new Uint32Array(depthMix.buffer);
+            for (let j = 0; j < vertexCount; j++) {
+                indexMix[2 * j] = j;
+            }
+        } else {
+            let dot =
+                lastProj[2] * viewProj[2] +
+                lastProj[6] * viewProj[6] +
+                lastProj[10] * viewProj[10];
+            if (Math.abs(dot - 1) < 0.01) {
+                return;
+            }
+        }
 
-		const floatMix = new Float32Array(depthMix.buffer);
-		const indexMix = new Uint32Array(depthMix.buffer);
+        const floatMix = new Float32Array(depthMix.buffer);
+        const indexMix = new Uint32Array(depthMix.buffer);
 
-		for (let j = 0; j < vertexCount; j++) {
-			let i = indexMix[2 * j];
-			floatMix[2 * j + 1] =
-				10000 +
-				viewProj[2] * f_buffer[8 * i + 0] +
-				viewProj[6] * f_buffer[8 * i + 1] +
-				viewProj[10] * f_buffer[8 * i + 2];
-		}
+        for (let j = 0; j < vertexCount; j++) {
+            let i = indexMix[2 * j];
+            const splatArrayBase = 8 * i;
+            floatMix[2 * j + 1] =
+                10000 +
+                viewProj[2] * splatArray[splatArrayBase] +
+                viewProj[6] * splatArray[splatArrayBase + 1] +
+                viewProj[10] * splatArray[splatArrayBase + 2];
+        }
 
-		lastProj = viewProj;
+        lastProj = viewProj;
 
-		depthMix.sort();
+        depthMix.sort();
 
-		for (let j = 0; j < vertexCount; j++) {
-			const i = indexMix[2 * j];
+        for (let j = 0; j < vertexCount; j++) {
+            const i = indexMix[2 * j];
 
-			centerCov[9 * j] = f_buffer[8 * i]; 
-			centerCov[9 * j + 1] = f_buffer[8 * i + 1]; 
-			centerCov[9 * j + 2] = f_buffer[8 * i + 2];
+            const centerCovBase = 9 * j;
+            const pCovarianceBase = 6 * i;
+            const colorBase = 4 * j;
+            const pcColorBase = 4 * i;
+            const splatArrayBase = 8 * i;
 
-			color[4 * j] = u_buffer[32 * i + 24] / 255;
-			color[4 * j + 1] = u_buffer[32 * i + 24 + 1] / 255;
-			color[4 * j + 2] = u_buffer[32 * i + 24 + 2] / 255;
-			color[4 * j + 3] = u_buffer[32 * i + 24 + 3] / 255;
+            centerCov[centerCovBase] = splatArray[splatArrayBase]; 
+            centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1]; 
+            centerCov[centerCovBase + 2] = splatArray[splatArrayBase + 2];
 
-            centerCov[9 * j + 3] = pc_buffer[6 * i]; 
-			centerCov[9 * j + 3 + 1] = pc_buffer[6 * i + 1]; 
-			centerCov[9 * j + 3 + 2] = pc_buffer[6 * i + 2]; 
-			centerCov[9 * j + 6 + 0] = pc_buffer[6 * i + 3]; 
-			centerCov[9 * j + 6 + 1] = pc_buffer[6 * i + 4]; 
-			centerCov[9 * j + 6 + 2] = pc_buffer[6 * i + 5]; 
-		}
+            color[colorBase] = pColorArray[pcColorBase];
+            color[colorBase + 1] = pColorArray[pcColorBase + 1];
+            color[colorBase + 2] = pColorArray[pcColorBase + 2];
+            color[colorBase + 3] = pColorArray[pcColorBase + 3];
 
-		self.postMessage({color, centerCov, viewProj}, [
-			color.buffer,
-			centerCov.buffer,
-		]);
+            centerCov[centerCovBase + 3] = pCovarianceArray[pCovarianceBase]; 
+            centerCov[centerCovBase + 4] = pCovarianceArray[pCovarianceBase + 1]; 
+            centerCov[centerCovBase + 5] = pCovarianceArray[pCovarianceBase + 2]; 
+            centerCov[centerCovBase + 6] = pCovarianceArray[pCovarianceBase + 3]; 
+            centerCov[centerCovBase + 7] = pCovarianceArray[pCovarianceBase + 4]; 
+            centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5]; 
+        }
 
-	};
+        self.postMessage({color, centerCov}, [
+            color.buffer,
+            centerCov.buffer,
+        ]);
 
-	const throttledSort = () => {
-		if (!sortRunning) {
-			sortRunning = true;
-			let lastView = viewProj;
-			runSort(lastView);
-			setTimeout(() => {
-				sortRunning = false;
-				if (lastView !== viewProj) {
-					throttledSort();
-				}
-			}, 0);
-		}
-	};
+    };
 
-	let sortRunning;
-	self.onmessage = (e) => {
+    const throttledSort = () => {
+        if (!sortRunning) {
+            sortRunning = true;
+            let lastView = viewProj;
+            runSort(lastView);
+            setTimeout(() => {
+                sortRunning = false;
+                if (lastView !== viewProj) {
+                    throttledSort();
+                }
+            }, 0);
+        }
+    };
+
+    let sortRunning;
+    self.onmessage = (e) => {
         if (e.data.bufferUpdate) {
-			buffer = e.data.bufferUpdate.buffer;
+            buffer = e.data.bufferUpdate.buffer;
             precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
-			vertexCount = e.data.bufferUpdate.vertexCount;
-		} else if (e.data.sort) {
-			viewProj = e.data.sort.view;
-			throttledSort();
-		}
-	};
+            precomputedColor = e.data.bufferUpdate.precomputedColor;
+            vertexCount = e.data.bufferUpdate.vertexCount;
+        } else if (e.data.sort) {
+            viewProj = e.data.sort.view;
+            throttledSort();
+        }
+    };
 }
 
 const DEFAULT_CAMERA_SPECS = {
@@ -117,12 +125,13 @@ const DEFAULT_CAMERA_SPECS = {
 
 export class Viewer {
 
-    constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0], cameraSpecs = null, controls = null, selfDrivenMode = true) {
+    constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0],
+                cameraSpecs = DEFAULT_CAMERA_SPECS, controls = null, selfDrivenMode = true) {
         this.rootElement = rootElement;
         this.cameraUp = new THREE.Vector3().fromArray(cameraUp);
         this.initialCameraPos = new THREE.Vector3().fromArray(initialCameraPos);
         this.initialCameraLookAt = new THREE.Vector3().fromArray(initialCameraLookAt);
-        this.cameraSpecs = cameraSpecs || DEFAULT_CAMERA_SPECS;
+        this.cameraSpecs = cameraSpecs;
         this.controls = controls;
         this.selfDrivenMode = selfDrivenMode;
         this.scene = null;
@@ -338,6 +347,7 @@ export class Viewer {
                 bufferUpdate: {
                     buffer: this.splatBuffer.getBufferData(),
                     precomputedCovariance: this.splatBuffer.getCovarianceBufferData(),
+                    precomputedColor: this.splatBuffer.getColorBufferData(),
                     vertexCount: this.splatBuffer.getVertexCount()
                 }
             });
@@ -372,9 +382,9 @@ export class Viewer {
         
             void main () {
 
-            vec3 splatCenter = vec3(splatCenterCovariance[0][0], splatCenterCovariance[0][1], splatCenterCovariance[0][2]);
-            vec3 covA = vec3(splatCenterCovariance[1][0], splatCenterCovariance[1][1], splatCenterCovariance[1][2]);
-            vec3 covB = vec3(splatCenterCovariance[2][0], splatCenterCovariance[2][1], splatCenterCovariance[2][2]);
+            vec3 splatCenter = splatCenterCovariance[0];
+            vec3 covA = splatCenterCovariance[1];
+            vec3 covB = splatCenterCovariance[2];
 
             vec4 camspace = viewMatrix * vec4(splatCenter, 1);
             vec4 pos2d = realProjectionMatrix * camspace;
@@ -397,20 +407,7 @@ export class Viewer {
                 0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z), 
                 0., 0., 0.
             );
-
-           /* float limx = 1.3f * .00001;
-            float limy = 1.3f * .00001;
-            float txtz = camspace.x / camspace.z;
-            float tytz = camspace.y / camspace.z;
-            camspace.x = min(limx, max(-limx, txtz)) * camspace.z;
-            camspace.y = min(limy, max(-limy, tytz)) * camspace.z;
-
-            mat3 J = mat3(
-                500.0 / camspace.z, 0., -(500.0  * camspace.x) / (camspace.z * camspace.z), 
-                0., 500.0  / camspace.z, -(500.0 * camspace.y) / (camspace.z * camspace.z), 
-                0., 0., 0.
-            );*/
-        
+       
             mat3 W = transpose(mat3(viewMatrix));
             mat3 T = W * J;
             mat3 cov = transpose(T) * Vrk * T;
@@ -523,9 +520,7 @@ export class Viewer {
         positions.setXYZ(5, -2.0, -2.0, 0.0);
         positions.setXYZ(4, 2.0, -2.0, 0.0);
         positions.setXYZ(3, 2.0, 2.0, 0.0);
-
         positions.needsUpdate = true;
-
 
         const geometry  = new THREE.InstancedBufferGeometry().copy(baseGeometry);
 
