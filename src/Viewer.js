@@ -6,7 +6,7 @@ import { SplatLoader } from './SplatLoader.js';
 
 function createWorker(self) {
 	let buffer;
-    let precomputedCenterCovariance;
+    let precomputedCovariance;
 	let vertexCount = 0;
 	let viewProj;
 	let depthMix = new BigInt64Array();
@@ -18,7 +18,7 @@ function createWorker(self) {
 
 		const f_buffer = new Float32Array(buffer);
 		const u_buffer = new Uint8Array(buffer);
-        const pcc_buffer = new Float32Array(precomputedCenterCovariance);
+        const pc_buffer = new Float32Array(precomputedCovariance);
 
 		const color = new Float32Array(4 * vertexCount);
         const centerCov = new Float32Array(9 * vertexCount);
@@ -58,21 +58,21 @@ function createWorker(self) {
 		for (let j = 0; j < vertexCount; j++) {
 			const i = indexMix[2 * j];
 
-			centerCov[9 * j + 0] = pcc_buffer[9 * i + 0]; 
-			centerCov[9 * j + 1] = pcc_buffer[9 * i + 1]; 
-			centerCov[9 * j + 2] = pcc_buffer[9 * i + 2];
+			centerCov[9 * j + 0] = f_buffer[8 * i + 0]; 
+			centerCov[9 * j + 1] = f_buffer[8 * i + 1]; 
+			centerCov[9 * j + 2] = f_buffer[8 * i + 2];
 
 			color[4 * j + 0] = u_buffer[32 * i + 24 + 0] / 255;
 			color[4 * j + 1] = u_buffer[32 * i + 24 + 1] / 255;
 			color[4 * j + 2] = u_buffer[32 * i + 24 + 2] / 255;
 			color[4 * j + 3] = u_buffer[32 * i + 24 + 3] / 255;
 
-			centerCov[9 * j + 3 + 0] = pcc_buffer[9 * i + 3]; 
-			centerCov[9 * j + 3 + 1] = pcc_buffer[9 * i + 4]; 
-			centerCov[9 * j + 3 + 2] = pcc_buffer[9 * i + 5]; 
-			centerCov[9 * j + 6 + 0] = pcc_buffer[9 * i + 6]; 
-			centerCov[9 * j + 6 + 1] = pcc_buffer[9 * i + 7]; 
-			centerCov[9 * j + 6 + 2] = pcc_buffer[9 * i + 8]; 
+            centerCov[9 * j + 3 + 0] = pc_buffer[6 * i + 0]; 
+			centerCov[9 * j + 3 + 1] = pc_buffer[6 * i + 1]; 
+			centerCov[9 * j + 3 + 2] = pc_buffer[6 * i + 2]; 
+			centerCov[9 * j + 6 + 0] = pc_buffer[6 * i + 3]; 
+			centerCov[9 * j + 6 + 1] = pc_buffer[6 * i + 4]; 
+			centerCov[9 * j + 6 + 2] = pc_buffer[6 * i + 5]; 
 		}
 
 		self.postMessage({ color, centerCov, viewProj }, [
@@ -100,7 +100,7 @@ function createWorker(self) {
 	self.onmessage = (e) => {
         if (e.data.bufferUpdate) {
 			buffer = e.data.bufferUpdate.buffer;
-            precomputedCenterCovariance = e.data.bufferUpdate.precomputedCenterCovariance;
+            precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
 			vertexCount = e.data.bufferUpdate.vertexCount;
 		} else if (e.data.sort) {
 			viewProj = e.data.sort.view;
@@ -329,7 +329,7 @@ export class Viewer {
             this.worker.postMessage({
                 bufferUpdate: {
                     buffer: this.splatBuffer.getBufferData(),
-                    precomputedCenterCovariance: this.splatBuffer.getCenterCovarianceBufferData(),
+                    precomputedCovariance: this.splatBuffer.getCovarianceBufferData(),
                     vertexCount: this.splatBuffer.getVertexCount()
                 }
             });
