@@ -185,14 +185,24 @@ export class Viewer {
         this.worker = null;
     }
 
-    onResize() {
-        this.renderer.setSize(1, 1);
-        const renderWidth = this.rootElement.offsetWidth;
-        const renderHeight =  this.rootElement.offsetHeight;
-        this.camera.aspect = renderWidth / renderHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(renderWidth, renderHeight);
+    getRenderDimensions(outDimensions) {
+        outDimensions.x = this.rootElement.offsetWidth;
+        outDimensions.y = this.rootElement.offsetHeight;
     }
+
+    onResize = function() {
+
+        const renderDimensions = new THREE.Vector2();
+
+        return function () {
+            this.renderer.setSize(1, 1);
+            this.getRenderDimensions(renderDimensions);
+            this.camera.aspect = renderDimensions.x / renderDimensions.y;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+        };
+
+    }();
 
     init() {
 
@@ -203,10 +213,10 @@ export class Viewer {
             document.body.appendChild(this.rootElement);
         }
 
-        const renderWidth = this.rootElement.offsetWidth;
-        const renderHeight = this.rootElement.offsetHeight;
+        const renderDimensions = new THREE.Vector2();
+        this.getRenderDimensions(renderDimensions);
     
-        this.camera = new THREE.PerspectiveCamera(70, renderWidth / renderHeight, 0.1, 500);
+        this.camera = new THREE.PerspectiveCamera(70, renderDimensions.x / renderDimensions.y, 0.1, 500);
         this.camera.position.set(0, 10, 15);
     
         this.scene = new THREE.Scene();
@@ -216,7 +226,7 @@ export class Viewer {
         });
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.setSize(renderWidth, renderHeight);
+        this.renderer.setSize(renderDimensions.x, renderDimensions.y);
 
         if (!this.controls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -242,6 +252,8 @@ export class Viewer {
             if (e.data.buffer) {
 
             } else {
+                this.getRenderDimensions(renderDimensions);
+
                 let { covA, covB, center, color, viewProj } = e.data;
                 lastData = e.data;
     
@@ -262,8 +274,8 @@ export class Viewer {
                 geometry.attributes.splatCovarianceY.set(covB);
                 geometry.attributes.splatCovarianceY.needsUpdate = true;
 
-                this.splatMesh.material.uniforms.focal.value.set(1164.6601287484507, 1159.5880733038064);
-                this.splatMesh.material.uniforms.viewport.value.set(this.rootElement.offsetWidth, this.rootElement.offsetHeight);
+                this.splatMesh.material.uniforms.focal.value.set(renderDimensions.x, renderDimensions.y);
+                this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
                 this.splatMesh.material.uniformsNeedUpdate = true;
 
                 /*
@@ -369,10 +381,24 @@ export class Viewer {
     updateView = function () {
 
         const tempMatrix = new THREE.Matrix4();
+        const tempProjectionMatrix = new THREE.Matrix4();
+        const tempVector2 = new THREE.Vector2();
 
         return function () {
+            this.getRenderDimensions(tempVector2);
+            const zFar = 500.0;
+            const zNear = 0.1;
+            tempProjectionMatrix.elements = [
+                [(2 * 1164.6601287484507) / tempVector2.x, 0, 0, 0],
+                [0, -(2 * 1159.5880733038064) / tempVector2.y, 0, 0],
+                [0, 0, zFar / (zFar - zNear), 1],
+                [0, 0, -(zFar * zNear) / (zFar - zNear), 0],
+            ].flat();
+
+            //tempProjectionMatrix.copy(this.camera.projectionMatrix);
+
             tempMatrix.copy(this.camera.matrixWorld).invert();
-            tempMatrix.premultiply(this.camera.projectionMatrix);
+          //  tempMatrix.premultiply(tempProjectionMatrix);
             this.worker.postMessage({view: tempMatrix.elements});
         };
 
@@ -389,7 +415,7 @@ export class Viewer {
 
     }();
 
-    buildMaterial(useLogarithmicDepth) {
+    buildMaterial(useLogarithmicDepth = false) {
 
         let vertexShaderSource = `
             #include <common>
@@ -416,8 +442,53 @@ export class Viewer {
             varying vec2 vPosition;
         
             void main () {
-            vec4 camspace = viewMatrix * vec4(splatCenter, 1);
-            vec4 pos2d = projectionMatrix * camspace;
+
+            vec2 localViewport = viewport;
+            vec2 localFocal = vec2(1159.5880733038064, 1164.6601287484507);
+            mat4 localViewMatrix = viewMatrix;
+
+            
+            localViewMatrix = inverse(transpose(mat4(1, 0, 0, 0,
+                                                     0, 1, 0, 0,
+                                                     0, 0, 1, -2,
+                                                     0, 0, 0, 1)));
+
+
+           /* mat3 flip =  mat3(1, 0, 0,
+                              0, 1, 0,
+                              0, 0, 1);
+            mat3 rotMat = flip * mat3(localViewMatrix);
+            vec3 offset = vec3(localViewMatrix[3][0], localViewMatrix[3][1], localViewMatrix[3][2]);
+  
+            localViewMatrix = mat4(rotMat);
+            localViewMatrix[3][0] = offset.x;
+            localViewMatrix[3][1] = offset.y;
+            localViewMatrix[3][2] = offset.z;*/
+
+            float zFar = 500.0;
+            float zNear = 0.1; 
+            mat4 projMat = mat4(
+                (2.0 * localFocal.x) / localViewport.x, 0, 0, 0,
+                0, -(2.0 * localFocal.y) / localViewport.y, 0, 0,
+                0, 0, zFar / (zFar - zNear), 1,
+                0, 0, -(zFar * zNear) / (zFar - zNear), 0
+            );
+
+            /*projMat = transpose(mat4(
+                (2.0 * zNear) / localViewport.x, 0, 0, 0,
+                0, (2.0 * zNear) / localViewport.y, 0, 0,
+                0, 0, -zFar / (zFar - zNear), -zFar * zNear / (zFar - zNear),
+                0, 0, 1.0, 0
+            ));*/
+
+            mat4 flip4 =  mat4(1, 0, 0, 0,
+                               0, 1, 0, 0,
+                               0, 0, 1, 0,
+                               0, 0, 0, 1);
+
+            vec4 camspace = localViewMatrix * vec4(splatCenter, 1);
+            vec4 pos2d = flip4 * projMat * camspace;
+
         
             float bounds = 1.2 * pos2d.w;
             if (pos2d.z < -pos2d.w || pos2d.x < -bounds || pos2d.x > bounds
@@ -435,20 +506,20 @@ export class Viewer {
             );
             
             mat3 J = mat3(
-                focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z), 
-                0., -focal.y / camspace.z, (focal.y * camspace.y) / (camspace.z * camspace.z), 
+                localFocal.x / camspace.z, 0., -(localFocal.x * camspace.x) / (camspace.z * camspace.z), 
+                0., -localFocal.y / camspace.z, (localFocal.y * camspace.y) / (camspace.z * camspace.z), 
                 0., 0., 0.
             );
         
-            mat3 W = transpose(mat3(viewMatrix));
+            mat3 W = transpose(mat3(localViewMatrix));
             mat3 T = W * J;
             mat3 cov = transpose(T) * Vrk * T;
             
             vec2 vCenter = vec2(pos2d) / pos2d.w;
         
-            float diagonal1 = cov[0][0] + 0.3;
+            float diagonal1 = (cov[0][0] + 0.3);
             float offDiagonal = cov[0][1];
-            float diagonal2 = cov[1][1] + 0.3;
+            float diagonal2 = (cov[1][1] + 0.3);
         
             float mid = 0.5 * (diagonal1 + diagonal2);
             float radius = length(vec2((diagonal1 - diagonal2) / 2.0, offDiagonal));
@@ -461,10 +532,10 @@ export class Viewer {
             vColor = splatColor;
             vPosition = position.xy;
         
-            gl_Position = vec4(
-                vCenter 
-                    + position.x * v1 / viewport * 2.0 
-                    + position.y * v2 / viewport * 2.0, 0.0, 1.0);`;
+             gl_Position = vec4(
+                 vCenter
+                     + position.x * v1 / localViewport * 2.0
+                     + position.y * v2 / localViewport * 2.0, 0.0, 1.0);`;
 
         if (useLogarithmicDepth) {
             vertexShaderSource += `
@@ -529,7 +600,8 @@ export class Viewer {
             blendSrcAlpha: THREE.OneMinusDstAlphaFactor,
             blendDstAlpha: THREE.OneFactor,
             depthTest: false,
-            depthWrite: false
+            depthWrite: false,
+            side:  THREE.DoubleSide
         });
     }
 
@@ -540,6 +612,14 @@ export class Viewer {
         const positionsArray = new Float32Array(18);
         const positions = new THREE.BufferAttribute(positionsArray, 3);
         baseGeometry.setAttribute('position', positions);
+        positions.setXYZ(0, -2.0, 2.0, 0.0);
+        positions.setXYZ(1, -2.0, -2.0, 0.0);
+        positions.setXYZ(2, 2.0, 2.0, 0.0);
+        positions.setXYZ(3, -2.0, -2.0, 0.0);
+        positions.setXYZ(4, 2.0, -2.0, 0.0);
+        positions.setXYZ(5, 2.0, 2.0, 0.0);
+
+        positions.needsUpdate = true;
 
 
         const geometry  = new THREE.InstancedBufferGeometry().copy(baseGeometry);
