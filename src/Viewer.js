@@ -32,8 +32,6 @@ export class Viewer {
         this.selfDrivenUpdateFunc = this.update.bind(this);
         this.resizeFunc = this.onResize.bind(this);
         this.sortWorker = null;
-        this.sharedColor = null;
-        this.sharedCenterCov = null;
     }
 
     getRenderDimensions(outDimensions) {
@@ -86,7 +84,7 @@ export class Viewer {
         this.scene = new THREE.Scene();
     
         this.renderer = new THREE.WebGLRenderer({
-            antialias: true
+            antialias: false
         });
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -171,8 +169,6 @@ export class Viewer {
             this.splatMesh.frustumCulled = false;
             this.scene.add(this.splatMesh);
             this.addDebugMeshesToScene
-            //this.sharedColor = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4);
-            //this.sharedCenterCov = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 9);
             this.updateWorkerBuffer();
 
         });
@@ -245,8 +241,6 @@ export class Viewer {
                     precomputedCovariance: this.splatBuffer.getCovarianceBufferData(),
                     precomputedColor: this.splatBuffer.getColorBufferData(),
                     vertexCount: this.splatBuffer.getVertexCount(),
-                    sharedColor: this.sharedColor,
-                    sharedCenterCov: this.sharedCenterCov
                 }
             });
         };
@@ -267,22 +261,22 @@ export class Viewer {
 
         vertexShaderSource += `
             precision mediump float;
-        
+
             attribute vec4 splatColor;
             attribute mat3 splatCenterCovariance;
-        
+
             uniform mat4 realProjectionMatrix;
             uniform vec2 focal;
             uniform vec2 viewport;
-        
+
             varying vec4 vColor;
             varying vec2 vPosition;
-        
+
             void main () {
 
             vec3 splatCenter = splatCenterCovariance[0];
-            vec3 cov_M11_M12_M13 = splatCenterCovariance[1];
-            vec3 cov_M22_M23_M33 = splatCenterCovariance[2];
+            vec3 cov3D_M11_M12_M13 = splatCenterCovariance[1];
+            vec3 cov3D_M22_M23_M33 = splatCenterCovariance[2];
 
             vec4 camspace = viewMatrix * vec4(splatCenter, 1);
             vec4 pos2d = realProjectionMatrix * camspace;
@@ -293,29 +287,32 @@ export class Viewer {
                 gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
                 return;
             }
-        
+
             mat3 Vrk = mat3(
-                cov_M11_M12_M13.x, cov_M11_M12_M13.y, cov_M11_M12_M13.z, 
-                cov_M11_M12_M13.y, cov_M22_M23_M33.x, cov_M22_M23_M33.y,
-                cov_M11_M12_M13.z, cov_M22_M23_M33.y, cov_M22_M23_M33.z
+                cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z, 
+                cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
+                cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
             );
-            
+
             mat3 J = mat3(
                 focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z), 
                 0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z), 
                 0., 0., 0.
             );
-       
+
             mat3 W = transpose(mat3(viewMatrix));
             mat3 T = W * J;
-            mat3 cov = transpose(T) * Vrk * T;
-            
+            mat3 cov2Dm = transpose(T) * Vrk * T;
+            cov2Dm[0][0] += 0.3;
+            cov2Dm[1][1] += 0.3;
+            vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
+
             vec2 vCenter = vec2(pos2d) / pos2d.w;
         
-            float diagonal1 = (cov[0][0] + 0.3);
-            float offDiagonal = cov[0][1];
-            float diagonal2 = (cov[1][1] + 0.3);
-        
+            float diagonal1 = cov2Dv.x;
+            float offDiagonal = cov2Dv.y;
+            float diagonal2 = cov2Dv.z;
+
             float mid = 0.5 * (diagonal1 + diagonal2);
             float radius = length(vec2((diagonal1 - diagonal2) / 2.0, offDiagonal));
             float lambda1 = mid + radius;
@@ -323,15 +320,15 @@ export class Viewer {
             vec2 diagonalVector = normalize(vec2(offDiagonal, lambda1 - diagonal1));
             vec2 v1 = min(sqrt(2.0 * lambda1), 1024.0) * diagonalVector;
             vec2 v2 = min(sqrt(2.0 * lambda2), 1024.0) * vec2(diagonalVector.y, -diagonalVector.x);
-        
+
             vColor = splatColor;
             vPosition = position.xy;
-        
-             gl_Position = vec4(
-                 vCenter
-                     + position.x * v1 / viewport * 2.0
-                     + position.y * v2 / viewport * 2.0, 0.0, 1.0);
-                     `;
+
+            vec2 projectedCovariance = vCenter +
+                                       position.x * v1 / viewport * 2.0 +
+                                       position.y * v2 / viewport * 2.0;
+
+            gl_Position = vec4(projectedCovariance, 0.0, 1.0);`;
 
         if (useLogarithmicDepth) {
             vertexShaderSource += `

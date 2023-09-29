@@ -7,8 +7,6 @@ export function createSortWorker(self) {
     let viewProj;
     let depthMix = new BigInt64Array();
     let lastProj = [];
-    let sharedColor;
-    let sharedCenterCov;
 
     let rowSizeFloats = 0;
 
@@ -81,8 +79,6 @@ export function createSortWorker(self) {
             centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5]; 
         }
 
-        lastVertexCount = vertexCount;
-
         self.postMessage({color, centerCov}, [
             color.buffer,
             centerCov.buffer,
@@ -113,8 +109,6 @@ export function createSortWorker(self) {
             precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
             precomputedColor = e.data.bufferUpdate.precomputedColor;
             vertexCount = e.data.bufferUpdate.vertexCount;
-            sharedColor = e.data.bufferUpdate.sharedColor;
-            sharedCenterCov = e.data.bufferUpdate.sharedCenterCov;
         } else if (e.data.sort) {
             viewProj = e.data.sort.view;
             throttledSort();
