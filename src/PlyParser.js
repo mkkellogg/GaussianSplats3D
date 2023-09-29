@@ -55,16 +55,16 @@ export class PlyParser {
         };
     }
 
-    readRawVertex(vertexData, offset, propertyTypes) {
+    readRawVertex(vertexData, offset, fieldOffsets, propertyTypes) {
         let rawVertex = {};
 
         for (const property in propertyTypes) {
             const propertyType = propertyTypes[property];
             if (propertyType === 'float') {
-                rawVertex[property] = vertexData.getFloat32(offset, true);
+                rawVertex[property] = vertexData.getFloat32(offset+ fieldOffsets[property], true);
                 offset += Float32Array.BYTES_PER_ELEMENT;
             } else if (propertyType === 'uchar') {
-                rawVertex[property] = vertexData.getUint8(offset) / 255.0;
+                rawVertex[property] = vertexData.getUint8(offset + fieldOffsets[property]) / 255.0;
                 offset += Uint8Array.BYTES_PER_ELEMENT;
             }
         }
@@ -75,19 +75,16 @@ export class PlyParser {
         };
     }
 
-    readRawVertexFast(vertexData, offset, propertiesToRead, propertyTypes, outVertex) {
+    readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, outVertex) {
         let rawVertex = outVertex || {};
         for (let property of propertiesToRead) {
             const propertyType = propertyTypes[property];
             if (propertyType === 'float') {
-                rawVertex[property] = vertexData.getFloat32(offset, true);
-                offset += Float32Array.BYTES_PER_ELEMENT;
+                rawVertex[property] = vertexData.getFloat32(offset + fieldOffsets[property], true);
             } else if (propertyType === 'uchar') {
-                rawVertex[property] = vertexData.getUint8(offset) / 255.0;
-                offset += Uint8Array.BYTES_PER_ELEMENT;
+                rawVertex[property] = vertexData.getUint8(offset + fieldOffsets[property]) / 255.0;
             }
         }
-        return offset;
     }
 
     arrangeVertex(rawVertex, shFeatureOrder, sphericalHarmonicsDegree) {
@@ -161,7 +158,7 @@ export class PlyParser {
         }
 
         let plyRowSize = 0;
-        let offsets = {};
+        let fieldOffsets = {};
         const types = {};
         const TYPE_MAP = {
             'double': "getFloat64",
@@ -176,6 +173,7 @@ export class PlyParser {
             const type = propertyTypes[typeName];
             const arrayType = TYPE_MAP[type] || "getInt8";
             types[type] = arrayType;
+            fieldOffsets[typeName] = plyRowSize;
             plyRowSize += parseInt(arrayType.replace(/[^\d]/g, "")) / 8;
         }
 
@@ -204,7 +202,7 @@ export class PlyParser {
         let sizeIndex = new Uint32Array(vertexCount);
         let offset = 0;
         for (row = 0; row < vertexCount; row++) {
-            offset = this.readRawVertexFast(vertexData, offset, propertiesToRead, propertyTypes, rawVertex);
+            this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             // TODO: For now, in the interest of speed, we use the raw vertex
             // const arrangedVertex = this.arrangeVertex(rawVertex, shFeatureOrder, sphericalHarmonicsDegree);
             
@@ -231,7 +229,7 @@ export class PlyParser {
         for (let j = 0; j < vertexCount; j++) {
             row = sizeIndex[j];
             offset = row * plyRowSize;
-            offset = this.readRawVertexFast(vertexData, offset, propertiesToRead, propertyTypes, rawVertex);
+            offset = this.readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
 
             // TODO: For now, in the interest of speed, we use the raw vertex
             //const arrangedVertex = this.arrangeVertex(rawVertex, shFeatureOrder, sphericalHarmonicsDegree);
@@ -295,7 +293,6 @@ export class PlyParser {
             } else {
                 rgba[3] = 255;
             }
-
         }
 
         const plyLoadEndTime = performance.now() / 1000;
