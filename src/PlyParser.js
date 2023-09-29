@@ -1,4 +1,5 @@
 import { SplatBuffer } from './SplatBuffer.js';
+import * as THREE from 'three';
 
 export class PlyParser {
 
@@ -150,16 +151,12 @@ export class PlyParser {
             const rot = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.RotationRowOffsetBytes, 4);
 
             if (propertyTypes["scale_0"]) {
-                const qlen = Math.sqrt(Math.pow(rawVertex.rot_0, 2) +
-                                       Math.pow(rawVertex.rot_1, 2) +
-                                       Math.pow(rawVertex.rot_2, 2) +
-                                       Math.pow(rawVertex.rot_3, 2));
-
-                rot[0] = rawVertex.rot_0 / qlen;
-                rot[1] = rawVertex.rot_1 / qlen;
-                rot[2] = rawVertex.rot_2 / qlen;
-                rot[3] = rawVertex.rot_3 / qlen;
-
+                const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
+                quat.normalize();
+                rot[0] = quat.w;
+                rot[1] = quat.x;
+                rot[2] = quat.y;
+                rot[3] = quat.z;
                 scales[0] = Math.exp(rawVertex.scale_0);
                 scales[1] = Math.exp(rawVertex.scale_1);
                 scales[2] = Math.exp(rawVertex.scale_2);
@@ -167,7 +164,6 @@ export class PlyParser {
                 scales[0] = 0.01;
                 scales[1] = 0.01;
                 scales[2] = 0.01;
-
                 rot[0] = 1.0;
                 rot[1] = 0;
                 rot[2] = 0;
