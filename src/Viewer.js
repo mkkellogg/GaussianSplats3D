@@ -43,7 +43,7 @@ function createWorker(self) {
 
         for (let j = 0; j < vertexCount; j++) {
             let i = indexMix[2 * j];
-            const splatArrayBase = 8 * i;
+            const splatArrayBase = 11 * i;
             floatMix[2 * j + 1] =
                 10000 +
                 viewProj[2] * splatArray[splatArrayBase] +
@@ -62,7 +62,7 @@ function createWorker(self) {
             const pCovarianceBase = 6 * i;
             const colorBase = 4 * j;
             const pcColorBase = 4 * i;
-            const splatArrayBase = 8 * i;
+            const splatArrayBase = 11 * i;
 
             centerCov[centerCovBase] = splatArray[splatArrayBase]; 
             centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1]; 
