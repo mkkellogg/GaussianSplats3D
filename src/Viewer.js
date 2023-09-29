@@ -247,19 +247,10 @@ export class Viewer {
 
     }();
 
-    buildMaterial(useLogarithmicDepth = false) {
+    buildMaterial() {
 
-        let vertexShaderSource = `
+        const vertexShaderSource = `
             #include <common>
-        `;
-
-        if (useLogarithmicDepth) {
-            vertexShaderSource += `
-                #include <logdepthbuf_pars_vertex> 
-            `;
-        }
-
-        vertexShaderSource += `
             precision mediump float;
 
             attribute vec4 splatColor;
@@ -328,46 +319,22 @@ export class Viewer {
                                        position.x * v1 / viewport * 2.0 +
                                        position.y * v2 / viewport * 2.0;
 
-            gl_Position = vec4(projectedCovariance, 0.0, 1.0);`;
-
-        if (useLogarithmicDepth) {
-            vertexShaderSource += `
-                #include <logdepthbuf_vertex>
-            `;
-        }
+            gl_Position = vec4(projectedCovariance, 0.0, 1.0);
+        }`;
       
-        vertexShaderSource += `}`;
-      
-        let fragmentShaderSource = `
+        const fragmentShaderSource = `
             #include <common>
-        `;
-
-        if (useLogarithmicDepth) {
-            fragmentShaderSource += `
-                #include <logdepthbuf_pars_fragment>
-            `;
-        }
-
-        fragmentShaderSource += `
             precision mediump float;
             
             varying vec4 vColor;
             varying vec2 vPosition;
         
-            void main () {`;
-
-        if (useLogarithmicDepth) {
-            fragmentShaderSource += `
-                #include <logdepthbuf_fragment>
-            `;
-        }    
-
-        fragmentShaderSource += `
+            void main () {
                 float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
                 float B = exp(A) * vColor.a;
                 gl_FragColor = vec4(B * vColor.rgb, B);
-        }`;
+            }`;
 
         const uniforms = {
             'realProjectionMatrix': {
