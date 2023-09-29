@@ -4,6 +4,7 @@ import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
 import { createSortWorker } from './SortWorker.js';
+import { LoadingSpinner } from './LoadingSpinner.js';
 
 const DEFAULT_CAMERA_SPECS = {
     'fx': 1159.5880733038064,
@@ -145,6 +146,8 @@ export class Viewer {
     }();
 
     loadFile(fileName) {
+        const loadingSpinner = new LoadingSpinner();
+        loadingSpinner.show();
         const loadPromise = new Promise((resolve, reject) => {
             let fileLoadPromise;
             if (fileName.endsWith('.splat')) {
@@ -167,6 +170,7 @@ export class Viewer {
             this.splatBuffer = splatBuffer;
             this.splatMesh = this.buildMesh(this.splatBuffer);
             this.splatMesh.frustumCulled = false;
+            loadingSpinner.hide();
             this.scene.add(this.splatMesh);
             this.updateWorkerBuffer();
 
