@@ -156,36 +156,22 @@ export class PlyParser {
             if (propertyTypes['scale_0']) {
                 const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
                 quat.normalize();
-                rot[0] = quat.w;
-                rot[1] = quat.x;
-                rot[2] = quat.y;
-                rot[3] = quat.z;
-                scales[0] = Math.exp(rawVertex.scale_0);
-                scales[1] = Math.exp(rawVertex.scale_1);
-                scales[2] = Math.exp(rawVertex.scale_2);
+                rot.set([quat.w, quat.x, quat.y, quat.z]);
+                scales.set([Math.exp(rawVertex.scale_0), Math.exp(rawVertex.scale_1), Math.exp(rawVertex.scale_2)]);
             } else {
-                scales[0] = 0.01;
-                scales[1] = 0.01;
-                scales[2] = 0.01;
-                rot[0] = 1.0;
-                rot[1] = 0;
-                rot[2] = 0;
-                rot[3] = 0;
+                scales.set([0.01, 0.01, 0.01]);
+                rot.set([1.0, 0.0, 0.0, 0.0]);
             }
 
-            position[0] = rawVertex.x;
-            position[1] = rawVertex.y;
-            position[2] = rawVertex.z;
+            position.set([rawVertex.x, rawVertex.y, rawVertex.z]);
 
             if (propertyTypes['f_dc_0']) {
                 const SH_C0 = 0.28209479177387814;
-                rgba[0] = (0.5 + SH_C0 * rawVertex.f_dc_0) * 255;
-                rgba[1] = (0.5 + SH_C0 * rawVertex.f_dc_1) * 255;
-                rgba[2] = (0.5 + SH_C0 * rawVertex.f_dc_2) * 255;
+                rgba.set([(0.5 + SH_C0 * rawVertex.f_dc_0) * 255,
+                          (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
+                          (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
             } else {
-                rgba[0] = 255;
-                rgba[1] = 0;
-                rgba[2] = 0;
+                rgba.set([255, 0, 0]);
             }
             if (propertyTypes['opacity']) {
                 rgba[3] = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
