@@ -145,8 +145,8 @@ export class PlyParser {
             const offset = row * plyRowSize;
             this.readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             const position = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes, 3);
-            const scales = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes + 4 * 3, 3);
-            const rgba = new Uint8ClampedArray(splatBufferData, j * SplatBuffer.RowSizeBytes + 4 * 3 + 4 * 3, 4,);
+            const scales = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.ScaleRowOffsetBytes, 3);
+            const rgba = new Uint8ClampedArray(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.ColorRowOffsetBytes, 4,);
             const rot = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.RotationRowOffsetBytes, 4);
 
             if (propertyTypes["scale_0"]) {

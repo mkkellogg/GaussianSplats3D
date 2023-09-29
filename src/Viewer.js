@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
+import { SplatBuffer } from './SplatBuffer.js';
 
 function createWorker(self) {
     let splatBuffer;
@@ -11,6 +12,10 @@ function createWorker(self) {
     let viewProj;
     let depthMix = new BigInt64Array();
     let lastProj = [];
+    let sharedColor;
+    let sharedCenterCov;
+
+    let rowSizeFloats = 0;
 
     const runSort = (viewProj) => {
 
@@ -43,7 +48,7 @@ function createWorker(self) {
 
         for (let j = 0; j < vertexCount; j++) {
             let i = indexMix[2 * j];
-            const splatArrayBase = 11 * i;
+            const splatArrayBase = rowSizeFloats * i;
             floatMix[2 * j + 1] =
                 10000 +
                 viewProj[2] * splatArray[splatArrayBase] +
@@ -62,7 +67,7 @@ function createWorker(self) {
             const pCovarianceBase = 6 * i;
             const colorBase = 4 * j;
             const pcColorBase = 4 * i;
-            const splatArrayBase = 11 * i;
+            const splatArrayBase = rowSizeFloats * i;
 
             centerCov[centerCovBase] = splatArray[splatArrayBase]; 
             centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1]; 
@@ -80,6 +85,8 @@ function createWorker(self) {
             centerCov[centerCovBase + 7] = pCovarianceArray[pCovarianceBase + 4]; 
             centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5]; 
         }
+
+        lastVertexCount = vertexCount;
 
         self.postMessage({color, centerCov}, [
             color.buffer,
@@ -105,10 +112,14 @@ function createWorker(self) {
     let sortRunning;
     self.onmessage = (e) => {
         if (e.data.bufferUpdate) {
+            rowSizeFloats = e.data.bufferUpdate.rowSizeFloats;
+            rowSizeBytes = e.data.bufferUpdate.rowSizeBytes;
             splatBuffer = e.data.bufferUpdate.splatBuffer;
             precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
             precomputedColor = e.data.bufferUpdate.precomputedColor;
             vertexCount = e.data.bufferUpdate.vertexCount;
+            sharedColor = e.data.bufferUpdate.sharedColor;
+            sharedCenterCov = e.data.bufferUpdate.sharedCenterCov;
         } else if (e.data.sort) {
             viewProj = e.data.sort.view;
             throttledSort();
@@ -143,6 +154,8 @@ export class Viewer {
         this.selfDrivenUpdateFunc = this.update.bind(this);
         this.resizeFunc = this.onResize.bind(this);
         this.worker = null;
+        this.sharedColor = null;
+        this.sharedCenterCov = null;
     }
 
     getRenderDimensions(outDimensions) {
@@ -279,6 +292,9 @@ export class Viewer {
             this.splatMesh = this.buildMesh(this.splatBuffer);
             this.splatMesh.frustumCulled = false;
             this.scene.add(this.splatMesh);
+            this.addDebugMeshesToScene
+            //this.sharedColor = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4);
+            //this.sharedCenterCov = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 9);
             this.updateWorkerBuffer();
 
         });
@@ -345,10 +361,14 @@ export class Viewer {
         return function () {
             this.worker.postMessage({
                 bufferUpdate: {
+                    rowSizeFloats: SplatBuffer.RowSizeFloats,
+                    rowSizeBytes: SplatBuffer.RowSizeBytes,
                     splatBuffer: this.splatBuffer.getBufferData(),
                     precomputedCovariance: this.splatBuffer.getCovarianceBufferData(),
                     precomputedColor: this.splatBuffer.getColorBufferData(),
-                    vertexCount: this.splatBuffer.getVertexCount()
+                    vertexCount: this.splatBuffer.getVertexCount(),
+                    sharedColor: this.sharedColor,
+                    sharedCenterCov: this.sharedCenterCov
                 }
             });
         };

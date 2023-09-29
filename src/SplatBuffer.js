@@ -59,10 +59,6 @@ export class SplatBuffer {
             scaleMatrix.setFromMatrix4(tempMatrix4);
    
             const rotationBase = SplatBuffer.RowSizeFloats * i + SplatBuffer.RotationRowOffsetFloats;
-            /*rotation.set((splatUintArray[rotationBase + 1] - 128) / 128,
-                         (splatUintArray[rotationBase + 2] - 128) / 128,
-                         (splatUintArray[rotationBase + 3] - 128) / 128,
-                         (splatUintArray[rotationBase ] - 128) / 128);*/
             rotation.set(splatFloatArray[rotationBase + 1],
                          splatFloatArray[rotationBase + 2],
                          splatFloatArray[rotationBase + 3],
