@@ -105,7 +105,7 @@ function createWorker(self) {
     let sortRunning;
     self.onmessage = (e) => {
         if (e.data.bufferUpdate) {
-            buffer = e.data.bufferUpdate.buffer;
+            splatBuffer = e.data.bufferUpdate.splatBuffer;
             precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
             precomputedColor = e.data.bufferUpdate.precomputedColor;
             vertexCount = e.data.bufferUpdate.vertexCount;
@@ -345,7 +345,7 @@ export class Viewer {
         return function () {
             this.worker.postMessage({
                 bufferUpdate: {
-                    buffer: this.splatBuffer.getBufferData(),
+                    splatBuffer: this.splatBuffer.getBufferData(),
                     precomputedCovariance: this.splatBuffer.getCovarianceBufferData(),
                     precomputedColor: this.splatBuffer.getColorBufferData(),
                     vertexCount: this.splatBuffer.getVertexCount()

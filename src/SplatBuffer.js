@@ -35,9 +35,10 @@ export class SplatBuffer {
 
         const scale = new THREE.Vector3();
         const rotation = new THREE.Quaternion();
-        const rotationMatrix = new THREE.Matrix4();
-        const scaleMatrix = new THREE.Matrix4();
-        const covarianceMatrix = new THREE.Matrix4();
+        const rotationMatrix = new THREE.Matrix3();
+        const scaleMatrix = new THREE.Matrix3();
+        const covarianceMatrix = new THREE.Matrix3();
+        const tempMatrix4 = new THREE.Matrix4();
         for (let i = 0; i < vertexCount; i++) {
 
             const baseColor = SplatBuffer.RowSize * i + SplatBuffer.ColorRowOffset;
@@ -48,20 +49,19 @@ export class SplatBuffer {
 
             const baseScale = 8 * i + 3;
             scale.set(splatFloatArray[baseScale], splatFloatArray[baseScale + 1], splatFloatArray[baseScale + 2]);
-            scaleMatrix.makeScale(scale.x, scale.y, scale.z);
+            tempMatrix4.makeScale(scale.x, scale.y, scale.z);
+            scaleMatrix.setFromMatrix4(tempMatrix4);
    
             const rotationBase = 32 * i + 28;
-            rotation.set(splatUintArray[rotationBase] - 128,
-                         splatUintArray[rotationBase + 1] - 128,
-                         splatUintArray[rotationBase + 2] - 128,
-                         splatUintArray[rotationBase+ 3] - 128);
-            rotation.multiplyScalar(1 / 128);
-            rotationMatrix.makeRotationFromQuaternion(rotation);
+            rotation.set((splatUintArray[rotationBase + 1] - 128) / 128,
+                         (splatUintArray[rotationBase + 2] - 128) / 128,
+                         (splatUintArray[rotationBase + 3] - 128) / 128,
+                         (splatUintArray[rotationBase ] - 128) / 128);
+            tempMatrix4.makeRotationFromQuaternion(rotation);
+            rotationMatrix.setFromMatrix4(tempMatrix4);
 
-            covarianceMatrix.copy(scaleMatrix).multiply(rotationMatrix);
-
+            covarianceMatrix.copy(rotationMatrix).multiply(scaleMatrix);
             const M = covarianceMatrix.elements;
-
             covarianceArray[SplatBuffer.CovarianceSizeFloat * i] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
             covarianceArray[SplatBuffer.CovarianceSizeFloat * i + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
             covarianceArray[SplatBuffer.CovarianceSizeFloat * i + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
