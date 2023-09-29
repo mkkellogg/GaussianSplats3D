@@ -395,7 +395,6 @@ export class Viewer {
         splatCenters.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatCenterCovariance', splatCenters);
 
-
         return geometry;
     }
 
