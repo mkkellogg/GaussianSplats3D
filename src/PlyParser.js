@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export class PlyParser {
 
     constructor(plyBuffer) {
-        this.plyBuffer = plyBuffer
+        this.plyBuffer = plyBuffer;
     }
 
     decodeHeader(plyBuffer) {
@@ -68,9 +68,9 @@ export class PlyParser {
         }
     }
 
-    parseToSplatBuffer(){
+    parseToSplatBuffer() {
 
-        console.time("PLY load");
+        console.time('PLY load');
 
         const {vertexCount, propertyTypes, vertexData} = this.decodeHeader(this.plyBuffer);
 
@@ -82,7 +82,7 @@ export class PlyParser {
             }
         }
         const nCoeffsPerColor = nRestCoeffs / 3;
-        
+
         // TODO: Eventually properly support multiple degree spherical harmonics
         // const sphericalHarmonicsDegree = Math.sqrt(nCoeffsPerColor + 1) - 1;
         const sphericalHarmonicsDegree = 0;
@@ -112,31 +112,34 @@ export class PlyParser {
             'uchar': 1,
         };
         for (let fieldName in propertyTypes) {
-            const type = propertyTypes[fieldName];
-            fieldOffsets[fieldName] = plyRowSize;
-            plyRowSize += fieldSize[type];
+            if (propertyTypes.hasOwnProperty(fieldName)) {
+                const type = propertyTypes[fieldName];
+                fieldOffsets[fieldName] = plyRowSize;
+                plyRowSize += fieldSize[type];
+            }
         }
 
         let rawVertex = {};
 
-        const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3', 'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
+        const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
+                                  'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
-        console.time("Importance computations");
+        console.time('Importance computations');
         let sizeList = new Float32Array(vertexCount);
         let sizeIndex = new Uint32Array(vertexCount);
         for (let row = 0; row < vertexCount; row++) {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             sizeIndex[row] = row;
-            if (!propertyTypes["scale_0"]) continue;
+            if (!propertyTypes['scale_0']) continue;
             const size = Math.exp(rawVertex.scale_0) * Math.exp(rawVertex.scale_1) * Math.exp(rawVertex.scale_2);
             const opacity = 1 / (1 + Math.exp(-rawVertex.opacity));
             sizeList[row] = size * opacity;
         }
-        console.timeEnd("Importance computations");
+        console.timeEnd('Importance computations');
 
-        console.time("Importance sort");
+        console.time('Importance sort');
         sizeIndex.sort((b, a) => sizeList[a] - sizeList[b]);
-        console.timeEnd("Importance sort");
+        console.timeEnd('Importance sort');
 
 
         const splatBufferData = new ArrayBuffer(SplatBuffer.RowSizeBytes * vertexCount);
@@ -150,7 +153,7 @@ export class PlyParser {
             const rgba = new Uint8ClampedArray(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.ColorRowOffsetBytes, 4,);
             const rot = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.RotationRowOffsetBytes, 4);
 
-            if (propertyTypes["scale_0"]) {
+            if (propertyTypes['scale_0']) {
                 const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
                 quat.normalize();
                 rot[0] = quat.w;
@@ -174,7 +177,7 @@ export class PlyParser {
             position[1] = rawVertex.y;
             position[2] = rawVertex.z;
 
-            if (propertyTypes["f_dc_0"]) {
+            if (propertyTypes['f_dc_0']) {
                 const SH_C0 = 0.28209479177387814;
                 rgba[0] = (0.5 + SH_C0 * rawVertex.f_dc_0) * 255;
                 rgba[1] = (0.5 + SH_C0 * rawVertex.f_dc_1) * 255;
@@ -184,14 +187,14 @@ export class PlyParser {
                 rgba[1] = 0;
                 rgba[2] = 0;
             }
-            if (propertyTypes["opacity"]) {
+            if (propertyTypes['opacity']) {
                 rgba[3] = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
             } else {
                 rgba[3] = 255;
             }
         }
 
-        console.timeEnd("PLY load");
+        console.timeEnd('PLY load');
 
         const splatBuffer = new SplatBuffer(splatBufferData);
         splatBuffer.buildPreComputedBuffers();

@@ -6,11 +6,11 @@ export class PlyLoader {
         this.splatBuffer = null;
     }
 
-    fetchFile(fileName){
+    fetchFile(fileName) {
         return new Promise((resolve, reject) => {
             fetch(fileName)
             .then((res) => {
-                return res.arrayBuffer()
+                return res.arrayBuffer();
             })
             .then((data) => {
                 resolve(data);
@@ -21,7 +21,7 @@ export class PlyLoader {
         });
     }
 
-    loadFromFile(fileName){
+    loadFromFile(fileName) {
         return new Promise((resolve, reject) => {
             const loadPromise = this.fetchFile(fileName);
             loadPromise
@@ -29,7 +29,7 @@ export class PlyLoader {
                 const plyParser = new PlyParser(plyFileData);
                 const splatBuffer = plyParser.parseToSplatBuffer();
                 this.splatBuffer = splatBuffer;
-                resolve(splatBuffer);                
+                resolve(splatBuffer);
             })
             .catch((err) => {
                 reject(err);

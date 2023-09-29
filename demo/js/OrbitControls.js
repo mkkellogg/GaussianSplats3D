@@ -55,7 +55,7 @@ class OrbitControls extends EventDispatcher {
         this.maxPolarAngle = Math.PI; // radians
 
         // How far you can orbit horizontally, upper and lower limits.
-        // If set, the interval [ min, max ] must be a sub-interval of [ - 2 PI, 2 PI ], with ( max - min < 2 PI )
+        // If set, the interval [min, max] must be a sub-interval of [- 2 PI, 2 PI], with ( max - min < 2 PI )
         this.minAzimuthAngle = - Infinity; // radians
         this.maxAzimuthAngle = Infinity; // radians
 
@@ -77,7 +77,7 @@ class OrbitControls extends EventDispatcher {
         this.enablePan = true;
         this.panSpeed = 1.0;
         this.screenSpacePanning = true; // if false, pan orthogonal to world-space direction camera.up
-        this.keyPanSpeed = 7.0;    // pixels moved per arrow key push
+        this.keyPanSpeed = 7.0; // pixels moved per arrow key push
         this.zoomToCursor = false;
 
         // Set to true to automatically rotate around the target
@@ -106,39 +106,39 @@ class OrbitControls extends EventDispatcher {
         // public methods
         //
 
-        this.getPolarAngle = function () {
+        this.getPolarAngle = function() {
 
             return spherical.phi;
 
         };
 
-        this.getAzimuthalAngle = function () {
+        this.getAzimuthalAngle = function() {
 
             return spherical.theta;
 
         };
 
-        this.getDistance = function () {
+        this.getDistance = function() {
 
             return this.object.position.distanceTo( this.target );
 
         };
 
-        this.listenToKeyEvents = function ( domElement ) {
+        this.listenToKeyEvents = function( domElement ) {
 
             domElement.addEventListener( 'keydown', onKeyDown );
             this._domElementKeyEvents = domElement;
 
         };
 
-        this.stopListenToKeyEvents = function () {
+        this.stopListenToKeyEvents = function() {
 
             this._domElementKeyEvents.removeEventListener( 'keydown', onKeyDown );
             this._domElementKeyEvents = null;
 
         };
 
-        this.saveState = function () {
+        this.saveState = function() {
 
             scope.target0.copy( scope.target );
             scope.position0.copy( scope.object.position );
@@ -146,7 +146,7 @@ class OrbitControls extends EventDispatcher {
 
         };
 
-        this.reset = function () {
+        this.reset = function() {
 
             scope.target.copy( scope.target0 );
             scope.object.position.copy( scope.position0 );
@@ -162,7 +162,7 @@ class OrbitControls extends EventDispatcher {
         };
 
         // this method is exposed, but perhaps it would be better if we can make it private...
-        this.update = function () {
+        this.update = function() {
 
             const offset = new Vector3();
 
@@ -399,7 +399,7 @@ class OrbitControls extends EventDispatcher {
 
         }();
 
-        this.dispose = function () {
+        this.dispose = function() {
 
             scope.domElement.removeEventListener( 'contextmenu', onContextMenu );
 
@@ -417,8 +417,6 @@ class OrbitControls extends EventDispatcher {
                 scope._domElementKeyEvents = null;
 
             }
-
-            //scope.dispatchEvent( { type: 'dispose' } ); // should this be added here?
 
         };
 
@@ -493,7 +491,7 @@ class OrbitControls extends EventDispatcher {
 
         }
 
-        const panLeft = function () {
+        const panLeft = function() {
 
             const v = new Vector3();
 
@@ -508,7 +506,7 @@ class OrbitControls extends EventDispatcher {
 
         }();
 
-        const panUp = function () {
+        const panUp = function() {
 
             const v = new Vector3();
 
@@ -534,7 +532,7 @@ class OrbitControls extends EventDispatcher {
         }();
 
         // deltaX and deltaY are in pixels; right and down are positive
-        const pan = function () {
+        const pan = function() {
 
             const offset = new Vector3();
 
@@ -559,8 +557,10 @@ class OrbitControls extends EventDispatcher {
                 } else if ( scope.object.isOrthographicCamera ) {
 
                     // orthographic
-                    panLeft( deltaX * ( scope.object.right - scope.object.left ) / scope.object.zoom / element.clientWidth, scope.object.matrix );
-                    panUp( deltaY * ( scope.object.top - scope.object.bottom ) / scope.object.zoom / element.clientHeight, scope.object.matrix );
+                    panLeft( deltaX * ( scope.object.right - scope.object.left ) /
+                                        scope.object.zoom / element.clientWidth, scope.object.matrix );
+                    panUp( deltaY * ( scope.object.top - scope.object.bottom ) / scope.object.zoom /
+                                      element.clientHeight, scope.object.matrix );
 
                 } else {
 
@@ -812,12 +812,12 @@ class OrbitControls extends EventDispatcher {
 
             if ( pointers.length === 1 ) {
 
-                rotateStart.set( pointers[ 0 ].pageX, pointers[ 0 ].pageY );
+                rotateStart.set( pointers[0].pageX, pointers[0].pageY );
 
             } else {
 
-                const x = 0.5 * ( pointers[ 0 ].pageX + pointers[ 1 ].pageX );
-                const y = 0.5 * ( pointers[ 0 ].pageY + pointers[ 1 ].pageY );
+                const x = 0.5 * ( pointers[0].pageX + pointers[1].pageX );
+                const y = 0.5 * ( pointers[0].pageY + pointers[1].pageY );
 
                 rotateStart.set( x, y );
 
@@ -829,12 +829,12 @@ class OrbitControls extends EventDispatcher {
 
             if ( pointers.length === 1 ) {
 
-                panStart.set( pointers[ 0 ].pageX, pointers[ 0 ].pageY );
+                panStart.set( pointers[0].pageX, pointers[0].pageY );
 
             } else {
 
-                const x = 0.5 * ( pointers[ 0 ].pageX + pointers[ 1 ].pageX );
-                const y = 0.5 * ( pointers[ 0 ].pageY + pointers[ 1 ].pageY );
+                const x = 0.5 * ( pointers[0].pageX + pointers[1].pageX );
+                const y = 0.5 * ( pointers[0].pageY + pointers[1].pageY );
 
                 panStart.set( x, y );
 
@@ -844,8 +844,8 @@ class OrbitControls extends EventDispatcher {
 
         function handleTouchStartDolly() {
 
-            const dx = pointers[ 0 ].pageX - pointers[ 1 ].pageX;
-            const dy = pointers[ 0 ].pageY - pointers[ 1 ].pageY;
+            const dx = pointers[0].pageX - pointers[1].pageX;
+            const dy = pointers[0].pageY - pointers[1].pageY;
 
             const distance = Math.sqrt( dx * dx + dy * dy );
 
@@ -1331,11 +1331,11 @@ class OrbitControls extends EventDispatcher {
 
         function removePointer( event ) {
 
-            delete pointerPositions[ event.pointerId ];
+            delete pointerPositions[event.pointerId];
 
             for ( let i = 0; i < pointers.length; i ++ ) {
 
-                if ( pointers[ i ].pointerId == event.pointerId ) {
+                if ( pointers[i].pointerId == event.pointerId ) {
 
                     pointers.splice( i, 1 );
                     return;
@@ -1348,12 +1348,12 @@ class OrbitControls extends EventDispatcher {
 
         function trackPointer( event ) {
 
-            let position = pointerPositions[ event.pointerId ];
+            let position = pointerPositions[event.pointerId];
 
             if ( position === undefined ) {
 
                 position = new Vector2();
-                pointerPositions[ event.pointerId ] = position;
+                pointerPositions[event.pointerId] = position;
 
             }
 
@@ -1363,9 +1363,9 @@ class OrbitControls extends EventDispatcher {
 
         function getSecondPointerPosition( event ) {
 
-            const pointer = ( event.pointerId === pointers[ 0 ].pointerId ) ? pointers[ 1 ] : pointers[ 0 ];
+            const pointer = ( event.pointerId === pointers[0].pointerId ) ? pointers[1] : pointers[0];
 
-            return pointerPositions[ pointer.pointerId ];
+            return pointerPositions[pointer.pointerId];
 
         }
 

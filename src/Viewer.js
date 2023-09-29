@@ -10,7 +10,7 @@ const DEFAULT_CAMERA_SPECS = {
     'fy': 1164.6601287484507,
     'near': 0.1,
     'far': 500
-}
+};
 
 export class Viewer {
 
@@ -51,7 +51,7 @@ export class Viewer {
 
         const renderDimensions = new THREE.Vector2();
 
-        return function () {
+        return function() {
             this.renderer.setSize(1, 1);
             this.getRenderDimensions(renderDimensions);
             this.camera.aspect = renderDimensions.x / renderDimensions.y;
@@ -80,9 +80,9 @@ export class Viewer {
         this.camera.lookAt(this.initialCameraLookAt);
         this.camera.up.copy(this.cameraUp).normalize();
         this.updateRealProjectionMatrix(renderDimensions);
-    
+
         this.scene = new THREE.Scene();
-    
+
         this.renderer = new THREE.WebGLRenderer({
             antialias: false
         });
@@ -97,15 +97,15 @@ export class Viewer {
             this.controls.dampingFactor = 0.15;
             this.controls.target.copy(this.initialCameraLookAt);
         }
-    
+
         window.addEventListener('resize', this.resizeFunc, false);
-    
+
         this.rootElement.appendChild(this.renderer.domElement);
 
         this.sortWorker = new Worker(
             URL.createObjectURL(
-                new Blob(["(", createSortWorker.toString(), ")(self)"], {
-                    type: "application/javascript",
+                new Blob(['(', createSortWorker.toString(), ')(self)'], {
+                    type: 'application/javascript',
                 }),
             ),
         );
@@ -119,7 +119,7 @@ export class Viewer {
 
     updateSplatMeshAttributes(colors, centerCovariances) {
         const vertexCount = centerCovariances.length / 9;
-        const geometry  = this.splatMesh.geometry;
+        const geometry = this.splatMesh.geometry;
 
         geometry.attributes.splatCenterCovariance.set(centerCovariances);
         geometry.attributes.splatCenterCovariance.needsUpdate = true;
@@ -130,7 +130,7 @@ export class Viewer {
         geometry.instanceCount = vertexCount;
     }
 
-    updateSplatMeshUniforms = function () {
+    updateSplatMeshUniforms = function() {
 
         const renderDimensions = new THREE.Vector2();
 
@@ -160,7 +160,7 @@ export class Viewer {
             })
             .catch((e) => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
-            })
+            });
         });
 
         return loadPromise.then((splatBuffer) => {
@@ -168,7 +168,6 @@ export class Viewer {
             this.splatMesh = this.buildMesh(this.splatBuffer);
             this.splatMesh.frustumCulled = false;
             this.scene.add(this.splatMesh);
-            this.addDebugMeshesToScene
             this.updateWorkerBuffer();
 
         });
@@ -198,7 +197,7 @@ export class Viewer {
         if (this.selfDrivenMode) {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
         } else {
-            throw new Error("Cannot start viewer unless it is in self driven mode.");
+            throw new Error('Cannot start viewer unless it is in self driven mode.');
         }
     }
 
@@ -212,12 +211,12 @@ export class Viewer {
         this.renderer.render(this.scene, this.camera);
     }
 
-    updateView = function () {
+    updateView = function() {
 
         const tempMatrix = new THREE.Matrix4();
         const tempVector2 = new THREE.Vector2();
 
-        return function () {
+        return function() {
             this.getRenderDimensions(tempVector2);
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(this.realProjectionMatrix);
@@ -230,9 +229,9 @@ export class Viewer {
 
     }();
 
-    updateWorkerBuffer = function () {
+    updateWorkerBuffer = function() {
 
-        return function () {
+        return function() {
             this.sortWorker.postMessage({
                 bufferUpdate: {
                     rowSizeFloats: SplatBuffer.RowSizeFloats,
@@ -280,14 +279,14 @@ export class Viewer {
             }
 
             mat3 Vrk = mat3(
-                cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z, 
+                cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z,
                 cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
                 cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
             );
 
             mat3 J = mat3(
-                focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z), 
-                0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z), 
+                focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z),
+                0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z),
                 0., 0., 0.
             );
 
@@ -299,7 +298,7 @@ export class Viewer {
             vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
 
             vec2 vCenter = vec2(pos2d) / pos2d.w;
-        
+
             float diagonal1 = cov2Dv.x;
             float offDiagonal = cov2Dv.y;
             float diagonal2 = cov2Dv.z;
@@ -321,14 +320,14 @@ export class Viewer {
 
             gl_Position = vec4(projectedCovariance, 0.0, 1.0);
         }`;
-      
+
         const fragmentShaderSource = `
             #include <common>
             precision mediump float;
-            
+
             varying vec4 vColor;
             varying vec2 vPosition;
-        
+
             void main () {
                 float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
@@ -365,7 +364,7 @@ export class Viewer {
             blendDstAlpha: THREE.OneFactor,
             depthTest: false,
             depthWrite: false,
-            side:  THREE.DoubleSide
+            side: THREE.DoubleSide
         });
     }
 
@@ -384,7 +383,7 @@ export class Viewer {
         positions.setXYZ(3, 2.0, 2.0, 0.0);
         positions.needsUpdate = true;
 
-        const geometry  = new THREE.InstancedBufferGeometry().copy(baseGeometry);
+        const geometry = new THREE.InstancedBufferGeometry().copy(baseGeometry);
 
         const splatColorsArray = new Float32Array(splatBuffer.getVertexCount() * 4);
         const splatColors = new THREE.InstancedBufferAttribute(splatColorsArray, 4, false);

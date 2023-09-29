@@ -62,8 +62,8 @@ export function createSortWorker(self) {
             const pcColorBase = 4 * i;
             const splatArrayBase = rowSizeFloats * i;
 
-            centerCov[centerCovBase] = splatArray[splatArrayBase]; 
-            centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1]; 
+            centerCov[centerCovBase] = splatArray[splatArrayBase];
+            centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1];
             centerCov[centerCovBase + 2] = splatArray[splatArrayBase + 2];
 
             color[colorBase] = pColorArray[pcColorBase];
@@ -71,12 +71,12 @@ export function createSortWorker(self) {
             color[colorBase + 2] = pColorArray[pcColorBase + 2];
             color[colorBase + 3] = pColorArray[pcColorBase + 3];
 
-            centerCov[centerCovBase + 3] = pCovarianceArray[pCovarianceBase]; 
-            centerCov[centerCovBase + 4] = pCovarianceArray[pCovarianceBase + 1]; 
-            centerCov[centerCovBase + 5] = pCovarianceArray[pCovarianceBase + 2]; 
-            centerCov[centerCovBase + 6] = pCovarianceArray[pCovarianceBase + 3]; 
-            centerCov[centerCovBase + 7] = pCovarianceArray[pCovarianceBase + 4]; 
-            centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5]; 
+            centerCov[centerCovBase + 3] = pCovarianceArray[pCovarianceBase];
+            centerCov[centerCovBase + 4] = pCovarianceArray[pCovarianceBase + 1];
+            centerCov[centerCovBase + 5] = pCovarianceArray[pCovarianceBase + 2];
+            centerCov[centerCovBase + 6] = pCovarianceArray[pCovarianceBase + 3];
+            centerCov[centerCovBase + 7] = pCovarianceArray[pCovarianceBase + 4];
+            centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5];
         }
 
         self.postMessage({color, centerCov}, [

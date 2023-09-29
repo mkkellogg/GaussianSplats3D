@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 export class SplatBuffer {
 
-    // Row format: 
+    // Row format:
     //     Center position (XYZ) - Float32 * 3
     //     Scale (XYZ)  - Float32 * 3
     //     Color (RGBA) - Uint8 * 4
@@ -27,10 +27,10 @@ export class SplatBuffer {
         this.colorBufferData = null;
     }
 
-    buildPreComputedBuffers(){
+    buildPreComputedBuffers() {
         const vertexCount = this.getVertexCount();
 
-        this.covarianceBufferData = new ArrayBuffer(SplatBuffer.CovarianceSizeBytes * vertexCount); 
+        this.covarianceBufferData = new ArrayBuffer(SplatBuffer.CovarianceSizeBytes * vertexCount);
         const covarianceArray = new Float32Array(this.covarianceBufferData);
 
         this.colorBufferData = new ArrayBuffer(SplatBuffer.ColorSizeBytes * vertexCount);
@@ -57,7 +57,7 @@ export class SplatBuffer {
             scale.set(splatFloatArray[baseScale], splatFloatArray[baseScale + 1], splatFloatArray[baseScale + 2]);
             tempMatrix4.makeScale(scale.x, scale.y, scale.z);
             scaleMatrix.setFromMatrix4(tempMatrix4);
-   
+
             const rotationBase = SplatBuffer.RowSizeFloats * i + SplatBuffer.RotationRowOffsetFloats;
             rotation.set(splatFloatArray[rotationBase + 1],
                          splatFloatArray[rotationBase + 2],
