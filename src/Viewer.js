@@ -34,7 +34,8 @@ export class Viewer {
         this.resizeFunc = this.onResize.bind(this);
         this.sortWorker = null;
 
-        const sab = new SharedArrayBuffer(1024);
+        this.workerTransferCenterCovarainceBuffer = null;
+        this.workerTransferColorBuffer = null;
     }
 
     getRenderDimensions(outDimensions) {
@@ -172,6 +173,8 @@ export class Viewer {
             this.splatBuffer = splatBuffer;
             this.splatMesh = this.buildMesh(this.splatBuffer);
             this.splatMesh.frustumCulled = false;
+            this.workerTransferCenterCovarainceBuffer = new SharedArrayBuffer();
+            this.workerTransferColorBuffer = new SharedArrayBuffer()
             loadingSpinner.hide();
             this.scene.add(this.splatMesh);
             this.updateWorkerBuffer();
