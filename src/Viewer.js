@@ -34,8 +34,10 @@ export class Viewer {
         this.resizeFunc = this.onResize.bind(this);
         this.sortWorker = null;
 
-        this.workerTransferCenterCovarainceBuffer = null;
+        this.workerTransferCenterCovarianceBuffer = null;
         this.workerTransferColorBuffer = null;
+        this.workerTransferCenterCovarianceArray = null;
+        this.workerTransferColorArray = null;
     }
 
     getRenderDimensions(outDimensions) {
@@ -115,9 +117,11 @@ export class Viewer {
         );
 
         this.sortWorker.onmessage = (e) => {
-            let {color, centerCov} = e.data;
-            this.updateSplatMeshAttributes(color, centerCov);
-            this.updateSplatMeshUniforms();
+            if (e.data.sortDone) {
+                //let {color, centerCov} = e.data;
+                this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray);
+                this.updateSplatMeshUniforms();
+            }
         };
     }
 
@@ -173,8 +177,10 @@ export class Viewer {
             this.splatBuffer = splatBuffer;
             this.splatMesh = this.buildMesh(this.splatBuffer);
             this.splatMesh.frustumCulled = false;
-            this.workerTransferCenterCovarainceBuffer = new SharedArrayBuffer();
-            this.workerTransferColorBuffer = new SharedArrayBuffer()
+            this.workerTransferCenterCovarianceBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 9 * 4);
+            this.workerTransferColorBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4 * 4)
+            this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer);
+            this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer);
             loadingSpinner.hide();
             this.scene.add(this.splatMesh);
             this.updateWorkerBuffer();
@@ -251,6 +257,8 @@ export class Viewer {
                     rowSizeFloats: SplatBuffer.RowSizeFloats,
                     rowSizeBytes: SplatBuffer.RowSizeBytes,
                     splatBuffer: this.splatBuffer.getBufferData(),
+                    workerTransferCenterCovarianceBuffer: this.workerTransferCenterCovarianceBuffer,
+                    workerTransferColorBuffer: this.workerTransferColorBuffer,
                     precomputedCovariance: this.splatBuffer.getCovarianceBufferData(),
                     precomputedColor: this.splatBuffer.getColorBufferData(),
                     vertexCount: this.splatBuffer.getVertexCount(),
@@ -293,10 +301,7 @@ export class Viewer {
                 gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
                 return;
             }
-
-
-
-            
+ 
             mat3 Vrk = mat3(
                 cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z,
                 cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
@@ -351,29 +356,28 @@ export class Viewer {
             varying vec4 conicOpacity;
             varying vec2 vUv;
 
+            vec3 gamma(vec3 value, float param) {
+                return vec3(pow(abs(value.r), param),pow(abs(value.g), param),pow(abs(value.b), param));
+            }  
+
             void main () {
-    
                 float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
-                float B = exp(A) * vColor.a;
-                gl_FragColor = vec4(B * vColor.rgb, B);
+                vec3 color = vColor.rgb;
+                float alpha = vColor.a;
 
-                /*
-                // we want the distance from the gaussian to the fragment while uv
-                // is the reverse
-                vec2 d = -vUv.xy;
-                vec3 conic = conicOpacity.xyz;
-                float power = -0.5 * (conic.x * d.x * d.x + conic.z * d.y * d.y) + conic.y * d.x * d.y;
-                float opacity = conicOpacity.w;
-            
-                if (power > 0.0) discard;
-            
-                float alpha = min(0.99, opacity * exp(power));
-            
-                gl_FragColor = vec4(vColor.rgb * alpha, alpha);*/
+                //color = color / (color + vec3(1.0));
+                //color = pow(color, vec3(1.0/1.5));  
+                //color = saturate(mix(vec3(0.5, 0.5, 0.5), color, 1.01));
 
+                float B = exp(A) * alpha;
+                vec3 colorB = B * color.rgb;
 
-
+                // colorB = pow(colorB, vec3(2.2));
+                // colorB = saturate(mix(vec3(0.5, 0.5, 0.5), colorB, 1.0001));
+                // colorB = pow(colorB, vec3(1.0/2.2));
+  
+                gl_FragColor = vec4(colorB, B);
 
             }`;
 

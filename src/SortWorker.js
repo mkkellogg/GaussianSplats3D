@@ -20,6 +20,9 @@ export function createSortWorker(self) {
     let aggregateTraveled = [];
     let maxCameraTravel = 5.0;
 
+    let workerTransferCenterCovarianceBuffer;
+    let workerTransferColorBuffer;
+
     const runSort = (viewProj) => {
 
         if (!splatBuffer) return;
@@ -27,8 +30,8 @@ export function createSortWorker(self) {
         const splatArray = new Float32Array(splatBuffer);
         const pCovarianceArray = new Float32Array(precomputedCovariance);
         const pColorArray = new Float32Array(precomputedColor);
-        const color = new Float32Array(4 * vertexCount);
-        const centerCov = new Float32Array(9 * vertexCount);
+        const color = new Float32Array(workerTransferColorBuffer);
+        const centerCov = new Float32Array(workerTransferCenterCovarianceBuffer);
 
         let fullRefresh = false;
 
@@ -123,10 +126,7 @@ export function createSortWorker(self) {
         lastVertexCount = vertexCount;
         lastCameraPosition = cameraPosition;
         
-        self.postMessage({color, centerCov}, [
-            color.buffer,
-            centerCov.buffer,
-        ]);
+        self.postMessage({'sortDone': true});
 
     };
 
@@ -150,6 +150,8 @@ export function createSortWorker(self) {
             rowSizeFloats = e.data.bufferUpdate.rowSizeFloats;
             rowSizeBytes = e.data.bufferUpdate.rowSizeBytes;
             splatBuffer = e.data.bufferUpdate.splatBuffer;
+            workerTransferCenterCovarianceBuffer = e.data.bufferUpdate.workerTransferCenterCovarianceBuffer,
+            workerTransferColorBuffer = e.data.bufferUpdate.workerTransferColorBuffer,
             precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
             precomputedColor = e.data.bufferUpdate.precomputedColor;
             vertexCount = e.data.bufferUpdate.vertexCount;
