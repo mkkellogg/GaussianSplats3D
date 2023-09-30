@@ -5,6 +5,7 @@ import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
 import { createSortWorker } from './SortWorker.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
+import { Octree } from './octree/Octree.js';
 
 const DEFAULT_CAMERA_SPECS = {
     'fx': 1159.5880733038064,
@@ -29,7 +30,6 @@ export class Viewer {
         this.realProjectionMatrix = new THREE.Matrix4();
         this.renderer = null;
         this.splatBuffer = null;
-        this.splatMesh = null;
         this.selfDrivenUpdateFunc = this.update.bind(this);
         this.resizeFunc = this.onResize.bind(this);
         this.sortWorker = null;
@@ -38,6 +38,8 @@ export class Viewer {
         this.workerTransferColorBuffer = null;
         this.workerTransferCenterCovarianceArray = null;
         this.workerTransferColorArray = null;
+
+        this.octree = null;
     }
 
     getRenderDimensions(outDimensions) {
@@ -118,7 +120,6 @@ export class Viewer {
 
         this.sortWorker.onmessage = (e) => {
             if (e.data.sortDone) {
-                //let {color, centerCov} = e.data;
                 this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray);
                 this.updateSplatMeshUniforms();
             }
@@ -126,16 +127,23 @@ export class Viewer {
     }
 
     updateSplatMeshAttributes(colors, centerCovariances) {
-        const vertexCount = centerCovariances.length / 9;
-        const geometry = this.splatMesh.geometry;
-
-        geometry.attributes.splatCenterCovariance.set(centerCovariances);
-        geometry.attributes.splatCenterCovariance.needsUpdate = true;
-
-        geometry.attributes.splatColor.set(colors);
-        geometry.attributes.splatColor.needsUpdate = true;
-
-        geometry.instanceCount = vertexCount;
+        return;
+        this.octree.visitLeaves((node) => {
+            const vertexCount = node.data.splatBuffer.getVertexCount();
+            if (vertexCount > 0) {
+                const vertexCount = centerCovariances.length / 9;
+                const geometry = node.data.splatMesh.geometry;
+        
+                geometry.attributes.splatCenterCovariance.set(centerCovariances);
+                geometry.attributes.splatCenterCovariance.needsUpdate = true;
+        
+                geometry.attributes.splatColor.set(colors);
+                geometry.attributes.splatColor.needsUpdate = true;
+        
+                geometry.instanceCount = vertexCount;
+            }
+        });
+     
     }
 
     updateSplatMeshUniforms = function() {
@@ -144,10 +152,16 @@ export class Viewer {
 
         return function() {
             this.getRenderDimensions(renderDimensions);
-            this.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
-            this.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
-            this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
-            this.splatMesh.material.uniformsNeedUpdate = true;
+            this.octree.visitLeaves((node) => {
+                const vertexCount = node.data.splatBuffer.getVertexCount();
+                if (vertexCount > 0) {
+                    node.data.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
+                    node.data.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
+                    node.data.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
+                    node.data.splatMesh.material.uniformsNeedUpdate = true;
+                }
+            });
+            
         };
 
     }();
@@ -175,15 +189,48 @@ export class Viewer {
 
         return loadPromise.then((splatBuffer) => {
             this.splatBuffer = splatBuffer;
-            this.splatMesh = this.buildMesh(this.splatBuffer);
-            this.splatMesh.frustumCulled = false;
+
+            this.octree = new Octree(2);
+            console.time("Octree build");
+            this.octree.processScene(this.splatBuffer);
+            console.timeEnd("Octree build");
+
+            console.log("Octree leaves: " + this.octree.countLeaves());
+            console.log("Octree leaves with vertices: " + this.octree.countLeavesWithVertices());
+            let avgVertexCount = 0;
+            let nodeCount = 0;
+            this.octree.visitLeaves((node) => {
+                const vertexCount = node.data.splatBuffer.getVertexCount();
+                if (vertexCount > 0) {
+                    avgVertexCount += vertexCount;
+                    nodeCount++;
+                    node.data.splatBuffer.buildPreComputedBuffers();
+                    node.data.splatMesh = this.buildMesh(node.data.splatBuffer);
+                    node.data.splatMesh.frustumCulled = false;
+                    this.scene.add(node.data.splatMesh);
+
+                    const {colors, centerCovariances} =  this.getAttributeDataFromSplatBuffer(node.data.splatBuffer);
+
+                    const geometry = node.data.splatMesh.geometry;
+        
+                    geometry.attributes.splatCenterCovariance.set(centerCovariances);
+                    geometry.attributes.splatCenterCovariance.needsUpdate = true;
+            
+                    geometry.attributes.splatColor.set(colors);
+                    geometry.attributes.splatColor.needsUpdate = true;
+            
+                    geometry.instanceCount = vertexCount;
+                }
+            });
+            avgVertexCount /= nodeCount;
+            console.log("Avg vertex count per node: " + avgVertexCount);
+
             this.workerTransferCenterCovarianceBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 9 * 4);
             this.workerTransferColorBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4 * 4)
             this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer);
             this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer);
             loadingSpinner.hide();
-            this.scene.add(this.splatMesh);
-            this.updateWorkerBuffer();
+            //this.updateWorkerBuffer();
 
         });
     }
@@ -208,6 +255,37 @@ export class Viewer {
         sphereMesh.position.set(0, 0, 50);
     }
 
+    sortSceneNodes = function() {
+
+        const sortList = [];
+        const tempVectorA = new THREE.Vector3();
+        const tempVectorB = new THREE.Vector3();
+
+        return function () {
+            let index = 0;
+            this.octree.visitLeaves((node) => {
+                const vertexCount = node.data.splatBuffer.getVertexCount();
+                if (vertexCount > 0) {
+                    sortList[index] = node;
+                    index++;
+                }
+            });
+
+            sortList.sort((a, b) => {
+                tempVectorA.copy(a.center).sub(this.camera.position);
+                tempVectorB.copy(a.center).sub(this.camera.position);
+                return tempVectorA.lengthSq() > tempVectorB.lengthSq();
+            });
+
+            let renderOrder = 2;
+            for (let node of sortList) {
+                node.data.splatMesh.renderOrder = renderOrder;
+                renderOrder++;
+            }
+        };
+
+    }();
+
     start() {
         if (this.selfDrivenMode) {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
@@ -221,6 +299,7 @@ export class Viewer {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.controls.update();
+        this.sortSceneNodes();
         this.updateView();
         this.renderer.autoClear = false;
         this.renderer.render(this.scene, this.camera);
@@ -259,8 +338,8 @@ export class Viewer {
                     splatBuffer: this.splatBuffer.getBufferData(),
                     workerTransferCenterCovarianceBuffer: this.workerTransferCenterCovarianceBuffer,
                     workerTransferColorBuffer: this.workerTransferColorBuffer,
-                    precomputedCovariance: this.splatBuffer.getCovarianceBufferData(),
-                    precomputedColor: this.splatBuffer.getColorBufferData(),
+                    precomputedCovariance: this.splatBuffer.getPrecomputedCovarianceBufferData(),
+                    precomputedColor: this.splatBuffer.getPrecomputedColorBufferData(),
                     vertexCount: this.splatBuffer.getVertexCount(),
                 }
             });
@@ -450,4 +529,46 @@ export class Viewer {
         const mesh = new THREE.Mesh(geometry, material);
         return mesh;
     }
+
+    getAttributeDataFromSplatBuffer (splatBuffer) {
+
+        const vertexCount = splatBuffer.getVertexCount();
+
+        const splatArray = new Float32Array(splatBuffer.getBufferData());
+        const pCovarianceArray = new Float32Array(splatBuffer.getPrecomputedCovarianceBufferData());
+        const pColorArray = new Float32Array(splatBuffer.getPrecomputedColorBufferData());
+        const color = new Float32Array(vertexCount * 4);
+        const centerCov = new Float32Array(vertexCount * 9);
+
+        for (let i = 0; i < vertexCount; i++) {
+
+            const centerCovBase = 9 * i;
+            const pCovarianceBase = 6 * i;
+            const colorBase = 4 * i;
+            const pcColorBase = 4 * i;
+            const splatArrayBase = SplatBuffer.RowSizeFloats * i;
+
+            centerCov[centerCovBase] = splatArray[splatArrayBase];
+            centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1];
+            centerCov[centerCovBase + 2] = splatArray[splatArrayBase + 2];
+
+            color[colorBase] = pColorArray[pcColorBase];
+            color[colorBase + 1] = pColorArray[pcColorBase + 1];
+            color[colorBase + 2] = pColorArray[pcColorBase + 2];
+            color[colorBase + 3] = pColorArray[pcColorBase + 3];
+
+            centerCov[centerCovBase + 3] = pCovarianceArray[pCovarianceBase];
+            centerCov[centerCovBase + 4] = pCovarianceArray[pCovarianceBase + 1];
+            centerCov[centerCovBase + 5] = pCovarianceArray[pCovarianceBase + 2];
+            centerCov[centerCovBase + 6] = pCovarianceArray[pCovarianceBase + 3];
+            centerCov[centerCovBase + 7] = pCovarianceArray[pCovarianceBase + 4];
+            centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5];
+        }
+
+        return {
+            'colors': color,
+            'centerCovariances': centerCov
+        }
+
+    };
 }
