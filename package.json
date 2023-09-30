@@ -15,7 +15,7 @@
         "build-library": "npx rollup -c && mkdir -p ./build/demo/lib && cp ./build/gaussian-splat-3d* ./build/demo/lib/",
         "build": "npm run build-library && npm run build-demo",
         "watch": "npx npm-watch ",
-        "demo": "npx http-server ./build/demo",
+        "demo": "npx http-server ./build/demo --cors",
         "fix-styling": "npx stylelint **/*.scss --fix",
         "fix-js": "npx eslint src --fix",
         "lint": "npx eslint 'src/**/*.js' || true",

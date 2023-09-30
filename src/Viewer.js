@@ -33,6 +33,8 @@ export class Viewer {
         this.selfDrivenUpdateFunc = this.update.bind(this);
         this.resizeFunc = this.onResize.bind(this);
         this.sortWorker = null;
+
+        const sab = new SharedArrayBuffer(1024);
     }
 
     getRenderDimensions(outDimensions) {
