@@ -219,14 +219,19 @@ export class Viewer {
 
         const tempMatrix = new THREE.Matrix4();
         const tempVector2 = new THREE.Vector2();
+        const cameraPositionArray = [];
 
         return function() {
             this.getRenderDimensions(tempVector2);
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(this.realProjectionMatrix);
+            cameraPositionArray[0] = this.camera.position.x;
+            cameraPositionArray[1] = this.camera.position.y;
+            cameraPositionArray[2] = this.camera.position.z;
             this.sortWorker.postMessage({
                 sort: {
-                    'view': tempMatrix.elements
+                    'view': tempMatrix.elements,
+                    'cameraPosition': cameraPositionArray
                 }
             });
         };
@@ -293,30 +298,11 @@ export class Viewer {
                 cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
             );
 
-           /* mat3 J = mat3(
+            mat3 J = mat3(
                 focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z),
                 0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z),
                 0., 0., 0.
-            );*/
-
-;
-            vec4 t = camspace;
-            float limx = 1.3f * tan(1.4928373061797564 );
-            float limy = 1.3f * tan(0.9167412262575036 );
-            float txtz = t.x / t.z;
-            float tytz = t.y / t.z;
-            t.x = min(limx, max(-limx, txtz)) * t.z;
-            t.y = min(limy, max(-limy, tytz)) * t.z;
-
-            mat3 J = mat3(
-                focal.x / t.z, 0., -(focal.x * t.x) / (t.z * t.z),
-                0., focal.y / t.z, -(focal.y * t.y) / (t.z * t.z),
-                0., 0., 0.
             );
-
-
-
-
 
             mat3 W = transpose(mat3(viewMatrix));
             mat3 T = W * J;
@@ -324,12 +310,6 @@ export class Viewer {
             cov2Dm[0][0] += 0.3;
             cov2Dm[1][1] += 0.3;
             vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
-
-
-
-
-
-
 
 
             vec2 vCenter = vec2(pos2d) / pos2d.w;
@@ -354,68 +334,6 @@ export class Viewer {
                                        position.y * v2 / viewport * 2.0;
 
             gl_Position = vec4(projectedCovariance, 0.0, 1.0);
-
-
-
-
-
-
-
-
-            /*
-            let cov2d = compute_cov2d(point.position, point.log_scale, point.rot);
-            let det = cov2d.x * cov2d.z - cov2d.y * cov2d.y;
-            let det_inv = 1.0 / det;
-            let conic = vec3<f32>(cov2d.z * det_inv, -cov2d.y * det_inv, cov2d.x * det_inv);
-            let mid = 0.5 * (cov2d.x + cov2d.z);
-            let lambda_1 = mid + sqrt(max(0.1, mid * mid - det));
-            let lambda_2 = mid - sqrt(max(0.1, mid * mid - det));
-            let radius_px = ceil(3. * sqrt(max(lambda_1, lambda_2)));
-            let radius_ndc = vec2<f32>(
-            radius_px / (canvas_height),
-            radius_px / (canvas_width),
-            );
-            output.conic_and_opacity = vec4<f32>(conic, sigmoid(point.opacity_logit));
-
-            var projPosition = uniforms.projMatrix * vec4<f32>(point.position, 1.0);
-            projPosition = projPosition / projPosition.w;
-            output.position = vec4<f32>(projPosition.xy + 2 * radius_ndc * quadOffset, projPosition.zw);
-            output.color = compute_color_from_sh(point.position, point.sh);
-            output.uv = radius_px * quadOffset;
-        */
-
-
-
-
-
-            /*float det = cov2Dv.x * cov2Dv.z - cov2Dv.y * cov2Dv.y;
-            float det_inv = 1.0 / det;
-            vec3 conic = vec3(cov2Dv.z * det_inv, -cov2Dv.y * det_inv, cov2Dv.x * det_inv);
-            float mid = 0.5 * (cov2Dv.x + cov2Dv.z);
-            float lambda_1 = mid + sqrt(max(0.1, mid * mid - det));
-            float lambda_2 = mid - sqrt(max(0.1, mid * mid - det));
-            float radius_px = ceil(3.0 * sqrt(max(lambda_1, lambda_2)));
-
-            vec2 radius_ndc = vec2(radius_px / (viewport.x), radius_px / (viewport.y));
-
-            //float opacityLogit = -log(255.0  / splatColor.a - 1.0);
-            conicOpacity = vec4(conic, splatColor.a);
-
-            vec4 projPosition = realProjectionMatrix * camspace;
-            projPosition = projPosition / projPosition.w;
-
-            float px = projPosition.x + 2.0 * position.x * radius_ndc.x;
-            float py = projPosition.y + 2.0 * position.y * radius_ndc.y;
-            gl_Position = vec4(px, py, 0.0, 1.0);
-    
-           // gl_Position = vec4(projPosition.xy + 2.0 * radius_ndc * position.xy, 0.0, 1.0);
-
-            vColor = splatColor;
-            vPosition = projPosition.xy;
-            vUv = radius_px * position.xy;
-        
-            output.color = compute_color_from_sh(point.position, point.sh);*/
-            
 
         }`;
 
