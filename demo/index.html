@@ -6,13 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
   <title>3D Gaussian Splat Viewer Examples</title>
-  <script>
-
-    function openDemo(demoName) {
-      window.location = `./viewer?asset=./assets/${demoName}.json`;
-    }
-
-  </script>
   <style>
 
     body {
@@ -113,22 +106,34 @@
 <body class="body">
   <div class="table-of-contents-container">
     <div class="table-of-contents-inner-container">
-      <div class="table-of-contents">
-        <div class="table-of-contents-entry" onclick="openDemo('garden')">
-          <img src="assets/images/garden.png" class="table-of-contents-entry-image">
-          Garden
-        </div>
-        <div class="table-of-contents-entry" onclick="openDemo('truck')">
-          <img src="assets/images/truck.png" class="table-of-contents-entry-image">
-          Truck
-        </div>
-        <div class="table-of-contents-entry" onclick="openDemo('stump')">
-          <img src="assets/images/stump.png" class="table-of-contents-entry-image">
-          Stump
-        </div>
+      <div id="table-list" class="table-of-contents" data-demos="garden, truck, stump">
       </div>
     </div>
   </div>
-</body>
+  <template id="entry-template">
+    <a href="#">
+      <div class="table-of-contents-entry">
+        <img src="" class="table-of-contents-entry-image">
+        <span class="table-of-contents-entry-title"></span>
+      </div>
+    </a>
+  </template>
+  <script>
+    const container = document.querySelector("#table-list");
+    const template = document.querySelector("#entry-template");
 
+    container.dataset.demos
+      .split(",")
+      .forEach(element => {
+        const key = element.trim();
+        const node = template.content.cloneNode(true);
+        node.querySelector("a").href = `/viewer?asset=./assets/${key}.json`;
+        node.querySelector(".table-of-contents-entry-image").src = `assets/images/${key}.png`;
+        node.querySelector(".table-of-contents-entry-title").textContent = key[0].toUpperCase() + key.substring(1);
+
+        container.appendChild(node)
+      });
+
+  </script>
+</body>
 </html>
