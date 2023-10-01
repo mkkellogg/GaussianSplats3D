@@ -33,6 +33,8 @@ export class Viewer {
         this.resizeFunc = this.onResize.bind(this);
         this.sortWorker = null;
 
+        this.workerTransferSplatBuffer = null;
+        this.workerTransferSplatArray = null;
         this.workerTransferCenterCovarianceBuffer = null;
         this.workerTransferColorBuffer = null;
         this.workerTransferCenterCovarianceArray = null;
@@ -216,9 +218,12 @@ export class Viewer {
             avgVertexCount /= nodeCount;
             console.log("Avg vertex count per node: " + avgVertexCount);
 
+            this.workerTransferSplatBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * SplatBuffer.RowSizeBytes);
+            this.workerTransferSplatArray = new Float32Array(this.workerTransferSplatBuffer);
+            this.workerTransferSplatArray.set(new Float32Array(this.splatBuffer.getBufferData()));
             this.workerTransferCenterCovarianceBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 9 * 4);
-            this.workerTransferColorBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4 * 4)
             this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer);
+            this.workerTransferColorBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4 * 4)
             this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer);
             loadingSpinner.hide();
             this.updateSortWorkerBuffers();
@@ -251,7 +256,7 @@ export class Viewer {
         const tempVectorA = new THREE.Vector3();
         const tempVectorB = new THREE.Vector3();
 
-        const sorted = {};
+        let e = 0;
 
         return function () {
 
@@ -274,12 +279,19 @@ export class Viewer {
                 }
             });
 
-            for (let node of sortList) {
-                if (!sorted[node.id]) {
-                    this.nodesToSort.push(node);
-                    sorted[node.id] = true;
-                    break;
+            // DEBUG/Test code
+            if (e == 0) {
+                e = 1;
+                console.log("sortList length: " + sortList.length);
+                console.time("copy");
+                let currentOffset = 0;
+                for (let node of sortList) {
+                    const windowSizeFloats = node.data.splatBuffer.getVertexCount() * SplatBuffer.RowSizeFloats;
+                    let destView = new Float32Array(this.splatBuffer.getBufferData(), currentOffset, windowSizeFloats);
+                    destView.set(new Float32Array(node.data.splatBuffer.getBufferData()));
+                    currentOffset += windowSizeFloats * 4;
                 }
+                console.timeEnd("copy");
             }
 
         };
@@ -349,7 +361,7 @@ export class Viewer {
                 buffer: {
                     'rowSizeFloats': SplatBuffer.RowSizeFloats,
                     'rowSizeBytes': SplatBuffer.RowSizeBytes,
-                    'splatBuffer': this.splatBuffer.getBufferData(),
+                    'workerTransferSplatBuffer': this.workerTransferSplatBuffer,
                     'workerTransferCenterCovarianceBuffer': this.workerTransferCenterCovarianceBuffer,
                     'workerTransferColorBuffer': this.workerTransferColorBuffer,
                     'precomputedCovariance': this.splatBuffer.getPrecomputedCovarianceBufferData(),
