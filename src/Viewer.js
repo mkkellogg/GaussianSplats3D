@@ -29,7 +29,6 @@ export class Viewer {
         this.camera = null;
         this.realProjectionMatrix = new THREE.Matrix4();
         this.renderer = null;
-        this.splatBuffer = null;
         this.selfDrivenUpdateFunc = this.update.bind(this);
         this.resizeFunc = this.onResize.bind(this);
         this.sortWorker = null;
@@ -41,6 +40,9 @@ export class Viewer {
 
         this.octree = null;
         this.octreeNodeMap = {};
+
+        this.nodesToSort = [];
+        this.currentlySorting = false;
     }
 
     getRenderDimensions(outDimensions) {
@@ -121,9 +123,10 @@ export class Viewer {
 
         this.sortWorker.onmessage = (e) => {
             if (e.data.sortDone) {
-                const node = this.octreeNodeMap[e.data.sortDone.id];
+                const node = this.octreeNodeMap[e.data.id];
                 this.updateSplatMeshAttributes(node, this.workerTransferColorArray, this.workerTransferCenterCovarianceArray);
                 this.updateSplatMeshUniforms(node);
+                this.currentlySorting = false;
             }
         };
     }
@@ -131,7 +134,6 @@ export class Viewer {
     updateSplatMeshAttributes(node, colors, centerCovariances) {
         const vertexCount = node.data.splatBuffer.getVertexCount();
         if (vertexCount > 0) {
-            const vertexCount = centerCovariances.length / 9;
             const geometry = node.data.splatMesh.geometry;
     
             geometry.attributes.splatCenterCovariance.set(centerCovariances);
@@ -190,11 +192,10 @@ export class Viewer {
         });
 
         return loadPromise.then((splatBuffer) => {
-            this.splatBuffer = splatBuffer;
 
             this.octree = new Octree(2);
             console.time("Octree build");
-            this.octree.processScene(this.splatBuffer);
+            this.octree.processScene(splatBuffer);
             console.timeEnd("Octree build");
 
             console.log("Octree leaves: " + this.octree.countLeaves());
@@ -262,6 +263,8 @@ export class Viewer {
         const tempVectorA = new THREE.Vector3();
         const tempVectorB = new THREE.Vector3();
 
+        const sorted = {};
+
         return function () {
 
             this.renderer.sortObjects = true;
@@ -290,6 +293,15 @@ export class Viewer {
                 node.data.splatMesh.renderOrder = renderOrder;
                 renderOrder++;
             }
+
+            for (let node of sortList) {
+                if (!sorted[node.id]) {
+                    this.nodesToSort.push(node);
+                    sorted[node.id] = true;
+                    break;
+                }
+            }
+
         };
 
     }();
@@ -308,47 +320,49 @@ export class Viewer {
         }
         this.controls.update();
         this.sortSceneNodes();
-       // this.updateView();
+        if (!this.currentlySorting) {
+            if (this.nodesToSort.length > 0) {
+                const node = this.nodesToSort.shift();
+                this.updateSortWorkerForNode(node);
+                this.currentlySorting = true;
+            }
+        }
         this.renderer.autoClear = false;
         this.renderer.render(this.scene, this.camera);
     }
 
-    updateView = function() {
+    updateSortWorkerForNode = function() {
 
         const tempMatrix = new THREE.Matrix4();
         const tempVector2 = new THREE.Vector2();
         const cameraPositionArray = [];
 
-        return function() {
+        return function(node) {
+
             this.getRenderDimensions(tempVector2);
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(this.realProjectionMatrix);
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
+
+            const vertexCount = node.data.splatBuffer.getVertexCount();
+            this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer, 0, vertexCount);
+            this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer, 0, vertexCount);
+
             this.sortWorker.postMessage({
                 sort: {
+                    'rowSizeFloats': SplatBuffer.RowSizeFloats,
+                    'rowSizeBytes': SplatBuffer.RowSizeBytes,
+                    'splatBuffer': node.data.splatBuffer.getBufferData(),
+                    'workerTransferCenterCovarianceBuffer': this.workerTransferCenterCovarianceBuffer,
+                    'workerTransferColorBuffer': this.workerTransferColorBuffer,
+                    'precomputedCovariance': node.data.splatBuffer.getPrecomputedCovarianceBufferData(),
+                    'precomputedColor': node.data.splatBuffer.getPrecomputedColorBufferData(),
+                    'vertexCount': vertexCount,
                     'view': tempMatrix.elements,
-                    'cameraPosition': cameraPositionArray
-                }
-            });
-        };
-
-    }();
-
-    updateWorkerBuffer = function() {
-
-        return function() {
-            this.sortWorker.postMessage({
-                bufferUpdate: {
-                    rowSizeFloats: SplatBuffer.RowSizeFloats,
-                    rowSizeBytes: SplatBuffer.RowSizeBytes,
-                    splatBuffer: this.splatBuffer.getBufferData(),
-                    workerTransferCenterCovarianceBuffer: this.workerTransferCenterCovarianceBuffer,
-                    workerTransferColorBuffer: this.workerTransferColorBuffer,
-                    precomputedCovariance: this.splatBuffer.getPrecomputedCovarianceBufferData(),
-                    precomputedColor: this.splatBuffer.getPrecomputedColorBufferData(),
-                    vertexCount: this.splatBuffer.getVertexCount(),
+                    'cameraPosition': cameraPositionArray,
+                    'id': node.id
                 }
             });
         };

@@ -17,6 +17,8 @@ export function createNodeSortWorker(self) {
     let workerTransferCenterCovarianceBuffer;
     let workerTransferColorBuffer;
 
+    let id = -1;
+
     const runSort = (viewProj) => {
 
         if (!splatBuffer) return;
@@ -89,7 +91,10 @@ export function createNodeSortWorker(self) {
         lastVertexCount = vertexCount;
         lastCameraPosition = cameraPosition;
         
-        self.postMessage({'sortDone': true});
+        self.postMessage({
+            'sortDone': true,
+            'id': id
+        });
 
     };
 
@@ -120,6 +125,7 @@ export function createNodeSortWorker(self) {
             vertexCount = e.data.sort.vertexCount;
             viewProj = e.data.sort.view;
             cameraPosition = e.data.sort.cameraPosition;
+            id = e.data.sort.id;
             throttledSort();
         }
     };
