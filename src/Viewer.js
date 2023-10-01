@@ -193,7 +193,7 @@ export class Viewer {
 
         return loadPromise.then((splatBuffer) => {
 
-            this.octree = new Octree(2);
+            this.octree = new Octree(4);
             console.time("Octree build");
             this.octree.processScene(splatBuffer);
             console.timeEnd("Octree build");
@@ -347,8 +347,8 @@ export class Viewer {
             cameraPositionArray[2] = this.camera.position.z;
 
             const vertexCount = node.data.splatBuffer.getVertexCount();
-            this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer, 0, vertexCount);
-            this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer, 0, vertexCount);
+            this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer, 0, vertexCount * 9);
+            this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer, 0, vertexCount * 4);
 
             this.sortWorker.postMessage({
                 sort: {

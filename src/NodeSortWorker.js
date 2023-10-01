@@ -29,29 +29,22 @@ export function createNodeSortWorker(self) {
         const color = new Float32Array(workerTransferColorBuffer);
         const centerCov = new Float32Array(workerTransferCenterCovarianceBuffer);
 
-        if (depthMix.length < vertexCount) {
+        if (depthMix.length !== vertexCount) {
             depthMix = new BigInt64Array(vertexCount);
             const indexMix = new Uint32Array(depthMix.buffer);
             for (let j = 0; j < vertexCount; j++) {
                 indexMix[2 * j] = j;
             }
-        } else {
-            let dot =
-                lastProj[2] * viewProj[2] +
-                lastProj[6] * viewProj[6] +
-                lastProj[10] * viewProj[10];
-            if (Math.abs(dot - 1) < 0.01) {
-                return;
-            }
         }
 
         let depthMixView = new BigInt64Array(depthMix.buffer, 0, vertexCount);
-        const floatMix = new Float32Array(depthMix.buffer, 0, vertexCount);
-        const indexMix = new Uint32Array(depthMix.buffer, 0, vertexCount);
+        const floatMix = new Float32Array(depthMix.buffer, 0, vertexCount * 2);
+        const indexMix = new Uint32Array(depthMix.buffer, 0, vertexCount * 2);
 
         for (let j = 0; j < vertexCount; j++) {
-            let i = indexMix[2 * j];
-            const splatArrayBase = rowSizeFloats * i;
+            let i = j;
+            indexMix[2 * j] = j;
+            const splatArrayBase = rowSizeFloats * j;
             const dx = splatArray[splatArrayBase] - cameraPosition[0];
             const dy = splatArray[splatArrayBase + 1] - cameraPosition[1];
             const dz = splatArray[splatArrayBase + 2] - cameraPosition[2];

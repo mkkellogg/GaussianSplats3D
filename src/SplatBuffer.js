@@ -95,6 +95,18 @@ export class SplatBuffer {
         return outPosition;
     }
 
+    getScale(index, outScale = new THREE.Vector3()) {
+        const scaleBase = SplatBuffer.RowSizeFloats * index + SplatBuffer.ScaleRowOffsetFloats;
+        outScale.set(this.floatArray[scaleBase], this.floatArray[scaleBase + 1], this.floatArray[scaleBase + 2]);
+        return outScale;
+    }
+
+    getColor(index, outColor = new THREE.Color()) {
+        const colorBase = SplatBuffer.RowSizeBytes * index + SplatBuffer.ColorRowOffsetBytes;
+        outColor.set(this.uintArray[colorBase], this.uintArray[colorBase + 1], this.uintArray[colorBase + 2]);
+        return outColor;
+    }
+
     getPrecomputedCovarianceBufferData() {
         return this.precomputedCovarianceBufferData;
     }
