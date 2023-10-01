@@ -1,0 +1,6 @@
+{
+    "data": "./data/stump/stump.splat",
+    "cameraUp": [0, -1, -1.0], 
+    "cameraPos": [-3.3816, 1.96931, -1.71890], 
+    "cameraTarget": [0.60910, 1.42099, 2.02511]
+}

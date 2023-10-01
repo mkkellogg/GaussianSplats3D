@@ -1,0 +1,6 @@
+{
+    "data": "./data/truck/truck.splat",
+    "cameraUp": [0, -1, -0.17], 
+    "cameraPos": [-5, -1, -1], 
+    "cameraTarget": [1, 1, 0]
+}

@@ -1,3 +1,6 @@
 dist
 build
 node_modules
+*.splat
+*.DS_Store
+yarn.lock

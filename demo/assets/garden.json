@@ -1,0 +1,6 @@
+{
+    "data": "./data/garden/garden.splat",
+    "cameraUp": [0, -1, -0.6], 
+    "cameraPos": [-1, -4, 6], 
+    "cameraTarget": [0, 4, -0]
+}
