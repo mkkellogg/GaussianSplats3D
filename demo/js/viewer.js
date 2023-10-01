@@ -1,9 +1,13 @@
 import * as GaussianSplat3D from '../lib/gaussian-splat-3d.module.js';
 
 
-const load = async (metaUrl) => {
-    metaUrl = new URL(metaUrl, location.href);
-    const meta = await (await fetch(metaUrl)).json();
+const load = async (url) => {
+    const metaUrl = new URL(url, location.href);
+    const meta = await (await fetch(metaUrl)).json().catch(()=>{
+        alert(`Invalid asset url: ${url}`);
+        location.href = '/';
+    });
+
     const {
         data,
         cameraUp,
