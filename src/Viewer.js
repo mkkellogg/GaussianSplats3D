@@ -3,7 +3,7 @@ import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
-import { createSortWorker } from './SortWorker.js';
+import { createNodeSortWorker } from './NodeSortWorker.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Octree } from './octree/Octree.js';
 
@@ -40,6 +40,7 @@ export class Viewer {
         this.workerTransferColorArray = null;
 
         this.octree = null;
+        this.octreeNodeMap = {};
     }
 
     getRenderDimensions(outDimensions) {
@@ -66,7 +67,7 @@ export class Viewer {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
             this.updateRealProjectionMatrix(renderDimensions);
-            this.updateSplatMeshUniforms();
+            this.updateAllSplatMeshUniforms();
         };
 
     }();
@@ -112,7 +113,7 @@ export class Viewer {
 
         this.sortWorker = new Worker(
             URL.createObjectURL(
-                new Blob(['(', createSortWorker.toString(), ')(self)'], {
+                new Blob(['(', createNodeSortWorker.toString(), ')(self)'], {
                     type: 'application/javascript',
                 }),
             ),
@@ -120,48 +121,49 @@ export class Viewer {
 
         this.sortWorker.onmessage = (e) => {
             if (e.data.sortDone) {
-                this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray);
-                this.updateSplatMeshUniforms();
+                const node = this.octreeNodeMap[e.data.sortDone.id];
+                this.updateSplatMeshAttributes(node, this.workerTransferColorArray, this.workerTransferCenterCovarianceArray);
+                this.updateSplatMeshUniforms(node);
             }
         };
     }
 
-    updateSplatMeshAttributes(colors, centerCovariances) {
-        return;
-        this.octree.visitLeaves((node) => {
-            const vertexCount = node.data.splatBuffer.getVertexCount();
-            if (vertexCount > 0) {
-                const vertexCount = centerCovariances.length / 9;
-                const geometry = node.data.splatMesh.geometry;
-        
-                geometry.attributes.splatCenterCovariance.set(centerCovariances);
-                geometry.attributes.splatCenterCovariance.needsUpdate = true;
-        
-                geometry.attributes.splatColor.set(colors);
-                geometry.attributes.splatColor.needsUpdate = true;
-        
-                geometry.instanceCount = vertexCount;
-            }
-        });
-     
+    updateSplatMeshAttributes(node, colors, centerCovariances) {
+        const vertexCount = node.data.splatBuffer.getVertexCount();
+        if (vertexCount > 0) {
+            const vertexCount = centerCovariances.length / 9;
+            const geometry = node.data.splatMesh.geometry;
+    
+            geometry.attributes.splatCenterCovariance.set(centerCovariances);
+            geometry.attributes.splatCenterCovariance.needsUpdate = true;
+    
+            geometry.attributes.splatColor.set(colors);
+            geometry.attributes.splatColor.needsUpdate = true;
+    
+            geometry.instanceCount = vertexCount;
+        }
+    }
+
+    updateAllSplatMeshUniforms = function () {
+        for (let nodeID in this.octreeNodeMap) {
+            const node = this.octreeNodeMap[nodeID];
+            this.updateSplatMeshUniforms(node);
+        }
     }
 
     updateSplatMeshUniforms = function() {
 
         const renderDimensions = new THREE.Vector2();
 
-        return function() {
-            this.getRenderDimensions(renderDimensions);
-            this.octree.visitLeaves((node) => {
-                const vertexCount = node.data.splatBuffer.getVertexCount();
-                if (vertexCount > 0) {
-                    node.data.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
-                    node.data.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
-                    node.data.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
-                    node.data.splatMesh.material.uniformsNeedUpdate = true;
-                }
-            });
-            
+        return function(node) {
+            const vertexCount = node.data.splatBuffer.getVertexCount();
+            if (vertexCount > 0) {
+                this.getRenderDimensions(renderDimensions);
+                node.data.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
+                node.data.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
+                node.data.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
+                node.data.splatMesh.material.uniformsNeedUpdate = true;
+            }
         };
 
     }();
@@ -198,11 +200,14 @@ export class Viewer {
             console.log("Octree leaves: " + this.octree.countLeaves());
             console.log("Octree leaves with vertices: " + this.octree.countLeavesWithVertices());
             let avgVertexCount = 0;
+            let maxVertexCount = 0;
             let nodeCount = 0;
             this.octree.visitLeaves((node) => {
                 const vertexCount = node.data.splatBuffer.getVertexCount();
                 if (vertexCount > 0) {
+                    this.octreeNodeMap[node.id] = node;
                     avgVertexCount += vertexCount;
+                    maxVertexCount = Math.max(maxVertexCount, vertexCount);
                     nodeCount++;
                     node.data.splatBuffer.buildPreComputedBuffers();
                     node.data.splatMesh = this.buildMesh(node.data.splatBuffer);
@@ -210,27 +215,23 @@ export class Viewer {
                     this.scene.add(node.data.splatMesh);
 
                     const {colors, centerCovariances} =  this.getAttributeDataFromSplatBuffer(node.data.splatBuffer);
-
                     const geometry = node.data.splatMesh.geometry;
-        
                     geometry.attributes.splatCenterCovariance.set(centerCovariances);
                     geometry.attributes.splatCenterCovariance.needsUpdate = true;
-            
                     geometry.attributes.splatColor.set(colors);
                     geometry.attributes.splatColor.needsUpdate = true;
-            
                     geometry.instanceCount = vertexCount;
                 }
             });
+            this.updateAllSplatMeshUniforms();
             avgVertexCount /= nodeCount;
             console.log("Avg vertex count per node: " + avgVertexCount);
 
-            this.workerTransferCenterCovarianceBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 9 * 4);
-            this.workerTransferColorBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4 * 4)
+            this.workerTransferCenterCovarianceBuffer = new SharedArrayBuffer(maxVertexCount * 9 * 4);
+            this.workerTransferColorBuffer = new SharedArrayBuffer(maxVertexCount * 4 * 4)
             this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer);
             this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer);
             loadingSpinner.hide();
-            //this.updateWorkerBuffer();
 
         });
     }
@@ -262,6 +263,9 @@ export class Viewer {
         const tempVectorB = new THREE.Vector3();
 
         return function () {
+
+            this.renderer.sortObjects = true;
+
             let index = 0;
             this.octree.visitLeaves((node) => {
                 const vertexCount = node.data.splatBuffer.getVertexCount();
@@ -273,11 +277,15 @@ export class Viewer {
 
             sortList.sort((a, b) => {
                 tempVectorA.copy(a.center).sub(this.camera.position);
-                tempVectorB.copy(a.center).sub(this.camera.position);
-                return tempVectorA.lengthSq() > tempVectorB.lengthSq();
+                tempVectorB.copy(b.center).sub(this.camera.position);
+                if(tempVectorA.lengthSq() > tempVectorB.lengthSq()) {
+                    return 1;
+                } else {
+                    return -1;
+                }
             });
 
-            let renderOrder = 2;
+            let renderOrder = 0;
             for (let node of sortList) {
                 node.data.splatMesh.renderOrder = renderOrder;
                 renderOrder++;
@@ -300,7 +308,7 @@ export class Viewer {
         }
         this.controls.update();
         this.sortSceneNodes();
-        this.updateView();
+       // this.updateView();
         this.renderer.autoClear = false;
         this.renderer.render(this.scene, this.camera);
     }
@@ -430,6 +438,8 @@ export class Viewer {
             #include <common>
             precision mediump float;
 
+            uniform vec3 debugColor;
+
             varying vec4 vColor;
             varying vec2 vPosition;
             varying vec4 conicOpacity;
@@ -472,6 +482,10 @@ export class Viewer {
             'viewport': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
+            },
+            'debugColor': {
+                'type': 'v3',
+                'value': new THREE.Color()
             },
         };
 
