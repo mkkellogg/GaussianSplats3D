@@ -146,18 +146,21 @@ export function createSortWorker(self) {
 
     let sortRunning;
     self.onmessage = (e) => {
-        if (e.data.bufferUpdate) {
-            rowSizeFloats = e.data.bufferUpdate.rowSizeFloats;
-            rowSizeBytes = e.data.bufferUpdate.rowSizeBytes;
-            splatBuffer = e.data.bufferUpdate.splatBuffer;
-            workerTransferCenterCovarianceBuffer = e.data.bufferUpdate.workerTransferCenterCovarianceBuffer,
-            workerTransferColorBuffer = e.data.bufferUpdate.workerTransferColorBuffer,
-            precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
-            precomputedColor = e.data.bufferUpdate.precomputedColor;
-            vertexCount = e.data.bufferUpdate.vertexCount;
-        } else if (e.data.sort) {
-            viewProj = e.data.sort.view;
-            cameraPosition = e.data.sort.cameraPosition;
+        if (e.data.view) {
+            viewProj = e.data.view.view;
+            cameraPosition = e.data.view.cameraPosition;
+            throttledSort();
+        } else if (e.data.buffer) {
+            rowSizeFloats = e.data.buffer.rowSizeFloats;
+            rowSizeBytes = e.data.buffer.rowSizeBytes;
+            splatBuffer = e.data.buffer.splatBuffer;
+            workerTransferCenterCovarianceBuffer = e.data.buffer.workerTransferCenterCovarianceBuffer,
+            workerTransferColorBuffer = e.data.buffer.workerTransferColorBuffer,
+            precomputedCovariance = e.data.buffer.precomputedCovariance;
+            precomputedColor = e.data.buffer.precomputedColor;
+            vertexCount = e.data.buffer.vertexCount;
+            viewProj = e.data.buffer.view;
+            cameraPosition = e.data.buffer.cameraPosition;
             throttledSort();
         }
     };
