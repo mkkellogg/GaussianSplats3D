@@ -11,10 +11,6 @@ export class Octree {
         this.sceneMin = new THREE.Vector3();
         this.sceneMax = new THREE.Vector3();
         this.rootNode = null;
-
-        this.minScaleVolume = null;
-        this.maxScaleVolume = null;
-
     }
 
     processScene(splatBuffer) {
@@ -30,11 +26,6 @@ export class Octree {
             if (i === 0 || position.y > this.sceneMax.y) this.sceneMax.y = position.y;
             if (i === 0 || position.z < this.sceneMin.z) this.sceneMin.z = position.z;
             if (i === 0 || position.z > this.sceneMax.z) this.sceneMax.z = position.z;
-
-            splatBuffer.getScale(i, scale);
-            const scaleVolume = scale.x * scale.y * scale.z;
-            if (i == 0 || scaleVolume < this.minScaleVolume) this.minScaleVolume = scaleVolume;
-            if (i == 0 || scaleVolume > this.maxScaleVolume) this.maxScaleVolume = scaleVolume;
         }
 
         this.sceneDimensions.copy(this.sceneMin).sub(this.sceneMin);
@@ -80,14 +71,6 @@ export class Octree {
                            new THREE.Vector3(nodeCenter.x, nodeCenter.y, nodeCenter.z + halfDimensions.z)),
         ];
 
-        const expandedChildrenBounds = [];
-        for (let i = 0; i < childrenBounds.length; i++) {
-            const exapndedBounds = new THREE.Box3().copy(childrenBounds[i]);
-           // exapndedBounds.min.sub(new THREE.Vector3(1.0, 1.0, 1.0).multiplyScalar(2.0));
-           // exapndedBounds.max.add(new THREE.Vector3(1.0, 1.0, 1.0).multiplyScalar(2.0));
-            expandedChildrenBounds.push(exapndedBounds);
-        }
-
         const vertexCounts = [];
         const indexes = [];
         for (let i = 0; i < childrenBounds.length; i++) {
@@ -98,17 +81,12 @@ export class Octree {
         const position = new THREE.Vector3();
         const scale = new THREE.Vector3();
         const color = new THREE.Color();
-        const scaleVolumeRange = this.maxScaleVolume - this.minScaleVolume;
         for (let i = 0; i < vertexCount; i++) {
             splatBuffer.getPosition(i, position);
             splatBuffer.getScale(i, scale);
             splatBuffer.getColor(i, color);
-            const scaleVolume = scale.x * scale.y * scale.z;
-            if (scaleVolume > .01) continue;
-            const luminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
-            //if (luminance < 25.0) continue;
             for (let j = 0; j < childrenBounds.length; j++) {
-                if (expandedChildrenBounds[j].containsPoint(position)) {
+                if (childrenBounds[j].containsPoint(position)) {
                     vertexCounts[j]++;
                     indexes[j].push(i);
                 }

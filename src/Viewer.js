@@ -214,14 +214,6 @@ export class Viewer {
                     node.data.splatMesh = this.buildMesh(node.data.splatBuffer);
                     node.data.splatMesh.frustumCulled = false;
                     this.scene.add(node.data.splatMesh);
-
-                    const {colors, centerCovariances} =  this.getAttributeDataFromSplatBuffer(node.data.splatBuffer);
-                    const geometry = node.data.splatMesh.geometry;
-                    geometry.attributes.splatCenterCovariance.set(centerCovariances);
-                    geometry.attributes.splatCenterCovariance.needsUpdate = true;
-                    geometry.attributes.splatColor.set(colors);
-                    geometry.attributes.splatColor.needsUpdate = true;
-                    geometry.instanceCount = vertexCount;
                 }
             });
             this.updateAllSplatMeshUniforms();
