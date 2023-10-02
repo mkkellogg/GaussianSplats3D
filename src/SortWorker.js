@@ -13,12 +13,6 @@ export function createSortWorker(self) {
     let rowSizeFloats = 0;
     let rowSizeBytes = 0;
 
-    let depthMixTiers = [];
-    let depthMixTierVertexCounts = [];
-    let tierCount = 5;
-    let aggregateTraveled = [];
-    let maxCameraTravel = 5.0;
-
     let vertexRenderCount;
     let workerTransferSplatBuffer;
     let workerTransferIndexBuffer;
@@ -39,20 +33,8 @@ export function createSortWorker(self) {
         const color = new Float32Array(workerTransferColorBuffer);
         const centerCov = new Float32Array(workerTransferCenterCovarianceBuffer);
 
-        let fullRefresh = false;
-
-        /*if (depthMix.length !== vertexCount) {
+        if (depthMix.length !== vertexCount) {
             depthMix = new BigInt64Array(vertexCount);
-            for (let i = 0; i < tierCount; i++) {
-                aggregateTraveled[i] = 0;
-                depthMixTierVertexCounts[i] = Math.floor(i * vertexCount / tierCount);
-                depthMixTiers[i] = new BigInt64Array(depthMix.buffer, 0, depthMixTierVertexCounts[i]);
-            }
-            const indexMix = new Uint32Array(depthMix.buffer);
-            for (let j = 0; j < vertexCount; j++) {
-                indexMix[2 * j] = indexArray[j];
-            }
-            fullRefresh = true;
         } else {
             let dot =
                 lastProj[2] * viewProj[2] +
@@ -62,36 +44,13 @@ export function createSortWorker(self) {
                 self.postMessage({'sortCanceled': true});
                 return;
             }
-        }*/
-
-        /*let distanceTraveled = maxCameraTravel;
-        let depthMixTier = tierCount - 1;
-        if (lastCameraPosition) {
-            const dx = lastCameraPosition[0] - cameraPosition[0];
-            const dy = lastCameraPosition[1] - cameraPosition[1];
-            const dz = lastCameraPosition[2] - cameraPosition[2];
-            distanceTraveled = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-            for (let i = 0; i < tierCount; i++) {
-                const maxTravelForTier = maxCameraTravel / tierCount * i;
-                aggregateTraveled[i] += distanceTraveled;
-                if (aggregateTraveled[i] >= maxTravelForTier) {
-                    for (let j = i; j >= 0; j--) {
-                        aggregateTraveled[j] = 0;
-                    }
-                    depthMixTier = i;
-                }
-            }
-        }*/
-
-        if (depthMix.length !== vertexCount) {
-            depthMix = new BigInt64Array(vertexCount);
         }
-        const floatMix = new Float32Array(depthMix.buffer, 0, vertexRenderCount);
-        const indexMix = new Uint32Array(depthMix.buffer, 0, vertexRenderCount);
+
+        const floatMix = new Float32Array(depthMix.buffer);
+        const indexMix = new Uint32Array(depthMix.buffer);
 
         for (let j = 0; j < vertexRenderCount; j++) {
-            const i = indexArray[j];
+            let i = indexArray[j];
             indexMix[2 * j] = i;
             const splatArrayBase = rowSizeFloats * i;
             const dx = splatArray[splatArrayBase] - cameraPosition[0];
@@ -100,17 +59,9 @@ export function createSortWorker(self) {
             floatMix[2 * j + 1] = Math.sqrt(dx * dx + dy * dy + dz * dz);
         }
         lastProj = viewProj;
+        depthMix.sort();
 
-        let depthMixView = new BigInt64Array(depthMix.buffer, 0, vertexRenderCount);
-        depthMixView.sort();
-        /*
-        if (fullRefresh) {
-            depthMix.sort();
-        } else {
-            depthMixTiers[depthMixTier].sort();
-        }*/
-
-        for (let j = 0; j < vertexCount; j++) {
+        for (let j = 0; j < vertexRenderCount; j++) {
             const i = indexMix[2 * j];
 
             const centerCovBase = 9 * j;

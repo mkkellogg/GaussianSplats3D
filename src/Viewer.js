@@ -135,7 +135,7 @@ export class Viewer {
                 this.sortRunning = false;
                 this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray, e.data.sortedVertexCount);
                 this.updateSplatMeshUniforms();
-                //this.sortSceneNodes();
+                this.sortSceneNodes();
             } else if (e.data.sortCanceled) {
                 this.sortRunning = false;
             }
@@ -201,7 +201,7 @@ export class Viewer {
             this.splatMesh.frustumCulled = false;
             this.scene.add(this.splatMesh);
 
-            this.octree = new Octree(5);
+            this.octree = new Octree(6);
             console.time("Octree build");
             this.octree.processScene(splatBuffer);
             console.timeEnd("Octree build");
@@ -237,18 +237,17 @@ export class Viewer {
             loadingSpinner.hide();
 
             let currentByteOffset = 0;
-            let totalVerticesSoFar = 0;
             this.octree.visitLeaves((node) => {
                 const vertexCount = node.data.splatBuffer.getVertexCount();
                 if (vertexCount > 0) {
-                    if (totalVerticesSoFar + vertexCount >= this.splatBuffer.getVertexCount()) return;
                     const windowSizeInts = vertexCount;
                     let destView = new Uint32Array(this.workerTransferIndexBuffer, currentByteOffset, windowSizeInts);
                     destView.set(node.data.indexes);
                     currentByteOffset += windowSizeInts * 4;
-                    totalVerticesSoFar += vertexCount;
                 }
             });
+
+            //for (let i = 0; i < this.splatBuffer.getVertexCount(); i ++)this.workerTransferIndexArray[i] = i;
 
             this.updateSortWorkerBuffers();
         });
@@ -291,7 +290,7 @@ export class Viewer {
 
         return function () {
 
-            cameraForward.set(0, 0, -1).applyMatrix4(this.camera.matrixWorld);
+            cameraForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
 
             let index = 0;
             let verticesToCopy = 0;
@@ -302,7 +301,8 @@ export class Viewer {
                     const distanceToNode = tempVector.length();
                     tempVector.normalize();
                     const cameraAngleDot = tempVector.dot(cameraForward);
-                    if (cameraAngleDot < .5 && distanceToNode > nodeSize(node) || distanceToNode > 10) {
+                    const ns = nodeSize(node);
+                    if (cameraAngleDot < .15 && distanceToNode > ns / 2 || distanceToNode > 50) {
                         return;
                     }
                     verticesToCopy += node.data.splatBuffer.getVertexCount();
@@ -321,8 +321,8 @@ export class Viewer {
                 }
             });*/
 
-
             this.vertexRenderCount = verticesToCopy;
+
             let currentByteOffset = 0;
             for (let node of sortList) {
                 const windowSizeInts = node.data.splatBuffer.getVertexCount();

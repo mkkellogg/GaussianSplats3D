@@ -19,7 +19,6 @@ for(let i = 0; i < process.argv.length; ++i) {
 
 http
   .createServer(function (request, response) {
-    console.log("request starting...");
 
     response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
@@ -64,6 +63,7 @@ http
           response.end();
         }
       } else {
+        console.log("SUCCESS! Request for " + filePath);
         response.writeHead(200, { "Content-Type": contentType });
         response.end(content, "utf-8");
       }

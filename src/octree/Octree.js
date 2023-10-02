@@ -30,11 +30,14 @@ export class Octree {
 
         this.sceneDimensions.copy(this.sceneMin).sub(this.sceneMin);
 
+        const indexes = [];
+        for (let i = 0; i < vertexCount; i ++)indexes.push(i);
         this.rootNode = new OctreeNode(this.sceneMin, this.sceneMax, 0);
         this.rootNode.data = {
-            'splatBuffer': splatBuffer
+            'splatBuffer': splatBuffer,
+            'indexes': indexes
         }
-        this.processNode(this.rootNode);
+        this.processNode(this.rootNode, 0);
     }
 
     processNode(node) {
@@ -73,18 +76,23 @@ export class Octree {
 
         const vertexCounts = [];
         const indexes = [];
+        const baseIndexes = [];
         for (let i = 0; i < childrenBounds.length; i++) {
             vertexCounts[i] = 0;
             indexes[i] = [];
+            baseIndexes[i] = [];
         }
 
+        const added = {};
         const position = new THREE.Vector3();
         for (let i = 0; i < vertexCount; i++) {
             splatBuffer.getPosition(i, position);
             for (let j = 0; j < childrenBounds.length; j++) {
-                if (childrenBounds[j].containsPoint(position)) {
+                if (childrenBounds[j].containsPoint(position) && !added[i]) {
+                    added[i] = true;
                     vertexCounts[j]++;
                     indexes[j].push(i);
+                    baseIndexes[j].push(node.data.indexes[i]);
                 }
             }
         }
@@ -99,7 +107,7 @@ export class Octree {
             const childNode = new OctreeNode(childrenBounds[i].min, childrenBounds[i].max, node.depth + 1);
             childNode.data = {
                 'splatBuffer': childSplatBuffer,
-                'indexes': indexesForChild
+                'indexes': baseIndexes[i]
             };
             node.children.push(childNode);
         }
