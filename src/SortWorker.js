@@ -19,15 +19,21 @@ export function createSortWorker(self) {
     let aggregateTraveled = [];
     let maxCameraTravel = 5.0;
 
+    let vertexRenderCount;
     let workerTransferSplatBuffer;
+    let workerTransferIndexBuffer;
     let workerTransferCenterCovarianceBuffer;
     let workerTransferColorBuffer;
 
     const runSort = (viewProj) => {
 
-        if (!workerTransferSplatBuffer) return;
+        if (!workerTransferSplatBuffer) {
+            self.postMessage({'sortCanceled': true});
+            return;
+        }
 
         const splatArray = new Float32Array(workerTransferSplatBuffer);
+        const indexArray = new Uint32Array(workerTransferIndexBuffer);
         const pCovarianceArray = new Float32Array(precomputedCovariance);
         const pColorArray = new Float32Array(precomputedColor);
         const color = new Float32Array(workerTransferColorBuffer);
@@ -35,7 +41,7 @@ export function createSortWorker(self) {
 
         let fullRefresh = false;
 
-        if (depthMix.length !== vertexCount) {
+        /*if (depthMix.length !== vertexCount) {
             depthMix = new BigInt64Array(vertexCount);
             for (let i = 0; i < tierCount; i++) {
                 aggregateTraveled[i] = 0;
@@ -44,7 +50,7 @@ export function createSortWorker(self) {
             }
             const indexMix = new Uint32Array(depthMix.buffer);
             for (let j = 0; j < vertexCount; j++) {
-                indexMix[2 * j] = j;
+                indexMix[2 * j] = indexArray[j];
             }
             fullRefresh = true;
         } else {
@@ -53,11 +59,12 @@ export function createSortWorker(self) {
                 lastProj[6] * viewProj[6] +
                 lastProj[10] * viewProj[10];
             if (Math.abs(dot - 1) < 0.01) {
+                self.postMessage({'sortCanceled': true});
                 return;
             }
-        }
+        }*/
 
-        let distanceTraveled = maxCameraTravel;
+        /*let distanceTraveled = maxCameraTravel;
         let depthMixTier = tierCount - 1;
         if (lastCameraPosition) {
             const dx = lastCameraPosition[0] - cameraPosition[0];
@@ -75,34 +82,40 @@ export function createSortWorker(self) {
                     depthMixTier = i;
                 }
             }
+        }*/
+
+        if (depthMix.length !== vertexCount) {
+            depthMix = new BigInt64Array(vertexCount);
         }
+        const floatMix = new Float32Array(depthMix.buffer, 0, vertexRenderCount);
+        const indexMix = new Uint32Array(depthMix.buffer, 0, vertexRenderCount);
 
-        const floatMix = new Float32Array(depthMix.buffer);
-        const indexMix = new Uint32Array(depthMix.buffer);
-
-        for (let j = 0; j < vertexCount; j++) {
-            let i = indexMix[2 * j];
+        for (let j = 0; j < vertexRenderCount; j++) {
+            const i = indexArray[j];
+            indexMix[2 * j] = i;
             const splatArrayBase = rowSizeFloats * i;
             const dx = splatArray[splatArrayBase] - cameraPosition[0];
             const dy = splatArray[splatArrayBase + 1] - cameraPosition[1];
             const dz = splatArray[splatArrayBase + 2] - cameraPosition[2];
             floatMix[2 * j + 1] = Math.sqrt(dx * dx + dy * dy + dz * dz);
         }
-
         lastProj = viewProj;
 
+        let depthMixView = new BigInt64Array(depthMix.buffer, 0, vertexRenderCount);
+        depthMixView.sort();
+        /*
         if (fullRefresh) {
             depthMix.sort();
         } else {
             depthMixTiers[depthMixTier].sort();
-        }
+        }*/
 
         for (let j = 0; j < vertexCount; j++) {
             const i = indexMix[2 * j];
 
             const centerCovBase = 9 * j;
-            const pCovarianceBase = 6 * i;
             const colorBase = 4 * j;
+            const pCovarianceBase = 6 * i;
             const pcColorBase = 4 * i;
             const splatArrayBase = rowSizeFloats * i;
 
@@ -126,7 +139,10 @@ export function createSortWorker(self) {
         lastVertexCount = vertexCount;
         lastCameraPosition = cameraPosition;
         
-        self.postMessage({'sortDone': true});
+        self.postMessage({
+            'sortDone': true,
+            'sortedVertexCount': vertexRenderCount
+        });
 
     };
 
@@ -149,11 +165,13 @@ export function createSortWorker(self) {
         if (e.data.view) {
             viewProj = e.data.view.view;
             cameraPosition = e.data.view.cameraPosition;
-            throttledSort();
+            vertexRenderCount = e.data.view.vertexRenderCount;
+            runSort(viewProj);
         } else if (e.data.buffer) {
             rowSizeFloats = e.data.buffer.rowSizeFloats;
             rowSizeBytes = e.data.buffer.rowSizeBytes;
             workerTransferSplatBuffer = e.data.buffer.workerTransferSplatBuffer,
+            workerTransferIndexBuffer = e.data.buffer.workerTransferIndexBuffer,
             workerTransferCenterCovarianceBuffer = e.data.buffer.workerTransferCenterCovarianceBuffer,
             workerTransferColorBuffer = e.data.buffer.workerTransferColorBuffer,
             precomputedCovariance = e.data.buffer.precomputedCovariance;
@@ -161,7 +179,8 @@ export function createSortWorker(self) {
             vertexCount = e.data.buffer.vertexCount;
             viewProj = e.data.buffer.view;
             cameraPosition = e.data.buffer.cameraPosition;
-            throttledSort();
+            vertexRenderCount = e.data.buffer.vertexRenderCount;
+            runSort(viewProj);
         }
     };
 }

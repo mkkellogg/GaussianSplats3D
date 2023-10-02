@@ -79,12 +79,8 @@ export class Octree {
         }
 
         const position = new THREE.Vector3();
-        const scale = new THREE.Vector3();
-        const color = new THREE.Color();
         for (let i = 0; i < vertexCount; i++) {
             splatBuffer.getPosition(i, position);
-            splatBuffer.getScale(i, scale);
-            splatBuffer.getColor(i, color);
             for (let j = 0; j < childrenBounds.length; j++) {
                 if (childrenBounds[j].containsPoint(position)) {
                     vertexCounts[j]++;
@@ -102,7 +98,8 @@ export class Octree {
             }
             const childNode = new OctreeNode(childrenBounds[i].min, childrenBounds[i].max, node.depth + 1);
             childNode.data = {
-                'splatBuffer': childSplatBuffer
+                'splatBuffer': childSplatBuffer,
+                'indexes': indexesForChild
             };
             node.children.push(childNode);
         }
