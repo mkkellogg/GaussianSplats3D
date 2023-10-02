@@ -16,6 +16,10 @@ export function createSortWorker(self) {
     let workerTransferCenterCovarianceBuffer;
     let workerTransferColorBuffer;
 
+    let distances;
+    let frequencies;
+    let realIndex;
+
     const runSort = (viewProj) => {
 
         if (!workerTransferSplatBuffer) {
@@ -31,7 +35,7 @@ export function createSortWorker(self) {
         const centerCov = new Float32Array(workerTransferCenterCovarianceBuffer);
 
 
-        if (depthMix.length !== vertexCount) {
+        /*if (depthMix.length !== vertexCount) {
             depthMix = new BigInt64Array(vertexCount);
         } else {
             let dot =
@@ -57,10 +61,66 @@ export function createSortWorker(self) {
             floatMix[2 * j + 1] = dx * dx + dy * dy + dz * dz;
         }
         lastProj = viewProj;
-        depthMix.sort();
+        depthMix.sort();*/
+
+
+
+        if (depthMix.length === vertexCount) {
+            let dot =
+                lastProj[2] * viewProj[2] +
+                lastProj[6] * viewProj[6] +
+                lastProj[10] * viewProj[10];
+            if (Math.abs(dot - 1) < 0.01) {
+                self.postMessage({'sortCanceled': true});
+                return;
+            }
+        }
+
+        if (!distances || distances.length < vertexRenderCount) {
+            distances = new Uint32Array(vertexRenderCount);
+        }
+        let minDistance;
+        let maxDistance;
+        for (let j = 0; j < vertexRenderCount; j++) {
+            let i = indexArray[j];
+            const splatArrayBase = rowSizeFloats * i;
+            const dx = splatArray[splatArrayBase] - cameraPosition[0];
+            const dy = splatArray[splatArrayBase + 1] - cameraPosition[1];
+            const dz = splatArray[splatArrayBase + 2] - cameraPosition[2];
+            const distance = Math.floor((dx * dx + dy * dy + dz * dz) * 1000);
+            distances[j] = distance;
+            if (j === 0 || distance < minDistance) minDistance = distance;
+            if (j === 0 || distance > maxDistance) maxDistance = distance;
+        }
+
+        const distancesRange = maxDistance - minDistance;
+        if (!frequencies || frequencies.length < distancesRange) {
+            frequencies = new Uint32Array(distancesRange);
+        }
+        for (let i = 0; i < vertexRenderCount; i++) {
+            const frequenciesIndex = distances[i] - minDistance;
+            const cFreq = frequencies[frequenciesIndex] || 0;
+            frequencies[frequenciesIndex] = cFreq + 1;   
+        }
+
+        let cumulativeFreq = 0;
+        for (let i = 0; i < distancesRange; i++) {
+            const cFreq = frequencies[i];
+            cumulativeFreq += cFreq;
+            frequencies[i] = cumulativeFreq;
+        }
+
+        if (!realIndex || realIndex.length < vertexRenderCount) {
+            realIndex = new Uint32Array(vertexRenderCount);
+        }
+        for (let i = 0; i < vertexRenderCount; i++) {
+            const frequenciesIndex = distances[i] - minDistance;
+            realIndex[frequencies[frequenciesIndex]] = i;
+        }
+
 
         for (let j = 0; j < vertexRenderCount; j++) {
-            const i = indexMix[2 * j];
+            const i = realIndex[j];
 
             const centerCovBase = 9 * j;
             const colorBase = 4 * j;
