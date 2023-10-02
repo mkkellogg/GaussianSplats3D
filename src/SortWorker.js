@@ -7,11 +7,8 @@ export function createSortWorker(self) {
     let depthMix = new BigInt64Array();
     let lastProj = [];
 
-    let lastVertexCount = -1;
     let cameraPosition;
-    let lastCameraPosition;
     let rowSizeFloats = 0;
-    let rowSizeBytes = 0;
 
     let vertexRenderCount;
     let workerTransferSplatBuffer;
@@ -32,6 +29,7 @@ export function createSortWorker(self) {
         const pColorArray = new Float32Array(precomputedColor);
         const color = new Float32Array(workerTransferColorBuffer);
         const centerCov = new Float32Array(workerTransferCenterCovarianceBuffer);
+
 
         if (depthMix.length !== vertexCount) {
             depthMix = new BigInt64Array(vertexCount);
@@ -56,7 +54,7 @@ export function createSortWorker(self) {
             const dx = splatArray[splatArrayBase] - cameraPosition[0];
             const dy = splatArray[splatArrayBase + 1] - cameraPosition[1];
             const dz = splatArray[splatArrayBase + 2] - cameraPosition[2];
-            floatMix[2 * j + 1] = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            floatMix[2 * j + 1] = dx * dx + dy * dy + dz * dz;
         }
         lastProj = viewProj;
         depthMix.sort();
@@ -87,9 +85,6 @@ export function createSortWorker(self) {
             centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5];
         }
 
-        lastVertexCount = vertexCount;
-        lastCameraPosition = cameraPosition;
-        
         self.postMessage({
             'sortDone': true,
             'sortedVertexCount': vertexRenderCount
@@ -97,21 +92,6 @@ export function createSortWorker(self) {
 
     };
 
-    const throttledSort = () => {
-        if (!sortRunning) {
-            sortRunning = true;
-            let lastView = viewProj;
-            runSort(lastView);
-            setTimeout(() => {
-                sortRunning = false;
-                if (lastView !== viewProj) {
-                    throttledSort();
-                }
-            }, 0);
-        }
-    };
-
-    let sortRunning;
     self.onmessage = (e) => {
         if (e.data.view) {
             viewProj = e.data.view.view;
@@ -128,10 +108,6 @@ export function createSortWorker(self) {
             precomputedCovariance = e.data.buffer.precomputedCovariance;
             precomputedColor = e.data.buffer.precomputedColor;
             vertexCount = e.data.buffer.vertexCount;
-            viewProj = e.data.buffer.view;
-            cameraPosition = e.data.buffer.cameraPosition;
-            vertexRenderCount = e.data.buffer.vertexRenderCount;
-            runSort(viewProj);
         }
     };
 }

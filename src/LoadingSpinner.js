@@ -1,11 +1,11 @@
 export class LoadingSpinner {
 
     constructor(message) {
-        this.message = message || "Loading...";
+        this.message = message || 'Loading...';
 
-        this.spinnerDivContainer = document.createElement("div");
-        this.spinnerDiv = document.createElement("div");
-        this.messageDiv = document.createElement("div");
+        this.spinnerDivContainer = document.createElement('div');
+        this.spinnerDiv = document.createElement('div');
+        this.messageDiv = document.createElement('div');
         this.spinnerDivContainer.className = 'loaderContainer';
         this.spinnerDiv.className = 'loader';
         this.spinnerDivContainer.style.display = 'none';
