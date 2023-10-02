@@ -289,7 +289,7 @@ export class Viewer {
                     tempVector.normalize();
                     const cameraAngleDot = tempVector.dot(cameraForward);
                     const ns = nodeSize(node);
-                    if (cameraAngleDot < .15 && distanceToNode > ns / 2) {
+                    if (cameraAngleDot < .15 && distanceToNode > ns) {
                         return;
                     }
                     verticesToCopy += vertexCount;
@@ -489,19 +489,8 @@ export class Viewer {
                 float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
                 vec3 color = vColor.rgb;
-                float alpha = vColor.a;
-
-                //color = color / (color + vec3(1.0));
-                //color = pow(color, vec3(1.0/1.5));  
-                //color = saturate(mix(vec3(0.5, 0.5, 0.5), color, 1.01));
-
-                float B = exp(A) * alpha;
+                float B = exp(A) * vColor.a;
                 vec3 colorB = B * color.rgb;
-
-                // colorB = pow(colorB, vec3(2.2));
-                // colorB = saturate(mix(vec3(0.5, 0.5, 0.5), colorB, 1.0001));
-                // colorB = pow(colorB, vec3(1.0/2.2));
-  
                 gl_FragColor = vec4(colorB, B);
 
             }`;

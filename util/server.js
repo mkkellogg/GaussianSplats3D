@@ -5,6 +5,7 @@ import * as path from 'path';
 let baseDirectory = '.';
 let port = 8080;
 let host = '127.0.0.1';
+let lasttRequesTime = performance.now() / 1000;
 for(let i = 0; i < process.argv.length; ++i) {
   if (process.argv[i] == '-d' && i < process.argv.length - 1) {
     baseDirectory = process.argv[i + 1];
@@ -46,14 +47,18 @@ http
         break;
     }
 
+    const requestTime = performance.now() / 1000;
+    if (requestTime - lasttRequesTime > 1) {
+      console.log("");
+      console.log("-----------------------------------------------");
+    }
+
     fs.readFile(filePath, function (error, content) {
       if (error) {
         if (error.code == "ENOENT") {
-          fs.readFile("./404.html", function (error, content) {
-            response.writeHead(200, { "Content-Type": contentType });
-            response.end(content, "utf-8");
-          });
+          console.log("HTTP(404) Request for " + filePath + " -> File not found.");
         } else {
+          console.log("HTTP(500)) Request for " + filePath + " -> Server error.");
           response.writeHead(500);
           response.end(
             "Sorry, check with the site admin for error: " +
@@ -63,11 +68,13 @@ http
           response.end();
         }
       } else {
-        console.log("SUCCESS! Request for " + filePath);
+        console.log("HTTP(200) Request for " + filePath);
         response.writeHead(200, { "Content-Type": contentType });
         response.end(content, "utf-8");
       }
     });
+
+    lasttRequesTime = requestTime;
   })
   .listen(port, host);
 console.log("Server running at " + host + ':' + port);

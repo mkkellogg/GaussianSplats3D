@@ -28,7 +28,6 @@ export class SplatBuffer {
             this.uintArray = new Uint8Array(this.bufferData);
             this.precomputedCovarianceBufferData = null;
             this.precomputedColorBufferData = null;
-
         } else {
             this.bufferData = bufferDataOrVertexCount;
             this.floatArray = new Float32Array(this.bufferData);
