@@ -1,6 +1,5 @@
 
 export function createSortWorker(self) {
-    let splatBuffer;
     let precomputedCovariance;
     let precomputedColor;
     let vertexCount = 0;
@@ -8,30 +7,39 @@ export function createSortWorker(self) {
     let depthMix = new BigInt64Array();
     let lastProj = [];
 
+    let cameraPosition;
     let rowSizeFloats = 0;
+
+    let vertexRenderCount;
+    let workerTransferSplatBuffer;
+    let workerTransferIndexBuffer;
+    let workerTransferCenterCovarianceBuffer;
+    let workerTransferColorBuffer;
 
     const runSort = (viewProj) => {
 
-        if (!splatBuffer) return;
+        if (!workerTransferSplatBuffer) {
+            self.postMessage({'sortCanceled': true});
+            return;
+        }
 
-        const splatArray = new Float32Array(splatBuffer);
+        const splatArray = new Float32Array(workerTransferSplatBuffer);
+        const indexArray = new Uint32Array(workerTransferIndexBuffer);
         const pCovarianceArray = new Float32Array(precomputedCovariance);
         const pColorArray = new Float32Array(precomputedColor);
-        const color = new Float32Array(4 * vertexCount);
-        const centerCov = new Float32Array(9 * vertexCount);
+        const color = new Float32Array(workerTransferColorBuffer);
+        const centerCov = new Float32Array(workerTransferCenterCovarianceBuffer);
+
 
         if (depthMix.length !== vertexCount) {
             depthMix = new BigInt64Array(vertexCount);
-            const indexMix = new Uint32Array(depthMix.buffer);
-            for (let j = 0; j < vertexCount; j++) {
-                indexMix[2 * j] = j;
-            }
         } else {
             let dot =
                 lastProj[2] * viewProj[2] +
                 lastProj[6] * viewProj[6] +
                 lastProj[10] * viewProj[10];
             if (Math.abs(dot - 1) < 0.01) {
+                self.postMessage({'sortCanceled': true});
                 return;
             }
         }
@@ -39,26 +47,24 @@ export function createSortWorker(self) {
         const floatMix = new Float32Array(depthMix.buffer);
         const indexMix = new Uint32Array(depthMix.buffer);
 
-        for (let j = 0; j < vertexCount; j++) {
-            let i = indexMix[2 * j];
+        for (let j = 0; j < vertexRenderCount; j++) {
+            let i = indexArray[j];
+            indexMix[2 * j] = i;
             const splatArrayBase = rowSizeFloats * i;
-            floatMix[2 * j + 1] =
-                10000 +
-                viewProj[2] * splatArray[splatArrayBase] +
-                viewProj[6] * splatArray[splatArrayBase + 1] +
-                viewProj[10] * splatArray[splatArrayBase + 2];
+            const dx = splatArray[splatArrayBase] - cameraPosition[0];
+            const dy = splatArray[splatArrayBase + 1] - cameraPosition[1];
+            const dz = splatArray[splatArrayBase + 2] - cameraPosition[2];
+            floatMix[2 * j + 1] = dx * dx + dy * dy + dz * dz;
         }
-
         lastProj = viewProj;
-
         depthMix.sort();
 
-        for (let j = 0; j < vertexCount; j++) {
+        for (let j = 0; j < vertexRenderCount; j++) {
             const i = indexMix[2 * j];
 
             const centerCovBase = 9 * j;
-            const pCovarianceBase = 6 * i;
             const colorBase = 4 * j;
+            const pCovarianceBase = 6 * i;
             const pcColorBase = 4 * i;
             const splatArrayBase = rowSizeFloats * i;
 
@@ -79,39 +85,29 @@ export function createSortWorker(self) {
             centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5];
         }
 
-        self.postMessage({color, centerCov}, [
-            color.buffer,
-            centerCov.buffer,
-        ]);
+        self.postMessage({
+            'sortDone': true,
+            'sortedVertexCount': vertexRenderCount
+        });
 
     };
 
-    const throttledSort = () => {
-        if (!sortRunning) {
-            sortRunning = true;
-            let lastView = viewProj;
-            runSort(lastView);
-            setTimeout(() => {
-                sortRunning = false;
-                if (lastView !== viewProj) {
-                    throttledSort();
-                }
-            }, 0);
-        }
-    };
-
-    let sortRunning;
     self.onmessage = (e) => {
-        if (e.data.bufferUpdate) {
-            rowSizeFloats = e.data.bufferUpdate.rowSizeFloats;
-            rowSizeBytes = e.data.bufferUpdate.rowSizeBytes;
-            splatBuffer = e.data.bufferUpdate.splatBuffer;
-            precomputedCovariance = e.data.bufferUpdate.precomputedCovariance;
-            precomputedColor = e.data.bufferUpdate.precomputedColor;
-            vertexCount = e.data.bufferUpdate.vertexCount;
-        } else if (e.data.sort) {
-            viewProj = e.data.sort.view;
-            throttledSort();
+        if (e.data.view) {
+            viewProj = e.data.view.view;
+            cameraPosition = e.data.view.cameraPosition;
+            vertexRenderCount = e.data.view.vertexRenderCount;
+            runSort(viewProj);
+        } else if (e.data.buffer) {
+            rowSizeFloats = e.data.buffer.rowSizeFloats;
+            rowSizeBytes = e.data.buffer.rowSizeBytes;
+            workerTransferSplatBuffer = e.data.buffer.workerTransferSplatBuffer,
+            workerTransferIndexBuffer = e.data.buffer.workerTransferIndexBuffer,
+            workerTransferCenterCovarianceBuffer = e.data.buffer.workerTransferCenterCovarianceBuffer,
+            workerTransferColorBuffer = e.data.buffer.workerTransferColorBuffer,
+            precomputedCovariance = e.data.buffer.precomputedCovariance;
+            precomputedColor = e.data.buffer.precomputedColor;
+            vertexCount = e.data.buffer.vertexCount;
         }
     };
 }
