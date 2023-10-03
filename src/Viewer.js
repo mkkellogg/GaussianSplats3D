@@ -270,7 +270,7 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
-        return function(gatherAllNode) {
+        return function(gatherAllNodes) {
 
             cameraForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
 
@@ -284,7 +284,7 @@ export class Viewer {
                     tempVector.normalize();
                     const cameraAngleDot = tempVector.dot(cameraForward);
                     const ns = nodeSize(node);
-                    if (!gatherAllNode && (cameraAngleDot < .1 && distanceToNode > ns)) {
+                    if (!gatherAllNodes && (cameraAngleDot < .1 && distanceToNode > ns)) {
                         return;
                     }
                     verticesToCopy += vertexCount;
@@ -335,7 +335,7 @@ export class Viewer {
         const lastSortViewPos = new THREE.Vector3();
         const sortViewOffset = new THREE.Vector3();
 
-        return function(force = false, gatherAllNode = false) {
+        return function(force = false, gatherAllNodes = false) {
             if (!force) {
                 sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
                 if (sortViewDir.dot(lastSortViewDir) > 0.95) return;
@@ -350,7 +350,7 @@ export class Viewer {
             cameraPositionArray[2] = this.camera.position.z;
 
             if (!this.sortRunning) {
-                this.gatherSceneNodes(gatherAllNode);
+                this.gatherSceneNodes(gatherAllNodes);
                 this.sortRunning = true;
                 this.sortWorker.postMessage({
                     view: {
