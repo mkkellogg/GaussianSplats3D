@@ -33,6 +33,8 @@ export class Viewer {
         this.resizeFunc = this.onResize.bind(this);
 
         this.sortWorker = null;
+        this.workerTransferDistanceBuffer = null;
+        this.workerTransferDistanceArray = null;
         this.workerTransferIndexBuffer = null;
         this.workerTransferIndexArray = null;
         this.workerTransferSplatBuffer = null;
@@ -218,6 +220,8 @@ export class Viewer {
                 this.vertexRenderCount = this.splatBuffer.getVertexCount();
                 this.workerTransferIndexBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4);
                 this.workerTransferIndexArray = new Uint32Array(this.workerTransferIndexBuffer);
+                this.workerTransferDistanceBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4);
+                this.workerTransferDistanceArray = new Uint32Array(this.workerTransferDistanceBuffer);
                 this.workerTransferSplatBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * SplatBuffer.RowSizeBytes);
                 this.workerTransferSplatArray = new Float32Array(this.workerTransferSplatBuffer);
                 this.workerTransferSplatArray.set(new Float32Array(this.splatBuffer.getBufferData()));
@@ -376,6 +380,7 @@ export class Viewer {
                         'rowSizeBytes': SplatBuffer.RowSizeBytes,
                         'workerTransferSplatBuffer': this.workerTransferSplatBuffer,
                         'workerTransferIndexBuffer': this.workerTransferIndexBuffer,
+                        'workerTransferDistanceBuffer': this.workerTransferDistanceBuffer,
                         'workerTransferCenterCovarianceBuffer': this.workerTransferCenterCovarianceBuffer,
                         'workerTransferColorBuffer': this.workerTransferColorBuffer,
                         'precomputedCovariance': this.splatBuffer.getPrecomputedCovarianceBufferData(),

@@ -13,6 +13,7 @@ export function createSortWorker(self) {
     let vertexRenderCount;
     let workerTransferSplatBuffer;
     let workerTransferIndexBuffer;
+    let workerTransferDistanceBuffer;
     let workerTransferCenterCovarianceBuffer;
     let workerTransferColorBuffer;
 
@@ -191,6 +192,7 @@ export function createSortWorker(self) {
             rowSizeBytes = e.data.buffer.rowSizeBytes;
             workerTransferSplatBuffer = e.data.buffer.workerTransferSplatBuffer,
             workerTransferIndexBuffer = e.data.buffer.workerTransferIndexBuffer,
+            workerTransferDistanceBuffer = e.data.buffer.workerTransferDistanceBuffer,
             workerTransferCenterCovarianceBuffer = e.data.buffer.workerTransferCenterCovarianceBuffer,
             workerTransferColorBuffer = e.data.buffer.workerTransferColorBuffer,
             precomputedCovariance = e.data.buffer.precomputedCovariance;
