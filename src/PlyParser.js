@@ -183,7 +183,6 @@ export class PlyParser {
         console.timeEnd('PLY load');
 
         const splatBuffer = new SplatBuffer(splatBufferData);
-        splatBuffer.buildPreComputedBuffers();
         return splatBuffer;
 
     }
