@@ -1,5 +1,5 @@
 
-export function createSortWorker(self) {
+export function sortWorker(self) {
     let precomputedCovariance;
     let precomputedColor;
     let vertexCount = 0;

@@ -3,9 +3,10 @@ import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
-import { createSortWorker } from './SortWorker.js';
+import { sortWorker } from './SortWorker.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Octree } from './octree/Octree.js';
+import { createSortWorker } from './worker/SortWorker.js';
 
 const DEFAULT_CAMERA_SPECS = {
     'fx': 1159.5880733038064,
@@ -122,14 +123,32 @@ export class Viewer {
 
         this.rootElement.appendChild(this.renderer.domElement);
 
+        createSortWorker().then((wasmSortWorker) => {
+            this.wasmSortWorker = wasmSortWorker;
+            this.wasmSortWorker.onmessage = (e) => {
+                if (e.data.sortDone) {
+                    this.sortRunning = false;
+                    console.log('WASM: sort done');
+                } else if (e.data.sortCanceled) {
+                    this.sortRunning = false;
+                    console.log('WASM: sort canceled');
+                }
+            };
+            this.wasmSortWorker.postMessage({
+                sort: {
+    
+                }
+            })
+        });
+
+
         this.sortWorker = new Worker(
             URL.createObjectURL(
-                new Blob(['(', createSortWorker.toString(), ')(self)'], {
+                new Blob(['(', sortWorker.toString(), ')(self)'], {
                     type: 'application/javascript',
                 }),
             ),
         );
-
         this.sortWorker.onmessage = (e) => {
             if (e.data.sortDone) {
                 this.sortRunning = false;
@@ -140,6 +159,7 @@ export class Viewer {
                 this.sortRunning = false;
             }
         };
+
     }
 
     updateSplatMeshAttributes(colors, centerCovariances, sortedVertexCount) {
@@ -187,23 +207,29 @@ export class Viewer {
             fileLoadPromise
             .then((splatBuffer) => {
                 this.splatBuffer = splatBuffer;
+
+                // Remove splats with alpha less than 5 / 255
+                this.splatBuffer.optimize(1);
+                
                 this.splatBuffer.buildPreComputedBuffers();
                 this.splatMesh = this.buildMesh(this.splatBuffer);
                 this.splatMesh.frustumCulled = false;
                 this.scene.add(this.splatMesh);
                 this.updateSplatMeshUniforms();
 
-                this.octree = new Octree(3);
+                this.octree = new Octree(12, 1000);
                 console.time('Octree build');
                 this.octree.processScene(splatBuffer);
                 console.timeEnd('Octree build');
 
-                console.log(`Octree leaves: ${this.octree.countLeaves()}`);
                 let leavesWithVertices = 0;
                 let avgVertexCount = 0;
                 let maxVertexCount = 0;
                 let nodeCount = 0;
+                let leafCount = 0;
+
                 this.octree.visitLeaves((node) => {
+                    leafCount++;
                     const vertexCount = node.data.indexes.length;
                     if (vertexCount > 0) {
                         this.octreeNodeMap[node.id] = node;
@@ -213,6 +239,7 @@ export class Viewer {
                         leavesWithVertices++;
                     }
                 });
+                console.log(`Octree leaves: ${this.octree.countLeaves()}`);
                 console.log(`Octree leaves with vertices:${leavesWithVertices}`);
                 avgVertexCount /= nodeCount;
                 console.log(`Avg vertex count per node: ${avgVertexCount}`);
@@ -232,9 +259,9 @@ export class Viewer {
                 loadingSpinner.hide();
 
                 for (let i = 0; i < this.splatBuffer.getVertexCount(); i ++) this.workerTransferIndexArray[i] = i;
-
                 this.updateSortWorkerBuffers();
                 this.updateView(true, true);
+
                 resolve();
             })
             .catch((e) => {
@@ -266,8 +293,11 @@ export class Viewer {
     gatherSceneNodes = function() {
 
         const nodeRenderList = [];
+        const tempVectorYZ = new THREE.Vector3();
+        const tempVectorXZ = new THREE.Vector3();
         const tempVector = new THREE.Vector3();
-        const cameraForward = new THREE.Vector3();
+        const tempMatrix4 = new THREE.Matrix4();
+        const renderDimensions = new THREE.Vector3();
 
         const tempMax = new THREE.Vector3();
         const nodeSize = (node) => {
@@ -276,26 +306,39 @@ export class Viewer {
 
         return function(gatherAllNodes) {
 
-            cameraForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+            this.getRenderDimensions(renderDimensions);
+            const fovXOver2 = Math.atan(renderDimensions.x / (2.0 * this.cameraSpecs.fx));
+            const fovYOver2 = Math.atan(renderDimensions.y / (2.0 * this.cameraSpecs.fy));
+            const cosFovXOver2 = Math.cos(fovXOver2);
+            const cosFovYOver2 = Math.cos(fovYOver2);
+            tempMatrix4.copy(this.camera.matrixWorld).invert();
 
             let nodeRenderCount = 0;
             let verticesToCopy = 0;
-            this.octree.visitLeaves((node) => {
-                const vertexCount = node.data.indexes.length;
-                if (vertexCount > 0) {
-                    tempVector.copy(node.center).sub(this.camera.position);
-                    const distanceToNode = tempVector.length();
-                    tempVector.normalize();
-                    const cameraAngleDot = tempVector.dot(cameraForward);
-                    const ns = nodeSize(node);
-                    if (!gatherAllNodes && (cameraAngleDot < .1 && distanceToNode > ns)) {
-                        return;
-                    }
-                    verticesToCopy += vertexCount;
-                    nodeRenderList[nodeRenderCount] = node;
-                    nodeRenderCount++;
+            const nodeCount = this.octree.nodesWithIndexes.length;
+            for (let i = 0; i < nodeCount; i++) {
+                const node = this.octree.nodesWithIndexes[i];
+                tempVector.copy(node.center).sub(this.camera.position);
+                const distanceToNode = tempVector.length();
+                tempVector.normalize();
+                tempVector.transformDirection(tempMatrix4);
+
+                tempVectorYZ.copy(tempVector).setX(0).normalize();
+                tempVectorXZ.copy(tempVector).setY(0).normalize();
+                tempVector.set(0, 0, -1);
+                const cameraAngleXZDot = tempVector.dot(tempVectorXZ);
+                const cameraAngleYZDot = tempVector.dot(tempVectorYZ);
+
+                const ns = nodeSize(node);
+                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .4);
+                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .4);
+                if (!gatherAllNodes && ((outOfFovX || outOfFovY)  && distanceToNode > ns)) {
+                    continue;
                 }
-            });
+                verticesToCopy += node.data.indexes.length;
+                nodeRenderList[nodeRenderCount] = node;
+                nodeRenderCount++;
+            }
 
             this.vertexRenderCount = verticesToCopy;
             let currentByteOffset = 0;
