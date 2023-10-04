@@ -3,7 +3,6 @@ import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
-import { sortWorker } from './SortWorker.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Octree } from './octree/Octree.js';
 import { createSortWorker } from './worker/SortWorker.js';
@@ -34,14 +33,8 @@ export class Viewer {
         this.resizeFunc = this.onResize.bind(this);
 
         this.sortWorker = null;
-        this.workerTransferDistanceBuffer = null;
-        this.workerTransferDistanceArray = null;
         this.workerTransferIndexBuffer = null;
         this.workerTransferIndexArray = null;
-        this.workerTransferSplatBuffer = null;
-        this.workerTransferSplatArray = null;
-        this.workerTransferCenterCovarianceBuffer = null;
-        this.workerTransferColorBuffer = null;
         this.workerTransferCenterCovarianceArray = null;
         this.workerTransferColorArray = null;
         this.vertexRenderCount = 0;
@@ -122,44 +115,6 @@ export class Viewer {
         window.addEventListener('resize', this.resizeFunc, false);
 
         this.rootElement.appendChild(this.renderer.domElement);
-
-        createSortWorker().then((wasmSortWorker) => {
-            this.wasmSortWorker = wasmSortWorker;
-            this.wasmSortWorker.onmessage = (e) => {
-                if (e.data.sortDone) {
-                    this.sortRunning = false;
-                    console.log('WASM: sort done');
-                } else if (e.data.sortCanceled) {
-                    this.sortRunning = false;
-                    console.log('WASM: sort canceled');
-                }
-            };
-            this.wasmSortWorker.postMessage({
-                sort: {
-    
-                }
-            })
-        });
-
-
-        this.sortWorker = new Worker(
-            URL.createObjectURL(
-                new Blob(['(', sortWorker.toString(), ')(self)'], {
-                    type: 'application/javascript',
-                }),
-            ),
-        );
-        this.sortWorker.onmessage = (e) => {
-            if (e.data.sortDone) {
-                this.sortRunning = false;
-                this.updateSplatMeshAttributes(this.workerTransferColorArray,
-                                               this.workerTransferCenterCovarianceArray, e.data.sortedVertexCount);
-                this.updateSplatMeshUniforms();
-            } else if (e.data.sortCanceled) {
-                this.sortRunning = false;
-            }
-        };
-
     }
 
     updateSplatMeshAttributes(colors, centerCovariances, sortedVertexCount) {
@@ -208,9 +163,11 @@ export class Viewer {
             .then((splatBuffer) => {
                 this.splatBuffer = splatBuffer;
 
-                // Remove splats with alpha less than 5 / 255
+                // Remove splats with alpha less than 1 / 255
                 this.splatBuffer.optimize(1);
-                
+                const vertexCount = this.splatBuffer.getVertexCount();
+                console.log(`Splat count: ${vertexCount}`);
+
                 this.splatBuffer.buildPreComputedBuffers();
                 this.splatMesh = this.buildMesh(this.splatBuffer);
                 this.splatMesh.frustumCulled = false;
@@ -244,25 +201,43 @@ export class Viewer {
                 avgVertexCount /= nodeCount;
                 console.log(`Avg vertex count per node: ${avgVertexCount}`);
 
-                this.vertexRenderCount = this.splatBuffer.getVertexCount();
-                this.workerTransferIndexBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4);
-                this.workerTransferIndexArray = new Uint32Array(this.workerTransferIndexBuffer);
-                this.workerTransferDistanceBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4);
-                this.workerTransferDistanceArray = new Uint32Array(this.workerTransferDistanceBuffer);
-                this.workerTransferSplatBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * SplatBuffer.RowSizeBytes);
-                this.workerTransferSplatArray = new Float32Array(this.workerTransferSplatBuffer);
-                this.workerTransferSplatArray.set(new Float32Array(this.splatBuffer.getBufferData()));
-                this.workerTransferCenterCovarianceBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 9 * 4);
-                this.workerTransferCenterCovarianceArray = new Float32Array(this.workerTransferCenterCovarianceBuffer);
-                this.workerTransferColorBuffer = new SharedArrayBuffer(this.splatBuffer.getVertexCount() * 4 * 4);
-                this.workerTransferColorArray = new Float32Array(this.workerTransferColorBuffer);
+                this.vertexRenderCount = vertexCount;
                 loadingSpinner.hide();
 
-                for (let i = 0; i < this.splatBuffer.getVertexCount(); i ++) this.workerTransferIndexArray[i] = i;
-                this.updateSortWorkerBuffers();
-                this.updateView(true, true);
+                this.sortWorker = createSortWorker(vertexCount, SplatBuffer.RowSizeBytes);
+                this.sortWorker.onmessage = (e) => {
+                    if (e.data.sortDone) {
+                        this.sortRunning = false;
+                       // console.log('WASM: sort done');
+                        this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray, e.data.vertexSortCount);
+                    } else if (e.data.sortCanceled) {
+                        this.sortRunning = false;
+                        //console.log('WASM: sort canceled');
+                    } else if (e.data.sortSetupComplete) {
+                        console.log("Sorting web worker WASM setup complete.");
+                        this.workerTransferIndexBuffer = e.data.wasmMemory;
+                        this.workerTransferIndexArray = new Uint32Array(e.data.wasmMemory, e.data.indexesOffset, vertexCount);
 
-                resolve();
+                        const workerTransferPositionArray = new Float32Array(e.data.wasmMemory, e.data.positionsOffset, vertexCount * SplatBuffer.PositionComponentCount);
+                        const workerTransferPrecomputedCovarianceArray = new Float32Array(e.data.wasmMemory, e.data.precomputedCovariancesOffset, vertexCount * SplatBuffer.CovarianceSizeFloats);
+                        const workerTransferPrecomputedColorArray = new Float32Array(e.data.wasmMemory, e.data.precomputedColorsOffset, vertexCount * SplatBuffer.ColorSizeFloats);
+
+                        this.workerTransferCenterCovarianceArray = new Float32Array(e.data.wasmMemory, e.data.centerCovariancesOffset, vertexCount * 9);
+                        this.workerTransferColorArray = new Float32Array(e.data.wasmMemory, e.data.outColorsOffset, vertexCount * SplatBuffer.ColorComponentCount);
+
+                        for (let i = 0; i < vertexCount; i ++) {
+                            this.workerTransferIndexArray[i] = i;
+                        }
+                        this.splatBuffer.fillPositionArray(workerTransferPositionArray);
+                        workerTransferPrecomputedCovarianceArray.set(new Float32Array(this.splatBuffer.getPrecomputedCovarianceBufferData()));
+                        workerTransferPrecomputedColorArray.set(new Float32Array(this.splatBuffer.getPrecomputedColorBufferData()));
+
+                        this.updateView(true, true);
+
+                        resolve();
+                    }
+                };
+
             })
             .catch((e) => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
@@ -400,38 +375,14 @@ export class Viewer {
                 this.gatherSceneNodes(gatherAllNodes);
                 this.sortRunning = true;
                 this.sortWorker.postMessage({
-                    view: {
+                    sort: {
                         'view': tempMatrix.elements,
                         'cameraPosition': cameraPositionArray,
-                        'vertexRenderCount': this.vertexRenderCount
+                        'vertexSortCount': this.vertexRenderCount
                     }
                 });
                 lastSortViewPos.copy(this.camera.position);
                 lastSortViewDir.copy(sortViewDir);
-            }
-        };
-
-    }();
-
-    updateSortWorkerBuffers = function() {
-
-        return function() {
-            if (!this.sortRunning) {
-                this.sortWorker.postMessage({
-                    buffer: {
-                        'rowSizeFloats': SplatBuffer.RowSizeFloats,
-                        'rowSizeBytes': SplatBuffer.RowSizeBytes,
-                        'workerTransferSplatBuffer': this.workerTransferSplatBuffer,
-                        'workerTransferIndexBuffer': this.workerTransferIndexBuffer,
-                        'workerTransferDistanceBuffer': this.workerTransferDistanceBuffer,
-                        'workerTransferCenterCovarianceBuffer': this.workerTransferCenterCovarianceBuffer,
-                        'workerTransferColorBuffer': this.workerTransferColorBuffer,
-                        'precomputedCovariance': this.splatBuffer.getPrecomputedCovarianceBufferData(),
-                        'precomputedColor': this.splatBuffer.getPrecomputedColorBufferData(),
-                        'vertexCount': this.splatBuffer.getVertexCount(),
-                        'vertexRenderCount': this.vertexRenderCount
-                    }
-                });
             }
         };
 

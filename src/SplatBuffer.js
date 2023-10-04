@@ -8,11 +8,16 @@ export class SplatBuffer {
     //     Color (RGBA) - Uint8 * 4
     //     Rotation (IJKW) - Float32 * 4
 
+    static PositionComponentCount = 3;
+    static ScaleComponentCount = 3;
+    static RotationComponentCount = 4;
+    static ColorComponentCount = 4;
+
     static RowSizeBytes = 44;
     static RowSizeFloats = 11;
-    static PositionsSizeFloats = 3;
-    static PositionsSizeBytes = 12;
-    static CovarianceSizeFloat = 6;
+    static PositionSizeFloats = 3;
+    static PositionSizeBytes = 12;
+    static CovarianceSizeFloats = 6;
     static CovarianceSizeBytes = 24;
     static ColorSizeFloats = 4;
     static ColorSizeBytes = 16;
@@ -27,17 +32,15 @@ export class SplatBuffer {
         if (typeof bufferDataOrVertexCount === 'number') {
             this.bufferData = new ArrayBuffer(SplatBuffer.RowSizeBytes * bufferDataOrVertexCount);
             this.floatArray = new Float32Array(this.bufferData);
-            this.uintArray = new Uint8Array(this.bufferData);
+            this.uint8Array = new Uint8Array(this.bufferData);
             this.precomputedCovarianceBufferData = null;
             this.precomputedColorBufferData = null;
-            this.separatePositionBufferData = null;
         } else {
             this.bufferData = bufferDataOrVertexCount;
             this.floatArray = new Float32Array(this.bufferData);
-            this.uintArray = new Uint8Array(this.bufferData);
+            this.uint8Array = new Uint8Array(this.bufferData);
             this.precomputedCovarianceBufferData = null;
             this.precomputedColorBufferData = null;
-            this.separatePositionBufferData = null;
         }
     }
 
@@ -49,7 +52,7 @@ export class SplatBuffer {
         let index = 0;
         while (index < vertexCount) {
             const colorBase = SplatBuffer.RowSizeBytes * index + SplatBuffer.ColorRowOffsetBytes;
-            const baseAlpha = this.uintArray[colorBase + 3];
+            const baseAlpha = this.uint8Array[colorBase + 3];
             if (baseAlpha <= minAlpha) {
                 this.swapVertices(index, vertexCount - 1);
                 vertexCount--;
@@ -73,7 +76,7 @@ export class SplatBuffer {
         const newBufferData = this.bufferData.transfer(newByteCount);
         this.bufferData = newBufferData;
         this.floatArray = new Float32Array(this.bufferData);
-        this.uintArray = new Uint8Array(this.bufferData);
+        this.uint8Array = new Uint8Array(this.bufferData);
     }
 
     buildPreComputedBuffers() {
@@ -85,9 +88,6 @@ export class SplatBuffer {
         this.precomputedColorBufferData = new ArrayBuffer(SplatBuffer.ColorSizeBytes * vertexCount);
         const colorArray = new Float32Array(this.precomputedColorBufferData);
 
-        this.separatePositionBufferData = new ArrayBuffer(SplatBuffer.PositionsSizeBytes * vertexCount);
-        const positionArray = new Float32Array(this.separatePositionBufferData);
-    
         const scale = new THREE.Vector3();
         const rotation = new THREE.Quaternion();
         const rotationMatrix = new THREE.Matrix3();
@@ -96,16 +96,11 @@ export class SplatBuffer {
         const tempMatrix4 = new THREE.Matrix4();
         for (let i = 0; i < vertexCount; i++) {
 
-            const positionBase = SplatBuffer.RowSizeFloats * i;
-            positionArray[SplatBuffer.PositionsSizeFloats * i] = this.floatArray[positionBase];
-            positionArray[SplatBuffer.PositionsSizeFloats * i + 1] = this.floatArray[positionBase + 1];
-            positionArray[SplatBuffer.PositionsSizeFloats * i + 2] = this.floatArray[positionBase + 2];
-
             const colorBase = SplatBuffer.RowSizeBytes * i + SplatBuffer.ColorRowOffsetBytes;
-            colorArray[SplatBuffer.ColorSizeFloats * i] = this.uintArray[colorBase] / 255;
-            colorArray[SplatBuffer.ColorSizeFloats * i + 1] = this.uintArray[colorBase + 1] / 255;
-            colorArray[SplatBuffer.ColorSizeFloats * i + 2] = this.uintArray[colorBase + 2] / 255;
-            colorArray[SplatBuffer.ColorSizeFloats * i + 3] = this.uintArray[colorBase + 3] / 255;
+            colorArray[SplatBuffer.ColorSizeFloats * i] = this.uint8Array[colorBase] / 255;
+            colorArray[SplatBuffer.ColorSizeFloats * i + 1] = this.uint8Array[colorBase + 1] / 255;
+            colorArray[SplatBuffer.ColorSizeFloats * i + 2] = this.uint8Array[colorBase + 2] / 255;
+            colorArray[SplatBuffer.ColorSizeFloats * i + 3] = this.uint8Array[colorBase + 3] / 255;
 
             const scaleBase = SplatBuffer.RowSizeFloats * i + SplatBuffer.ScaleRowOffsetFloats;
             scale.set(this.floatArray[scaleBase], this.floatArray[scaleBase + 1], this.floatArray[scaleBase + 2]);
@@ -122,12 +117,12 @@ export class SplatBuffer {
 
             covarianceMatrix.copy(rotationMatrix).multiply(scaleMatrix);
             const M = covarianceMatrix.elements;
-            covarianceArray[SplatBuffer.CovarianceSizeFloat * i] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
-            covarianceArray[SplatBuffer.CovarianceSizeFloat * i + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
-            covarianceArray[SplatBuffer.CovarianceSizeFloat * i + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
-            covarianceArray[SplatBuffer.CovarianceSizeFloat * i + 3] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
-            covarianceArray[SplatBuffer.CovarianceSizeFloat * i + 4] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
-            covarianceArray[SplatBuffer.CovarianceSizeFloat * i + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
+            covarianceArray[SplatBuffer.CovarianceSizeFloats * i] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
+            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
+            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
+            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 3] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
+            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 4] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
+            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
         }
     }
 
@@ -147,9 +142,15 @@ export class SplatBuffer {
         return outScale;
     }
 
+    getRotation(index, outRotation = new THREE.Quaternion()) {
+        const rotationBase = SplatBuffer.RowSizeFloats * index + SplatBuffer.RotationRowOffsetFloats;
+        outRotation.set(this.floatArray[rotationBase + 1], this.floatArray[rotationBase + 2],  this.floatArray[rotationBase + 3], this.floatArray[rotationBase]);
+        return outRotation;
+    }
+
     getColor(index, outColor = new THREE.Color()) {
         const colorBase = SplatBuffer.RowSizeBytes * index + SplatBuffer.ColorRowOffsetBytes;
-        outColor.set(this.uintArray[colorBase], this.uintArray[colorBase + 1], this.uintArray[colorBase + 2]);
+        outColor.set(this.uint8Array[colorBase], this.uint8Array[colorBase + 1], this.uint8Array[colorBase + 2]);
         return outColor;
     }
 
@@ -161,12 +162,54 @@ export class SplatBuffer {
         return this.precomputedColorBufferData;
     }
 
-    getSeparatePositionBufferData() {
-        return this.separatePositionBufferData;
-    }
-
     getVertexCount() {
         return this.bufferData.byteLength / SplatBuffer.RowSizeBytes;
+    }
+
+    fillPositionArray(outPositionArray) {
+        const vertexCount = this.getVertexCount();
+        for (let i = 0; i < vertexCount; i++) {
+            const outPositionBase = i * SplatBuffer.PositionComponentCount;
+            const srcPositionBase = SplatBuffer.RowSizeFloats * i;
+            outPositionArray[outPositionBase] = this.floatArray[srcPositionBase];
+            outPositionArray[outPositionBase + 1] = this.floatArray[srcPositionBase + 1];
+            outPositionArray[outPositionBase + 2] = this.floatArray[srcPositionBase + 2];
+        }
+    }
+
+    fillScaleArray(outScaleArray) {
+        const vertexCount = this.getVertexCount();
+        for (let i = 0; i < vertexCount; i++) {
+            const outScaleBase = i * SplatBuffer.ScaleComponentCount;
+            const srcScaleBase = SplatBuffer.RowSizeFloats * i + SplatBuffer.ScaleRowOffsetFloats;
+            outScaleArray[outScaleBase] = this.floatArray[srcScaleBase];
+            outScaleArray[outScaleBase + 1] = this.floatArray[srcScaleBase + 1];
+            outScaleArray[outScaleBase + 2] = this.floatArray[srcScaleBase + 2];
+        }
+    }
+
+    fillRotationArray(outRotationArray) {
+        const vertexCount = this.getVertexCount();
+        for (let i = 0; i < vertexCount; i++) {
+            const outRotationBase = i * SplatBuffer.RotationComponentCount;
+            const srcRotationBase = SplatBuffer.RowSizeFloats * i + SplatBuffer.RotationRowOffsetFloats;
+            outRotationArray[outRotationBase] = this.floatArray[srcRotationBase];
+            outRotationArray[outRotationBase + 1] = this.floatArray[srcRotationBase + 1];
+            outRotationArray[outRotationBase + 2] = this.floatArray[srcRotationBase + 2];
+            outRotationArray[outRotationBase + 3] = this.floatArray[srcRotationBase + 3];
+        }
+    }
+
+    fillColorArray(outColorArray) {
+        const vertexCount = this.getVertexCount();
+        for (let i = 0; i < vertexCount; i++) {
+            const outColorBase = i * SplatBuffer.ColorComponentCount;
+            const srcColorBase = SplatBuffer.RowSizeBytes * i + SplatBuffer.ColorRowOffsetBytes;
+            outColorArray[outColorBase] = this.uint8Array[srcColorBase];
+            outColorArray[outColorBase + 1] = this.uint8Array[srcColorBase + 1];
+            outColorArray[outColorBase + 2] = this.uint8Array[srcColorBase + 2];
+            outColorArray[outColorBase + 3] = this.uint8Array[srcColorBase + 3];
+        }
     }
 
     setVertexDataFromComponents(index, position, scale, rotation, color, opacity) {
@@ -187,10 +230,10 @@ export class SplatBuffer {
         this.floatArray[rotationBase + 3] = rotation.z;
 
         const colorBase = SplatBuffer.RowSizeBytes * i + SplatBuffer.ColorRowOffsetBytes;
-        this.uintArray[colorBase] = Math.floor(color.r * 255);
-        this.uintArray[colorBase + 1] = Math.floor(color.g * 255);
-        this.uintArray[colorBase + 2] = Math.floor(color.b * 255);
-        this.uintArray[colorBase + 3] = Math.floor(opacity * 255);
+        this.uint8Array[colorBase] = Math.floor(color.r * 255);
+        this.uint8Array[colorBase + 1] = Math.floor(color.g * 255);
+        this.uint8Array[colorBase + 2] = Math.floor(color.b * 255);
+        this.uint8Array[colorBase + 3] = Math.floor(opacity * 255);
     }
 
     swapVertices(indexA, indexB) {
@@ -237,18 +280,18 @@ export class SplatBuffer {
 
         const colorBaseA = SplatBuffer.RowSizeBytes * indexA + SplatBuffer.ColorRowOffsetBytes;
         const colorBaseB = SplatBuffer.RowSizeBytes * indexB + SplatBuffer.ColorRowOffsetBytes;
-        temp = this.uintArray[colorBaseB];
-        this.uintArray[colorBaseB] = this.uintArray[colorBaseA];
-        this.uintArray[colorBaseA] = temp;
-        temp = this.uintArray[colorBaseB + 1];
-        this.uintArray[colorBaseB + 1] = this.uintArray[colorBaseA + 1];
-        this.uintArray[colorBaseA + 1] = temp;
-        temp = this.uintArray[colorBaseB + 2];
-        this.uintArray[colorBaseB + 2] = this.uintArray[colorBaseA + 2];
-        this.uintArray[colorBaseA + 2] = temp;
-        temp = this.uintArray[colorBaseB + 3];
-        this.uintArray[colorBaseB + 3] = this.uintArray[colorBaseA + 3];
-        this.uintArray[colorBaseA + 3] = temp;
+        temp = this.uint8Array[colorBaseB];
+        this.uint8Array[colorBaseB] = this.uint8Array[colorBaseA];
+        this.uint8Array[colorBaseA] = temp;
+        temp = this.uint8Array[colorBaseB + 1];
+        this.uint8Array[colorBaseB + 1] = this.uint8Array[colorBaseA + 1];
+        this.uint8Array[colorBaseA + 1] = temp;
+        temp = this.uint8Array[colorBaseB + 2];
+        this.uint8Array[colorBaseB + 2] = this.uint8Array[colorBaseA + 2];
+        this.uint8Array[colorBaseA + 2] = temp;
+        temp = this.uint8Array[colorBaseB + 3];
+        this.uint8Array[colorBaseB + 3] = this.uint8Array[colorBaseA + 3];
+        this.uint8Array[colorBaseA + 3] = temp;
     }
 
     copyVertexFromSplatBuffer(otherSplatBuffer, srcIndex, destIndex) {
