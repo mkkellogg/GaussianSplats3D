@@ -84,30 +84,4 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int *indexes, float* posit
         depthIndex[starts0[sizeList[i]]++] = indexes[i];
     }
 
-    for (unsigned int i = 0; i < sortCount; i++) {
-        unsigned int realIndex = depthIndex[i];
-
-        unsigned int centerCovBase = 9 * i;
-        unsigned int colorBase = 4 * i;
-
-        unsigned int precomputedCovarianceBase = 6 * realIndex;
-        unsigned int pcColorBase = 4 * realIndex;
-        unsigned int positionsBase = 3 * realIndex;
-
-        centerCovariances[centerCovBase] = positions[positionsBase];
-        centerCovariances[centerCovBase + 1] = positions[positionsBase + 1];
-        centerCovariances[centerCovBase + 2] = positions[positionsBase + 2];
-
-        outColors[colorBase] = precomputedColors[pcColorBase];
-        outColors[colorBase + 1] = precomputedColors[pcColorBase + 1];
-        outColors[colorBase + 2] = precomputedColors[pcColorBase + 2];
-        outColors[colorBase + 3] = precomputedColors[pcColorBase + 3];
-
-        centerCovariances[centerCovBase + 3] = precomputedCovariances[precomputedCovarianceBase];
-        centerCovariances[centerCovBase + 4] = precomputedCovariances[precomputedCovarianceBase + 1];
-        centerCovariances[centerCovBase + 5] = precomputedCovariances[precomputedCovarianceBase + 2];
-        centerCovariances[centerCovBase + 6] = precomputedCovariances[precomputedCovarianceBase + 3];
-        centerCovariances[centerCovBase + 7] = precomputedCovariances[precomputedCovarianceBase + 4];
-        centerCovariances[centerCovBase + 8] = precomputedCovariances[precomputedCovarianceBase + 5];
-    }
 }

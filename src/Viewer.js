@@ -129,6 +129,13 @@ export class Viewer {
         geometry.instanceCount = sortedVertexCount;
     }
 
+    updateSplatMeshIndexes(indexes, sortedVertexCount) {
+        const geometry = this.splatMesh.geometry;
+
+       // geometry.index.array.set(indexes);
+
+        geometry.instanceCount = sortedVertexCount;
+    }
 
     updateSplatMeshUniforms = function() {
 
@@ -164,7 +171,7 @@ export class Viewer {
                 this.splatBuffer = splatBuffer;
 
                 // Remove splats with alpha less than 1 / 255
-                this.splatBuffer.optimize(1);
+                //this.splatBuffer.optimize(1);
                 const vertexCount = this.splatBuffer.getVertexCount();
                 console.log(`Splat count: ${vertexCount}`);
 
@@ -209,7 +216,7 @@ export class Viewer {
                     if (e.data.sortDone) {
                         this.sortRunning = false;
                        // console.log('WASM: sort done');
-                        this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray, e.data.vertexSortCount);
+                        this.updateSplatMeshIndexes(this.workerTransferIndexArray, e.data.vertexSortCount);
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
                         //console.log('WASM: sort canceled');
@@ -218,21 +225,20 @@ export class Viewer {
 
                         const workerTransferPositionArray = new Float32Array(vertexCount * SplatBuffer.PositionComponentCount);
                         this.splatBuffer.fillPositionArray(workerTransferPositionArray);
-                        this.workerTransferCenterCovarianceArray = new Float32Array(new SharedArrayBuffer(vertexCount * 9 * 4));
-                        this.workerTransferColorArray = new Float32Array(new SharedArrayBuffer(vertexCount * SplatBuffer.ColorComponentCount * 4));
 
                         this.sortWorker.postMessage({
                             'buffers': {
-                               'precomputedCovariance': this.splatBuffer.getPrecomputedCovarianceBufferData(),
-                               'precomputedColor': this.splatBuffer.getPrecomputedColorBufferData(),
                                'positions': workerTransferPositionArray.buffer,
-                               'outCenterCovariance': this.workerTransferCenterCovarianceArray,
-                               'outColor': this.workerTransferColorArray,
                             }
                         })
 
                         this.workerTransferIndexArray = new Uint32Array(new SharedArrayBuffer(vertexCount * 4));
                     } else if(e.data.sortBuffersSetup) {
+
+                        const attributeData = this.getAttributeDataFromSplatBuffer(this.splatBuffer);
+                        this.updateSplatMeshIndexes(this.workerTransferIndexArray, this.splatBuffer.getVertexCount());
+                        this.updateSplatMeshAttributes(attributeData.colors, attributeData.centerCovariances, this.splatBuffer.getVertexCount());
+
                         this.updateView(true, true);
                         resolve();
                     }
@@ -416,7 +422,7 @@ export class Viewer {
 
             void main () {
 
-            vec3 splatCenter = splatCenterCovariance[0];
+            /*vec3 splatCenter = splatCenterCovariance[0];
             vec3 cov3D_M11_M12_M13 = splatCenterCovariance[1];
             vec3 cov3D_M22_M23_M33 = splatCenterCovariance[2];
 
@@ -471,7 +477,9 @@ export class Viewer {
                                        position.x * v1 / viewport * 2.0 +
                                        position.y * v2 / viewport * 2.0;
 
-            gl_Position = vec4(projectedCovariance, 0.0, 1.0);
+            gl_Position = vec4(projectedCovariance, 0.0, 1.0);*/
+
+            gl_Position = vec4(1.0, 0.0, 0.0, 1.0);
 
         }`;
 
@@ -491,12 +499,13 @@ export class Viewer {
             }  
 
             void main () {
-                float A = -dot(vPosition, vPosition);
+                /*float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
                 vec3 color = vColor.rgb;
                 float B = exp(A) * vColor.a;
                 vec3 colorB = B * color.rgb;
-                gl_FragColor = vec4(colorB, B);
+                gl_FragColor = vec4(colorB, B);*/
+                gl_FragColor = vec4(1.0, 0.0, 0.0 ,1.0);
 
             }`;
 
@@ -539,6 +548,8 @@ export class Viewer {
 
     buildGeomtery(splatBuffer) {
 
+        const vertexCount = splatBuffer.getVertexCount();
+
         const baseGeometry = new THREE.BufferGeometry();
 
         const positionsArray = new Float32Array(18);
@@ -552,14 +563,24 @@ export class Viewer {
         positions.setXYZ(3, 2.0, 2.0, 0.0);
         positions.needsUpdate = true;
 
+        baseGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(32), 1))
+
         const geometry = new THREE.InstancedBufferGeometry().copy(baseGeometry);
 
-        const splatColorsArray = new Float32Array(splatBuffer.getVertexCount() * 4);
+        //geometry.setIndex(new Uint32Array(vertexCount));
+        //BufferAttribute( array : TypedArray, itemSize : Integer, normalized : Boolean )
+       
+        /*const splatIndexesArray = new Float32Array(splatBuffer.getVertexCount());
+        const splatIndexes = new THREE.InstancedBufferAttribute(splatIndexesArray, 1, false);
+        splatIndexes.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute('index', splatIndexes);*/
+
+        const splatColorsArray = new Float32Array(vertexCount * 4);
         const splatColors = new THREE.InstancedBufferAttribute(splatColorsArray, 4, false);
         splatColors.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatColor', splatColors);
 
-        const splatCentersArray = new Float32Array(splatBuffer.getVertexCount() * 9);
+        const splatCentersArray = new Float32Array(vertexCount * 9);
         const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 9, false);
         splatCenters.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatCenterCovariance', splatCenters);

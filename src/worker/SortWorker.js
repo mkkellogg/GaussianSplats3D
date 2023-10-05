@@ -16,34 +16,30 @@ function sortWorker(self) {
 
     let wasmMemory;
 
-    let precomputedCovariance;
-    let precomputedColor;
     let positions;
-
-    let outCenterCovariance;
-    let outColor;
 
     let countsZero;
 
     function sort (vertexSortCount, viewProj, cameraPosition, indexBuffer) {
   
         if (!countsZero) countsZero = new Uint32Array(65536);
+        const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
         const workerTransferIndexArray = new Uint32Array(wasmMemory);
-        workerTransferIndexArray.set(new Uint32Array(indexBuffer));
+        workerTransferIndexArray.set(indexArray);
         const viewProjArray = new Float32Array(wasmMemory, viewProjOffset, 16);
         viewProjArray.set(viewProj);
         console.time("SORT")
-        const counts = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4);
-        const counts2 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + 65536);
+        const counts = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, 65536);
+        const counts2 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + 65536, 65536);
         counts.set(countsZero);
         counts2.set(countsZero);
         console.time("SORT_MAIN")
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, precomputedCovariancesOffset,
                                          precomputedColorsOffset, centerCovariancesOffset, outColorsOffset, sortBuffersOffset,
                                          viewProjOffset, cameraPosition[0], cameraPosition[1], cameraPosition[2], vertexSortCount, vertexCount);
+        const sortedIndexes = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + 65536 + 65536, vertexSortCount);
+        indexArray.set(sortedIndexes)
         console.timeEnd("SORT_MAIN");
-        outColor.set(new Float32Array(wasmMemory, outColorsOffset, vertexCount * 4));
-        outCenterCovariance.set(new Float32Array(wasmMemory, centerCovariancesOffset, vertexCount * 9));
         console.timeEnd("SORT");
         self.postMessage({
             'sortDone': true,
@@ -53,14 +49,8 @@ function sortWorker(self) {
 
     self.onmessage = (e) => {
         if (e.data.buffers) {
-            precomputedCovariance = e.data.buffers.precomputedCovariance;
-            precomputedColor = e.data.buffers.precomputedColor;
             positions = e.data.buffers.positions;
-            new Float32Array(wasmMemory, precomputedCovariancesOffset, vertexCount * 6).set(new Float32Array(precomputedCovariance));
-            new Float32Array(wasmMemory, precomputedColorsOffset, vertexCount * 4).set(new Float32Array(precomputedColor));
             new Float32Array(wasmMemory, positionsOffset, vertexCount * 3).set(new Float32Array(positions));
-            outCenterCovariance = e.data.buffers.outCenterCovariance;
-            outColor = e.data.buffers.outColor;
             self.postMessage({
                 'sortBuffersSetup': true,
             });
