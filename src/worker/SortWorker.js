@@ -16,16 +16,34 @@ function sortWorker(self) {
 
     let wasmMemory;
 
+    let precomputedCovariance;
+    let precomputedColor;
+    let positions;
+
+    let outCenterCovariance;
+    let outColor;
+
+    let countsZero;
+
     function sort (vertexSortCount, viewProj, cameraPosition, indexBuffer) {
-        
-        const workerTransferIndexArray = new Float32Array(wasmMemory);
-        workerTransferIndexArray.set(new Float32Array(indexBuffer));
+  
+        if (!countsZero) countsZero = new Uint32Array(65536);
+        const workerTransferIndexArray = new Uint32Array(wasmMemory);
+        workerTransferIndexArray.set(new Uint32Array(indexBuffer));
         const viewProjArray = new Float32Array(wasmMemory, viewProjOffset, 16);
         viewProjArray.set(viewProj);
         console.time("SORT")
+        const counts = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4);
+        const counts2 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + 65536);
+        counts.set(countsZero);
+        counts2.set(countsZero);
+        console.time("SORT_MAIN")
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, precomputedCovariancesOffset,
                                          precomputedColorsOffset, centerCovariancesOffset, outColorsOffset, sortBuffersOffset,
                                          viewProjOffset, cameraPosition[0], cameraPosition[1], cameraPosition[2], vertexSortCount, vertexCount);
+        console.timeEnd("SORT_MAIN");
+        outColor.set(new Float32Array(wasmMemory, outColorsOffset, vertexCount * 4));
+        outCenterCovariance.set(new Float32Array(wasmMemory, centerCovariancesOffset, vertexCount * 9));
         console.timeEnd("SORT");
         self.postMessage({
             'sortDone': true,
@@ -34,7 +52,19 @@ function sortWorker(self) {
     }
 
     self.onmessage = (e) => {
-        if(e.data.sort) {
+        if (e.data.buffers) {
+            precomputedCovariance = e.data.buffers.precomputedCovariance;
+            precomputedColor = e.data.buffers.precomputedColor;
+            positions = e.data.buffers.positions;
+            new Float32Array(wasmMemory, precomputedCovariancesOffset, vertexCount * 6).set(new Float32Array(precomputedCovariance));
+            new Float32Array(wasmMemory, precomputedColorsOffset, vertexCount * 4).set(new Float32Array(precomputedColor));
+            new Float32Array(wasmMemory, positionsOffset, vertexCount * 3).set(new Float32Array(positions));
+            outCenterCovariance = e.data.buffers.outCenterCovariance;
+            outColor = e.data.buffers.outColor;
+            self.postMessage({
+                'sortBuffersSetup': true,
+            });
+        } else if(e.data.sort) {
             const sortCount = e.data.sort.vertexSortCount || 0;
             if (sortCount > 0) {
                 sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.indexBuffer);
@@ -92,14 +122,7 @@ function sortWorker(self) {
 
                     wasmMemory = sorterWasmImport.env.memory.buffer;
                     self.postMessage({
-                        'sortSetupComplete': true,
-                        'wasmMemory': wasmMemory,
-                        'indexesOffset': indexesOffset,
-                        'positionsOffset': positionsOffset,
-                        'precomputedCovariancesOffset': precomputedCovariancesOffset,
-                        'precomputedColorsOffset': precomputedColorsOffset,
-                        'centerCovariancesOffset': centerCovariancesOffset,
-                        'outColorsOffset': outColorsOffset
+                        'sortSetupComplete': true
                     });
                 });
             });

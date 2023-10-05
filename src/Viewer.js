@@ -35,6 +35,10 @@ export class Viewer {
         this.sortWorker = null;
         this.vertexRenderCount = 0;
 
+        this.workerTransferCenterCovarianceArray = null;
+        this.workerTransferColorArray = null;
+        this.workerTransferIndexArray = null;
+
         this.splatBuffer = null;
         this.splatMesh = null;
 
@@ -170,7 +174,7 @@ export class Viewer {
                 this.scene.add(this.splatMesh);
                 this.updateSplatMeshUniforms();
 
-                this.octree = new Octree(12, 1000);
+                this.octree = new Octree(8, 5000);
                 console.time('Octree build');
                 this.octree.processScene(splatBuffer);
                 console.timeEnd('Octree build');
@@ -205,38 +209,31 @@ export class Viewer {
                     if (e.data.sortDone) {
                         this.sortRunning = false;
                        // console.log('WASM: sort done');
-                        const workerTransferCenterCovarianceArray = new Float32Array(this.wasmMemory, this.centerCovariancesOffset, vertexCount * 9);
-                        const workerTransferColorArray = new Float32Array(this.wasmMemory, this.outColorsOffset, vertexCount * SplatBuffer.ColorComponentCount);
-                        this.workerTransferCenterCovarianceCopyArray.set(workerTransferCenterCovarianceArray);
-                        this.workerTransferColorCopyArray.set(workerTransferColorArray);
-                        this.updateSplatMeshAttributes(this.workerTransferColorCopyArray, this.workerTransferCenterCovarianceCopyArray, e.data.vertexSortCount);
+                        this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray, e.data.vertexSortCount);
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
                         //console.log('WASM: sort canceled');
                     } else if (e.data.sortSetupComplete) {
                         console.log("Sorting web worker WASM setup complete.");
 
-                        this.wasmMemory = e.data.wasmMemory;
-                        this.centerCovariancesOffset = e.data.centerCovariancesOffset;
-                        this.outColorsOffset = e.data.outColorsOffset;
-
-                        const workerTransferIndexArray = new Uint32Array(e.data.wasmMemory, e.data.indexesOffset, vertexCount);
-                        const workerTransferPositionArray = new Float32Array(e.data.wasmMemory, e.data.positionsOffset, vertexCount * SplatBuffer.PositionComponentCount);
-                        const workerTransferPrecomputedCovarianceArray = new Float32Array(e.data.wasmMemory, e.data.precomputedCovariancesOffset, vertexCount * SplatBuffer.CovarianceSizeFloats);
-                        const workerTransferPrecomputedColorArray = new Float32Array(e.data.wasmMemory, e.data.precomputedColorsOffset, vertexCount * SplatBuffer.ColorSizeFloats);
-                        for (let i = 0; i < vertexCount; i ++) {
-                            workerTransferIndexArray[i] = i;
-                        }
+                        const workerTransferPositionArray = new Float32Array(vertexCount * SplatBuffer.PositionComponentCount);
                         this.splatBuffer.fillPositionArray(workerTransferPositionArray);
-                        workerTransferPrecomputedCovarianceArray.set(new Float32Array(this.splatBuffer.getPrecomputedCovarianceBufferData()));
-                        workerTransferPrecomputedColorArray.set(new Float32Array(this.splatBuffer.getPrecomputedColorBufferData()));
+                        this.workerTransferCenterCovarianceArray = new Float32Array(new SharedArrayBuffer(vertexCount * 9 * 4));
+                        this.workerTransferColorArray = new Float32Array(new SharedArrayBuffer(vertexCount * SplatBuffer.ColorComponentCount * 4));
 
-                        this.workerTransferIndexCopyArray = new Uint32Array(vertexCount);
-                        this.workerTransferCenterCovarianceCopyArray = new Float32Array(vertexCount * 9);
-                        this.workerTransferColorCopyArray = new Float32Array(vertexCount * SplatBuffer.ColorComponentCount);
+                        this.sortWorker.postMessage({
+                            'buffers': {
+                               'precomputedCovariance': this.splatBuffer.getPrecomputedCovarianceBufferData(),
+                               'precomputedColor': this.splatBuffer.getPrecomputedColorBufferData(),
+                               'positions': workerTransferPositionArray.buffer,
+                               'outCenterCovariance': this.workerTransferCenterCovarianceArray,
+                               'outColor': this.workerTransferColorArray,
+                            }
+                        })
 
+                        this.workerTransferIndexArray = new Uint32Array(new SharedArrayBuffer(vertexCount * 4));
+                    } else if(e.data.sortBuffersSetup) {
                         this.updateView(true, true);
-
                         resolve();
                     }
                 };
@@ -315,15 +312,22 @@ export class Viewer {
                 }
                 verticesToCopy += node.data.indexes.length;
                 nodeRenderList[nodeRenderCount] = node;
+                node.data.distanceToNode = distanceToNode;
                 nodeRenderCount++;
             }
+
+            nodeRenderList.length = nodeRenderCount;
+            nodeRenderList.sort((a, b) => {
+                if (a.data.distanceToNode > b.data.distanceToNode) return 1;
+                else return -1;
+            });
 
             this.vertexRenderCount = verticesToCopy;
             let currentByteOffset = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
                 const windowSizeInts = node.data.indexes.length;
-                let destView = new Uint32Array(this.workerTransferIndexCopyArray.buffer, currentByteOffset, windowSizeInts);
+                let destView = new Uint32Array(this.workerTransferIndexArray.buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);
                 currentByteOffset += windowSizeInts * 4;
             }
@@ -382,7 +386,7 @@ export class Viewer {
                         'view': tempMatrix.elements,
                         'cameraPosition': cameraPositionArray,
                         'vertexSortCount': this.vertexRenderCount,
-                        'indexBuffer': this.workerTransferIndexCopyArray.buffer
+                        'indexBuffer': this.workerTransferIndexArray.buffer
                     }
                 });
                 lastSortViewPos.copy(this.camera.position);

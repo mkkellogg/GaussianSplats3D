@@ -59,22 +59,31 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int *indexes, float* posit
 
     // This is a 16 bit single-pass counting sort
     float depthInv = (float)(256 * 256) / ((float)maxDepth - (float)minDepth);
+
     unsigned int* counts0 = ((unsigned int *)sizeList) + vertexCount;
-    for (unsigned int i = 0; i < 256 * 256; i++) {
-        counts0[i] = 0;
-    }
+    /* for (unsigned int i = 0; i < 256 * 256; i++) {
+        counts0[i] = counts0[i] - counts0[i];
+    }*/
+
+    unsigned int* starts0 = ((unsigned int *)counts0) + (256 * 256);
+    /*for (unsigned int i = 0; i < 256 * 256; i++) {
+        starts0[i] = counts0[i];
+    }*/
+
     for (unsigned int i = 0; i < sortCount; i++) {
         sizeList[i] = (int)(((float)sizeList[i] - (float)minDepth) * depthInv);
         counts0[sizeList[i]]++;
     }
-    unsigned int* starts0 = ((unsigned int *)counts0) + (256 * 256);
-    for (unsigned int i = 0; i < 256 * 256; i++) {
-        starts0[i] = 0;
+
+    for (unsigned int i = 1; i < 256*256; i++) {
+        starts0[i] = starts0[i - 1] + counts0[i - 1];
     }
-    for (unsigned int i = 1; i < 256*256; i++) starts0[i] = starts0[i - 1] + counts0[i - 1];
+
     unsigned int* depthIndex = ((unsigned int *)starts0) + (256 * 256);
-    for (unsigned int i = 0; i < sortCount; i++) depthIndex[starts0[sizeList[i]]++] = indexes[i];
-    
+    for (unsigned int i = 0; i < sortCount; i++) {
+        depthIndex[starts0[sizeList[i]]++] = indexes[i];
+    }
+
     for (unsigned int i = 0; i < sortCount; i++) {
         unsigned int realIndex = depthIndex[i];
 
