@@ -16,8 +16,10 @@ function sortWorker(self) {
 
     let wasmMemory;
 
-    function sort (vertexSortCount, viewProj, cameraPosition) {
+    function sort (vertexSortCount, viewProj, cameraPosition, indexBuffer) {
         
+        const workerTransferIndexArray = new Float32Array(wasmMemory);
+        workerTransferIndexArray.set(new Float32Array(indexBuffer));
         const viewProjArray = new Float32Array(wasmMemory, viewProjOffset, 16);
         viewProjArray.set(viewProj);
         console.time("SORT")
@@ -35,7 +37,7 @@ function sortWorker(self) {
         if(e.data.sort) {
             const sortCount = e.data.sort.vertexSortCount || 0;
             if (sortCount > 0) {
-                sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition);
+                sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.indexBuffer);
             }
         } else if (e.data.init) {
 
@@ -64,7 +66,7 @@ function sortWorker(self) {
                         memory: new WebAssembly.Memory({
                             initial: totalPagesRequired * 2,
                             maximum: totalPagesRequired * 3,
-                            shared: true, 
+                            shared: false, 
                         }),
                     }
                 };

@@ -33,10 +33,6 @@ export class Viewer {
         this.resizeFunc = this.onResize.bind(this);
 
         this.sortWorker = null;
-        this.workerTransferIndexBuffer = null;
-        this.workerTransferIndexArray = null;
-        this.workerTransferCenterCovarianceArray = null;
-        this.workerTransferColorArray = null;
         this.vertexRenderCount = 0;
 
         this.splatBuffer = null;
@@ -209,28 +205,35 @@ export class Viewer {
                     if (e.data.sortDone) {
                         this.sortRunning = false;
                        // console.log('WASM: sort done');
-                        this.updateSplatMeshAttributes(this.workerTransferColorArray, this.workerTransferCenterCovarianceArray, e.data.vertexSortCount);
+                        const workerTransferCenterCovarianceArray = new Float32Array(this.wasmMemory, this.centerCovariancesOffset, vertexCount * 9);
+                        const workerTransferColorArray = new Float32Array(this.wasmMemory, this.outColorsOffset, vertexCount * SplatBuffer.ColorComponentCount);
+                        this.workerTransferCenterCovarianceCopyArray.set(workerTransferCenterCovarianceArray);
+                        this.workerTransferColorCopyArray.set(workerTransferColorArray);
+                        this.updateSplatMeshAttributes(this.workerTransferColorCopyArray, this.workerTransferCenterCovarianceCopyArray, e.data.vertexSortCount);
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
                         //console.log('WASM: sort canceled');
                     } else if (e.data.sortSetupComplete) {
                         console.log("Sorting web worker WASM setup complete.");
-                        this.workerTransferIndexBuffer = e.data.wasmMemory;
-                        this.workerTransferIndexArray = new Uint32Array(e.data.wasmMemory, e.data.indexesOffset, vertexCount);
 
+                        this.wasmMemory = e.data.wasmMemory;
+                        this.centerCovariancesOffset = e.data.centerCovariancesOffset;
+                        this.outColorsOffset = e.data.outColorsOffset;
+
+                        const workerTransferIndexArray = new Uint32Array(e.data.wasmMemory, e.data.indexesOffset, vertexCount);
                         const workerTransferPositionArray = new Float32Array(e.data.wasmMemory, e.data.positionsOffset, vertexCount * SplatBuffer.PositionComponentCount);
                         const workerTransferPrecomputedCovarianceArray = new Float32Array(e.data.wasmMemory, e.data.precomputedCovariancesOffset, vertexCount * SplatBuffer.CovarianceSizeFloats);
                         const workerTransferPrecomputedColorArray = new Float32Array(e.data.wasmMemory, e.data.precomputedColorsOffset, vertexCount * SplatBuffer.ColorSizeFloats);
-
-                        this.workerTransferCenterCovarianceArray = new Float32Array(e.data.wasmMemory, e.data.centerCovariancesOffset, vertexCount * 9);
-                        this.workerTransferColorArray = new Float32Array(e.data.wasmMemory, e.data.outColorsOffset, vertexCount * SplatBuffer.ColorComponentCount);
-
                         for (let i = 0; i < vertexCount; i ++) {
-                            this.workerTransferIndexArray[i] = i;
+                            workerTransferIndexArray[i] = i;
                         }
                         this.splatBuffer.fillPositionArray(workerTransferPositionArray);
                         workerTransferPrecomputedCovarianceArray.set(new Float32Array(this.splatBuffer.getPrecomputedCovarianceBufferData()));
                         workerTransferPrecomputedColorArray.set(new Float32Array(this.splatBuffer.getPrecomputedColorBufferData()));
+
+                        this.workerTransferIndexCopyArray = new Uint32Array(vertexCount);
+                        this.workerTransferCenterCovarianceCopyArray = new Float32Array(vertexCount * 9);
+                        this.workerTransferColorCopyArray = new Float32Array(vertexCount * SplatBuffer.ColorComponentCount);
 
                         this.updateView(true, true);
 
@@ -320,7 +323,7 @@ export class Viewer {
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
                 const windowSizeInts = node.data.indexes.length;
-                let destView = new Uint32Array(this.workerTransferIndexBuffer, currentByteOffset, windowSizeInts);
+                let destView = new Uint32Array(this.workerTransferIndexCopyArray.buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);
                 currentByteOffset += windowSizeInts * 4;
             }
@@ -378,7 +381,8 @@ export class Viewer {
                     sort: {
                         'view': tempMatrix.elements,
                         'cameraPosition': cameraPositionArray,
-                        'vertexSortCount': this.vertexRenderCount
+                        'vertexSortCount': this.vertexRenderCount,
+                        'indexBuffer': this.workerTransferIndexCopyArray.buffer
                     }
                 });
                 lastSortViewPos.copy(this.camera.position);
