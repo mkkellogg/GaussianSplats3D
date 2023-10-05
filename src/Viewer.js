@@ -117,22 +117,35 @@ export class Viewer {
         this.rootElement.appendChild(this.renderer.domElement);
     }
 
-    updateSplatMeshAttributes(colors, centerCovariances, sortedVertexCount) {
+    updateSplatMeshAttributes(colors, centerCovariances, vertexCount) {
         const geometry = this.splatMesh.geometry;
 
-        geometry.attributes.splatCenterCovariance.set(centerCovariances);
-        geometry.attributes.splatCenterCovariance.needsUpdate = true;
+        const paddedCenterCovariances = new Float32Array(4096 * 4096 * 4);
+        for (let c = 0; c < vertexCount; c++) {
+            let destOffset = c * 12;
+            let srcOffset = c * 9;
+            for (let i = 0; i < 9; i++) {
+                paddedCenterCovariances[destOffset + i] = centerCovariances[srcOffset + i];
+            }
+        }
+        const centerCovarianceTexture = new THREE.DataTexture(paddedCenterCovariances, 4096, 4096, THREE.RGBAFormat, THREE.FloatType);
+        centerCovarianceTexture.needsUpdate = true;
+        this.splatMesh.material.uniforms.centerCovarianceTexture.value = centerCovarianceTexture;
 
-        geometry.attributes.splatColor.set(colors);
-        geometry.attributes.splatColor.needsUpdate = true;
+        const paddedColors = new Float32Array(4096 * 4096 * 4);
+        paddedColors.set(colors);
+        const colorTexture = new THREE.DataTexture(paddedColors, 4096, 4096, THREE.RGBAFormat, THREE.FloatType);
+        colorTexture.needsUpdate = true;
+        this.splatMesh.material.uniforms.colorTexture.value = colorTexture;
 
-        geometry.instanceCount = sortedVertexCount;
+        geometry.instanceCount = vertexCount;
     }
 
     updateSplatMeshIndexes(indexes, sortedVertexCount) {
         const geometry = this.splatMesh.geometry;
 
-       // geometry.index.array.set(indexes);
+        geometry.attributes.splatIndex.set(indexes);
+        geometry.attributes.splatIndex.needsUpdate = true;
 
         geometry.instanceCount = sortedVertexCount;
     }
@@ -220,20 +233,19 @@ export class Viewer {
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
                         //console.log('WASM: sort canceled');
-                    } else if (e.data.sortSetupComplete) {
+                    } else if (e.data.sortSetupPhase1Complete) {
                         console.log("Sorting web worker WASM setup complete.");
 
                         const workerTransferPositionArray = new Float32Array(vertexCount * SplatBuffer.PositionComponentCount);
                         this.splatBuffer.fillPositionArray(workerTransferPositionArray);
 
                         this.sortWorker.postMessage({
-                            'buffers': {
-                               'positions': workerTransferPositionArray.buffer,
-                            }
+                            'positions': workerTransferPositionArray.buffer
                         })
 
                         this.workerTransferIndexArray = new Uint32Array(new SharedArrayBuffer(vertexCount * 4));
-                    } else if(e.data.sortBuffersSetup) {
+                        for (let i = 0 ; i < vertexCount; i++) this.workerTransferIndexArray[i] = i;
+                    } else if(e.data.sortSetupComplete) {
 
                         const attributeData = this.getAttributeDataFromSplatBuffer(this.splatBuffer);
                         this.updateSplatMeshIndexes(this.workerTransferIndexArray, this.splatBuffer.getVertexCount());
@@ -408,9 +420,12 @@ export class Viewer {
             #include <common>
             precision mediump float;
 
+            attribute uint splatIndex;
             attribute vec4 splatColor;
             attribute mat3 splatCenterCovariance;
 
+            uniform sampler2D centerCovarianceTexture;
+            uniform sampler2D colorTexture;
             uniform mat4 realProjectionMatrix;
             uniform vec2 focal;
             uniform vec2 viewport;
@@ -422,66 +437,86 @@ export class Viewer {
 
             void main () {
 
-            /*vec3 splatCenter = splatCenterCovariance[0];
-            vec3 cov3D_M11_M12_M13 = splatCenterCovariance[1];
-            vec3 cov3D_M22_M23_M33 = splatCenterCovariance[2];
+                vec2 centerCovarianceUV = vec2(0.0, 0.0);
+                float covarianceD = float(splatIndex * uint(3)) / 4096.0;
+                centerCovarianceUV.y = float(floor(covarianceD)) / 4096.0;
+                centerCovarianceUV.x = fract(covarianceD);
+                vec4 sampledCenterCovarianceA = texture2D(centerCovarianceTexture, centerCovarianceUV);
+                
+                covarianceD = float(splatIndex * uint(3) + uint(1)) / 4096.0;
+                centerCovarianceUV.y = float(floor(covarianceD)) / 4096.0;
+                centerCovarianceUV.x = fract(covarianceD);
+                vec4 sampledCenterCovarianceB = texture2D(centerCovarianceTexture, centerCovarianceUV);
 
-            vec4 camspace = viewMatrix * vec4(splatCenter, 1);
-            vec4 pos2d = realProjectionMatrix * camspace;
+                covarianceD = float(splatIndex * uint(3) + uint(2)) / 4096.0;
+                centerCovarianceUV.y = float(floor(covarianceD)) / 4096.0;
+                centerCovarianceUV.x = fract(covarianceD);
+                float sampledCenterCovarianceC = texture2D(centerCovarianceTexture, centerCovarianceUV).r;
 
-            float bounds = 1.2 * pos2d.w;
-            if (pos2d.z < -pos2d.w || pos2d.x < -bounds || pos2d.x > bounds
-                || pos2d.y < -bounds || pos2d.y > bounds) {
-                gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
-                return;
-            }
- 
-            mat3 Vrk = mat3(
-                cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z,
-                cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
-                cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
-            );
+                vec3 splatCenter = sampledCenterCovarianceA.xyz;
+                vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.w, sampledCenterCovarianceB.xy);
+                vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.zw, sampledCenterCovarianceC);
 
-            mat3 J = mat3(
-                focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z),
-                0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z),
-                0., 0., 0.
-            );
+                vec2 colorUV = vec2(0.0, 0.0);
+                float colorD = float(splatIndex * uint(4)) / 4.0 / 4096.0;
+                colorUV.y = float(int(colorD)) / 4096.0;
+                colorUV.x = fract(colorD);
+                vec4 sampledColor = texture2D(colorTexture, colorUV);
 
-            mat3 W = transpose(mat3(viewMatrix));
-            mat3 T = W * J;
-            mat3 cov2Dm = transpose(T) * Vrk * T;
-            cov2Dm[0][0] += 0.3;
-            cov2Dm[1][1] += 0.3;
-            vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
+                vec4 camspace = viewMatrix * vec4(splatCenter, 1);
+                vec4 pos2d = realProjectionMatrix * camspace;
+
+                float bounds = 1.2 * pos2d.w;
+                if (pos2d.z < -pos2d.w || pos2d.x < -bounds || pos2d.x > bounds
+                    || pos2d.y < -bounds || pos2d.y > bounds) {
+                    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+                    return;
+                }
+    
+                mat3 Vrk = mat3(
+                    cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z,
+                    cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
+                    cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
+                );
+
+                mat3 J = mat3(
+                    focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z),
+                    0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z),
+                    0., 0., 0.
+                );
+
+                mat3 W = transpose(mat3(viewMatrix));
+                mat3 T = W * J;
+                mat3 cov2Dm = transpose(T) * Vrk * T;
+                cov2Dm[0][0] += 0.3;
+                cov2Dm[1][1] += 0.3;
+                vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
 
 
-            vec2 vCenter = vec2(pos2d) / pos2d.w;
+                vec2 vCenter = vec2(pos2d) / pos2d.w;
 
-            float diagonal1 = cov2Dv.x;
-            float offDiagonal = cov2Dv.y;
-            float diagonal2 = cov2Dv.z;
+                float diagonal1 = cov2Dv.x;
+                float offDiagonal = cov2Dv.y;
+                float diagonal2 = cov2Dv.z;
 
-            float mid = 0.5 * (diagonal1 + diagonal2);
-            float radius = length(vec2((diagonal1 - diagonal2) / 2.0, offDiagonal));
-            float lambda1 = mid + radius;
-            float lambda2 = max(mid - radius, 0.1);
-            vec2 diagonalVector = normalize(vec2(offDiagonal, lambda1 - diagonal1));
-            vec2 v1 = min(sqrt(2.0 * lambda1), 1024.0) * diagonalVector;
-            vec2 v2 = min(sqrt(2.0 * lambda2), 1024.0) * vec2(diagonalVector.y, -diagonalVector.x);
+                float mid = 0.5 * (diagonal1 + diagonal2);
+                float radius = length(vec2((diagonal1 - diagonal2) / 2.0, offDiagonal));
+                float lambda1 = mid + radius;
+                float lambda2 = max(mid - radius, 0.1);
+                vec2 diagonalVector = normalize(vec2(offDiagonal, lambda1 - diagonal1));
+                vec2 v1 = min(sqrt(2.0 * lambda1), 1024.0) * diagonalVector;
+                vec2 v2 = min(sqrt(2.0 * lambda2), 1024.0) * vec2(diagonalVector.y, -diagonalVector.x);
 
-            vColor = splatColor;
-            vPosition = position.xy;
+                vColor = sampledColor;
+                vPosition = position.xy;
 
-            vec2 projectedCovariance = vCenter +
-                                       position.x * v1 / viewport * 2.0 +
-                                       position.y * v2 / viewport * 2.0;
+                vec2 projectedCovariance = vCenter +
+                                        position.x * v1 / viewport * 2.0 +
+                                        position.y * v2 / viewport * 2.0;
 
-            gl_Position = vec4(projectedCovariance, 0.0, 1.0);*/
+                gl_Position = vec4(projectedCovariance, 0.0, 1.0);
 
-            gl_Position = vec4(1.0, 0.0, 0.0, 1.0);
-
-        }`;
+            }`;
 
         const fragmentShaderSource = `
             #include <common>
@@ -499,17 +534,24 @@ export class Viewer {
             }  
 
             void main () {
-                /*float A = -dot(vPosition, vPosition);
+                float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
                 vec3 color = vColor.rgb;
                 float B = exp(A) * vColor.a;
                 vec3 colorB = B * color.rgb;
-                gl_FragColor = vec4(colorB, B);*/
-                gl_FragColor = vec4(1.0, 0.0, 0.0 ,1.0);
+                gl_FragColor = vec4(colorB, B);
 
             }`;
 
         const uniforms = {
+            'centerCovarianceTexture': {
+                'type': 't',
+                'value': null
+            },
+            'colorTexture': {
+                'type': 't',
+                'value': null
+            },
             'realProjectionMatrix': {
                 'type': 'v4v',
                 'value': new THREE.Matrix4()
@@ -563,17 +605,12 @@ export class Viewer {
         positions.setXYZ(3, 2.0, 2.0, 0.0);
         positions.needsUpdate = true;
 
-        baseGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(32), 1))
-
         const geometry = new THREE.InstancedBufferGeometry().copy(baseGeometry);
 
-        //geometry.setIndex(new Uint32Array(vertexCount));
-        //BufferAttribute( array : TypedArray, itemSize : Integer, normalized : Boolean )
-       
-        /*const splatIndexesArray = new Float32Array(splatBuffer.getVertexCount());
-        const splatIndexes = new THREE.InstancedBufferAttribute(splatIndexesArray, 1, false);
+        const splatIndexArray = new Uint32Array(vertexCount);
+        const splatIndexes = new THREE.InstancedBufferAttribute(splatIndexArray, 1, false);
         splatIndexes.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('index', splatIndexes);*/
+        geometry.setAttribute('splatIndex', splatIndexes);
 
         const splatColorsArray = new Float32Array(vertexCount * 4);
         const splatColors = new THREE.InstancedBufferAttribute(splatColorsArray, 4, false);

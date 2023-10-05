@@ -2,45 +2,78 @@ import SorterWasm from './sorter.wasm';
 
 function sortWorker(self) {
 
+    const DEPTH_MAP_RANGE = 65536;
+    const MEMORY_PAGE_SIZE = 65536;
+
     let wasmInstance;
     let vertexCount;
     let indexesOffset;
     let positionsOffset;
-    let precomputedCovariancesOffset;
-    let precomputedColorsOffset;
-    let centerCovariancesOffset;
-    let outColorsOffset;
     let viewProjOffset;
-
+    let indexesOutOffset;
     let sortBuffersOffset;
-
     let wasmMemory;
-
     let positions;
-
     let countsZero;
+    let depthMix;
 
     function sort (vertexSortCount, viewProj, cameraPosition, indexBuffer) {
-  
-        if (!countsZero) countsZero = new Uint32Array(65536);
+
+        //console.time("WASM SORT")
+        if (!countsZero) countsZero = new Uint32Array(DEPTH_MAP_RANGE);
         const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
         const workerTransferIndexArray = new Uint32Array(wasmMemory);
         workerTransferIndexArray.set(indexArray);
         const viewProjArray = new Float32Array(wasmMemory, viewProjOffset, 16);
         viewProjArray.set(viewProj);
-        console.time("SORT")
-        const counts = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, 65536);
-        const counts2 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + 65536, 65536);
-        counts.set(countsZero);
+        const counts1 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, DEPTH_MAP_RANGE);
+        const counts2 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + DEPTH_MAP_RANGE * 4, DEPTH_MAP_RANGE);
+        counts1.set(countsZero);
         counts2.set(countsZero);
-        console.time("SORT_MAIN")
-        wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, precomputedCovariancesOffset,
-                                         precomputedColorsOffset, centerCovariancesOffset, outColorsOffset, sortBuffersOffset,
-                                         viewProjOffset, cameraPosition[0], cameraPosition[1], cameraPosition[2], vertexSortCount, vertexCount);
-        const sortedIndexes = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + 65536 + 65536, vertexSortCount);
+        wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
+                                         indexesOutOffset, cameraPosition[0], cameraPosition[1], cameraPosition[2], vertexSortCount, vertexCount);
+        const sortedIndexes = new Uint32Array(wasmMemory, indexesOutOffset, vertexSortCount);
+
         indexArray.set(sortedIndexes)
-        console.timeEnd("SORT_MAIN");
-        console.timeEnd("SORT");
+        //console.timeEnd("WASM SORT");
+
+
+
+        // Leaving the JavaScript sort code in for debugging
+        /*
+        console.time("JS SORT");
+
+        const positionsArray = new Float32Array(positions);
+        const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
+
+        if (!depthMix || depthMix.length !== vertexCount) {
+            depthMix = new BigInt64Array(vertexCount);
+        }
+
+        const floatMix = new Float32Array(depthMix.buffer);
+        const indexMix = new Uint32Array(depthMix.buffer);
+
+        for (let j = 0; j < vertexSortCount; j++) {
+            let i = indexArray[j];
+            indexMix[2 * j] = i;
+            const splatArrayBase = 3 * i;
+            const dx = positionsArray[splatArrayBase] - cameraPosition[0];
+            const dy = positionsArray[splatArrayBase + 1] - cameraPosition[1];
+            const dz = positionsArray[splatArrayBase + 2] - cameraPosition[2];
+            floatMix[2 * j + 1] = dx * dx + dy * dy + dz * dz;
+        }
+        lastProj = viewProj;
+
+        const depthMixView = new BigInt64Array(depthMix.buffer, 0, vertexSortCount);
+        depthMixView.sort();
+
+        for (let j = 0; j < vertexSortCount; j++) {
+            indexArray[j] = indexMix[2 * j];
+        }
+        console.timeEnd("JS SORT");*/
+
+
+    
         self.postMessage({
             'sortDone': true,
             'vertexSortCount': vertexSortCount
@@ -48,11 +81,11 @@ function sortWorker(self) {
     }
 
     self.onmessage = (e) => {
-        if (e.data.buffers) {
-            positions = e.data.buffers.positions;
+        if (e.data.positions) {
+            positions = e.data.positions;
             new Float32Array(wasmMemory, positionsOffset, vertexCount * 3).set(new Float32Array(positions));
             self.postMessage({
-                'sortBuffersSetup': true,
+                'sortSetupComplete': true,
             });
         } else if(e.data.sort) {
             const sortCount = e.data.sort.vertexSortCount || 0;
@@ -65,55 +98,38 @@ function sortWorker(self) {
 
             const INDEXES_BYTES_PER_ENTRY = 4;
             const POSITIONS_BYTES_PER_ENTRY = 12;
-            const PRECOMPUTED_COVARIANCES_BYTES_PER_ENTRY = 24;
-            const CENTER_COVARIANCES_BYTES_PER_ENTRY = 36;
-            const COLORS_BYTES_PER_ENTRY = 16;
 
-            const wasmPromise = new Promise((resolve) => {
-
-                const sorterWasmBytes = new Uint8Array(e.data.init.sorterWasmBytes);
-                const memoryBytesPerVertex = INDEXES_BYTES_PER_ENTRY + POSITIONS_BYTES_PER_ENTRY  +
-                                             PRECOMPUTED_COVARIANCES_BYTES_PER_ENTRY + COLORS_BYTES_PER_ENTRY +
-                                             CENTER_COVARIANCES_BYTES_PER_ENTRY + COLORS_BYTES_PER_ENTRY;
-                const memoryRequiredForVertices = vertexCount * memoryBytesPerVertex;
-                const memoryRequiredForSortBuffers = 2 * 4 * vertexCount + 65536 * 2;
-                const extraMemory = 65536 * 32;
-                const totalRequiredMemory = memoryRequiredForVertices + memoryRequiredForSortBuffers + extraMemory;
-                const totalPagesRequired = Math.floor(totalRequiredMemory / 65536);
-                const sorterWasmImport = {
-                    module: {},
-                    env: {
-                        memory: new WebAssembly.Memory({
-                            initial: totalPagesRequired * 2,
-                            maximum: totalPagesRequired * 3,
-                            shared: false, 
-                        }),
-                    }
-                };
-                WebAssembly.compile(sorterWasmBytes)
-                .then((wasmModule) => {
-                    //console.log(wasmModule)
-                    return WebAssembly.instantiate(wasmModule, sorterWasmImport);
-                })
-                .then((instance) => {
-                    //console.log(wasmInstance)
-                    //console.log(sorterWasmImport.env.memory)
-        
-                    wasmInstance = instance;
-
-                    indexesOffset = 0;
-                    positionsOffset = vertexCount * INDEXES_BYTES_PER_ENTRY;
-                    precomputedCovariancesOffset = positionsOffset + vertexCount * POSITIONS_BYTES_PER_ENTRY;
-                    precomputedColorsOffset = precomputedCovariancesOffset + vertexCount * PRECOMPUTED_COVARIANCES_BYTES_PER_ENTRY;
-                    centerCovariancesOffset = precomputedColorsOffset + vertexCount * COLORS_BYTES_PER_ENTRY;
-                    outColorsOffset = centerCovariancesOffset + vertexCount * CENTER_COVARIANCES_BYTES_PER_ENTRY;
-                    viewProjOffset = outColorsOffset + vertexCount * COLORS_BYTES_PER_ENTRY;
-                    sortBuffersOffset = viewProjOffset + 16 * 4;
-
-                    wasmMemory = sorterWasmImport.env.memory.buffer;
-                    self.postMessage({
-                        'sortSetupComplete': true
-                    });
+            const sorterWasmBytes = new Uint8Array(e.data.init.sorterWasmBytes);
+            const memoryBytesPerVertex = INDEXES_BYTES_PER_ENTRY + POSITIONS_BYTES_PER_ENTRY;
+            const memoryRequiredForVertices = vertexCount * memoryBytesPerVertex;
+            const memoryRequiredForSortBuffers = 2 * 4 * vertexCount + DEPTH_MAP_RANGE * 4 * 2;
+            const extraMemory = MEMORY_PAGE_SIZE * 32;
+            const totalRequiredMemory = memoryRequiredForVertices + memoryRequiredForSortBuffers + extraMemory;
+            const totalPagesRequired = Math.floor(totalRequiredMemory / MEMORY_PAGE_SIZE) + 1;
+            const sorterWasmImport = {
+                module: {},
+                env: {
+                    memory: new WebAssembly.Memory({
+                        initial: totalPagesRequired * 2,
+                        maximum: totalPagesRequired * 3,
+                        shared: false, 
+                    }),
+                }
+            };
+            WebAssembly.compile(sorterWasmBytes)
+            .then((wasmModule) => {
+                return WebAssembly.instantiate(wasmModule, sorterWasmImport);
+            })
+            .then((instance) => {
+                wasmInstance = instance;
+                indexesOffset = 0;
+                positionsOffset = vertexCount * INDEXES_BYTES_PER_ENTRY;
+                viewProjOffset = positionsOffset + vertexCount * POSITIONS_BYTES_PER_ENTRY;
+                sortBuffersOffset = viewProjOffset + 16 * 4;
+                indexesOutOffset = sortBuffersOffset + vertexCount * 4 + DEPTH_MAP_RANGE * 4 * 2;
+                wasmMemory = sorterWasmImport.env.memory.buffer;
+                self.postMessage({
+                    'sortSetupPhase1Complete': true
                 });
             });
         }
