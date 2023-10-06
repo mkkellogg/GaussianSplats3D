@@ -2,7 +2,7 @@
 
 This repository contains a Three.js-based implementation of [3D Gaussian Splatting for Real-Time Radiance Field Rendering](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/), a technique for the real-time visualization of real-world 3D scenes. I used Kevin Kwok's ([https://github.com/antimatter15](https://github.com/antimatter15)) WebGL implementation [https://github.com/antimatter15/splat](https://github.com/antimatter15/splat) as a starting point and used an ESM module approach to organize the code.
 
-Online demo: [http://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php](http://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php)
+Online demo: [https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php](https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php)
 
 ## Building
 Navigate to the code directory and run
