@@ -7,42 +7,48 @@
 #define EXTERN
 #endif
 
-EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int indexes[], float* positions, char* sortBuffers, float* viewProj,
-                                             unsigned int* indexesOut, unsigned int cameraX, unsigned int cameraY,
-                                             unsigned int cameraZ, unsigned int sortCount, unsigned int vertexCount) {
-    const unsigned int MAP_RANGE = 65536;
+EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positions, char* sortBuffers, int* viewProj,
+                                             unsigned int* indexesOut, float cameraX, float cameraY,
+                                             float cameraZ, unsigned int distanceMapRange, unsigned int sortCount, unsigned int vertexCount) {
 
-    int maxDepth = -2147483648;
-    int minDepth = 2147483647;
-    int* sizeList = (int*)sortBuffers;
+    int maxDistance = -2147483648;
+    int minDistance = 2147483647;
+    int* distances = (int*)sortBuffers;
     for (unsigned int i = 0; i < sortCount; i++) {
         unsigned int indexOffset = 3 * (unsigned int)indexes[i];
         int depth =
-            (int)(((float)viewProj[2] * (float)positions[indexOffset] +
-                    (float)viewProj[6] * (float)positions[indexOffset + 1] +
-                    (float)viewProj[10] * (float)positions[indexOffset + 2]) *
-                    4096.0);
-        sizeList[i] = depth;
-        if (depth > maxDepth) maxDepth = depth;
-        if (depth < minDepth) minDepth = depth;
+            (int)((viewProj[2] * positions[indexOffset] +
+                   viewProj[6] * positions[indexOffset + 1] +
+                   viewProj[10] * positions[indexOffset + 2]));
+        distances[i] = depth;
+        if (depth > maxDistance) maxDistance = depth;
+        if (depth < minDistance) minDistance = depth;
     }
 
-    float depthMap = (float)MAP_RANGE / ((float)maxDepth - (float)minDepth);
+    float distancesRange = (float)maxDistance - (float)minDistance;
+    float rangeMap = (float)distanceMapRange / distancesRange;
 
-    unsigned int* counts0 = ((unsigned int *)sizeList) + vertexCount;
-    unsigned int* starts0 = ((unsigned int *)counts0) + MAP_RANGE;
+    unsigned int* frequencies = ((unsigned int *)distances) + vertexCount;
+    unsigned int* realIndex = ((unsigned int *)frequencies) + distanceMapRange;
 
     for (unsigned int i = 0; i < sortCount; i++) {
-        sizeList[i] = (int)(((float)sizeList[i] - (float)minDepth) * depthMap);
-        counts0[(int)sizeList[i]]++;
+        unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
+        unsigned int cFreq = frequencies[frequenciesIndex];
+        frequencies[frequenciesIndex] = cFreq + 1;   
     }
 
-    for (unsigned int i = 1; i < MAP_RANGE; i++) {
-        starts0[i] = (unsigned int)starts0[i - 1] + (unsigned int)counts0[i - 1];
+    unsigned int cumulativeFreq = 0;
+    for (unsigned int i = 1; i < distanceMapRange; i++) {
+        unsigned int cFreq = frequencies[i];
+        cumulativeFreq += cFreq;
+        frequencies[i] = cumulativeFreq;
     }
 
-    for (unsigned int i = 0; i < sortCount; i++) {
-        indexesOut[(unsigned int)starts0[(int)sizeList[i]]++] = (unsigned int)indexes[i];
+    for (int i = sortCount - 1; i >= 0; i--) {
+        unsigned int frequenciesIndex =  (int)((float)(distances[i] - minDistance) * rangeMap);
+        unsigned int freq = frequencies[frequenciesIndex];
+        realIndex[freq - 1] = indexes[i];
+        frequencies[frequenciesIndex] = freq - 1;
     }
 
 }
