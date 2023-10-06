@@ -18,7 +18,7 @@ function sortWorker(self) {
 
     function sort(vertexSortCount, viewProj, cameraPosition, indexBuffer) {
 
-         console.time("WASM SORT")
+        // console.time("WASM SORT")
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
         const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
         const workerTransferIndexArray = new Uint32Array(wasmMemory);
@@ -38,7 +38,7 @@ function sortWorker(self) {
         const sortedIndexes = new Uint32Array(wasmMemory, indexesOutOffset, vertexSortCount);
 
         indexArray.set(sortedIndexes);
-         console.timeEnd("WASM SORT");
+        // console.timeEnd("WASM SORT");
 
 
         // Leaving the JavaScript sort code in for debugging
