@@ -6,6 +6,7 @@ import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Octree } from './octree/Octree.js';
 import { createSortWorker } from './worker/SortWorker.js';
+import { Constants } from './Constants.js';
 
 const DEFAULT_CAMERA_SPECS = {
     'fx': 1159.5880733038064,
@@ -14,15 +15,18 @@ const DEFAULT_CAMERA_SPECS = {
     'far': 500
 };
 
+const DATA_TEXTURE_SIZE = 4096;
+
 export class Viewer {
 
     constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0],
-                cameraSpecs = DEFAULT_CAMERA_SPECS, controls = null, selfDrivenMode = true) {
+                splatAlphaRemovalThreshold = 0, cameraSpecs = DEFAULT_CAMERA_SPECS, controls = null, selfDrivenMode = true) {
         this.rootElement = rootElement;
         this.cameraUp = new THREE.Vector3().fromArray(cameraUp);
         this.initialCameraPos = new THREE.Vector3().fromArray(initialCameraPos);
         this.initialCameraLookAt = new THREE.Vector3().fromArray(initialCameraLookAt);
         this.cameraSpecs = cameraSpecs;
+        this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.controls = controls;
         this.selfDrivenMode = selfDrivenMode;
         this.scene = null;
@@ -106,6 +110,7 @@ export class Viewer {
 
         if (!this.controls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+            this.controls.rotateSpeed = 0.5;
             this.controls.maxPolarAngle = (0.9 * Math.PI) / 2;
             this.controls.enableDamping = true;
             this.controls.dampingFactor = 0.15;
@@ -118,9 +123,11 @@ export class Viewer {
     }
 
     updateSplatMeshAttributes(colors, centerCovariances, vertexCount) {
+        const ELEMENTS_PER_TEXEL = 4;
+
         const geometry = this.splatMesh.geometry;
 
-        const paddedCenterCovariances = new Float32Array(4096 * 4096 * 4);
+        const paddedCenterCovariances = new Float32Array(DATA_TEXTURE_SIZE * DATA_TEXTURE_SIZE * ELEMENTS_PER_TEXEL);
         for (let c = 0; c < vertexCount; c++) {
             let destOffset = c * 12;
             let srcOffset = c * 9;
@@ -128,13 +135,14 @@ export class Viewer {
                 paddedCenterCovariances[destOffset + i] = centerCovariances[srcOffset + i];
             }
         }
-        const centerCovarianceTexture = new THREE.DataTexture(paddedCenterCovariances, 4096, 4096, THREE.RGBAFormat, THREE.FloatType);
+        const centerCovarianceTexture = new THREE.DataTexture(paddedCenterCovariances, DATA_TEXTURE_SIZE,
+                                                              DATA_TEXTURE_SIZE, THREE.RGBAFormat, THREE.FloatType);
         centerCovarianceTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.centerCovarianceTexture.value = centerCovarianceTexture;
 
-        const paddedColors = new Float32Array(4096 * 4096 * 4);
+        const paddedColors = new Float32Array(DATA_TEXTURE_SIZE * DATA_TEXTURE_SIZE * ELEMENTS_PER_TEXEL);
         paddedColors.set(colors);
-        const colorTexture = new THREE.DataTexture(paddedColors, 4096, 4096, THREE.RGBAFormat, THREE.FloatType);
+        const colorTexture = new THREE.DataTexture(paddedColors, DATA_TEXTURE_SIZE, DATA_TEXTURE_SIZE, THREE.RGBAFormat, THREE.FloatType);
         colorTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.colorTexture.value = colorTexture;
 
@@ -183,8 +191,7 @@ export class Viewer {
             .then((splatBuffer) => {
                 this.splatBuffer = splatBuffer;
 
-                // Remove splats with alpha less than 1 / 255
-                //this.splatBuffer.optimize(1);
+                this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
                 const vertexCount = this.splatBuffer.getVertexCount();
                 console.log(`Splat count: ${vertexCount}`);
 
@@ -203,10 +210,8 @@ export class Viewer {
                 let avgVertexCount = 0;
                 let maxVertexCount = 0;
                 let nodeCount = 0;
-                let leafCount = 0;
 
                 this.octree.visitLeaves((node) => {
-                    leafCount++;
                     const vertexCount = node.data.indexes.length;
                     if (vertexCount > 0) {
                         this.octreeNodeMap[node.id] = node;
@@ -228,29 +233,24 @@ export class Viewer {
                 this.sortWorker.onmessage = (e) => {
                     if (e.data.sortDone) {
                         this.sortRunning = false;
-                       // console.log('WASM: sort done');
                         this.updateSplatMeshIndexes(this.workerTransferIndexArray, e.data.vertexSortCount);
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
-                        //console.log('WASM: sort canceled');
                     } else if (e.data.sortSetupPhase1Complete) {
-                        console.log("Sorting web worker WASM setup complete.");
-
+                        console.log('Sorting web worker WASM setup complete.');
                         const workerTransferPositionArray = new Float32Array(vertexCount * SplatBuffer.PositionComponentCount);
                         this.splatBuffer.fillPositionArray(workerTransferPositionArray);
-
                         this.sortWorker.postMessage({
                             'positions': workerTransferPositionArray.buffer
-                        })
-
-                        this.workerTransferIndexArray = new Uint32Array(new SharedArrayBuffer(vertexCount * 4));
-                        for (let i = 0 ; i < vertexCount; i++) this.workerTransferIndexArray[i] = i;
-                    } else if(e.data.sortSetupComplete) {
-
+                        });
+                        this.workerTransferIndexArray = new Uint32Array(new SharedArrayBuffer(vertexCount * Constants.BytesPerInt));
+                        for (let i = 0; i < vertexCount; i++) this.workerTransferIndexArray[i] = i;
+                    } else if (e.data.sortSetupComplete) {
+                        console.log('Sorting web worker ready.');
                         const attributeData = this.getAttributeDataFromSplatBuffer(this.splatBuffer);
                         this.updateSplatMeshIndexes(this.workerTransferIndexArray, this.splatBuffer.getVertexCount());
-                        this.updateSplatMeshAttributes(attributeData.colors, attributeData.centerCovariances, this.splatBuffer.getVertexCount());
-
+                        this.updateSplatMeshAttributes(attributeData.colors,
+                                                       attributeData.centerCovariances, this.splatBuffer.getVertexCount());
                         this.updateView(true, true);
                         resolve();
                     }
@@ -325,7 +325,7 @@ export class Viewer {
                 const ns = nodeSize(node);
                 const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .4);
                 const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .4);
-                if (!gatherAllNodes && ((outOfFovX || outOfFovY)  && distanceToNode > ns)) {
+                if (!gatherAllNodes && ((outOfFovX || outOfFovY) && distanceToNode > ns)) {
                     continue;
                 }
                 verticesToCopy += node.data.indexes.length;
@@ -347,7 +347,7 @@ export class Viewer {
                 const windowSizeInts = node.data.indexes.length;
                 let destView = new Uint32Array(this.workerTransferIndexArray.buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);
-                currentByteOffset += windowSizeInts * 4;
+                currentByteOffset += windowSizeInts * Constants.BytesPerInt;
             }
 
         };
@@ -594,7 +594,7 @@ export class Viewer {
 
         const baseGeometry = new THREE.BufferGeometry();
 
-        const positionsArray = new Float32Array(18);
+        const positionsArray = new Float32Array(6 * 3);
         const positions = new THREE.BufferAttribute(positionsArray, 3);
         baseGeometry.setAttribute('position', positions);
         positions.setXYZ(2, -2.0, 2.0, 0.0);

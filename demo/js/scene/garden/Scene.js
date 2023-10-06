@@ -6,7 +6,7 @@ export class Scene {
     }
 
     load() {
-        const viewer = new GaussianSplat3D.Viewer(null, [0, -1, -0.6], [-1, -4, 6], [0, 4, -0]);
+        const viewer = new GaussianSplat3D.Viewer(null, [0, -1, -0.6], [-1, -4, 6], [0, 4, -0],  20);
         viewer.init();
         viewer.loadFile('assets/data/garden/garden.splat')
         .then(() => {

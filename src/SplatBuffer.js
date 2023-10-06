@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 
+const tempVector3A = new THREE.Vector3();
+const tempVector3B = new THREE.Vector3();
+const tempVector4A = new THREE.Vector4();
+const tempVector4B = new THREE.Vector4();
+const tempQuaternion4A = new THREE.Quaternion();
+const tempQuaternion4B = new THREE.Quaternion();
+
 export class SplatBuffer {
 
     // Row format:
@@ -63,15 +70,15 @@ export class SplatBuffer {
 
         const newByteCount = vertexCount * SplatBuffer.RowSizeBytes;
 
-        console.log("Splat buffer optimization");
-        console.log("-------------------------------");
-        console.log("Old vertex count: " + oldVertexCount);
-        console.log("Old byte count: " + oldByteCount);
-        console.log("New vertex count: " + vertexCount);
-        console.log("New byte count: " + newByteCount);
-        console.log("Reduction: " + ((oldByteCount - newByteCount) / oldByteCount * 100).toFixed(3) + '%');
-        console.log("==============================");
-        console.log("");
+        console.log('Splat buffer optimization');
+        console.log('-------------------------------');
+        console.log('Old vertex count: ' + oldVertexCount);
+        console.log('Old byte count: ' + oldByteCount);
+        console.log('New vertex count: ' + vertexCount);
+        console.log('New byte count: ' + newByteCount);
+        console.log('Splat count reduction: ' + ((oldByteCount - newByteCount) / oldByteCount * 100).toFixed(3) + '%');
+        console.log('==============================');
+        console.log('');
 
         const newBufferData = this.bufferData.transfer(newByteCount);
         this.bufferData = newBufferData;
@@ -136,22 +143,54 @@ export class SplatBuffer {
         return outPosition;
     }
 
+    setPosition(index, position) {
+        const positionBase = SplatBuffer.RowSizeFloats * index;
+        this.floatArray[positionBase] = position.x;
+        this.floatArray[positionBase + 1] = position.y;
+        this.floatArray[positionBase + 2] = position.z;
+    }
+
     getScale(index, outScale = new THREE.Vector3()) {
         const scaleBase = SplatBuffer.RowSizeFloats * index + SplatBuffer.ScaleRowOffsetFloats;
         outScale.set(this.floatArray[scaleBase], this.floatArray[scaleBase + 1], this.floatArray[scaleBase + 2]);
         return outScale;
     }
 
+    setScale(index, scale) {
+        const scaleBase = SplatBuffer.RowSizeFloats * index + SplatBuffer.ScaleRowOffsetFloats;
+        this.floatArray[scaleBase] = scale.x;
+        this.floatArray[scaleBase + 1] = scale.y;
+        this.floatArray[scaleBase + 2] = scale.z;
+    }
+
     getRotation(index, outRotation = new THREE.Quaternion()) {
         const rotationBase = SplatBuffer.RowSizeFloats * index + SplatBuffer.RotationRowOffsetFloats;
-        outRotation.set(this.floatArray[rotationBase + 1], this.floatArray[rotationBase + 2],  this.floatArray[rotationBase + 3], this.floatArray[rotationBase]);
+        outRotation.set(this.floatArray[rotationBase + 1], this.floatArray[rotationBase + 2],
+                        this.floatArray[rotationBase + 3], this.floatArray[rotationBase]);
         return outRotation;
     }
 
-    getColor(index, outColor = new THREE.Color()) {
+    setRotation(index, rotation) {
+        const rotationBase = SplatBuffer.RowSizeFloats * index + SplatBuffer.RotationRowOffsetFloats;
+        this.floatArray[rotationBase] = rotation.w;
+        this.floatArray[rotationBase + 1] = rotation.x;
+        this.floatArray[rotationBase + 2] = rotation.y;
+        this.floatArray[rotationBase + 3] = rotation.z;
+    }
+
+    getColor(index, outColor = new THREE.Vector4()) {
         const colorBase = SplatBuffer.RowSizeBytes * index + SplatBuffer.ColorRowOffsetBytes;
-        outColor.set(this.uint8Array[colorBase], this.uint8Array[colorBase + 1], this.uint8Array[colorBase + 2]);
+        outColor.set(this.uint8Array[colorBase], this.uint8Array[colorBase + 1],
+                     this.uint8Array[colorBase + 2], this.uint8Array[colorBase + 3]);
         return outColor;
+    }
+
+    setColor(index, color) {
+        const colorBase = SplatBuffer.RowSizeBytes * index + SplatBuffer.ColorRowOffsetBytes;
+        this.uint8Array[colorBase] = color.x;
+        this.uint8Array[colorBase + 1] = color.y;
+        this.uint8Array[colorBase + 2] = color.z;
+        this.uint8Array[colorBase + 3] = color.w;
     }
 
     getPrecomputedCovarianceBufferData() {
@@ -212,86 +251,28 @@ export class SplatBuffer {
         }
     }
 
-    setVertexDataFromComponents(index, position, scale, rotation, color, opacity) {
-        const positionBase = SplatBuffer.RowSizeFloats * index;
-        this.floatArray[positionBase] = position.x;
-        this.floatArray[positionBase + 1] = position.y;
-        this.floatArray[positionBase + 2] = position.z;
-
-        const scaleBase = SplatBuffer.RowSizeFloats * index + SplatBuffer.ScaleRowOffsetFloats;
-        this.floatArray[scaleBase] = scale.x;
-        this.floatArray[scaleBase + 1] = scale.y;
-        this.floatArray[scaleBase + 2] = scale.z;
-
-        const rotationBase = SplatBuffer.RowSizeFloats * i + SplatBuffer.RotationRowOffsetFloats;
-        this.floatArray[rotationBase] = rotation.w;
-        this.floatArray[rotationBase + 1] = rotation.x;
-        this.floatArray[rotationBase + 2] = rotation.y;
-        this.floatArray[rotationBase + 3] = rotation.z;
-
-        const colorBase = SplatBuffer.RowSizeBytes * i + SplatBuffer.ColorRowOffsetBytes;
-        this.uint8Array[colorBase] = Math.floor(color.r * 255);
-        this.uint8Array[colorBase + 1] = Math.floor(color.g * 255);
-        this.uint8Array[colorBase + 2] = Math.floor(color.b * 255);
-        this.uint8Array[colorBase + 3] = Math.floor(opacity * 255);
-    }
-
     swapVertices(indexA, indexB) {
-        let temp = 0;
 
-        const positionBaseA = SplatBuffer.RowSizeFloats * indexA;
-        const positionBaseB = SplatBuffer.RowSizeFloats * indexB;
-        temp = this.floatArray[positionBaseB];
-        this.floatArray[positionBaseB] = this.floatArray[positionBaseA];
-        this.floatArray[positionBaseA] = temp;
-        temp = this.floatArray[positionBaseB + 1];
-        this.floatArray[positionBaseB + 1] = this.floatArray[positionBaseA + 1];
-        this.floatArray[positionBaseA + 1] = temp;
-        temp = this.floatArray[positionBaseB + 2];
-        this.floatArray[positionBaseB + 2] = this.floatArray[positionBaseA + 2];
-        this.floatArray[positionBaseA + 2] = temp;
+        this.getPosition(indexA, tempVector3A);
+        this.getPosition(indexB, tempVector3B);
+        this.setPosition(indexB, tempVector3A);
+        this.setPosition(indexA, tempVector3B);
 
-        const scaleBaseA = SplatBuffer.RowSizeFloats * indexA + SplatBuffer.ScaleRowOffsetFloats;
-        const scaleBaseB = SplatBuffer.RowSizeFloats * indexB + SplatBuffer.ScaleRowOffsetFloats;
-        temp = this.floatArray[scaleBaseB];
-        this.floatArray[scaleBaseB] = this.floatArray[scaleBaseA];
-        this.floatArray[scaleBaseA] = temp;
-        temp = this.floatArray[scaleBaseB + 1];
-        this.floatArray[scaleBaseB + 1] = this.floatArray[scaleBaseA + 1];
-        this.floatArray[scaleBaseA + 1] = temp;
-        temp = this.floatArray[scaleBaseB + 2];
-        this.floatArray[scaleBaseB + 2] = this.floatArray[scaleBaseA + 2];
-        this.floatArray[scaleBaseA + 2] = temp;
+        this.getScale(indexA, tempVector3A);
+        this.getScale(indexB, tempVector3B);
+        this.setScale(indexB, tempVector3A);
+        this.setScale(indexA, tempVector3B);
 
-        const rotationBaseA = SplatBuffer.RowSizeFloats * indexA + SplatBuffer.RotationRowOffsetFloats;
-        const rotationBaseB = SplatBuffer.RowSizeFloats * indexB + SplatBuffer.RotationRowOffsetFloats;
-        temp = this.floatArray[rotationBaseB];
-        this.floatArray[rotationBaseB] = this.floatArray[rotationBaseA];
-        this.floatArray[rotationBaseA] = temp;
-        temp = this.floatArray[rotationBaseB + 1];
-        this.floatArray[rotationBaseB + 1] = this.floatArray[rotationBaseA + 1];
-        this.floatArray[rotationBaseA + 1] = temp;
-        temp = this.floatArray[rotationBaseB + 2];
-        this.floatArray[rotationBaseB + 2] = this.floatArray[rotationBaseA + 2];
-        this.floatArray[rotationBaseA + 2] = temp;
-        temp = this.floatArray[rotationBaseB + 3];
-        this.floatArray[rotationBaseB + 3] = this.floatArray[rotationBaseA + 3];
-        this.floatArray[rotationBaseA + 3] = temp;
+        this.getRotation(indexA, tempQuaternion4A);
+        this.getRotation(indexB, tempQuaternion4B);
+        this.setRotation(indexB, tempQuaternion4A);
+        this.setRotation(indexA, tempQuaternion4B);
 
-        const colorBaseA = SplatBuffer.RowSizeBytes * indexA + SplatBuffer.ColorRowOffsetBytes;
-        const colorBaseB = SplatBuffer.RowSizeBytes * indexB + SplatBuffer.ColorRowOffsetBytes;
-        temp = this.uint8Array[colorBaseB];
-        this.uint8Array[colorBaseB] = this.uint8Array[colorBaseA];
-        this.uint8Array[colorBaseA] = temp;
-        temp = this.uint8Array[colorBaseB + 1];
-        this.uint8Array[colorBaseB + 1] = this.uint8Array[colorBaseA + 1];
-        this.uint8Array[colorBaseA + 1] = temp;
-        temp = this.uint8Array[colorBaseB + 2];
-        this.uint8Array[colorBaseB + 2] = this.uint8Array[colorBaseA + 2];
-        this.uint8Array[colorBaseA + 2] = temp;
-        temp = this.uint8Array[colorBaseB + 3];
-        this.uint8Array[colorBaseB + 3] = this.uint8Array[colorBaseA + 3];
-        this.uint8Array[colorBaseA + 3] = temp;
+        this.getColor(indexA, tempVector4A);
+        this.getColor(indexB, tempVector4B);
+        this.setColor(indexB, tempVector4A);
+        this.setColor(indexA, tempVector4B);
+
     }
 
     copyVertexFromSplatBuffer(otherSplatBuffer, srcIndex, destIndex) {

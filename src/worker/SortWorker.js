@@ -1,9 +1,7 @@
 import SorterWasm from './sorter.wasm';
+import { Constants } from '../Constants.js';
 
 function sortWorker(self) {
-
-    const DEPTH_MAP_RANGE = 65536;
-    const MEMORY_PAGE_SIZE = 65536;
 
     let wasmInstance;
     let vertexCount;
@@ -15,28 +13,30 @@ function sortWorker(self) {
     let wasmMemory;
     let positions;
     let countsZero;
-    let depthMix;
 
-    function sort (vertexSortCount, viewProj, cameraPosition, indexBuffer) {
+    let Constants;
 
-        //console.time("WASM SORT")
-        if (!countsZero) countsZero = new Uint32Array(DEPTH_MAP_RANGE);
+    function sort(vertexSortCount, viewProj, cameraPosition, indexBuffer) {
+
+        // console.time("WASM SORT")
+        if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
         const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
         const workerTransferIndexArray = new Uint32Array(wasmMemory);
         workerTransferIndexArray.set(indexArray);
         const viewProjArray = new Float32Array(wasmMemory, viewProjOffset, 16);
         viewProjArray.set(viewProj);
-        const counts1 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, DEPTH_MAP_RANGE);
-        const counts2 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4 + DEPTH_MAP_RANGE * 4, DEPTH_MAP_RANGE);
+        const counts1 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, Constants.DepthMapRange);
+        const counts2 = new Uint32Array(wasmMemory,
+                                        sortBuffersOffset + vertexCount * 4 + Constants.DepthMapRange * 4, Constants.DepthMapRange);
         counts1.set(countsZero);
         counts2.set(countsZero);
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
-                                         indexesOutOffset, cameraPosition[0], cameraPosition[1], cameraPosition[2], vertexSortCount, vertexCount);
+                                         indexesOutOffset, cameraPosition[0], cameraPosition[1],
+                                         cameraPosition[2], vertexSortCount, vertexCount);
         const sortedIndexes = new Uint32Array(wasmMemory, indexesOutOffset, vertexSortCount);
 
-        indexArray.set(sortedIndexes)
-        //console.timeEnd("WASM SORT");
-
+        indexArray.set(sortedIndexes);
+        // console.timeEnd("WASM SORT");
 
 
         // Leaving the JavaScript sort code in for debugging
@@ -73,7 +73,6 @@ function sortWorker(self) {
         console.timeEnd("JS SORT");*/
 
 
-    
         self.postMessage({
             'sortDone': true,
             'vertexSortCount': vertexSortCount
@@ -87,32 +86,35 @@ function sortWorker(self) {
             self.postMessage({
                 'sortSetupComplete': true,
             });
-        } else if(e.data.sort) {
+        } else if (e.data.sort) {
             const sortCount = e.data.sort.vertexSortCount || 0;
             if (sortCount > 0) {
                 sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.indexBuffer);
             }
         } else if (e.data.init) {
+            // Yep, this is super hacky and gross :(
+            Constants = e.data.init.Constants;
 
             vertexCount = e.data.init.vertexCount;
 
-            const INDEXES_BYTES_PER_ENTRY = 4;
-            const POSITIONS_BYTES_PER_ENTRY = 12;
+            const INDEXES_BYTES_PER_ENTRY = Constants.BytesPerInt;
+            const POSITIONS_BYTES_PER_ENTRY = Constants.BytesPerFloat * 3;
 
             const sorterWasmBytes = new Uint8Array(e.data.init.sorterWasmBytes);
             const memoryBytesPerVertex = INDEXES_BYTES_PER_ENTRY + POSITIONS_BYTES_PER_ENTRY;
             const memoryRequiredForVertices = vertexCount * memoryBytesPerVertex;
-            const memoryRequiredForSortBuffers = 2 * 4 * vertexCount + DEPTH_MAP_RANGE * 4 * 2;
-            const extraMemory = MEMORY_PAGE_SIZE * 32;
+            const memoryRequiredForSortBuffers = vertexCount * Constants.BytesPerInt * 2 +
+                                                 Constants.DepthMapRange * Constants.BytesPerInt * 2;
+            const extraMemory = Constants.MemoryPageSize * 32;
             const totalRequiredMemory = memoryRequiredForVertices + memoryRequiredForSortBuffers + extraMemory;
-            const totalPagesRequired = Math.floor(totalRequiredMemory / MEMORY_PAGE_SIZE) + 1;
+            const totalPagesRequired = Math.floor(totalRequiredMemory / Constants.MemoryPageSize ) + 1;
             const sorterWasmImport = {
                 module: {},
                 env: {
                     memory: new WebAssembly.Memory({
                         initial: totalPagesRequired * 2,
                         maximum: totalPagesRequired * 3,
-                        shared: false, 
+                        shared: false,
                     }),
                 }
             };
@@ -125,8 +127,9 @@ function sortWorker(self) {
                 indexesOffset = 0;
                 positionsOffset = vertexCount * INDEXES_BYTES_PER_ENTRY;
                 viewProjOffset = positionsOffset + vertexCount * POSITIONS_BYTES_PER_ENTRY;
-                sortBuffersOffset = viewProjOffset + 16 * 4;
-                indexesOutOffset = sortBuffersOffset + vertexCount * 4 + DEPTH_MAP_RANGE * 4 * 2;
+                sortBuffersOffset = viewProjOffset + 16 * Constants.BytesPerFloat;
+                indexesOutOffset = sortBuffersOffset + vertexCount * Constants.BytesPerInt +
+                                   Constants.DepthMapRange * Constants.BytesPerInt * 2;
                 wasmMemory = sorterWasmImport.env.memory.buffer;
                 self.postMessage({
                     'sortSetupPhase1Complete': true
@@ -155,7 +158,14 @@ export function createSortWorker(vertexCount, splatBufferRowBytes) {
         'init': {
             'sorterWasmBytes': sorterWasmBytes.buffer,
             'vertexCount': vertexCount,
-            'splatBufferRowBytes': splatBufferRowBytes
+            'splatBufferRowBytes': splatBufferRowBytes,
+            // Super hacky
+            'Constants': {
+                'BytesPerFloat': Constants.BytesPerFloat,
+                'BytesPerInt': Constants.BytesPerInt,
+                'DepthMapRange': Constants.DepthMapRange,
+                'MemoryPageSize': Constants.MemoryPageSize
+            }
         }
     });
     return worker;
