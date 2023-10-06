@@ -16,13 +16,10 @@ function sortWorker(self) {
 
     let Constants;
 
-    function sort(vertexSortCount, viewProj, cameraPosition, indexBuffer) {
+    function sort(vertexSortCount, viewProj, cameraPosition) {
 
-        // console.time("WASM SORT")
+        // console.time('WASM SORT');
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
-        const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
-        const workerTransferIndexArray = new Uint32Array(wasmMemory);
-        workerTransferIndexArray.set(indexArray);
         const viewProjArray = new Int32Array(wasmMemory, viewProjOffset, 16);
         for (let i = 0; i < 16; i++) {
             viewProjArray[i] = Math.round(viewProj[i] * 1000.0);
@@ -35,10 +32,8 @@ function sortWorker(self) {
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
                                          cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexCount);
-        const sortedIndexes = new Uint32Array(wasmMemory, indexesOutOffset, vertexSortCount);
 
-        indexArray.set(sortedIndexes);
-        // console.timeEnd("WASM SORT");
+        // console.timeEnd('WASM SORT');
 
 
         // Leaving the JavaScript sort code in for debugging
@@ -96,7 +91,7 @@ function sortWorker(self) {
         } else if (e.data.sort) {
             const sortCount = e.data.sort.vertexSortCount || 0;
             if (sortCount > 0) {
-                sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.indexBuffer);
+                sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.inIndexBuffer);
             }
         } else if (e.data.init) {
             // Yep, this is super hacky and gross :(
@@ -121,7 +116,7 @@ function sortWorker(self) {
                     memory: new WebAssembly.Memory({
                         initial: totalPagesRequired * 2,
                         maximum: totalPagesRequired * 3,
-                        shared: false,
+                        shared: true,
                     }),
                 }
             };
@@ -139,7 +134,11 @@ function sortWorker(self) {
                                    Constants.DepthMapRange * Constants.BytesPerInt * 2;
                 wasmMemory = sorterWasmImport.env.memory.buffer;
                 self.postMessage({
-                    'sortSetupPhase1Complete': true
+                    'sortSetupPhase1Complete': true,
+                    'inIndexBuffer': wasmMemory,
+                    'inIndexOffset': 0,
+                    'outIndexBuffer': wasmMemory,
+                    'outIndexOffset': indexesOutOffset
                 });
             });
         }
