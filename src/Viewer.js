@@ -444,27 +444,23 @@ export class Viewer {
             varying vec2 vUv;
             varying vec4 conicOpacity;
 
+            vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
+                vec2 samplerUV = vec2(0.0, 0.0);
+                float covarianceD = float(splatIndex * uint(stride) + uint(offset)) / dimensions.x;
+                samplerUV.y = float(floor(covarianceD)) / dimensions.y;
+                samplerUV.x = fract(covarianceD);
+                return samplerUV;
+            }
+
             void main () {
 
-                vec2 centerCovarianceUV = vec2(0.0, 0.0);
-                float covarianceD = float(splatIndex * uint(3)) / centerCovarianceTextureSize.x;
-                centerCovarianceUV.y = float(floor(covarianceD)) / centerCovarianceTextureSize.y;
-                centerCovarianceUV.x = fract(covarianceD);
-                vec4 sampledCenterCovarianceA = texture2D(centerCovarianceTexture, centerCovarianceUV);
-                
-                covarianceD = float(splatIndex * uint(3) + uint(1)) / centerCovarianceTextureSize.x;
-                centerCovarianceUV.y = float(floor(covarianceD)) / centerCovarianceTextureSize.y;
-                centerCovarianceUV.x = fract(covarianceD);
-                vec4 sampledCenterCovarianceB = texture2D(centerCovarianceTexture, centerCovarianceUV);
-
-                covarianceD = float(splatIndex * uint(3) + uint(2)) / centerCovarianceTextureSize.x;
-                centerCovarianceUV.y = float(floor(covarianceD)) / centerCovarianceTextureSize.y;
-                centerCovarianceUV.x = fract(covarianceD);
-                float sampledCenterCovarianceC = texture2D(centerCovarianceTexture, centerCovarianceUV).r;
+                vec4 sampledCenterCovarianceA = texture2D(centerCovarianceTexture, getDataUV(3, 0, centerCovarianceTextureSize));
+                vec4 sampledCenterCovarianceB = texture2D(centerCovarianceTexture, getDataUV(3, 1, centerCovarianceTextureSize));
+                vec4 sampledCenterCovarianceC = texture2D(centerCovarianceTexture, getDataUV(3, 2, centerCovarianceTextureSize));
 
                 vec3 splatCenter = sampledCenterCovarianceA.xyz;
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.w, sampledCenterCovarianceB.xy);
-                vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.zw, sampledCenterCovarianceC);
+                vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.zw, sampledCenterCovarianceC.r);
 
                 vec2 colorUV = vec2(0.0, 0.0);
                 float colorD = float(splatIndex * uint(4)) / 4.0 / colorTextureSize.x;
