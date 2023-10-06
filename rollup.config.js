@@ -1,3 +1,5 @@
+import { base64 } from "rollup-plugin-base64";
+
 export default [
     {
         input: './src/index.js',
@@ -11,7 +13,9 @@ export default [
             sourcemap: true,
             globals: p => /^three/.test( p ) ? 'THREE' : null,
         },
-
+        plugins: [
+            base64({ include: "**/*.wasm" })
+        ]
     },
     {
         input: './src/index.js',
@@ -24,5 +28,8 @@ export default [
             sourcemap: true,
             globals: p => /^three/.test( p ) ? 'THREE' : null,
         },
+        plugins: [
+            base64({ include: "**/*.wasm" })
+        ]
     }
 ];

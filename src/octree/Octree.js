@@ -11,9 +11,11 @@ export class Octree {
         this.sceneMax = new THREE.Vector3();
         this.rootNode = null;
         this.addedIndexes = {};
+        this.nodesWithIndexes = [];
     }
 
     processScene(splatBuffer) {
+        this.nodesWithIndexes = [];
         const vertexCount = splatBuffer.getVertexCount();
 
         const position = new THREE.Vector3();
@@ -49,6 +51,7 @@ export class Octree {
                     this.addedIndexes[node.data.indexes[i]] = true;
                 }
             }
+            this.nodesWithIndexes.push(node);
             return;
         }
 
