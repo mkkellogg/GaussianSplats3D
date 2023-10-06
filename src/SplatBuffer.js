@@ -80,8 +80,9 @@ export class SplatBuffer {
         console.log('==============================');
         console.log('');
 
-        const newBufferData = this.bufferData.transfer(newByteCount);
-        this.bufferData = newBufferData;
+        const newFloatArray = new Float32Array(this.floatArray.length);
+        newFloatArray.set(this.floatArray);
+        this.bufferData = newFloatArray.buffer;
         this.floatArray = new Float32Array(this.bufferData);
         this.uint8Array = new Uint8Array(this.bufferData);
     }
