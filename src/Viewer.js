@@ -316,6 +316,8 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
+        const MaximumDistanceToSort = 75;
+
         return function(gatherAllNodes) {
 
             this.getRenderDimensions(renderDimensions);
@@ -364,9 +366,11 @@ export class Viewer {
             let currentByteOffset = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
-                if (node.data.distanceToNode <= 50) {
+                const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
+                if (shouldSort) {
                     this.vertexSortCount += node.data.indexes.length;
                 }
+
                 const windowSizeInts = node.data.indexes.length;
                 let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);

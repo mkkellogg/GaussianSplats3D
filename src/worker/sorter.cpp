@@ -45,15 +45,15 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
         frequencies[i] = cumulativeFreq;
     }
 
-    for (int i = renderCount - 1; i >= 0; i--) {
-        if (i <= sortCount) {
-            unsigned int frequenciesIndex =  (int)((float)(distances[i] - minDistance) * rangeMap);
-            unsigned int freq = frequencies[frequenciesIndex];
-            realIndex[freq - 1] = indexes[i];
-            frequencies[frequenciesIndex] = freq - 1;
-        } else {
-            realIndex[i] = indexes[i];
-        }
+    for (int i = renderCount - 1; i >= sortCount; i--) {
+        realIndex[i] = indexes[i];
+    }
+
+    for (int i = sortCount - 1; i >= 0; i--) {
+        unsigned int frequenciesIndex =  (int)((float)(distances[i] - minDistance) * rangeMap);
+        unsigned int freq = frequencies[frequenciesIndex];
+        realIndex[freq - 1] = indexes[i];
+        frequencies[frequenciesIndex] = freq - 1;
     }
 
 }
