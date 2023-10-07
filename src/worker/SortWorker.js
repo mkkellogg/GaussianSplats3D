@@ -16,9 +16,9 @@ function sortWorker(self) {
 
     let Constants;
 
-    function sort(vertexSortCount, viewProj, cameraPosition) {
+    function sort(vertexSortCount, vertexRenderCount, viewProj, cameraPosition) {
 
-        // console.time('WASM SORT');
+         console.time('WASM SORT');
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
         const viewProjArray = new Int32Array(wasmMemory, viewProjOffset, 16);
         for (let i = 0; i < 16; i++) {
@@ -33,11 +33,12 @@ function sortWorker(self) {
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
                                          cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexCount);
 
-        // console.timeEnd('WASM SORT');
+         console.timeEnd('WASM SORT');
 
         self.postMessage({
             'sortDone': true,
-            'vertexSortCount': vertexSortCount
+            'vertexSortCount': vertexSortCount,
+            'vertexRenderCount': vertexRenderCount
         });
     }
 
@@ -54,10 +55,9 @@ function sortWorker(self) {
                 'sortSetupComplete': true,
             });
         } else if (e.data.sort) {
+            const renderCount = e.data.sort.vertexRenderCount || 0;
             const sortCount = e.data.sort.vertexSortCount || 0;
-            if (sortCount > 0) {
-                sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.inIndexBuffer);
-            }
+            sort(sortCount, renderCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.inIndexBuffer);
         } else if (e.data.init) {
             // Yep, this is super hacky and gross :(
             Constants = e.data.init.Constants;

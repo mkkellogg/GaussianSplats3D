@@ -42,6 +42,7 @@ export class Viewer {
 
         this.sortWorker = null;
         this.vertexRenderCount = 0;
+        this.vertexSortCount = 0;
 
         this.inIndexArray = null;
 
@@ -153,13 +154,13 @@ export class Viewer {
         geometry.instanceCount = vertexCount;
     }
 
-    updateSplatMeshIndexes(indexes, sortedVertexCount) {
+    updateSplatMeshIndexes(indexes, renderVertexCount) {
         const geometry = this.splatMesh.geometry;
 
         geometry.attributes.splatIndex.set(indexes);
         geometry.attributes.splatIndex.needsUpdate = true;
 
-        geometry.instanceCount = sortedVertexCount;
+        geometry.instanceCount = renderVertexCount;
     }
 
     updateSplatMeshUniforms = function() {
@@ -239,7 +240,7 @@ export class Viewer {
                 this.sortWorker.onmessage = (e) => {
                     if (e.data.sortDone) {
                         this.sortRunning = false;
-                        this.updateSplatMeshIndexes(this.outIndexArray, e.data.vertexSortCount);
+                        this.updateSplatMeshIndexes(this.outIndexArray, e.data.vertexRenderCount);
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
                     } else if (e.data.sortSetupPhase1Complete) {
@@ -359,9 +360,13 @@ export class Viewer {
             });
 
             this.vertexRenderCount = verticesToCopy;
+            this.vertexSortCount = 0;
             let currentByteOffset = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
+                if (node.data.distanceToNode <= 10) {
+                    this.vertexSortCount += node.data.indexes.length;
+                }
                 const windowSizeInts = node.data.indexes.length;
                 let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);
@@ -421,7 +426,8 @@ export class Viewer {
                     sort: {
                         'view': tempMatrix.elements,
                         'cameraPosition': cameraPositionArray,
-                        'vertexSortCount': this.vertexRenderCount,
+                        'vertexRenderCount': this.vertexRenderCount,
+                        'vertexSortCount': this.vertexSortCount,
                         'inIndexBuffer': this.inIndexArray.buffer
                     }
                 });
