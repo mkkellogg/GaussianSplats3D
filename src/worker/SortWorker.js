@@ -35,41 +35,6 @@ function sortWorker(self) {
 
         // console.timeEnd('WASM SORT');
 
-
-        // Leaving the JavaScript sort code in for debugging
-        /*
-        console.time("JS SORT");
-
-        const positionsArray = new Float32Array(positions);
-        const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
-
-        if (!depthMix || depthMix.length !== vertexCount) {
-            depthMix = new BigInt64Array(vertexCount);
-        }
-
-        const floatMix = new Float32Array(depthMix.buffer);
-        const indexMix = new Uint32Array(depthMix.buffer);
-
-        for (let j = 0; j < vertexSortCount; j++) {
-            let i = indexArray[j];
-            indexMix[2 * j] = i;
-            const splatArrayBase = 3 * i;
-            const dx = positionsArray[splatArrayBase] - cameraPosition[0];
-            const dy = positionsArray[splatArrayBase + 1] - cameraPosition[1];
-            const dz = positionsArray[splatArrayBase + 2] - cameraPosition[2];
-            floatMix[2 * j + 1] = dx * dx + dy * dy + dz * dz;
-        }
-        lastProj = viewProj;
-
-        const depthMixView = new BigInt64Array(depthMix.buffer, 0, vertexSortCount);
-        depthMixView.sort();
-
-        for (let j = 0; j < vertexSortCount; j++) {
-            indexArray[j] = indexMix[2 * j];
-        }
-        console.timeEnd("JS SORT");*/
-
-
         self.postMessage({
             'sortDone': true,
             'vertexSortCount': vertexSortCount
