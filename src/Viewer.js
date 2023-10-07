@@ -364,7 +364,7 @@ export class Viewer {
             let currentByteOffset = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
-                if (node.data.distanceToNode <= 10) {
+                if (node.data.distanceToNode <= 50) {
                     this.vertexSortCount += node.data.indexes.length;
                 }
                 const windowSizeInts = node.data.indexes.length;

@@ -31,7 +31,7 @@ function sortWorker(self) {
         counts2.set(countsZero);
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
-                                         cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexCount);
+                                         cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexRenderCount, vertexCount);
 
          console.timeEnd('WASM SORT');
 

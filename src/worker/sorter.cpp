@@ -9,7 +9,8 @@
 
 EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positions, char* sortBuffers, int* viewProj,
                                              unsigned int* indexesOut, float cameraX, float cameraY,
-                                             float cameraZ, unsigned int distanceMapRange, unsigned int sortCount, unsigned int vertexCount) {
+                                             float cameraZ, unsigned int distanceMapRange, unsigned int sortCount,
+                                             unsigned int renderCount, unsigned int vertexCount) {
 
     int maxDistance = -2147483648;
     int minDistance = 2147483647;
@@ -44,11 +45,15 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
         frequencies[i] = cumulativeFreq;
     }
 
-    for (int i = sortCount - 1; i >= 0; i--) {
-        unsigned int frequenciesIndex =  (int)((float)(distances[i] - minDistance) * rangeMap);
-        unsigned int freq = frequencies[frequenciesIndex];
-        realIndex[freq - 1] = indexes[i];
-        frequencies[frequenciesIndex] = freq - 1;
+    for (int i = renderCount - 1; i >= 0; i--) {
+        if (i <= sortCount) {
+            unsigned int frequenciesIndex =  (int)((float)(distances[i] - minDistance) * rangeMap);
+            unsigned int freq = frequencies[frequenciesIndex];
+            realIndex[freq - 1] = indexes[i];
+            frequencies[frequenciesIndex] = freq - 1;
+        } else {
+            realIndex[i] = indexes[i];
+        }
     }
 
 }
