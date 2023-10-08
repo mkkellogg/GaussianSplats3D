@@ -316,7 +316,7 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
-        const MaximumDistanceToSort = 75;
+        const MaximumDistanceToSort = 125;
 
         return function(gatherAllNodes) {
 
