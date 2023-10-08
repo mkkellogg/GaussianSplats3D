@@ -16,68 +16,26 @@ function sortWorker(self) {
 
     let Constants;
 
-    function sort(vertexSortCount, viewProj, cameraPosition, indexBuffer) {
+    function sort(vertexSortCount, vertexRenderCount, viewProj, cameraPosition) {
 
-        // console.time("WASM SORT")
+        // console.time('WASM SORT');
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
-        const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
-        const workerTransferIndexArray = new Uint32Array(wasmMemory);
-        workerTransferIndexArray.set(indexArray);
         const viewProjArray = new Int32Array(wasmMemory, viewProjOffset, 16);
         for (let i = 0; i < 16; i++) {
             viewProjArray[i] = Math.round(viewProj[i] * 1000.0);
         }
-        const counts1 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, Constants.DepthMapRange);
-        const counts2 = new Uint32Array(wasmMemory,
-                                        sortBuffersOffset + vertexCount * 4 + Constants.DepthMapRange * 4, Constants.DepthMapRange);
-        counts1.set(countsZero);
-        counts2.set(countsZero);
+        const frequencies = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, Constants.DepthMapRange);
+        frequencies.set(countsZero);
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
-                                         cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexCount);
-        const sortedIndexes = new Uint32Array(wasmMemory, indexesOutOffset, vertexSortCount);
+                                         cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexRenderCount, vertexCount);
 
-        indexArray.set(sortedIndexes);
-        // console.timeEnd("WASM SORT");
-
-
-        // Leaving the JavaScript sort code in for debugging
-        /*
-        console.time("JS SORT");
-
-        const positionsArray = new Float32Array(positions);
-        const indexArray = new Uint32Array(indexBuffer, 0, vertexSortCount);
-
-        if (!depthMix || depthMix.length !== vertexCount) {
-            depthMix = new BigInt64Array(vertexCount);
-        }
-
-        const floatMix = new Float32Array(depthMix.buffer);
-        const indexMix = new Uint32Array(depthMix.buffer);
-
-        for (let j = 0; j < vertexSortCount; j++) {
-            let i = indexArray[j];
-            indexMix[2 * j] = i;
-            const splatArrayBase = 3 * i;
-            const dx = positionsArray[splatArrayBase] - cameraPosition[0];
-            const dy = positionsArray[splatArrayBase + 1] - cameraPosition[1];
-            const dz = positionsArray[splatArrayBase + 2] - cameraPosition[2];
-            floatMix[2 * j + 1] = dx * dx + dy * dy + dz * dz;
-        }
-        lastProj = viewProj;
-
-        const depthMixView = new BigInt64Array(depthMix.buffer, 0, vertexSortCount);
-        depthMixView.sort();
-
-        for (let j = 0; j < vertexSortCount; j++) {
-            indexArray[j] = indexMix[2 * j];
-        }
-        console.timeEnd("JS SORT");*/
-
+        // console.timeEnd('WASM SORT');
 
         self.postMessage({
             'sortDone': true,
-            'vertexSortCount': vertexSortCount
+            'vertexSortCount': vertexSortCount,
+            'vertexRenderCount': vertexRenderCount
         });
     }
 
@@ -87,17 +45,16 @@ function sortWorker(self) {
             const floatPositions = new Float32Array(positions);
             const intPositions = new Int32Array(vertexCount * 3);
             for (let i = 0; i < vertexCount * 3; i++) {
-                intPositions[i] = Math.round(floatPositions[i] * 1000.0 );
+                intPositions[i] = Math.round(floatPositions[i] * 1000.0);
             }
             new Int32Array(wasmMemory, positionsOffset, vertexCount * 3).set(intPositions);
             self.postMessage({
                 'sortSetupComplete': true,
             });
         } else if (e.data.sort) {
+            const renderCount = e.data.sort.vertexRenderCount || 0;
             const sortCount = e.data.sort.vertexSortCount || 0;
-            if (sortCount > 0) {
-                sort(sortCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.indexBuffer);
-            }
+            sort(sortCount, renderCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.inIndexBuffer);
         } else if (e.data.init) {
             // Yep, this is super hacky and gross :(
             Constants = e.data.init.Constants;
@@ -121,7 +78,7 @@ function sortWorker(self) {
                     memory: new WebAssembly.Memory({
                         initial: totalPagesRequired * 2,
                         maximum: totalPagesRequired * 3,
-                        shared: false,
+                        shared: true,
                     }),
                 }
             };
@@ -139,7 +96,11 @@ function sortWorker(self) {
                                    Constants.DepthMapRange * Constants.BytesPerInt * 2;
                 wasmMemory = sorterWasmImport.env.memory.buffer;
                 self.postMessage({
-                    'sortSetupPhase1Complete': true
+                    'sortSetupPhase1Complete': true,
+                    'inIndexBuffer': wasmMemory,
+                    'inIndexOffset': 0,
+                    'outIndexBuffer': wasmMemory,
+                    'outIndexOffset': indexesOutOffset
                 });
             });
         }

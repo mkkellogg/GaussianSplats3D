@@ -19,7 +19,7 @@ const CENTER_COVARIANCE_DATA_TEXTURE_WIDTH = 4096;
 const CENTER_COVARIANCE_DATA_TEXTURE_HEIGHT = 4096;
 
 const COLOR_DATA_TEXTURE_WIDTH = 4096;
-const COLOR_DATA_TEXTURE_HEIGHT = 4096;
+const COLOR_DATA_TEXTURE_HEIGHT = 2048;
 
 export class Viewer {
 
@@ -42,10 +42,9 @@ export class Viewer {
 
         this.sortWorker = null;
         this.vertexRenderCount = 0;
+        this.vertexSortCount = 0;
 
-        this.workerTransferCenterCovarianceArray = null;
-        this.workerTransferColorArray = null;
-        this.workerTransferIndexArray = null;
+        this.inIndexArray = null;
 
         this.splatBuffer = null;
         this.splatMesh = null;
@@ -155,13 +154,13 @@ export class Viewer {
         geometry.instanceCount = vertexCount;
     }
 
-    updateSplatMeshIndexes(indexes, sortedVertexCount) {
+    updateSplatMeshIndexes(indexes, renderVertexCount) {
         const geometry = this.splatMesh.geometry;
 
         geometry.attributes.splatIndex.set(indexes);
         geometry.attributes.splatIndex.needsUpdate = true;
 
-        geometry.instanceCount = sortedVertexCount;
+        geometry.instanceCount = renderVertexCount;
     }
 
     updateSplatMeshUniforms = function() {
@@ -195,6 +194,7 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
+
                 this.splatBuffer = splatBuffer;
 
                 this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
@@ -204,6 +204,7 @@ export class Viewer {
                 this.splatBuffer.buildPreComputedBuffers();
                 this.splatMesh = this.buildMesh(this.splatBuffer);
                 this.splatMesh.frustumCulled = false;
+                this.splatMesh.renderOrder = 10;
                 this.scene.add(this.splatMesh);
                 this.updateSplatMeshUniforms();
 
@@ -239,7 +240,7 @@ export class Viewer {
                 this.sortWorker.onmessage = (e) => {
                     if (e.data.sortDone) {
                         this.sortRunning = false;
-                        this.updateSplatMeshIndexes(this.workerTransferIndexArray, e.data.vertexSortCount);
+                        this.updateSplatMeshIndexes(this.outIndexArray, e.data.vertexRenderCount);
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
                     } else if (e.data.sortSetupPhase1Complete) {
@@ -249,12 +250,15 @@ export class Viewer {
                         this.sortWorker.postMessage({
                             'positions': workerTransferPositionArray.buffer
                         });
-                        this.workerTransferIndexArray = new Uint32Array(new SharedArrayBuffer(vertexCount * Constants.BytesPerInt));
-                        for (let i = 0; i < vertexCount; i++) this.workerTransferIndexArray[i] = i;
+                        this.outIndexArray = new Uint32Array(e.data.outIndexBuffer,
+                                                             e.data.outIndexOffset, this.splatBuffer.getVertexCount());
+                        this.inIndexArray = new Uint32Array(e.data.inIndexBuffer,
+                                                            e.data.inIndexOffset, this.splatBuffer.getVertexCount());
+                        for (let i = 0; i < vertexCount; i++) this.inIndexArray[i] = i;
                     } else if (e.data.sortSetupComplete) {
                         console.log('Sorting web worker ready.');
                         const attributeData = this.getAttributeDataFromSplatBuffer(this.splatBuffer);
-                        this.updateSplatMeshIndexes(this.workerTransferIndexArray, this.splatBuffer.getVertexCount());
+                        this.updateSplatMeshIndexes(this.outIndexArray, this.splatBuffer.getVertexCount());
                         this.updateSplatMeshAttributes(attributeData.colors,
                                                        attributeData.centerCovariances, this.splatBuffer.getVertexCount());
                         this.updateView(true, true);
@@ -269,24 +273,33 @@ export class Viewer {
         });
     }
 
-    addDebugMeshesToScene() {
+    addDebugMeshesToScene(renderOrder) {
         const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
 
+        const debugMeshRoot = new THREE.Object3D();
+        this.scene.add(debugMeshRoot);
+
         let sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
-        this.scene.add(sphereMesh);
+        sphereMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(-50, 0, 0);
 
         sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
-        this.scene.add(sphereMesh);
+        sphereMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(50, 0, 0);
 
         sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
-        this.scene.add(sphereMesh);
+        sphereMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(0, 0, -50);
 
         sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
-        this.scene.add(sphereMesh);
+        sphereMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(0, 0, 50);
+
+        return debugMeshRoot;
     }
 
     gatherSceneNodes = function() {
@@ -302,6 +315,8 @@ export class Viewer {
         const nodeSize = (node) => {
             return tempMax.copy(node.max).sub(node.min).length();
         };
+
+        const MaximumDistanceToSort = 125;
 
         return function(gatherAllNodes) {
 
@@ -347,11 +362,17 @@ export class Viewer {
             });
 
             this.vertexRenderCount = verticesToCopy;
+            this.vertexSortCount = 0;
             let currentByteOffset = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
+                const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
+                if (shouldSort) {
+                    this.vertexSortCount += node.data.indexes.length;
+                }
+
                 const windowSizeInts = node.data.indexes.length;
-                let destView = new Uint32Array(this.workerTransferIndexArray.buffer, currentByteOffset, windowSizeInts);
+                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);
                 currentByteOffset += windowSizeInts * Constants.BytesPerInt;
             }
@@ -409,8 +430,9 @@ export class Viewer {
                     sort: {
                         'view': tempMatrix.elements,
                         'cameraPosition': cameraPositionArray,
-                        'vertexSortCount': this.vertexRenderCount,
-                        'indexBuffer': this.workerTransferIndexArray.buffer
+                        'vertexRenderCount': this.vertexRenderCount,
+                        'vertexSortCount': this.vertexSortCount,
+                        'inIndexBuffer': this.inIndexArray.buffer
                     }
                 });
                 lastSortViewPos.copy(this.camera.position);
