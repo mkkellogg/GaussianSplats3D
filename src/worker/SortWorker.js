@@ -18,22 +18,19 @@ function sortWorker(self) {
 
     function sort(vertexSortCount, vertexRenderCount, viewProj, cameraPosition) {
 
-         console.time('WASM SORT');
+        // console.time('WASM SORT');
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
         const viewProjArray = new Int32Array(wasmMemory, viewProjOffset, 16);
         for (let i = 0; i < 16; i++) {
             viewProjArray[i] = Math.round(viewProj[i] * 1000.0);
         }
-        const counts1 = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, Constants.DepthMapRange);
-        const counts2 = new Uint32Array(wasmMemory,
-                                        sortBuffersOffset + vertexCount * 4 + Constants.DepthMapRange * 4, Constants.DepthMapRange);
-        counts1.set(countsZero);
-        counts2.set(countsZero);
+        const frequencies = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, Constants.DepthMapRange);
+        frequencies.set(countsZero);
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
                                          cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexRenderCount, vertexCount);
 
-         console.timeEnd('WASM SORT');
+        // console.timeEnd('WASM SORT');
 
         self.postMessage({
             'sortDone': true,
@@ -48,7 +45,7 @@ function sortWorker(self) {
             const floatPositions = new Float32Array(positions);
             const intPositions = new Int32Array(vertexCount * 3);
             for (let i = 0; i < vertexCount * 3; i++) {
-                intPositions[i] = Math.round(floatPositions[i] * 1000.0 );
+                intPositions[i] = Math.round(floatPositions[i] * 1000.0);
             }
             new Int32Array(wasmMemory, positionsOffset, vertexCount * 3).set(intPositions);
             self.postMessage({

@@ -12,8 +12,8 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
                                              float cameraZ, unsigned int distanceMapRange, unsigned int sortCount,
                                              unsigned int renderCount, unsigned int vertexCount) {
 
-    int maxDistance = -2147483648;
-    int minDistance = 2147483647;
+    int maxDistance = -2147483640;
+    int minDistance = 2147483640;
     int* distances = (int*)sortBuffers;
     for (unsigned int i = 0; i < sortCount; i++) {
         unsigned int indexOffset = 3 * (unsigned int)indexes[i];
@@ -30,7 +30,6 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
     float rangeMap = (float)distanceMapRange / distancesRange;
 
     unsigned int* frequencies = ((unsigned int *)distances) + vertexCount;
-    unsigned int* realIndex = ((unsigned int *)frequencies) + distanceMapRange;
 
     for (unsigned int i = 0; i < sortCount; i++) {
         unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
@@ -38,21 +37,21 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
         frequencies[frequenciesIndex] = cFreq + 1;   
     }
 
-    unsigned int cumulativeFreq = 0;
+    unsigned int cumulativeFreq = frequencies[0];
     for (unsigned int i = 1; i < distanceMapRange; i++) {
-        unsigned int cFreq = frequencies[i];
-        cumulativeFreq += cFreq;
+        unsigned int freq = frequencies[i];
+        cumulativeFreq += freq;
         frequencies[i] = cumulativeFreq;
     }
 
     for (int i = renderCount - 1; i >= sortCount; i--) {
-        realIndex[i] = indexes[i];
+        indexesOut[i] = indexes[i];
     }
 
     for (int i = sortCount - 1; i >= 0; i--) {
-        unsigned int frequenciesIndex =  (int)((float)(distances[i] - minDistance) * rangeMap);
+        unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
         unsigned int freq = frequencies[frequenciesIndex];
-        realIndex[freq - 1] = indexes[i];
+        indexesOut[freq - 1] = indexes[i];
         frequencies[frequenciesIndex] = freq - 1;
     }
 
