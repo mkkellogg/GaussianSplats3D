@@ -28,4 +28,4 @@ The demo will be accessible locally at [http://127.0.0.1:8080/index.html](http:/
 ```
 <code directory>/build/demo/assets/data
 ```
-The demo scene data is available here: [projects.markkellogg.org/downloads/gaussian_splat_data.zip](projects.markkellogg.org/downloads/gaussian_splat_data.zip)
+The demo scene data is available here: [https://projects.markkellogg.org/downloads/gaussian_splat_data.zip](https://projects.markkellogg.org/downloads/gaussian_splat_data.zip)
