@@ -44,11 +44,11 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
         frequencies[i] = cumulativeFreq;
     }
 
-    for (int i = renderCount - 1; i >= sortCount; i--) {
+    for (int i = renderCount - 1; i >= (int)sortCount; i--) {
         indexesOut[i] = indexes[i];
     }
 
-    for (int i = sortCount - 1; i >= 0; i--) {
+    for (int i = (int)sortCount - 1; i >= 0; i--) {
         unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
         unsigned int freq = frequencies[frequenciesIndex];
         indexesOut[freq - 1] = indexes[i];
