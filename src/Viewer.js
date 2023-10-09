@@ -68,6 +68,7 @@ export class Viewer {
             [0, 0, -(2.0 * this.cameraSpecs.far * this.cameraSpecs.near) / (this.cameraSpecs.far - this.cameraSpecs.near), 0],
         ].flat();
     }
+
     onResize = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -80,6 +81,7 @@ export class Viewer {
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
             this.updateRealProjectionMatrix(renderDimensions);
             this.updateSplatMeshUniforms();
+            this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
         };
 
     }();
@@ -110,6 +112,8 @@ export class Viewer {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+        this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
+        this.setupRenderTargetCopyObjects();
 
         if (!this.controls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -120,9 +124,59 @@ export class Viewer {
             this.controls.target.copy(this.initialCameraLookAt);
         }
 
+        
         window.addEventListener('resize', this.resizeFunc, false);
 
         this.rootElement.appendChild(this.renderer.domElement);
+    }
+
+    updateSplatRenderTargetForRenderDimensions(renderDimensions) {
+        this.splatRenderTarget = new THREE.WebGLRenderTarget(renderDimensions.x, renderDimensions.y, {
+            format: THREE.RGBAFormat,
+            stencilBuffer: false,
+            depthBuffer: true,
+        });
+        this.splatRenderTarget.depthTexture =new THREE.DepthTexture();
+    }
+
+    setupRenderTargetCopyObjects() {
+        const uniforms = {
+            'sourceColorTexture': {
+                'type': 't',
+                'value': null
+            },
+            'sourceDepthTexture': {
+                'type': 't',
+                'value': null
+            },
+        };
+        this.renderTargetCopyMaterial = new THREE.ShaderMaterial({
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = vec4( position, 1.0 );    
+                }
+            `,
+            fragmentShader: `
+                varying vec2 vUv;
+                uniform sampler2D sourceColorTexture;
+                uniform sampler2D sourceDepthTexture;
+                void main() {
+                    vec4 color = texture2D(sourceColorTexture, vUv);
+                    gl_FragDepth = texture2D(sourceDepthTexture, vUv).x;
+                    gl_FragColor = vec4(color.rgba);
+              }
+            `,
+            uniforms: uniforms,
+            depthWrite: false,
+            depthTest: true,
+            transparent: true
+        });
+        this.renderTargetCopyMaterial.extensions.fragDepth = true;
+      
+        this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
+        this.renderTargetCopyCamera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
     }
 
     updateSplatMeshAttributes(colors, centerCovariances, vertexCount) {
@@ -197,6 +251,8 @@ export class Viewer {
 
                 this.splatBuffer = splatBuffer;
 
+                this.debugMeshRoot = this.addDebugMeshesToScene();
+
                 this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
                 const vertexCount = this.splatBuffer.getVertexCount();
                 console.log(`Splat count: ${vertexCount}`);
@@ -205,7 +261,6 @@ export class Viewer {
                 this.splatMesh = this.buildMesh(this.splatBuffer);
                 this.splatMesh.frustumCulled = false;
                 this.splatMesh.renderOrder = 10;
-                this.scene.add(this.splatMesh);
                 this.updateSplatMeshUniforms();
 
                 this.octree = new Octree(8, 5000);
@@ -395,8 +450,21 @@ export class Viewer {
         }
         this.controls.update();
         this.updateView();
+
         this.renderer.autoClear = false;
+        this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
+
+        this.renderer.setRenderTarget(this.splatRenderTarget);
+        this.renderer.clear(true, true, true);
+        this.renderer.render(this.splatMesh, this.camera);
+
+        this.renderer.setRenderTarget(null);
+        this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
+        this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
+        this.renderTargetCopyMaterial.uniformsNeedUpdate = true;
+        this.renderer.clear(true, true, true);
         this.renderer.render(this.scene, this.camera);
+        this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);
     }
 
     updateView = function() {
@@ -541,7 +609,9 @@ export class Viewer {
                                         position.x * v1 / viewport * 2.0 +
                                         position.y * v2 / viewport * 2.0;
 
-                gl_Position = vec4(projectedCovariance, 0.0, 1.0);
+                vec4 threeProjectedPos = projectionMatrix * camspace;
+
+                gl_Position = vec4(projectedCovariance, threeProjectedPos.z / threeProjectedPos.w, 1.0);
 
             }`;
 
@@ -609,8 +679,8 @@ export class Viewer {
             uniforms: uniforms,
             vertexShader: vertexShaderSource,
             fragmentShader: fragmentShaderSource,
-            transparent: true,
-            alphaTest: 1.0,
+            //transparent: true,
+            //alphaTest: 1.0,
             blending: THREE.CustomBlending,
             blendEquation: THREE.AddEquation,
             blendSrc: THREE.OneMinusDstAlphaFactor,
@@ -618,7 +688,7 @@ export class Viewer {
             blendSrcAlpha: THREE.OneMinusDstAlphaFactor,
             blendDstAlpha: THREE.OneFactor,
             depthTest: false,
-            depthWrite: false,
+            depthWrite: true,
             side: THREE.DoubleSide
         });
     }
