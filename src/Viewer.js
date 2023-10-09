@@ -135,8 +135,11 @@ export class Viewer {
             format: THREE.RGBAFormat,
             stencilBuffer: false,
             depthBuffer: true,
+
         });
-        this.splatRenderTarget.depthTexture =new THREE.DepthTexture();
+        this.splatRenderTarget.depthTexture = new THREE.DepthTexture(renderDimensions.x, renderDimensions.y);
+        this.splatRenderTarget.depthTexture.format = THREE.DepthFormat;
+        this.splatRenderTarget.depthTexture.type = THREE.UnsignedIntType;
     }
 
     setupRenderTargetCopyObjects() {
@@ -159,13 +162,16 @@ export class Viewer {
                 }
             `,
             fragmentShader: `
+                #include <common>
+                #include <packing>
                 varying vec2 vUv;
                 uniform sampler2D sourceColorTexture;
                 uniform sampler2D sourceDepthTexture;
                 void main() {
                     vec4 color = texture2D(sourceColorTexture, vUv);
-                    gl_FragDepth = texture2D(sourceDepthTexture, vUv).x;
-                    gl_FragColor = vec4(color.rgba);
+                    float fragCoordZ = texture2D( sourceDepthTexture, vUv ).x;
+                    gl_FragDepth = fragCoordZ;
+                    gl_FragColor = vec4(color.rgb, 1.0);
               }
             `,
             uniforms: uniforms,
@@ -354,6 +360,12 @@ export class Viewer {
         debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(0, 0, 50);
 
+        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xffAA00}));
+        sphereMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(sphereMesh);
+      //  sphereMesh.scale.set(1, 1, 1);
+        sphereMesh.position.set(5, 0, 5);
+
         return debugMeshRoot;
     }
 
@@ -533,6 +545,7 @@ export class Viewer {
             varying vec2 vPosition;
             varying vec2 vUv;
             varying vec4 conicOpacity;
+            varying float fragDepth;
 
             vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
                 vec2 samplerUV = vec2(0.0, 0.0);
@@ -610,8 +623,9 @@ export class Viewer {
                                         position.y * v2 / viewport * 2.0;
 
                 vec4 threeProjectedPos = projectionMatrix * camspace;
+                fragDepth = (threeProjectedPos.z / threeProjectedPos.w + 1.0) / 2.0;
 
-                gl_Position = vec4(projectedCovariance, threeProjectedPos.z / threeProjectedPos.w, 1.0);
+                gl_Position = vec4(projectedCovariance, 0.0, 1.0);
 
             }`;
 
@@ -625,6 +639,7 @@ export class Viewer {
             varying vec2 vPosition;
             varying vec4 conicOpacity;
             varying vec2 vUv;
+            varying float fragDepth;
 
             vec3 gamma(vec3 value, float param) {
                 return vec3(pow(abs(value.r), param),pow(abs(value.g), param),pow(abs(value.b), param));
@@ -636,8 +651,8 @@ export class Viewer {
                 vec3 color = vColor.rgb;
                 float B = exp(A) * vColor.a;
                 vec3 colorB = B * color.rgb;
+                gl_FragDepth = fragDepth;
                 gl_FragColor = vec4(colorB, B);
-
             }`;
 
         const uniforms = {
@@ -675,22 +690,26 @@ export class Viewer {
             }
         };
 
-        return new THREE.ShaderMaterial({
+        const material = new THREE.ShaderMaterial({
             uniforms: uniforms,
             vertexShader: vertexShaderSource,
             fragmentShader: fragmentShaderSource,
-            //transparent: true,
-            //alphaTest: 1.0,
+            transparent: true,
+            alphaTest: 1.0,
             blending: THREE.CustomBlending,
             blendEquation: THREE.AddEquation,
             blendSrc: THREE.OneMinusDstAlphaFactor,
             blendDst: THREE.OneFactor,
             blendSrcAlpha: THREE.OneMinusDstAlphaFactor,
             blendDstAlpha: THREE.OneFactor,
-            depthTest: false,
+            depthTest: true,
+            depthFunc: THREE.AlwaysDepth,
             depthWrite: true,
             side: THREE.DoubleSide
         });
+        material.extensions.fragDepth = true;
+
+        return material;
     }
 
     buildGeomtery(splatBuffer) {
