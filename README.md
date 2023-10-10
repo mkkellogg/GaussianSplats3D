@@ -29,3 +29,32 @@ The demo will be accessible locally at [http://127.0.0.1:8080/index.html](http:/
 <code directory>/build/demo/assets/data
 ```
 The demo scene data is available here: [https://projects.markkellogg.org/downloads/gaussian_splat_data.zip](https://projects.markkellogg.org/downloads/gaussian_splat_data.zip)
+
+## Usage
+
+To run the built-in viewer:
+
+```javascript
+const cameraUp =  [0, -1, -1.0];
+const initialCameraPos = [-3.3816, 1.96931, -1.71890];
+const initialCameraLookAt = [0.60910, 1.42099, 2.02511];
+const viewer = new GaussianSplat3D.Viewer(null, cameraUp, initialCameraPos, initialCameraLookAt);
+viewer.init();
+viewer.loadFile('<path to .ply or .splat file>')
+.then(() => {
+    viewer.start();
+});
+```
+
+The `loadFile()` method will accept the original `.ply` files as well as my custom `.splat` files.
+
+To convert a `.ply` file into the stripped-down `.splat` format (currently only compatible with this viewer):
+
+```javascript
+const plyLoader = new GaussianSplat3D.PlyLoader();
+plyLoader.loadFromFile('<path to .ply file>')
+.then((splatBuffer) => {
+    new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('converted_file.splat');
+});
+```
+This code will prompt your browser to automatically start downloading the converted `.splat` file.
