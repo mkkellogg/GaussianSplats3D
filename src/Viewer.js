@@ -21,6 +21,8 @@ const CENTER_COVARIANCE_DATA_TEXTURE_HEIGHT = 4096;
 const COLOR_DATA_TEXTURE_WIDTH = 4096;
 const COLOR_DATA_TEXTURE_HEIGHT = 2048;
 
+const THREE_CAMERA_FOV = 45;
+
 export class Viewer {
 
     constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0],
@@ -35,7 +37,6 @@ export class Viewer {
         this.selfDrivenMode = selfDrivenMode;
         this.scene = null;
         this.camera = null;
-        this.realProjectionMatrix = new THREE.Matrix4();
         this.renderer = null;
         this.selfDrivenUpdateFunc = this.update.bind(this);
         this.resizeFunc = this.onResize.bind(this);
@@ -60,15 +61,6 @@ export class Viewer {
         outDimensions.y = this.rootElement.offsetHeight;
     }
 
-    updateRealProjectionMatrix(renderDimensions) {
-        this.realProjectionMatrix.elements = [
-            [(2 * this.cameraSpecs.fx) / renderDimensions.x, 0, 0, 0],
-            [0, (2 * this.cameraSpecs.fy) / renderDimensions.y, 0, 0],
-            [0, 0, -(this.cameraSpecs.far + this.cameraSpecs.near) / (this.cameraSpecs.far - this.cameraSpecs.near), -1],
-            [0, 0, -(2.0 * this.cameraSpecs.far * this.cameraSpecs.near) / (this.cameraSpecs.far - this.cameraSpecs.near), 0],
-        ].flat();
-    }
-
     onResize = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -79,7 +71,6 @@ export class Viewer {
             this.camera.aspect = renderDimensions.x / renderDimensions.y;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
-            this.updateRealProjectionMatrix(renderDimensions);
             this.updateSplatMeshUniforms();
             this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
         };
@@ -98,11 +89,10 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
         this.getRenderDimensions(renderDimensions);
 
-        this.camera = new THREE.PerspectiveCamera(70, renderDimensions.x / renderDimensions.y, 0.1, 500);
+        this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
         this.camera.position.copy(this.initialCameraPos);
         this.camera.lookAt(this.initialCameraLookAt);
         this.camera.up.copy(this.cameraUp).normalize();
-        this.updateRealProjectionMatrix(renderDimensions);
 
         this.scene = new THREE.Scene();
 
@@ -158,7 +148,7 @@ export class Viewer {
                 varying vec2 vUv;
                 void main() {
                     vUv = uv;
-                    gl_Position = vec4( position, 1.0 );    
+                    gl_Position = vec4( position.xy, 0.0, 1.0 );    
                 }
             `,
             fragmentShader: `
@@ -169,9 +159,9 @@ export class Viewer {
                 uniform sampler2D sourceDepthTexture;
                 void main() {
                     vec4 color = texture2D(sourceColorTexture, vUv);
-                    float fragCoordZ = texture2D( sourceDepthTexture, vUv ).x;
-                    gl_FragDepth = fragCoordZ;
-                    gl_FragColor = vec4(color.rgb, 1.0);
+                    float fragDepth = texture2D( sourceDepthTexture, vUv ).x;
+                    gl_FragDepth = fragDepth;
+                    gl_FragColor = color;
               }
             `,
             uniforms: uniforms,
@@ -180,7 +170,6 @@ export class Viewer {
             transparent: true
         });
         this.renderTargetCopyMaterial.extensions.fragDepth = true;
-      
         this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
         this.renderTargetCopyCamera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
     }
@@ -231,9 +220,10 @@ export class Viewer {
             const vertexCount = this.splatBuffer.getVertexCount();
             if (vertexCount > 0) {
                 this.getRenderDimensions(renderDimensions);
-                this.splatMesh.material.uniforms.realProjectionMatrix.value.copy(this.realProjectionMatrix);
                 this.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
                 this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
+                const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(THREE_CAMERA_FOV / 2.0 * THREE.MathUtils.DEG2RAD);
+                this.splatMesh.material.uniforms.focal.value.set(cameraFocalLength, cameraFocalLength);
                 this.splatMesh.material.uniformsNeedUpdate = true;
             }
         };
@@ -498,7 +488,7 @@ export class Viewer {
 
             this.getRenderDimensions(tempVector2);
             tempMatrix.copy(this.camera.matrixWorld).invert();
-            tempMatrix.premultiply(this.realProjectionMatrix);
+            tempMatrix.premultiply(this.camera.projectionMatrix);
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
@@ -534,7 +524,6 @@ export class Viewer {
 
             uniform sampler2D centerCovarianceTexture;
             uniform sampler2D colorTexture;
-            uniform mat4 realProjectionMatrix;
             uniform vec2 focal;
             uniform vec2 viewport;
 
@@ -545,7 +534,7 @@ export class Viewer {
             varying vec2 vPosition;
             varying vec2 vUv;
             varying vec4 conicOpacity;
-            varying float fragDepth;
+            varying float ndcDepth;
 
             vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
                 vec2 samplerUV = vec2(0.0, 0.0);
@@ -572,7 +561,7 @@ export class Viewer {
                 vec4 sampledColor = texture2D(colorTexture, colorUV);
 
                 vec4 camspace = viewMatrix * vec4(splatCenter, 1);
-                vec4 pos2d = realProjectionMatrix * camspace;
+                vec4 pos2d = projectionMatrix * camspace;
 
                 float bounds = 1.2 * pos2d.w;
                 if (pos2d.z < -pos2d.w || pos2d.x < -bounds || pos2d.x > bounds
@@ -622,10 +611,9 @@ export class Viewer {
                                         position.x * v1 / viewport * 2.0 +
                                         position.y * v2 / viewport * 2.0;
 
-                vec4 threeProjectedPos = projectionMatrix * camspace;
-                fragDepth = (threeProjectedPos.z / threeProjectedPos.w + 1.0) / 2.0;
+                ndcDepth = pos2d.z / pos2d.w;
 
-                gl_Position = vec4(projectedCovariance, 0.0, 1.0);
+                gl_Position = vec4(projectedCovariance, 0.0 , 1.0);
 
             }`;
 
@@ -639,7 +627,7 @@ export class Viewer {
             varying vec2 vPosition;
             varying vec4 conicOpacity;
             varying vec2 vUv;
-            varying float fragDepth;
+            varying float ndcDepth;
 
             vec3 gamma(vec3 value, float param) {
                 return vec3(pow(abs(value.r), param),pow(abs(value.g), param),pow(abs(value.b), param));
@@ -651,7 +639,9 @@ export class Viewer {
                 vec3 color = vColor.rgb;
                 float B = exp(A) * vColor.a;
                 vec3 colorB = B * color.rgb;
-                gl_FragDepth = fragDepth;
+               // gl_FragDepth = ndcDepth;
+
+                gl_FragDepth = (ndcDepth + 1.0) / 2.0;
                 gl_FragColor = vec4(colorB, B);
             }`;
 
@@ -663,10 +653,6 @@ export class Viewer {
             'colorTexture': {
                 'type': 't',
                 'value': null
-            },
-            'realProjectionMatrix': {
-                'type': 'v4v',
-                'value': new THREE.Matrix4()
             },
             'focal': {
                 'type': 'v2',
