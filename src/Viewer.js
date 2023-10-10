@@ -159,7 +159,7 @@ export class Viewer {
                 uniform sampler2D sourceDepthTexture;
                 void main() {
                     vec4 color = texture2D(sourceColorTexture, vUv);
-                    float fragDepth = texture2D( sourceDepthTexture, vUv ).x;
+                    float fragDepth = texture2D(sourceDepthTexture, vUv).x;
                     gl_FragDepth = fragDepth;
                     gl_FragColor = color;
               }
@@ -247,7 +247,8 @@ export class Viewer {
 
                 this.splatBuffer = splatBuffer;
 
-                this.debugMeshRoot = this.addDebugMeshesToScene();
+                this.debugMeshRoot = this.createDebugMeshes();
+                this.secondaryDebugMeshRoot = this.createSecondaryDebugMeshes();
 
                 this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
                 const vertexCount = this.splatBuffer.getVertexCount();
@@ -324,33 +325,32 @@ export class Viewer {
         });
     }
 
-    addDebugMeshesToScene(renderOrder) {
+    createDebugMeshes(renderOrder) {
         const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
 
         const debugMeshRoot = new THREE.Object3D();
-        this.scene.add(debugMeshRoot);
 
-        let sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
+        let sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0xff0000));
         sphereMesh.renderOrder = renderOrder;
         debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(-50, 0, 0);
 
-        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xff0000}));
+        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0xff0000));
         sphereMesh.renderOrder = renderOrder;
         debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(50, 0, 0);
 
-        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
+        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0x00ff00));
         sphereMesh.renderOrder = renderOrder;
         debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(0, 0, -50);
 
-        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0x00ff00}));
+        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0x00ff00));
         sphereMesh.renderOrder = renderOrder;
         debugMeshRoot.add(sphereMesh);
         sphereMesh.position.set(0, 0, 50);
 
-        sphereMesh = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({color: 0xffAA00}));
+        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0xffaa00));
         sphereMesh.renderOrder = renderOrder;
         debugMeshRoot.add(sphereMesh);
       //  sphereMesh.scale.set(1, 1, 1);
@@ -358,6 +358,85 @@ export class Viewer {
 
         return debugMeshRoot;
     }
+
+    createSecondaryDebugMeshes(renderOrder) {
+        const boxGeometry = new THREE.BoxGeometry(3, 3, 3);
+
+        const debugMeshRoot = new THREE.Object3D();
+
+        let separation = 10;
+        let boxColor = 0xBBBBBB;
+
+        let boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor))
+        boxMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(boxMesh);
+        boxMesh.position.set(-separation, 0, -separation);
+
+        boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
+        boxMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(boxMesh);
+        boxMesh.position.set(-separation, 0, separation);
+
+        boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
+        boxMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(boxMesh);
+        boxMesh.position.set(separation, 0, -separation);
+
+        boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
+        boxMesh.renderOrder = renderOrder;
+        debugMeshRoot.add(boxMesh);
+        boxMesh.position.set(separation, 0, separation);
+
+        return debugMeshRoot;
+    }
+
+    buildDebugMaterial(color) {
+        const vertexShaderSource = `
+            #include <common>
+            varying float ndcDepth;
+
+            void main() {
+                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position.xyz, 1.0);
+                ndcDepth = gl_Position.z / gl_Position.w;
+                gl_Position.x = gl_Position.x / gl_Position.w;
+                gl_Position.y = gl_Position.y / gl_Position.w;
+                gl_Position.z = 0.0;
+                gl_Position.w = 1.0;
+    
+            }
+        `;
+    
+        const fragmentShaderSource = `
+            #include <common>
+            uniform vec3 color;
+            varying float ndcDepth;
+            void main() {
+                gl_FragDepth = (ndcDepth + 1.0) / 2.0;
+                gl_FragColor = vec4(color.rgb, 0.0);
+            }
+        `;
+    
+        const uniforms = {
+            'color': {
+                'type': 'v3',
+                'value': new THREE.Color(color)
+            },
+        };
+    
+        const material = new THREE.ShaderMaterial({
+            uniforms: uniforms,
+            vertexShader: vertexShaderSource,
+            fragmentShader: fragmentShaderSource,
+            transparent: false,
+            depthTest: true,
+            depthWrite: true,
+            side: THREE.FrontSide
+        });
+        material.extensions.fragDepth = true;
+
+        return material;
+    }
+
 
     gatherSceneNodes = function() {
 
@@ -456,17 +535,23 @@ export class Viewer {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
-        this.renderer.setRenderTarget(this.splatRenderTarget);
+
+        this.renderer.clear(true, true, true);
+        this.renderer.render(this.debugMeshRoot, this.camera);
+        this.renderer.render(this.splatMesh, this.camera);
+
+       /* this.renderer.setRenderTarget(this.splatRenderTarget);
         this.renderer.clear(true, true, true);
         this.renderer.render(this.splatMesh, this.camera);
+        //this.renderer.render(this.secondaryDebugMeshRoot, this.camera);
 
         this.renderer.setRenderTarget(null);
         this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
         this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
         this.renderTargetCopyMaterial.uniformsNeedUpdate = true;
         this.renderer.clear(true, true, true);
-        this.renderer.render(this.scene, this.camera);
-        this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);
+        this.renderer.render(this.debugMeshRoot, this.camera);
+        this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);*/
     }
 
     updateView = function() {
@@ -531,10 +616,12 @@ export class Viewer {
             uniform vec2 colorTextureSize;
 
             varying vec4 vColor;
-            varying vec2 vPosition;
             varying vec2 vUv;
-            varying vec4 conicOpacity;
             varying float ndcDepth;
+
+            varying vec2 screenCenterPos;
+            varying vec4 conicRadius;
+            varying vec4 screenExtent;
 
             vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
                 vec2 samplerUV = vec2(0.0, 0.0);
@@ -549,7 +636,7 @@ export class Viewer {
                 vec4 sampledCenterCovarianceA = texture2D(centerCovarianceTexture, getDataUV(3, 0, centerCovarianceTextureSize));
                 vec4 sampledCenterCovarianceB = texture2D(centerCovarianceTexture, getDataUV(3, 1, centerCovarianceTextureSize));
                 vec4 sampledCenterCovarianceC = texture2D(centerCovarianceTexture, getDataUV(3, 2, centerCovarianceTextureSize));
-
+             
                 vec3 splatCenter = sampledCenterCovarianceA.xyz;
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.w, sampledCenterCovarianceB.xy);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.zw, sampledCenterCovarianceC.r);
@@ -558,14 +645,14 @@ export class Viewer {
                 float colorD = float(splatIndex * uint(4)) / 4.0 / colorTextureSize.x;
                 colorUV.y = float(int(colorD)) / colorTextureSize.y;
                 colorUV.x = fract(colorD);
-                vec4 sampledColor = texture2D(colorTexture, colorUV);
+                vColor = texture2D(colorTexture, colorUV);
 
-                vec4 camspace = viewMatrix * vec4(splatCenter, 1);
-                vec4 pos2d = projectionMatrix * camspace;
+                vec4 camspace = viewMatrix * vec4(splatCenter, 1.0);
+                vec4 posClip = projectionMatrix * camspace;
 
-                float bounds = 1.2 * pos2d.w;
-                if (pos2d.z < -pos2d.w || pos2d.x < -bounds || pos2d.x > bounds
-                    || pos2d.y < -bounds || pos2d.y > bounds) {
+                float bounds = 1.2 * posClip.w;
+                if (posClip.z < -posClip.w || posClip.x < -bounds || posClip.x > bounds
+                    || posClip.y < -bounds || posClip.y > bounds) {
                     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
                     return;
                 }
@@ -590,31 +677,28 @@ export class Viewer {
                 vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
 
 
-                vec2 vCenter = vec2(pos2d) / pos2d.w;
+                float det = cov2Dv.x * cov2Dv.z - cov2Dv.y * cov2Dv.y;
+                det = max(1e-11, det);
+        
+                float mid = 0.5 * (cov2Dv.x + cov2Dv.z);
+                float lambda1 = mid + sqrt(max(0.1, mid * mid - det));
+                float lambda2 = mid - sqrt(max(0.1, mid * mid - det));
+                float radius = ceil(3.0 * sqrt(max(lambda1, lambda2)));
+                vec3 conic = vec3(cov2Dv.z, cov2Dv.y, cov2Dv.x) * (1.0 / det);
+                conicRadius = vec4(conic, radius);
 
-                float diagonal1 = cov2Dv.x;
-                float offDiagonal = cov2Dv.y;
-                float diagonal2 = cov2Dv.z;
+                screenCenterPos = (posClip.xy / posClip.w * vec2(0.5, 0.5 * -1.0) + vec2(0.5, 0.5)) * viewport.xy;
 
-                float mid = 0.5 * (diagonal1 + diagonal2);
-                float radius = length(vec2((diagonal1 - diagonal2) / 2.0, offDiagonal));
-                float lambda1 = mid + radius;
-                float lambda2 = max(mid - radius, 0.1);
-                vec2 diagonalVector = normalize(vec2(offDiagonal, lambda1 - diagonal1));
-                vec2 v1 = min(sqrt(2.0 * lambda1), 1024.0) * diagonalVector;
-                vec2 v2 = min(sqrt(2.0 * lambda2), 1024.0) * vec2(diagonalVector.y, -diagonalVector.x);
+		        vec2 deltaScreenPos = position.xy / 2.0 * radius * 2.0 / viewport.xy;
+		        screenExtent = posClip;
+		        screenExtent.xy += (deltaScreenPos) * posClip.w;
 
-                vColor = sampledColor;
-                vPosition = position.xy;
+                vec2 ndcExtent = screenExtent.xy / screenExtent.w;
 
-                vec2 projectedCovariance = vCenter +
-                                        position.x * v1 / viewport * 2.0 +
-                                        position.y * v2 / viewport * 2.0;
+                screenExtent.xy = (ndcExtent  * vec2(0.5, 0.5 * -1.0) + vec2(0.5, 0.5)) * viewport.xy;
 
-                ndcDepth = pos2d.z / pos2d.w;
-
-                gl_Position = vec4(projectedCovariance, 0.0 , 1.0);
-
+                ndcDepth = posClip.z / posClip.w;
+                gl_Position = vec4(ndcExtent, 0.0, 1.0);
             }`;
 
         const fragmentShaderSource = `
@@ -624,25 +708,30 @@ export class Viewer {
             uniform vec3 debugColor;
 
             varying vec4 vColor;
-            varying vec2 vPosition;
-            varying vec4 conicOpacity;
             varying vec2 vUv;
             varying float ndcDepth;
 
-            vec3 gamma(vec3 value, float param) {
-                return vec3(pow(abs(value.r), param),pow(abs(value.g), param),pow(abs(value.b), param));
-            }  
+            varying vec2 screenCenterPos;
+            varying vec4 conicRadius;
+            varying vec4 screenExtent;
+
+            vec2 computeScreenSpaceDelta(vec2 svPositionXY, vec2 centerXY) {
+                vec2 d = svPositionXY - centerXY;
+                d.y *= -1.0;
+                return d;
+            }
+
+            float computePowerFromConic(vec3 conic, vec2 d) {
+                return -0.5 * (conic.x * d.x * d.x + conic.z * d.y * d.y) + conic.y * d.x * d.y;
+            }
 
             void main () {
-                float A = -dot(vPosition, vPosition);
-                if (A < -4.0) discard;
-                vec3 color = vColor.rgb;
-                float B = exp(A) * vColor.a;
-                vec3 colorB = B * color.rgb;
-               // gl_FragDepth = ndcDepth;
-
+                vec2 d = computeScreenSpaceDelta(screenExtent.xy, screenCenterPos);
+                float power = computePowerFromConic(conicRadius.xyz, d);
+                float A = saturate(exp(power) * vColor.a);
+                vec4 color = vec4(vColor.rgb * A, A);
+                gl_FragColor = color;
                 gl_FragDepth = (ndcDepth + 1.0) / 2.0;
-                gl_FragColor = vec4(colorB, B);
             }`;
 
         const uniforms = {
@@ -689,8 +778,7 @@ export class Viewer {
             blendSrcAlpha: THREE.OneMinusDstAlphaFactor,
             blendDstAlpha: THREE.OneFactor,
             depthTest: true,
-            depthFunc: THREE.AlwaysDepth,
-            depthWrite: true,
+            depthWrite: false,
             side: THREE.DoubleSide
         });
         material.extensions.fragDepth = true;
