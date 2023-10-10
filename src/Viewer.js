@@ -617,11 +617,12 @@ export class Viewer {
 
             varying vec4 vColor;
             varying vec2 vUv;
-            varying float ndcDepth;
 
             varying vec2 screenCenterPos;
-            varying vec4 conicRadius;
+            varying vec3 vConic;
             varying vec4 screenExtent;
+
+            varying vec2 vPosition;
 
             vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
                 vec2 samplerUV = vec2(0.0, 0.0);
@@ -646,6 +647,7 @@ export class Viewer {
                 colorUV.y = float(int(colorD)) / colorTextureSize.y;
                 colorUV.x = fract(colorD);
                 vColor = texture2D(colorTexture, colorUV);
+                vPosition = position.xy;
 
                 vec4 camspace = viewMatrix * vec4(splatCenter, 1.0);
                 vec4 posClip = projectionMatrix * camspace;
@@ -676,7 +678,6 @@ export class Viewer {
                 cov2Dm[1][1] += 0.3;
                 vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
 
-
                 float det = cov2Dv.x * cov2Dv.z - cov2Dv.y * cov2Dv.y;
                 det = max(1e-11, det);
         
@@ -684,8 +685,7 @@ export class Viewer {
                 float lambda1 = mid + sqrt(max(0.1, mid * mid - det));
                 float lambda2 = mid - sqrt(max(0.1, mid * mid - det));
                 float radius = ceil(3.0 * sqrt(max(lambda1, lambda2)));
-                vec3 conic = vec3(cov2Dv.z, cov2Dv.y, cov2Dv.x) * (1.0 / det);
-                conicRadius = vec4(conic, radius);
+                vConic = vec3(cov2Dv.z, cov2Dv.y, cov2Dv.x) * (1.0 / det);
 
                 screenCenterPos = (posClip.xy / posClip.w * vec2(0.5, 0.5 * -1.0) + vec2(0.5, 0.5)) * viewport.xy;
 
@@ -697,8 +697,7 @@ export class Viewer {
 
                 screenExtent.xy = (ndcExtent  * vec2(0.5, 0.5 * -1.0) + vec2(0.5, 0.5)) * viewport.xy;
 
-                ndcDepth = posClip.z / posClip.w;
-                gl_Position = vec4(ndcExtent, 0.0, 1.0);
+                gl_Position = vec4(ndcExtent, posClip.z / posClip.w, 1.0);
             }`;
 
         const fragmentShaderSource = `
@@ -709,29 +708,19 @@ export class Viewer {
 
             varying vec4 vColor;
             varying vec2 vUv;
-            varying float ndcDepth;
 
             varying vec2 screenCenterPos;
-            varying vec4 conicRadius;
+            varying vec3 vConic;
             varying vec4 screenExtent;
 
-            vec2 computeScreenSpaceDelta(vec2 svPositionXY, vec2 centerXY) {
-                vec2 d = svPositionXY - centerXY;
-                d.y *= -1.0;
-                return d;
-            }
-
-            float computePowerFromConic(vec3 conic, vec2 d) {
-                return -0.5 * (conic.x * d.x * d.x + conic.z * d.y * d.y) + conic.y * d.x * d.y;
-            }
+            varying vec2 vPosition;
 
             void main () {
-                vec2 d = computeScreenSpaceDelta(screenExtent.xy, screenCenterPos);
-                float power = computePowerFromConic(conicRadius.xyz, d);
+                vec2 d = (screenExtent.xy - screenCenterPos) * vec2(1.0, -1.0);
+                float power = -0.5 * (vConic.x * d.x * d.x + vConic.z * d.y * d.y) + vConic.y * d.x * d.y;
                 float A = saturate(exp(power) * vColor.a);
                 vec4 color = vec4(vColor.rgb * A, A);
                 gl_FragColor = color;
-                gl_FragDepth = (ndcDepth + 1.0) / 2.0;
             }`;
 
         const uniforms = {
@@ -781,7 +770,6 @@ export class Viewer {
             depthWrite: false,
             side: THREE.DoubleSide
         });
-        material.extensions.fragDepth = true;
 
         return material;
     }
