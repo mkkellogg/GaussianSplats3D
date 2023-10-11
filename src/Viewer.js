@@ -237,9 +237,6 @@ export class Viewer {
 
                 this.splatBuffer = splatBuffer;
 
-                this.debugMeshRoot = this.createDebugMeshes();
-                this.secondaryDebugMeshRoot = this.createSecondaryDebugMeshes();
-
                 this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
                 const vertexCount = this.splatBuffer.getVertexCount();
                 console.log(`Splat count: ${vertexCount}`);
@@ -547,7 +544,7 @@ export class Viewer {
         this.renderer.clear(true, true, true);
         this.renderer.render(this.splatMesh, this.camera);
 
-        this.fps();
+        // this.fps();
     }
 
     updateView = function() {
