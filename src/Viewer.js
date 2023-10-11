@@ -8,30 +8,22 @@ import { Octree } from './octree/Octree.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
 
-const DEFAULT_CAMERA_SPECS = {
-    'fx': 1159.5880733038064,
-    'fy': 1164.6601287484507,
-    'near': 0.1,
-    'far': 500
-};
-
 const CENTER_COVARIANCE_DATA_TEXTURE_WIDTH = 4096;
 const CENTER_COVARIANCE_DATA_TEXTURE_HEIGHT = 4096;
 
 const COLOR_DATA_TEXTURE_WIDTH = 4096;
 const COLOR_DATA_TEXTURE_HEIGHT = 2048;
 
-const THREE_CAMERA_FOV = 45;
+const THREE_CAMERA_FOV = 60;
 
 export class Viewer {
 
     constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0],
-                splatAlphaRemovalThreshold = 0, cameraSpecs = DEFAULT_CAMERA_SPECS, controls = null, selfDrivenMode = true) {
+                splatAlphaRemovalThreshold = 0, controls = null, selfDrivenMode = true) {
         this.rootElement = rootElement;
         this.cameraUp = new THREE.Vector3().fromArray(cameraUp);
         this.initialCameraPos = new THREE.Vector3().fromArray(initialCameraPos);
         this.initialCameraLookAt = new THREE.Vector3().fromArray(initialCameraLookAt);
-        this.cameraSpecs = cameraSpecs;
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.controls = controls;
         this.selfDrivenMode = selfDrivenMode;
@@ -114,7 +106,6 @@ export class Viewer {
             this.controls.target.copy(this.initialCameraLookAt);
         }
 
-        
         window.addEventListener('resize', this.resizeFunc, false);
 
         this.rootElement.appendChild(this.renderer.domElement);
@@ -220,10 +211,9 @@ export class Viewer {
             const vertexCount = this.splatBuffer.getVertexCount();
             if (vertexCount > 0) {
                 this.getRenderDimensions(renderDimensions);
-                this.splatMesh.material.uniforms.focal.value.set(this.cameraSpecs.fx, this.cameraSpecs.fy);
                 this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
-                const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(THREE_CAMERA_FOV / 2.0 * THREE.MathUtils.DEG2RAD);
-                this.splatMesh.material.uniforms.focal.value.set(cameraFocalLength, cameraFocalLength);
+                this.cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(THREE_CAMERA_FOV / 2.0 * THREE.MathUtils.DEG2RAD);
+                this.splatMesh.material.uniforms.focal.value.set(this.cameraFocalLength, this.cameraFocalLength);
                 this.splatMesh.material.uniformsNeedUpdate = true;
             }
         };
@@ -366,7 +356,7 @@ export class Viewer {
         let separation = 10;
         let boxColor = 0xBBBBBB;
 
-        let boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor))
+        let boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
         boxMesh.renderOrder = renderOrder;
         debugMeshRoot.add(boxMesh);
         boxMesh.position.set(-separation, 0, -separation);
@@ -401,10 +391,10 @@ export class Viewer {
                 gl_Position.y = gl_Position.y / gl_Position.w;
                 gl_Position.z = 0.0;
                 gl_Position.w = 1.0;
-    
+
             }
         `;
-    
+
         const fragmentShaderSource = `
             #include <common>
             uniform vec3 color;
@@ -414,14 +404,14 @@ export class Viewer {
                 gl_FragColor = vec4(color.rgb, 0.0);
             }
         `;
-    
+
         const uniforms = {
             'color': {
                 'type': 'v3',
                 'value': new THREE.Color(color)
             },
         };
-    
+
         const material = new THREE.ShaderMaterial({
             uniforms: uniforms,
             vertexShader: vertexShaderSource,
@@ -456,8 +446,8 @@ export class Viewer {
         return function(gatherAllNodes) {
 
             this.getRenderDimensions(renderDimensions);
-            const fovXOver2 = Math.atan(renderDimensions.x / (2.0 * this.cameraSpecs.fx));
-            const fovYOver2 = Math.atan(renderDimensions.y / (2.0 * this.cameraSpecs.fy));
+            const fovXOver2 = Math.atan(renderDimensions.x / (2.0 * this.cameraFocalLength));
+            const fovYOver2 = Math.atan(renderDimensions.y / (2.0 * this.cameraFocalLength));
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
             tempMatrix4.copy(this.camera.matrixWorld).invert();
@@ -524,7 +514,7 @@ export class Viewer {
         }
     }
 
-    fps = function () {
+    fps = function() {
 
         let lastCalcTime = performance.now() / 1000;
         let frameCount = 0;
@@ -533,13 +523,13 @@ export class Viewer {
             const currentTime = performance.now() / 1000;
             const calcDelta = currentTime - lastCalcTime;
             if (calcDelta >= 1.0) {
-                console.log("FPS: " + frameCount);
+                console.log('FPS: ' + frameCount);
                 frameCount = 0;
                 lastCalcTime = currentTime;
             } else {
                 frameCount++;
             }
-        }
+        };
 
     }();
 
@@ -557,7 +547,7 @@ export class Viewer {
         this.renderer.clear(true, true, true);
         this.renderer.render(this.splatMesh, this.camera);
 
-        // this.fps();
+        this.fps();
     }
 
     updateView = function() {
