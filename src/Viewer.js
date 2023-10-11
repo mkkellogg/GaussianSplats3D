@@ -620,7 +620,7 @@ export class Viewer {
 
             varying vec2 screenCenterPos;
             varying vec3 vConic;
-            varying vec4 screenExtent;
+            varying vec2 screenExtent;
 
             varying vec2 vPosition;
 
@@ -649,12 +649,12 @@ export class Viewer {
                 vColor = texture2D(colorTexture, colorUV);
                 vPosition = position.xy;
 
-                vec4 camspace = viewMatrix * vec4(splatCenter, 1.0);
-                vec4 posClip = projectionMatrix * camspace;
+                vec4 viewCenter = viewMatrix * vec4(splatCenter, 1.0);
+                vec4 clipCenter = projectionMatrix * viewCenter;
 
-                float bounds = 1.2 * posClip.w;
-                if (posClip.z < -posClip.w || posClip.x < -bounds || posClip.x > bounds
-                    || posClip.y < -bounds || posClip.y > bounds) {
+                float bounds = 1.2 * clipCenter.w;
+                if (clipCenter.z < -clipCenter.w || clipCenter.x < -bounds || clipCenter.x > bounds
+                    || clipCenter.y < -bounds || clipCenter.y > bounds) {
                     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
                     return;
                 }
@@ -666,8 +666,8 @@ export class Viewer {
                 );
 
                 mat3 J = mat3(
-                    focal.x / camspace.z, 0., -(focal.x * camspace.x) / (camspace.z * camspace.z),
-                    0., focal.y / camspace.z, -(focal.y * camspace.y) / (camspace.z * camspace.z),
+                    focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) / (viewCenter.z * viewCenter.z),
+                    0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) / (viewCenter.z * viewCenter.z),
                     0., 0., 0.
                 );
 
@@ -680,24 +680,25 @@ export class Viewer {
 
                 float det = cov2Dv.x * cov2Dv.z - cov2Dv.y * cov2Dv.y;
                 det = max(1e-11, det);
-        
+
                 float mid = 0.5 * (cov2Dv.x + cov2Dv.z);
                 float lambda1 = mid + sqrt(max(0.1, mid * mid - det));
                 float lambda2 = mid - sqrt(max(0.1, mid * mid - det));
                 float radius = ceil(3.0 * sqrt(max(lambda1, lambda2)));
                 vConic = vec3(cov2Dv.z, cov2Dv.y, cov2Dv.x) * (1.0 / det);
 
-                screenCenterPos = (posClip.xy / posClip.w * vec2(0.5, 0.5 * -1.0) + vec2(0.5, 0.5)) * viewport.xy;
+                vec3 ndcClip = clipCenter.xyz / clipCenter.w;
+                screenCenterPos = (ndcClip.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * viewport.xy;
 
-		        vec2 deltaScreenPos = position.xy / 2.0 * radius * 2.0 / viewport.xy;
-		        screenExtent = posClip;
-		        screenExtent.xy += (deltaScreenPos) * posClip.w;
+		        vec2 deltaScreenPos = position.xy * radius * 2.0 / viewport.xy;
+		        vec4 clipExtent = clipCenter;
+		        clipExtent.xy += (deltaScreenPos) * clipCenter.w;
 
-                vec2 ndcExtent = screenExtent.xy / screenExtent.w;
+                vec2 ndcExtent = clipExtent.xy / clipExtent.w;
 
-                screenExtent.xy = (ndcExtent  * vec2(0.5, 0.5 * -1.0) + vec2(0.5, 0.5)) * viewport.xy;
+                screenExtent = (ndcExtent * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * viewport.xy;
 
-                gl_Position = vec4(ndcExtent, posClip.z / posClip.w, 1.0);
+                gl_Position = vec4(ndcExtent, ndcClip.z, 1.0);
             }`;
 
         const fragmentShaderSource = `
@@ -711,12 +712,12 @@ export class Viewer {
 
             varying vec2 screenCenterPos;
             varying vec3 vConic;
-            varying vec4 screenExtent;
+            varying vec2 screenExtent;
 
             varying vec2 vPosition;
 
             void main () {
-                vec2 d = (screenExtent.xy - screenCenterPos) * vec2(1.0, -1.0);
+                vec2 d = (screenExtent - screenCenterPos) * vec2(1.0, -1.0);
                 float power = -0.5 * (vConic.x * d.x * d.x + vConic.z * d.y * d.y) + vConic.y * d.x * d.y;
                 float A = saturate(exp(power) * vColor.a);
                 vec4 color = vec4(vColor.rgb * A, A);
@@ -783,12 +784,12 @@ export class Viewer {
         const positionsArray = new Float32Array(6 * 3);
         const positions = new THREE.BufferAttribute(positionsArray, 3);
         baseGeometry.setAttribute('position', positions);
-        positions.setXYZ(2, -2.0, 2.0, 0.0);
-        positions.setXYZ(1, -2.0, -2.0, 0.0);
-        positions.setXYZ(0, 2.0, 2.0, 0.0);
-        positions.setXYZ(5, -2.0, -2.0, 0.0);
-        positions.setXYZ(4, 2.0, -2.0, 0.0);
-        positions.setXYZ(3, 2.0, 2.0, 0.0);
+        positions.setXYZ(2, -1.0, 1.0, 0.0);
+        positions.setXYZ(1, -1.0, -1.0, 0.0);
+        positions.setXYZ(0, 1.0, 1.0, 0.0);
+        positions.setXYZ(5, -1.0, -1.0, 0.0);
+        positions.setXYZ(4, 1.0, -1.0, 0.0);
+        positions.setXYZ(3, 1.0, 1.0, 0.0);
         positions.needsUpdate = true;
 
         const geometry = new THREE.InstancedBufferGeometry().copy(baseGeometry);
