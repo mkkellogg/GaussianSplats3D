@@ -353,7 +353,6 @@ export class Viewer {
         sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0xffaa00));
         sphereMesh.renderOrder = renderOrder;
         debugMeshRoot.add(sphereMesh);
-      //  sphereMesh.scale.set(1, 1, 1);
         sphereMesh.position.set(5, 0, 5);
 
         return debugMeshRoot;
@@ -525,6 +524,25 @@ export class Viewer {
         }
     }
 
+    fps = function () {
+
+        let lastCalcTime = performance.now() / 1000;
+        let frameCount = 0;
+
+        return function() {
+            const currentTime = performance.now() / 1000;
+            const calcDelta = currentTime - lastCalcTime;
+            if (calcDelta >= 1.0) {
+                console.log("FPS: " + frameCount);
+                frameCount = 0;
+                lastCalcTime = currentTime;
+            } else {
+                frameCount++;
+            }
+        }
+
+    }();
+
     update() {
         if (this.selfDrivenMode) {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
@@ -537,21 +555,9 @@ export class Viewer {
 
 
         this.renderer.clear(true, true, true);
-        this.renderer.render(this.debugMeshRoot, this.camera);
         this.renderer.render(this.splatMesh, this.camera);
 
-       /* this.renderer.setRenderTarget(this.splatRenderTarget);
-        this.renderer.clear(true, true, true);
-        this.renderer.render(this.splatMesh, this.camera);
-        //this.renderer.render(this.secondaryDebugMeshRoot, this.camera);
-
-        this.renderer.setRenderTarget(null);
-        this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
-        this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
-        this.renderTargetCopyMaterial.uniformsNeedUpdate = true;
-        this.renderer.clear(true, true, true);
-        this.renderer.render(this.debugMeshRoot, this.camera);
-        this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);*/
+        // this.fps();
     }
 
     updateView = function() {
@@ -619,7 +625,6 @@ export class Viewer {
             varying vec2 vUv;
 
             varying vec2 screenCenterPos;
-            varying vec3 vConic;
             varying vec2 screenExtent;
 
             varying vec2 vPosition;
@@ -647,7 +652,7 @@ export class Viewer {
                 colorUV.y = float(int(colorD)) / colorTextureSize.y;
                 colorUV.x = fract(colorD);
                 vColor = texture2D(colorTexture, colorUV);
-                vPosition = position.xy;
+                vPosition = position.xy * 2.0;
 
                 vec4 viewCenter = viewMatrix * vec4(splatCenter, 1.0);
                 vec4 clipCenter = projectionMatrix * viewCenter;
@@ -676,29 +681,37 @@ export class Viewer {
                 mat3 cov2Dm = transpose(T) * Vrk * T;
                 cov2Dm[0][0] += 0.3;
                 cov2Dm[1][1] += 0.3;
+
+                // We are interested in the upper-left 2x2 portion of the projected 3D covariance matrix because
+                // we only care about the X and Y values. We want the X-diagonal, cov2Dm[0][0],
+                // the Y-diagonal, cov2Dm[1][1], and the correlation between the two cov2Dm[0][1]. We don't
+                // need cov2Dm[1][0] because it is a symetric matrix.
                 vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
 
-                float det = cov2Dv.x * cov2Dv.z - cov2Dv.y * cov2Dv.y;
-                det = max(1e-11, det);
+                vec3 ndcCenter = clipCenter.xyz / clipCenter.w;
 
-                float mid = 0.5 * (cov2Dv.x + cov2Dv.z);
-                float lambda1 = mid + sqrt(max(0.1, mid * mid - det));
-                float lambda2 = mid - sqrt(max(0.1, mid * mid - det));
-                float radius = ceil(3.0 * sqrt(max(lambda1, lambda2)));
-                vConic = vec3(cov2Dv.z, cov2Dv.y, cov2Dv.x) * (1.0 / det);
+                // We now need to solve for the eigen-values and eigen vectors of the 2D covariance matrix
+                // so that we can determine the 2D basis for the splat. This is done using the method described
+                // here: https://people.math.harvard.edu/~knill/teaching/math21b2004/exhibits/2dmatrices/index.html
+                float a = cov2Dv.x;
+                float d = cov2Dv.z;
+                float b = cov2Dv.y;
+                float D = a * d - b * b;
+                float aPlusD = (a + d);
+                float aPlusDOver2 = 0.5 * aPlusD;
+                float eigenValue1 = aPlusDOver2 + sqrt(aPlusD * aPlusD / 4.0 - D);
+                float eigenValue2 = aPlusDOver2 - sqrt(aPlusD * aPlusD / 4.0 - D);
 
-                vec3 ndcClip = clipCenter.xyz / clipCenter.w;
-                screenCenterPos = (ndcClip.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * viewport.xy;
+                const float maxSplatSize = 512.0;
+                vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
+                vec2 eigenVector2 = normalize(vec2(b, eigenValue2 - a));
+                vec2 basisVector1 = eigenVector1 * min(sqrt(2.0 * eigenValue1), maxSplatSize);
+                vec2 basisVector2 = eigenVector2 * min(sqrt(2.0 * eigenValue2), maxSplatSize);
 
-		        vec2 deltaScreenPos = position.xy * radius * 2.0 / viewport.xy;
-		        vec4 clipExtent = clipCenter;
-		        clipExtent.xy += (deltaScreenPos) * clipCenter.w;
+                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) / viewport * 2.0;
 
-                vec2 ndcExtent = clipExtent.xy / clipExtent.w;
+                gl_Position = vec4(ndcCenter.xy + ndcOffset, 0.0, 1.0);
 
-                screenExtent = (ndcExtent * vec2(0.5, -0.5) + vec2(0.5, 0.5)) * viewport.xy;
-
-                gl_Position = vec4(ndcExtent, ndcClip.z, 1.0);
             }`;
 
         const fragmentShaderSource = `
@@ -711,17 +724,16 @@ export class Viewer {
             varying vec2 vUv;
 
             varying vec2 screenCenterPos;
-            varying vec3 vConic;
             varying vec2 screenExtent;
 
             varying vec2 vPosition;
 
             void main () {
-                vec2 d = (screenExtent - screenCenterPos) * vec2(1.0, -1.0);
-                float power = -0.5 * (vConic.x * d.x * d.x + vConic.z * d.y * d.y) + vConic.y * d.x * d.y;
-                float A = saturate(exp(power) * vColor.a);
-                vec4 color = vec4(vColor.rgb * A, A);
-                gl_FragColor = color;
+                float A = -dot(vPosition, vPosition);
+                if (A < -4.0) discard;
+                vec3 color = vColor.rgb;
+                A = exp(A) * vColor.a;
+                gl_FragColor = vec4(A * color.rgb, A);
             }`;
 
         const uniforms = {
