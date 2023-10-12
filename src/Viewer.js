@@ -611,9 +611,6 @@ export class Viewer {
             varying vec4 vColor;
             varying vec2 vUv;
 
-            varying vec2 screenCenterPos;
-            varying vec2 screenExtent;
-
             varying vec2 vPosition;
 
             vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
@@ -650,19 +647,18 @@ export class Viewer {
                     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
                     return;
                 }
-    
+
+                // Compute the 2D covariance matrix from the upper-right portion of the 3D covariance matrix
                 mat3 Vrk = mat3(
                     cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z,
                     cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
                     cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
                 );
-
                 mat3 J = mat3(
                     focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) / (viewCenter.z * viewCenter.z),
                     0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) / (viewCenter.z * viewCenter.z),
                     0., 0., 0.
                 );
-
                 mat3 W = transpose(mat3(viewMatrix));
                 mat3 T = W * J;
                 mat3 cov2Dm = transpose(T) * Vrk * T;
@@ -680,14 +676,20 @@ export class Viewer {
                 // We now need to solve for the eigen-values and eigen vectors of the 2D covariance matrix
                 // so that we can determine the 2D basis for the splat. This is done using the method described
                 // here: https://people.math.harvard.edu/~knill/teaching/math21b2004/exhibits/2dmatrices/index.html
+                //
+                // This is a different approach than in the original work at INRIA. In that work they compute the
+                // max extents of the 2D covariance matrix in screen space to form an axis aligned bounding rectangle
+                // which forms the geometry that is actually rasterized. They then use the inverse 2D covariance
+                // matrix (called 'conic') to determine fragment opacity.
                 float a = cov2Dv.x;
                 float d = cov2Dv.z;
                 float b = cov2Dv.y;
                 float D = a * d - b * b;
-                float aPlusD = (a + d);
-                float aPlusDOver2 = 0.5 * aPlusD;
-                float eigenValue1 = aPlusDOver2 + sqrt(aPlusD * aPlusD / 4.0 - D);
-                float eigenValue2 = aPlusDOver2 - sqrt(aPlusD * aPlusD / 4.0 - D);
+                float trace = a + d;
+                float traceOver2 = 0.5 * trace;
+                float term2 = sqrt(trace * trace / 4.0 - D);
+                float eigenValue1 = traceOver2 + term2;
+                float eigenValue2 = traceOver2 - term2;
 
                 const float maxSplatSize = 512.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
@@ -710,12 +712,11 @@ export class Viewer {
             varying vec4 vColor;
             varying vec2 vUv;
 
-            varying vec2 screenCenterPos;
-            varying vec2 screenExtent;
-
             varying vec2 vPosition;
 
             void main () {
+                // compute the squared distance from the center of the splat to the current fragment in the
+                // splat's local space.
                 float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
                 vec3 color = vColor.rgb;
