@@ -157,8 +157,9 @@ export class Viewer {
             `,
             uniforms: uniforms,
             depthWrite: false,
-            depthTest: true,
-            transparent: true
+            depthTest: false,
+            transparent: true,
+            blending: THREE.NormalBlending
         });
         this.renderTargetCopyMaterial.extensions.fragDepth = true;
         this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
@@ -237,6 +238,8 @@ export class Viewer {
 
                 this.splatBuffer = splatBuffer;
 
+                this.addDebugMeshesToScene();
+
                 this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
                 const vertexCount = this.splatBuffer.getVertexCount();
                 console.log(`Splat count: ${vertexCount}`);
@@ -310,6 +313,13 @@ export class Viewer {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
             });
         });
+    }
+
+    addDebugMeshesToScene() {
+        this.debugRoot = this.createDebugMeshes();
+        this.secondaryDebugRoot = this.createSecondaryDebugMeshes();
+        this.scene.add(this.debugRoot);
+        this.scene.add(this.secondaryDebugRoot);
     }
 
     createDebugMeshes(renderOrder) {
@@ -540,9 +550,20 @@ export class Viewer {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
-
+        this.renderer.setRenderTarget(this.splatRenderTarget);
         this.renderer.clear(true, true, true);
+        this.renderer.getContext().colorMask(false, false, false, false);
+        this.renderer.render(this.scene, this.camera);
+        this.renderer.getContext().colorMask(true, true, true, true);
         this.renderer.render(this.splatMesh, this.camera);
+
+        this.renderer.setRenderTarget(null);
+        this.renderer.clear(true, true, true);
+
+        this.renderer.render(this.scene, this.camera);
+        this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
+        this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
+        this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);
 
         // this.fps();
     }
@@ -699,7 +720,7 @@ export class Viewer {
 
                 vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) / viewport * 2.0;
 
-                gl_Position = vec4(ndcCenter.xy + ndcOffset, 0.0, 1.0);
+                gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
 
             }`;
 
