@@ -19,7 +19,7 @@ const THREE_CAMERA_FOV = 60;
 export class Viewer {
 
     constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0],
-                splatAlphaRemovalThreshold = 0, controls = null, selfDrivenMode = true) {
+                scene = null, splatAlphaRemovalThreshold = 0, controls = null, selfDrivenMode = true) {
         this.rootElement = rootElement;
         this.cameraUp = new THREE.Vector3().fromArray(cameraUp);
         this.initialCameraPos = new THREE.Vector3().fromArray(initialCameraPos);
@@ -27,7 +27,7 @@ export class Viewer {
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.controls = controls;
         this.selfDrivenMode = selfDrivenMode;
-        this.scene = null;
+        this.scene = scene;
         this.camera = null;
         this.renderer = null;
         this.selfDrivenUpdateFunc = this.update.bind(this);
@@ -86,7 +86,7 @@ export class Viewer {
         this.camera.lookAt(this.initialCameraLookAt);
         this.camera.up.copy(this.cameraUp).normalize();
 
-        this.scene = new THREE.Scene();
+        this.scene = this.scene || new THREE.Scene();
 
         this.renderer = new THREE.WebGLRenderer({
             antialias: false
@@ -237,8 +237,6 @@ export class Viewer {
             .then((splatBuffer) => {
 
                 this.splatBuffer = splatBuffer;
-
-                this.addDebugMeshesToScene();
 
                 this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
                 const vertexCount = this.splatBuffer.getVertexCount();
@@ -550,20 +548,27 @@ export class Viewer {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
-        this.renderer.setRenderTarget(this.splatRenderTarget);
-        this.renderer.clear(true, true, true);
-        this.renderer.getContext().colorMask(false, false, false, false);
-        this.renderer.render(this.scene, this.camera);
-        this.renderer.getContext().colorMask(true, true, true, true);
-        this.renderer.render(this.splatMesh, this.camera);
+        // A more complex rendering sequence is require if want to include "normal" Three.js objects
+        // in the scene
+        if (this.scene.children.length > 0) {
+            this.renderer.setRenderTarget(this.splatRenderTarget);
+            this.renderer.clear(true, true, true);
+            this.renderer.getContext().colorMask(false, false, false, false);
+            this.renderer.render(this.scene, this.camera);
+            this.renderer.getContext().colorMask(true, true, true, true);
+            this.renderer.render(this.splatMesh, this.camera);
 
-        this.renderer.setRenderTarget(null);
-        this.renderer.clear(true, true, true);
+            this.renderer.setRenderTarget(null);
+            this.renderer.clear(true, true, true);
 
-        this.renderer.render(this.scene, this.camera);
-        this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
-        this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
-        this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);
+            this.renderer.render(this.scene, this.camera);
+            this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
+            this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
+            this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);
+        } else {
+            this.renderer.clear(true, true, true);
+            this.renderer.render(this.splatMesh, this.camera);
+        }
 
         // this.fps();
     }
