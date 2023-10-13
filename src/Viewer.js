@@ -548,8 +548,8 @@ export class Viewer {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
-        // A more complex rendering sequence is require if want to include "normal" Three.js objects
-        // in the scene
+        // A more complex rendering sequence is required if you want to render "normal" Three.js
+        // objects along with the splats
         if (this.scene.children.length > 0) {
             this.renderer.setRenderTarget(this.splatRenderTarget);
             this.renderer.clear(true, true, true);
