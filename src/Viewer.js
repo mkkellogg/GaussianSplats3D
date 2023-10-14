@@ -46,6 +46,7 @@ export class Viewer {
         this.octreeNodeMap = {};
 
         this.sortRunning = false;
+        this.running = false;
     }
 
     getRenderDimensions(outDimensions) {
@@ -58,13 +59,15 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
 
         return function() {
-            this.renderer.setSize(1, 1);
-            this.getRenderDimensions(renderDimensions);
-            this.camera.aspect = renderDimensions.x / renderDimensions.y;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(renderDimensions.x, renderDimensions.y);
-            this.updateSplatMeshUniforms();
-            this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
+            if (this.running) {
+                this.renderer.setSize(1, 1);
+                this.getRenderDimensions(renderDimensions);
+                this.camera.aspect = renderDimensions.x / renderDimensions.y;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+                this.updateSplatMeshUniforms();
+                this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
+            }
         };
 
     }();
@@ -514,6 +517,7 @@ export class Viewer {
     start() {
         if (this.selfDrivenMode) {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
+            this.running = true;
         } else {
             throw new Error('Cannot start viewer unless it is in self driven mode.');
         }
