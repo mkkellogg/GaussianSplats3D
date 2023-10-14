@@ -47,6 +47,7 @@ export class Viewer {
 
         this.sortRunning = false;
         this.running = false;
+        this.splatRenderingInitialized = false;
     }
 
     getRenderDimensions(outDimensions) {
@@ -59,12 +60,12 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
 
         return function() {
-            if (this.running) {
-                this.renderer.setSize(1, 1);
-                this.getRenderDimensions(renderDimensions);
-                this.camera.aspect = renderDimensions.x / renderDimensions.y;
-                this.camera.updateProjectionMatrix();
-                this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+            this.renderer.setSize(1, 1);
+            this.getRenderDimensions(renderDimensions);
+            this.camera.aspect = renderDimensions.x / renderDimensions.y;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+            if (this.splatRenderingInitialized) {
                 this.updateSplatMeshUniforms();
                 this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
             }
@@ -305,6 +306,7 @@ export class Viewer {
                         this.updateSplatMeshAttributes(attributeData.colors,
                                                        attributeData.centerCovariances, this.splatBuffer.getVertexCount());
                         this.updateView(true, true);
+                        this.splatRenderingInitialized = true;
                         resolve();
                     }
                 };
