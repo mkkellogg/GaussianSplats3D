@@ -548,7 +548,11 @@ export class Viewer {
         }
         this.controls.update();
         this.updateView();
+        this.render();
+        // this.fps();
+    }
 
+    render() {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
@@ -573,8 +577,6 @@ export class Viewer {
             this.renderer.clear(true, true, true);
             this.renderer.render(this.splatMesh, this.camera);
         }
-
-        // this.fps();
     }
 
     updateView = function() {
