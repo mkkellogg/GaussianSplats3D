@@ -1,4 +1,4 @@
-# 3D Gaussian splat viewer for for Three.js
+# 3D Gaussian splatting for Three.js
 
 This repository contains a Three.js-based implementation of [3D Gaussian Splatting for Real-Time Radiance Field Rendering](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/), a technique for the real-time visualization of real-world 3D scenes.
 
