@@ -24,7 +24,7 @@ export class Viewer {
         if (!params.initialCameraPos) params.initialCameraPos = [0, 10, 15];
         if (!params.initialCameraLookAt) params.initialCameraLookAt = [0, 0, 0];
         if (params.selfDrivenMode === undefined) params.selfDrivenMode = true;
-        if (params.useViewerControls === undefined) params.useViewerControls = true;
+        if (params.useBuiltInControls === undefined) params.useBuiltInControls = true;
         params.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold || 0;
 
         this.rootElement = params.rootElement;
@@ -38,7 +38,7 @@ export class Viewer {
         this.scene = params.scene;
         this.renderer = params.renderer;
         this.camera = params.camera;
-        this.useViewerControls = params.useViewerControls;
+        this.useBuiltInControls = params.useBuiltInControls;
         this.controls = null;
         this.selfDrivenMode = params.selfDrivenMode;
         this.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold;
@@ -100,7 +100,7 @@ export class Viewer {
         }
         this.setupRenderTargetCopyObjects();
 
-        if (this.useViewerControls) {
+        if (this.useBuiltInControls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
             this.controls.rotateSpeed = 0.5;
             this.controls.maxPolarAngle = (0.9 * Math.PI) / 2;

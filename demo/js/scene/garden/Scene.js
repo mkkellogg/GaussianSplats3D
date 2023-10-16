@@ -9,9 +9,7 @@ export class Scene {
             'cameraUp': [0, -1, -0.6],
             'initialCameraPos': [-1, -4, 6],
             'initialCameraLookAt': [0, 4, -0],
-            'selfDrivenMode': true,
-            'splatAlphaRemovalThreshold': 20,
-            'useViewerControls': true
+            'splatAlphaRemovalThreshold': 20
         });
         viewer.init();
         viewer.loadFile('assets/data/garden/garden.splat')

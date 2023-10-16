@@ -10,7 +10,6 @@ export class Scene {
             'cameraUp': [0, -1, -1.0],
             'initialCameraPos': [-3.3816, 1.96931, -1.71890],
             'initialCameraLookAt': [0.60910, 1.42099, 2.02511],
-            'selfDrivenMode': true,
             'splatAlphaRemovalThreshold': 30
         });
         viewer.init();

@@ -93,7 +93,7 @@ viewer.loadFile('<path to .ply or .splat file>')
 });
 ```
 
-The viewer allows for various levels of customization. You can control when its `update()` and `render()` methods are called by passing `false` for the `selfDrivenMode` parameter in the contructor. You can also use your own Three.js renderer and camera by passing those values to the viewer's constructor. The sample below shows all of these options:
+The viewer allows for various levels of customization via constructor parameters. You can control when its `update()` and `render()` methods are called by passing `false` for the `selfDrivenMode` parameter and then calling those methods whenever/wherever you decide is appropriate. You can tell the viewer to not use its built-in camera controls by passing `false` for the `useBuiltInControls` parameter. You can also use your own Three.js renderer and camera by passing those values to the viewer's constructor. The sample below shows all of these options:
 
 ```javascript
 const renderWidth = 800;
@@ -119,7 +119,7 @@ const viewer = new GaussianSplat3D.Viewer({
     'selfDrivenMode': false,
     'renderer': renderer,
     'camera': camera,
-    'useViewerControls': true
+    'useBuiltInControls': false
 });
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>')
