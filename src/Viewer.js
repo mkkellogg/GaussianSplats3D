@@ -18,20 +18,31 @@ const THREE_CAMERA_FOV = 60;
 
 export class Viewer {
 
-    constructor(rootElement = null, cameraUp = [0, 1, 0], initialCameraPos = [0, 10, 15], initialCameraLookAt = [0, 0, 0],
-                scene = null, splatAlphaRemovalThreshold = 0, controls = null, selfDrivenMode = true) {
-        this.rootElement = rootElement;
-        this.cameraUp = new THREE.Vector3().fromArray(cameraUp);
-        this.initialCameraPos = new THREE.Vector3().fromArray(initialCameraPos);
-        this.initialCameraLookAt = new THREE.Vector3().fromArray(initialCameraLookAt);
-        this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
-        this.controls = controls;
-        this.selfDrivenMode = selfDrivenMode;
-        this.scene = scene;
-        this.camera = null;
-        this.renderer = null;
-        this.selfDrivenUpdateFunc = this.update.bind(this);
-        this.resizeFunc = this.onResize.bind(this);
+    constructor(params = {}) {
+
+        if (!params.cameraUp) params.cameraUp = [0, 1, 0];
+        if (!params.initialCameraPos) params.initialCameraPos = [0, 10, 15];
+        if (!params.initialCameraLookAt) params.initialCameraLookAt = [0, 0, 0];
+        if (params.selfDrivenMode === undefined) params.selfDrivenMode = true;
+        if (params.useBuiltInControls === undefined) params.useBuiltInControls = true;
+        params.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold || 0;
+
+        this.rootElement = params.rootElement;
+        this.usingExternalCamera = params.camera ? true : false;
+        this.usingExternalRenderer = params.renderer ? true : false;
+
+        this.cameraUp = new THREE.Vector3().fromArray(params.cameraUp);
+        this.initialCameraPos = new THREE.Vector3().fromArray(params.initialCameraPos);
+        this.initialCameraLookAt = new THREE.Vector3().fromArray(params.initialCameraLookAt);
+
+        this.scene = params.scene;
+        this.renderer = params.renderer;
+        this.camera = params.camera;
+        this.useBuiltInControls = params.useBuiltInControls;
+        this.controls = null;
+        this.selfDrivenMode = params.selfDrivenMode;
+        this.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold;
+        this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
 
         this.sortWorker = null;
         this.vertexRenderCount = 0;
@@ -46,36 +57,23 @@ export class Viewer {
         this.octreeNodeMap = {};
 
         this.sortRunning = false;
-        this.running = false;
+        this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
+
     }
 
     getRenderDimensions(outDimensions) {
-        outDimensions.x = this.rootElement.offsetWidth;
-        outDimensions.y = this.rootElement.offsetHeight;
+        if (this.rootElement) {
+            outDimensions.x = this.rootElement.offsetWidth;
+            outDimensions.y = this.rootElement.offsetHeight;
+        } else {
+            this.renderer.getSize(outDimensions);
+        }
     }
-
-    onResize = function() {
-
-        const renderDimensions = new THREE.Vector2();
-
-        return function() {
-            this.renderer.setSize(1, 1);
-            this.getRenderDimensions(renderDimensions);
-            this.camera.aspect = renderDimensions.x / renderDimensions.y;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(renderDimensions.x, renderDimensions.y);
-            if (this.splatRenderingInitialized) {
-                this.updateSplatMeshUniforms();
-                this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
-            }
-        };
-
-    }();
 
     init() {
 
-        if (!this.rootElement) {
+        if (!this.rootElement && !this.usingExternalRenderer) {
             this.rootElement = document.createElement('div');
             this.rootElement.style.width = '100%';
             this.rootElement.style.height = '100%';
@@ -85,23 +83,24 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
         this.getRenderDimensions(renderDimensions);
 
-        this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
-        this.camera.position.copy(this.initialCameraPos);
-        this.camera.lookAt(this.initialCameraLookAt);
-        this.camera.up.copy(this.cameraUp).normalize();
+        if (!this.usingExternalCamera) {
+            this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
+            this.camera.position.copy(this.initialCameraPos);
+            this.camera.lookAt(this.initialCameraLookAt);
+            this.camera.up.copy(this.cameraUp).normalize();
+        }
 
         this.scene = this.scene || new THREE.Scene();
 
-        this.renderer = new THREE.WebGLRenderer({
-            antialias: false
-        });
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.setSize(renderDimensions.x, renderDimensions.y);
-        this.updateSplatRenderTargetForRenderDimensions(renderDimensions);
+        if (!this.usingExternalRenderer) {
+            this.renderer = new THREE.WebGLRenderer({
+                antialias: false
+            });
+            this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+        }
         this.setupRenderTargetCopyObjects();
 
-        if (!this.controls) {
+        if (this.useBuiltInControls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
             this.controls.rotateSpeed = 0.5;
             this.controls.maxPolarAngle = (0.9 * Math.PI) / 2;
@@ -110,19 +109,25 @@ export class Viewer {
             this.controls.target.copy(this.initialCameraLookAt);
         }
 
-        window.addEventListener('resize', this.resizeFunc, false);
+        if (!this.usingExternalRenderer) {
+            const resizeObserver = new ResizeObserver(() => {
+                this.getRenderDimensions(renderDimensions);
+                this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+            });
+            resizeObserver.observe(this.rootElement);
+            this.rootElement.appendChild(this.renderer.domElement);
+        }
 
-        this.rootElement.appendChild(this.renderer.domElement);
     }
 
-    updateSplatRenderTargetForRenderDimensions(renderDimensions) {
-        this.splatRenderTarget = new THREE.WebGLRenderTarget(renderDimensions.x, renderDimensions.y, {
+    updateSplatRenderTargetForRenderDimensions(width, height) {
+        this.splatRenderTarget = new THREE.WebGLRenderTarget(width, height, {
             format: THREE.RGBAFormat,
             stencilBuffer: false,
             depthBuffer: true,
 
         });
-        this.splatRenderTarget.depthTexture = new THREE.DepthTexture(renderDimensions.x, renderDimensions.y);
+        this.splatRenderTarget.depthTexture = new THREE.DepthTexture(width, height);
         this.splatRenderTarget.depthTexture.format = THREE.DepthFormat;
         this.splatRenderTarget.depthTexture.type = THREE.UnsignedIntType;
     }
@@ -217,7 +222,7 @@ export class Viewer {
             if (vertexCount > 0) {
                 this.getRenderDimensions(renderDimensions);
                 this.splatMesh.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
-                this.cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(THREE_CAMERA_FOV / 2.0 * THREE.MathUtils.DEG2RAD);
+                this.cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
                 this.splatMesh.material.uniforms.focal.value.set(this.cameraFocalLength, this.cameraFocalLength);
                 this.splatMesh.material.uniformsNeedUpdate = true;
             }
@@ -327,64 +332,41 @@ export class Viewer {
 
     createDebugMeshes(renderOrder) {
         const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-
         const debugMeshRoot = new THREE.Object3D();
 
-        let sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0xff0000));
-        sphereMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(sphereMesh);
-        sphereMesh.position.set(-50, 0, 0);
+        const createMesh = (color, position) => {
+            let sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(color));
+            sphereMesh.renderOrder = renderOrder;
+            debugMeshRoot.add(sphereMesh);
+            sphereMesh.position.fromArray(position);
+        };
 
-        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0xff0000));
-        sphereMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(sphereMesh);
-        sphereMesh.position.set(50, 0, 0);
-
-        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0x00ff00));
-        sphereMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(sphereMesh);
-        sphereMesh.position.set(0, 0, -50);
-
-        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0x00ff00));
-        sphereMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(sphereMesh);
-        sphereMesh.position.set(0, 0, 50);
-
-        sphereMesh = new THREE.Mesh(sphereGeometry, this.buildDebugMaterial(0xffaa00));
-        sphereMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(sphereMesh);
-        sphereMesh.position.set(5, 0, 5);
+        createMesh(0xff0000, [-50, 0, 0]);
+        createMesh(0xff0000, [50, 0, 0]);
+        createMesh(0x00ff00, [0, 0, -50]);
+        createMesh(0x00ff00, [0, 0, 50]);
+        createMesh(0xffaa00, [5, 0, 5]);
 
         return debugMeshRoot;
     }
 
     createSecondaryDebugMeshes(renderOrder) {
         const boxGeometry = new THREE.BoxGeometry(3, 3, 3);
-
         const debugMeshRoot = new THREE.Object3D();
 
-        let separation = 10;
         let boxColor = 0xBBBBBB;
+        const createMesh = (position) => {
+            let boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
+            boxMesh.renderOrder = renderOrder;
+            debugMeshRoot.add(boxMesh);
+            boxMesh.position.fromArray(position);
+        };
 
-        let boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
-        boxMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(boxMesh);
-        boxMesh.position.set(-separation, 0, -separation);
-
-        boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
-        boxMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(boxMesh);
-        boxMesh.position.set(-separation, 0, separation);
-
-        boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
-        boxMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(boxMesh);
-        boxMesh.position.set(separation, 0, -separation);
-
-        boxMesh = new THREE.Mesh(boxGeometry, this.buildDebugMaterial(boxColor));
-        boxMesh.renderOrder = renderOrder;
-        debugMeshRoot.add(boxMesh);
-        boxMesh.position.set(separation, 0, separation);
+        let separation = 10;
+        createMesh([-separation, 0, -separation]);
+        createMesh([-separation, 0, separation]);
+        createMesh([separation, 0, -separation]);
+        createMesh([separation, 0, separation]);
 
         return debugMeshRoot;
     }
@@ -445,6 +427,7 @@ export class Viewer {
         const tempVector = new THREE.Vector3();
         const tempMatrix4 = new THREE.Matrix4();
         const renderDimensions = new THREE.Vector3();
+        const forward = new THREE.Vector3(0, 0, -1);
 
         const tempMax = new THREE.Vector3();
         const nodeSize = (node) => {
@@ -456,8 +439,8 @@ export class Viewer {
         return function(gatherAllNodes) {
 
             this.getRenderDimensions(renderDimensions);
-            const fovXOver2 = Math.atan(renderDimensions.x / (2.0 * this.cameraFocalLength));
-            const fovYOver2 = Math.atan(renderDimensions.y / (2.0 * this.cameraFocalLength));
+            const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / this.cameraFocalLength);
+            const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / this.cameraFocalLength);
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
             tempMatrix4.copy(this.camera.matrixWorld).invert();
@@ -474,9 +457,9 @@ export class Viewer {
 
                 tempVectorYZ.copy(tempVector).setX(0).normalize();
                 tempVectorXZ.copy(tempVector).setY(0).normalize();
-                tempVector.set(0, 0, -1);
-                const cameraAngleXZDot = tempVector.dot(tempVectorXZ);
-                const cameraAngleYZDot = tempVector.dot(tempVectorYZ);
+
+                const cameraAngleXZDot = forward.dot(tempVectorXZ);
+                const cameraAngleYZDot = forward.dot(tempVectorYZ);
 
                 const ns = nodeSize(node);
                 const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .4);
@@ -505,7 +488,6 @@ export class Viewer {
                 if (shouldSort) {
                     this.vertexSortCount += node.data.indexes.length;
                 }
-
                 const windowSizeInts = node.data.indexes.length;
                 let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);
@@ -519,7 +501,7 @@ export class Viewer {
     start() {
         if (this.selfDrivenMode) {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
-            this.running = true;
+            this.selfDrivenModeRunning = true;
         } else {
             throw new Error('Cannot start viewer unless it is in self driven mode.');
         }
@@ -544,13 +526,42 @@ export class Viewer {
 
     }();
 
-    update() {
+    updateForRendererSizeChanges = function() {
+
+        const lastRendererSize = new THREE.Vector2();
+        const currentRendererSize = new THREE.Vector2();
+
+        return function() {
+            this.renderer.getSize(currentRendererSize);
+            if (currentRendererSize.x !== lastRendererSize.x || currentRendererSize.y !== lastRendererSize.y) {
+                if (!this.usingExternalCamera) {
+                    this.camera.aspect = currentRendererSize.x / currentRendererSize.y;
+                    this.camera.updateProjectionMatrix();
+                }
+                if (this.splatRenderingInitialized) {
+                    this.updateSplatMeshUniforms();
+                    this.updateSplatRenderTargetForRenderDimensions(currentRendererSize.x, currentRendererSize.y);
+                }
+                lastRendererSize.copy(currentRendererSize);
+            }
+        };
+
+    }();
+
+    selfDrivenUpdate() {
         if (this.selfDrivenMode) {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
-        this.controls.update();
-        this.updateView();
+        this.update();
         this.render();
+    }
+
+    update() {
+        if (this.controls) {
+            this.controls.update();
+        }
+        this.updateView();
+        this.updateForRendererSizeChanges();
         // this.fps();
     }
 
@@ -584,7 +595,6 @@ export class Viewer {
     updateView = function() {
 
         const tempMatrix = new THREE.Matrix4();
-        const tempVector2 = new THREE.Vector2();
         const cameraPositionArray = [];
         const lastSortViewDir = new THREE.Vector3(0, 0, -1);
         const sortViewDir = new THREE.Vector3(0, 0, -1);
@@ -594,11 +604,13 @@ export class Viewer {
         return function(force = false, gatherAllNodes = false) {
             if (!force) {
                 sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
-                if (sortViewDir.dot(lastSortViewDir) > 0.95) return;
-                if (sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length() < 1.0) return;
+                let needsRefreshForRotation = false;
+                let needsRefreshForPosition = false;
+                if (sortViewDir.dot(lastSortViewDir) <= 0.95) needsRefreshForRotation = true;
+                if (sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length() >= 1.0) needsRefreshForPosition = true;
+                if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
 
-            this.getRenderDimensions(tempVector2);
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(this.camera.projectionMatrix);
             cameraPositionArray[0] = this.camera.position.x;
