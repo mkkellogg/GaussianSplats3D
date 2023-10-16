@@ -45,10 +45,11 @@ The demo scene data is available here: [https://projects.markkellogg.org/downloa
 To run the built-in viewer:
 
 ```javascript
-const cameraUp =  [0, -1, -1.0];
-const initialCameraPos = [-3.3816, 1.96931, -1.71890];
-const initialCameraLookAt = [0.60910, 1.42099, 2.02511];
-const viewer = new GaussianSplat3D.Viewer(null, cameraUp, initialCameraPos, initialCameraLookAt);
+const viewer = new GaussianSplat3D.Viewer({
+  'cameraUp': [0, -1, -0.6],
+  'initialCameraPos': [-1, -4, 6],
+  'initialCameraLookAt': [0, 4, -0]
+});
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>')
 .then(() => {
@@ -79,5 +80,58 @@ const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color'
 scene.add(boxMesh);
 boxMesh.position.set(3, 2, 2);
 
-const viewer = new GaussianSplat3D.Viewer(null, cameraUp, initialCameraPos, initialCameraLookAt, scene);
+const viewer = new GaussianSplat3D.Viewer({
+  'scene': scene,
+  'cameraUp': [0, -1, -0.6],
+  'initialCameraPos': [-1, -4, 6],
+  'initialCameraLookAt': [0, 4, -0]
+});
+viewer.init();
+viewer.loadFile('<path to .ply or .splat file>')
+.then(() => {
+    viewer.start();
+});
+```
+
+The viewer allows for various levels of customization. You can control when its `update()` and `render()` methods are called by passing `false` for the `selfDrivenMode` parameter in the contructor. You can also use your own Three.js renderer and camera by passing those values to the viewer's constructor. The sample below shows all of these options:
+
+```javascript
+const renderWidth = 800;
+const renderHeight = 600;
+
+const rootElement = document.createElement('div');
+rootElement.style.width = renderWidth + 'px';
+rootElement.style.height = renderHeight + 'px';
+document.body.appendChild(rootElement);
+
+const renderer = new THREE.WebGLRenderer({
+    antialias: false
+});
+renderer.setSize(renderWidth, renderHeight);
+rootElement.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
+camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
+camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
+camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
+
+const viewer = new GaussianSplat3D.Viewer({
+    'selfDrivenMode': false,
+    'renderer': renderer,
+    'camera': camera,
+    'useViewerControls': true
+});
+viewer.init();
+viewer.loadFile('<path to .ply or .splat file>')
+.then(() => {
+    requestAnimationFrame(update);
+});
+```
+Since `selfDrivenMode` is false, it is up to the developer to call the `update()` and `render()` methods on the `Viewer` class:
+```javascript
+function update() {
+    requestAnimationFrame(update);
+    viewer.update();
+    viewer.render();
+}
 ```
