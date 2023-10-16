@@ -1,16 +1,17 @@
 # 3D Gaussian splatting for Three.js
 
-This repository contains a Three.js-based implementation of [3D Gaussian Splatting for Real-Time Radiance Field Rendering](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/), a technique for the real-time visualization of real-world 3D scenes.
+This repository contains a Three.js-based implementation of [3D Gaussian Splatting for Real-Time Radiance Field Rendering](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/), a technique for the real-time visualization of real-world 3D scenes. Their project was CUDA-based and I wanted to build a viewer that was accessible via the web.
 
-For the initial implementation, I used Kevin Kwok's ([https://github.com/antimatter15](https://github.com/antimatter15)) WebGL implementation [https://github.com/antimatter15/splat](https://github.com/antimatter15/splat) as a starting point.
+When I started, web-based viewers were already available -- A WebGL-based viewer from [antimatter15](https://github.com/antimatter15/splat) and a WebGPU viewer from [cvlab-epfl](https://github.com/cvlab-epfl/gaussian-splatting-web) -- However no Three.js version existed. I used those versions as a starting point for my initial implementation, but as of now this project contains all my own code.
 
-As of now, all of the code has been rewritten:
+Highlights:
  - Organized into ES modules
  - Rendering is done entirely through Three.js
- - The sorting algorithm is now a C++ counting sort contained in a WASM module.
- - Rasterization code now documented to describe 2D covariance computations as well as computations of corresponding eigen-values and eigen-vectors
+ - The sorting algorithm is a C++ counting sort contained in a WASM module.
+ - Rasterization code is documented to describe 2D covariance computations as well as computations of corresponding eigen-values and eigen-vectors
  - Scene is partitioned via octree that is used to cull non-visible splats prior to sorting
  - Splat data (position, covariance, color) is stored via textures so that only splat indexes are transferred between host and GPU
+ - Allows a Three.js scene or object group to be rendered along with the splats
 
 Online demo: [https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php](https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php)
 
