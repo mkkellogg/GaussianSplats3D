@@ -7,7 +7,7 @@ export class Scene {
     load() {
         const viewer = new GaussianSplat3D.Viewer({
             'cameraUp': [0, -1, -0.6],
-            'initialCameraPos': [-1, -4, 6],
+            'initialCameraPosition': [-1, -4, 6],
             'initialCameraLookAt': [0, 4, -0],
             'splatAlphaRemovalThreshold': 20
         });

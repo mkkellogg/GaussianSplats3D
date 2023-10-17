@@ -48,7 +48,7 @@ To run the built-in viewer:
 ```javascript
 const viewer = new GaussianSplat3D.Viewer({
   'cameraUp': [0, -1, -0.6],
-  'initialCameraPos': [-1, -4, 6],
+  'initialCameraPosition': [-1, -4, 6],
   'initialCameraLookAt': [0, 4, -0]
 });
 viewer.init();
@@ -84,7 +84,7 @@ boxMesh.position.set(3, 2, 2);
 const viewer = new GaussianSplat3D.Viewer({
   'scene': scene,
   'cameraUp': [0, -1, -0.6],
-  'initialCameraPos': [-1, -4, 6],
+  'initialCameraPosition': [-1, -4, 6],
   'initialCameraLookAt': [0, 4, -0]
 });
 viewer.init();

@@ -21,7 +21,7 @@ export class Viewer {
     constructor(params = {}) {
 
         if (!params.cameraUp) params.cameraUp = [0, 1, 0];
-        if (!params.initialCameraPos) params.initialCameraPos = [0, 10, 15];
+        if (!params.initialCameraPosition) params.initialCameraPosition = [0, 10, 15];
         if (!params.initialCameraLookAt) params.initialCameraLookAt = [0, 0, 0];
         if (params.selfDrivenMode === undefined) params.selfDrivenMode = true;
         if (params.useBuiltInControls === undefined) params.useBuiltInControls = true;
@@ -32,7 +32,7 @@ export class Viewer {
         this.usingExternalRenderer = params.renderer ? true : false;
 
         this.cameraUp = new THREE.Vector3().fromArray(params.cameraUp);
-        this.initialCameraPos = new THREE.Vector3().fromArray(params.initialCameraPos);
+        this.initialCameraPosition = new THREE.Vector3().fromArray(params.initialCameraPosition);
         this.initialCameraLookAt = new THREE.Vector3().fromArray(params.initialCameraLookAt);
 
         this.scene = params.scene;
@@ -85,7 +85,7 @@ export class Viewer {
 
         if (!this.usingExternalCamera) {
             this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
-            this.camera.position.copy(this.initialCameraPos);
+            this.camera.position.copy(this.initialCameraPosition);
             this.camera.lookAt(this.initialCameraLookAt);
             this.camera.up.copy(this.cameraUp).normalize();
         }
