@@ -194,10 +194,10 @@ export class Viewer {
         centerCovarianceTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.centerCovarianceTexture.value = centerCovarianceTexture;
 
-        const paddedColors = new Float32Array(COLOR_DATA_TEXTURE_WIDTH * COLOR_DATA_TEXTURE_HEIGHT * ELEMENTS_PER_TEXEL);
+        const paddedColors = new Uint8Array(COLOR_DATA_TEXTURE_WIDTH * COLOR_DATA_TEXTURE_HEIGHT * ELEMENTS_PER_TEXEL);
         paddedColors.set(colors);
         const colorTexture = new THREE.DataTexture(paddedColors, COLOR_DATA_TEXTURE_WIDTH,
-                                                   COLOR_DATA_TEXTURE_HEIGHT, THREE.RGBAFormat, THREE.FloatType);
+                                                   COLOR_DATA_TEXTURE_HEIGHT, THREE.RGBAFormat, THREE.UnsignedByteType);
         colorTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.colorTexture.value = colorTexture;
 
@@ -871,8 +871,8 @@ export class Viewer {
 
         const splatArray = new Float32Array(splatBuffer.getBufferData());
         const pCovarianceArray = new Float32Array(splatBuffer.getPrecomputedCovarianceBufferData());
-        const pColorArray = new Float32Array(splatBuffer.getPrecomputedColorBufferData());
-        const color = new Float32Array(vertexCount * 4);
+        const pColorArray = new Uint8Array(splatBuffer.getPrecomputedColorBufferData());
+        const color = new Uint8Array(vertexCount * 4);
         const centerCov = new Float32Array(vertexCount * 9);
 
         for (let i = 0; i < vertexCount; i++) {
