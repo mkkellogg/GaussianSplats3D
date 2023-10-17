@@ -172,11 +172,15 @@ export class Viewer {
         });
         this.renderTargetCopyMaterial.extensions.fragDepth = true;
         this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
-        this.renderTargetCopyCamera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
+        this.renderTargetCopyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     }
 
     updateSplatMeshAttributes(colors, centerCovariances, vertexCount) {
         const ELEMENTS_PER_TEXEL = 4;
+
+        const rgToFloat = (rg) => {
+            return rg[0] + rg[1]/65025.0;
+        };
 
         const geometry = this.splatMesh.geometry;
 
@@ -194,10 +198,20 @@ export class Viewer {
         centerCovarianceTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.centerCovarianceTexture.value = centerCovarianceTexture;
 
-        const paddedColors = new Uint8Array(COLOR_DATA_TEXTURE_WIDTH * COLOR_DATA_TEXTURE_HEIGHT * ELEMENTS_PER_TEXEL);
-        paddedColors.set(colors);
-        const colorTexture = new THREE.DataTexture(paddedColors, COLOR_DATA_TEXTURE_WIDTH,
-                                                   COLOR_DATA_TEXTURE_HEIGHT, THREE.RGBAFormat, THREE.UnsignedByteType);
+        const encodedColors = new Float32Array(COLOR_DATA_TEXTURE_WIDTH * COLOR_DATA_TEXTURE_HEIGHT);
+        const tempRG = [0, 0];
+        for (let c = 0; c < vertexCount; c++) {
+            const colorsBase = c * 4;
+            const encodedColorsBase = c * 2;
+            tempRG[0] = Math.min(colors[colorsBase], 254) / 255.0;
+            tempRG[1] = Math.min(colors[colorsBase + 1], 254) / 255.0;
+            encodedColors[encodedColorsBase] = rgToFloat(tempRG);
+            tempRG[0] = Math.min(colors[colorsBase + 2], 254) / 255.0;
+            tempRG[1] = Math.min(colors[colorsBase + 3], 254) / 255.0;
+            encodedColors[encodedColorsBase + 1] = rgToFloat(tempRG);
+        }
+        const colorTexture = new THREE.DataTexture(encodedColors, COLOR_DATA_TEXTURE_WIDTH,
+                                                   COLOR_DATA_TEXTURE_HEIGHT, THREE.RedFormat, THREE.FloatType);
         colorTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.colorTexture.value = colorTexture;
 
@@ -640,7 +654,7 @@ export class Viewer {
 
         const vertexShaderSource = `
             #include <common>
-            precision mediump float;
+            precision highp float;
 
             attribute uint splatIndex;
             attribute vec4 splatColor;
@@ -658,6 +672,15 @@ export class Viewer {
             varying vec2 vUv;
 
             varying vec2 vPosition;
+
+            vec2 floatToRG(float f) {
+                vec2 kEncodeMul = vec2(1.0f, 65025.0f);
+                float kEncodeBit = 1.0f/255.0f;
+                vec2 color = kEncodeMul * f;
+                color = fract(color);
+                color.x -= color.y * kEncodeBit;
+                return color;
+            }
 
             vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
                 vec2 samplerUV = vec2(0.0, 0.0);
@@ -677,11 +700,10 @@ export class Viewer {
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.w, sampledCenterCovarianceB.xy);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.zw, sampledCenterCovarianceC.r);
 
-                vec2 colorUV = vec2(0.0, 0.0);
-                float colorD = float(splatIndex * uint(4)) / 4.0 / colorTextureSize.x;
-                colorUV.y = float(int(colorD)) / colorTextureSize.y;
-                colorUV.x = fract(colorD);
-                vColor = texture2D(colorTexture, colorUV);
+                vec4 sampledColorRG = texture2D(colorTexture, getDataUV(2, 0, colorTextureSize));
+                vec4 sampledColorBA = texture2D(colorTexture, getDataUV(2, 1, colorTextureSize));
+
+                vColor = vec4(floatToRG(sampledColorRG.r), floatToRG(sampledColorBA.r));
                 vPosition = position.xy * 2.0;
 
                 vec4 viewCenter = viewMatrix * vec4(splatCenter, 1.0);
@@ -751,7 +773,7 @@ export class Viewer {
 
         const fragmentShaderSource = `
             #include <common>
-            precision mediump float;
+            precision highp float;
 
             uniform vec3 debugColor;
 
