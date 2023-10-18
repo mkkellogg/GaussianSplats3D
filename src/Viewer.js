@@ -184,20 +184,20 @@ export class Viewer {
 
         const geometry = this.splatMesh.geometry;
 
-        const covariances = new Uint16Array(COVARIANCE_DATA_TEXTURE_WIDTH *
+        const covariances = new Float32Array(COVARIANCE_DATA_TEXTURE_WIDTH *
                                             COVARIANCE_DATA_TEXTURE_HEIGHT * 2);
         for (let c = 0; c < vertexCount; c++) {
             const centerCovarianceBase = c * 9;
             const covariancesBase = c * 6;
-            covariances[covariancesBase] = toHalf(centerCovariances[centerCovarianceBase + 3]);
-            covariances[covariancesBase + 1] = toHalf(centerCovariances[centerCovarianceBase + 4]);
-            covariances[covariancesBase + 2] = toHalf(centerCovariances[centerCovarianceBase + 5]);
-            covariances[covariancesBase + 3] = toHalf(centerCovariances[centerCovarianceBase + 6]);
-            covariances[covariancesBase + 4] = toHalf(centerCovariances[centerCovarianceBase + 7]);
-            covariances[covariancesBase + 5] = toHalf(centerCovariances[centerCovarianceBase + 8]);
+            covariances[covariancesBase] = centerCovariances[centerCovarianceBase + 3];
+            covariances[covariancesBase + 1] = centerCovariances[centerCovarianceBase + 4];
+            covariances[covariancesBase + 2] = centerCovariances[centerCovarianceBase + 5];
+            covariances[covariancesBase + 3] = centerCovariances[centerCovarianceBase + 6];
+            covariances[covariancesBase + 4] = centerCovariances[centerCovarianceBase + 7];
+            covariances[covariancesBase + 5] = centerCovariances[centerCovarianceBase + 8];
         }
         const covarianceTexture = new THREE.DataTexture(covariances, COVARIANCE_DATA_TEXTURE_WIDTH,
-                                                        COVARIANCE_DATA_TEXTURE_HEIGHT, THREE.RGFormat, THREE.HalfFloatType);
+                                                        COVARIANCE_DATA_TEXTURE_HEIGHT, THREE.RGFormat, THREE.FloatType);
         covarianceTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.covarianceTexture.value = covarianceTexture;
 
