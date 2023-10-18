@@ -6,13 +6,8 @@ import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Octree } from './octree/Octree.js';
 import { createSortWorker } from './worker/SortWorker.js';
+import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 import { Constants } from './Constants.js';
-
-const CENTER_COVARIANCE_DATA_TEXTURE_WIDTH = 4096;
-const CENTER_COVARIANCE_DATA_TEXTURE_HEIGHT = 4096;
-
-const COLOR_DATA_TEXTURE_WIDTH = 4096;
-const COLOR_DATA_TEXTURE_HEIGHT = 2048;
 
 const THREE_CAMERA_FOV = 60;
 
@@ -94,7 +89,8 @@ export class Viewer {
 
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
-                antialias: false
+                antialias: false,
+                precision: 'highp'
             });
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
         }
@@ -172,34 +168,47 @@ export class Viewer {
         });
         this.renderTargetCopyMaterial.extensions.fragDepth = true;
         this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
-        this.renderTargetCopyCamera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
+        this.renderTargetCopyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     }
 
-    updateSplatMeshAttributes(colors, centerCovariances, vertexCount) {
-        const ELEMENTS_PER_TEXEL = 4;
+    updateSplatMeshAttributes(colors, centers, covariances, vertexCount) {
+
+        const covariancesTextureSize = new THREE.Vector2(4096, 1024);
+        while (covariancesTextureSize.x * covariancesTextureSize.y * 2 < vertexCount * 6) covariancesTextureSize.y *= 2;
+
+        const centersColorsTextureSize = new THREE.Vector2(4096, 1024);
+        while (centersColorsTextureSize.x * centersColorsTextureSize.y * 2 < vertexCount * 4) centersColorsTextureSize.y *= 2;
 
         const geometry = this.splatMesh.geometry;
 
-        const paddedCenterCovariances = new Float32Array(CENTER_COVARIANCE_DATA_TEXTURE_WIDTH *
-                                                         CENTER_COVARIANCE_DATA_TEXTURE_HEIGHT * ELEMENTS_PER_TEXEL);
-        for (let c = 0; c < vertexCount; c++) {
-            let destOffset = c * 12;
-            let srcOffset = c * 9;
-            for (let i = 0; i < 9; i++) {
-                paddedCenterCovariances[destOffset + i] = centerCovariances[srcOffset + i];
-            }
-        }
-        const centerCovarianceTexture = new THREE.DataTexture(paddedCenterCovariances, CENTER_COVARIANCE_DATA_TEXTURE_WIDTH,
-                                                              CENTER_COVARIANCE_DATA_TEXTURE_HEIGHT, THREE.RGBAFormat, THREE.FloatType);
-        centerCovarianceTexture.needsUpdate = true;
-        this.splatMesh.material.uniforms.centerCovarianceTexture.value = centerCovarianceTexture;
+        const paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * 2);
+        paddedCovariances.set(covariances);
+        const covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
+                                                         covariancesTextureSize.y, THREE.RGFormat, THREE.FloatType);
+        covariancesTexture.needsUpdate = true;
+        this.splatMesh.material.uniforms.covariancesTexture.value = covariancesTexture;
+        this.splatMesh.material.uniforms.covariancesTextureSize.value.copy(covariancesTextureSize);
+        console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
 
-        const paddedColors = new Float32Array(COLOR_DATA_TEXTURE_WIDTH * COLOR_DATA_TEXTURE_HEIGHT * ELEMENTS_PER_TEXEL);
-        paddedColors.set(colors);
-        const colorTexture = new THREE.DataTexture(paddedColors, COLOR_DATA_TEXTURE_WIDTH,
-                                                   COLOR_DATA_TEXTURE_HEIGHT, THREE.RGBAFormat, THREE.FloatType);
-        colorTexture.needsUpdate = true;
-        this.splatMesh.material.uniforms.colorTexture.value = colorTexture;
+        const centerColors = new Uint32Array(centersColorsTextureSize.x * centersColorsTextureSize.y * 2);
+        for (let c = 0; c < vertexCount; c++) {
+            const colorsBase = c * 4;
+            const centersBase = c * 3;
+            const centerColorsBase = c * 4;
+            centerColors[centerColorsBase] = rgbaToInteger(colors[colorsBase], colors[colorsBase + 1],
+                                                           colors[colorsBase + 2], colors[colorsBase + 3]);
+            centerColors[centerColorsBase + 1] = uintEncodedFloat(centers[centersBase]);
+            centerColors[centerColorsBase + 2] = uintEncodedFloat(centers[centersBase + 1]);
+            centerColors[centerColorsBase + 3] = uintEncodedFloat(centers[centersBase + 2]);
+        }
+        const centersColorsTexture = new THREE.DataTexture(centerColors, centersColorsTextureSize.x,
+                                                           centersColorsTextureSize.y, THREE.RGIntegerFormat, THREE.UnsignedIntType);
+        centersColorsTexture.internalFormat = 'RG32UI';
+        centersColorsTexture.needsUpdate = true;
+        this.splatMesh.material.uniforms.centersColorsTexture.value = centersColorsTexture;
+        this.splatMesh.material.uniforms.centersColorsTextureSize.value.copy(centersColorsTextureSize);
+        console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
+
 
         geometry.instanceCount = vertexCount;
     }
@@ -308,8 +317,8 @@ export class Viewer {
                         console.log('Sorting web worker ready.');
                         const attributeData = this.getAttributeDataFromSplatBuffer(this.splatBuffer);
                         this.updateSplatMeshIndexes(this.outIndexArray, this.splatBuffer.getVertexCount());
-                        this.updateSplatMeshAttributes(attributeData.colors,
-                                                       attributeData.centerCovariances, this.splatBuffer.getVertexCount());
+                        this.updateSplatMeshAttributes(attributeData.colors, attributeData.centers,
+                                                       attributeData.covariances, this.splatBuffer.getVertexCount());
                         this.updateView(true, true);
                         this.splatRenderingInitialized = true;
                         resolve();
@@ -639,49 +648,59 @@ export class Viewer {
     buildMaterial() {
 
         const vertexShaderSource = `
+            precision highp float;
             #include <common>
-            precision mediump float;
 
             attribute uint splatIndex;
             attribute vec4 splatColor;
             attribute mat3 splatCenterCovariance;
 
-            uniform sampler2D centerCovarianceTexture;
-            uniform sampler2D colorTexture;
+            uniform sampler2D covariancesTexture;
+            uniform highp usampler2D centersColorsTexture;
             uniform vec2 focal;
             uniform vec2 viewport;
 
-            uniform vec2 centerCovarianceTextureSize;
-            uniform vec2 colorTextureSize;
+            uniform vec2 covariancesTextureSize;
+            uniform vec2 centersColorsTextureSize;
 
             varying vec4 vColor;
             varying vec2 vUv;
 
             varying vec2 vPosition;
 
+            const vec4 encodeNorm4 = vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0);
+            const uvec4 mask4 = uvec4(uint(0x000000FF), uint(0x0000FF00), uint(0x00FF0000), uint(0xFF000000));
+            const uvec4 shift4 = uvec4(0, 8, 16, 24);
+            vec4 uintToRGBAVec (uint u) {
+               uvec4 urgba = mask4 & u;
+               urgba = urgba >> shift4;
+               vec4 rgba = vec4(urgba) * encodeNorm4;
+               return rgba;
+            }
+
             vec2 getDataUV(in int stride, in int offset, in vec2 dimensions) {
                 vec2 samplerUV = vec2(0.0, 0.0);
-                float covarianceD = float(splatIndex * uint(stride) + uint(offset)) / dimensions.x;
-                samplerUV.y = float(floor(covarianceD)) / dimensions.y;
-                samplerUV.x = fract(covarianceD);
+                float d = float(splatIndex * uint(stride) + uint(offset)) / dimensions.x;
+                samplerUV.y = float(floor(d)) / dimensions.y;
+                samplerUV.x = fract(d);
                 return samplerUV;
             }
 
             void main () {
 
-                vec4 sampledCenterCovarianceA = texture2D(centerCovarianceTexture, getDataUV(3, 0, centerCovarianceTextureSize));
-                vec4 sampledCenterCovarianceB = texture2D(centerCovarianceTexture, getDataUV(3, 1, centerCovarianceTextureSize));
-                vec4 sampledCenterCovarianceC = texture2D(centerCovarianceTexture, getDataUV(3, 2, centerCovarianceTextureSize));
-             
-                vec3 splatCenter = sampledCenterCovarianceA.xyz;
-                vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.w, sampledCenterCovarianceB.xy);
-                vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.zw, sampledCenterCovarianceC.r);
+                vec2 sampledCenterCovarianceA = texture2D(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
+                vec2 sampledCenterCovarianceB = texture2D(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
+                vec2 sampledCenterCovarianceC = texture2D(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
 
-                vec2 colorUV = vec2(0.0, 0.0);
-                float colorD = float(splatIndex * uint(4)) / 4.0 / colorTextureSize.x;
-                colorUV.y = float(int(colorD)) / colorTextureSize.y;
-                colorUV.x = fract(colorD);
-                vColor = texture2D(colorTexture, colorUV);
+                vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.rg, sampledCenterCovarianceB.r);
+                vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.g, sampledCenterCovarianceC.rg);
+
+                uvec2 sampledCenterColorA = texture(centersColorsTexture, getDataUV(2, 0, centersColorsTextureSize)).rg;
+                uvec2 sampledCenterColorB = texture(centersColorsTexture, getDataUV(2, 1, centersColorsTextureSize)).rg;
+
+                vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColorA.g, sampledCenterColorB.rg));
+                vColor = uintToRGBAVec(sampledCenterColorA.r);
+
                 vPosition = position.xy * 2.0;
 
                 vec4 viewCenter = viewMatrix * vec4(splatCenter, 1.0);
@@ -750,8 +769,8 @@ export class Viewer {
             }`;
 
         const fragmentShaderSource = `
+            precision highp float;
             #include <common>
-            precision mediump float;
 
             uniform vec3 debugColor;
 
@@ -771,11 +790,11 @@ export class Viewer {
             }`;
 
         const uniforms = {
-            'centerCovarianceTexture': {
+            'covariancesTexture': {
                 'type': 't',
                 'value': null
             },
-            'colorTexture': {
+            'centersColorsTexture': {
                 'type': 't',
                 'value': null
             },
@@ -791,13 +810,13 @@ export class Viewer {
                 'type': 'v3',
                 'value': new THREE.Color()
             },
-            'centerCovarianceTextureSize': {
+            'covariancesTextureSize': {
                 'type': 'v2',
-                'value': new THREE.Vector2(CENTER_COVARIANCE_DATA_TEXTURE_WIDTH, CENTER_COVARIANCE_DATA_TEXTURE_HEIGHT)
+                'value': new THREE.Vector2(1024, 1024)
             },
-            'colorTextureSize': {
+            'centersColorsTextureSize': {
                 'type': 'v2',
-                'value': new THREE.Vector2(COLOR_DATA_TEXTURE_WIDTH, COLOR_DATA_TEXTURE_HEIGHT)
+                'value': new THREE.Vector2(1024, 1024)
             }
         };
 
@@ -871,38 +890,26 @@ export class Viewer {
 
         const splatArray = new Float32Array(splatBuffer.getBufferData());
         const pCovarianceArray = new Float32Array(splatBuffer.getPrecomputedCovarianceBufferData());
-        const pColorArray = new Float32Array(splatBuffer.getPrecomputedColorBufferData());
-        const color = new Float32Array(vertexCount * 4);
-        const centerCov = new Float32Array(vertexCount * 9);
+        const pColorArray = new Uint8Array(splatBuffer.getSeparatedColorBufferData());
+        const colors = new Uint8Array(vertexCount * 4);
+        const centers = new Float32Array(vertexCount * 3);
+        const covariances = new Float32Array(vertexCount * 6);
+
+        covariances.set(pCovarianceArray);
+        colors.set(pColorArray);
 
         for (let i = 0; i < vertexCount; i++) {
-
-            const centerCovBase = 9 * i;
-            const pCovarianceBase = 6 * i;
-            const colorBase = 4 * i;
-            const pcColorBase = 4 * i;
+            const centersBase = 3 * i;
             const splatArrayBase = SplatBuffer.RowSizeFloats * i;
-
-            centerCov[centerCovBase] = splatArray[splatArrayBase];
-            centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1];
-            centerCov[centerCovBase + 2] = splatArray[splatArrayBase + 2];
-
-            color[colorBase] = pColorArray[pcColorBase];
-            color[colorBase + 1] = pColorArray[pcColorBase + 1];
-            color[colorBase + 2] = pColorArray[pcColorBase + 2];
-            color[colorBase + 3] = pColorArray[pcColorBase + 3];
-
-            centerCov[centerCovBase + 3] = pCovarianceArray[pCovarianceBase];
-            centerCov[centerCovBase + 4] = pCovarianceArray[pCovarianceBase + 1];
-            centerCov[centerCovBase + 5] = pCovarianceArray[pCovarianceBase + 2];
-            centerCov[centerCovBase + 6] = pCovarianceArray[pCovarianceBase + 3];
-            centerCov[centerCovBase + 7] = pCovarianceArray[pCovarianceBase + 4];
-            centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5];
+            centers[centersBase] = splatArray[splatArrayBase];
+            centers[centersBase + 1] = splatArray[splatArrayBase + 1];
+            centers[centersBase + 2] = splatArray[splatArrayBase + 2];
         }
 
         return {
-            'colors': color,
-            'centerCovariances': centerCov
+            'colors': colors,
+            'centers': centers,
+            'covariances': covariances
         };
 
     };
