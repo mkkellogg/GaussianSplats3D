@@ -95,7 +95,8 @@ export class Viewer {
 
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
-                antialias: false
+                antialias: false,
+                precision: 'highp'
             });
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
         }
@@ -182,6 +183,10 @@ export class Viewer {
             return rg[0] + rg[1] / 65025.0;
         };
 
+        const rgbaToFloat = (rgba) => {
+            return rgba[0] + rgba[1] / 255.0 + rgba[2] / 65025.0 + rgba[3] / 16581375.0;
+        };
+
         const geometry = this.splatMesh.geometry;
 
         const covariances = new Float32Array(COVARIANCE_DATA_TEXTURE_WIDTH *
@@ -202,21 +207,20 @@ export class Viewer {
         this.splatMesh.material.uniforms.covarianceTexture.value = covarianceTexture;
 
         const centerColors = new Float32Array(CENTER_COLOR_DATA_TEXTURE_WIDTH * CENTER_COLOR_DATA_TEXTURE_HEIGHT * 2);
-        const tempRG = [0, 0];
+        const tempRG = [0, 0, 0, 0];
         for (let c = 0; c < vertexCount; c++) {
             const colorsBase = c * 4;
             const centerCovarianceBase = c * 9;
-            const centerColorsBase = c * 6;
-            tempRG[0] = Math.min(colors[colorsBase], 254) / 255.0;
-            tempRG[1] = Math.min(colors[colorsBase + 1], 254) / 255.0;
-            centerColors[centerColorsBase] = rgToFloat(tempRG);
-            tempRG[0] = Math.min(colors[colorsBase + 2], 254) / 255.0;
-            tempRG[1] = Math.min(colors[colorsBase + 3], 254) / 255.0;
-            centerColors[centerColorsBase + 1] = rgToFloat(tempRG);
+            const centerColorsBase = c * 4;
+            tempRG[1] = Math.min(colors[colorsBase], 254) / 255.0;
+            tempRG[2] = Math.min(colors[colorsBase + 1], 254) / 255.0;
+            tempRG[3] = Math.min(colors[colorsBase + 2], 254) / 255.0;
+            tempRG[0] = Math.min(colors[colorsBase + 3], 254) / 255.0;
+            centerColors[centerColorsBase] = rgbaToFloat(tempRG);
 
-            centerColors[centerColorsBase + 2] = centerCovariances[centerCovarianceBase];
-            centerColors[centerColorsBase + 3] = centerCovariances[centerCovarianceBase + 1];
-            centerColors[centerColorsBase + 4] = centerCovariances[centerCovarianceBase + 2];
+            centerColors[centerColorsBase + 1] = centerCovariances[centerCovarianceBase];
+            centerColors[centerColorsBase + 2] = centerCovariances[centerCovarianceBase + 1];
+            centerColors[centerColorsBase + 3] = centerCovariances[centerCovarianceBase + 2];
         }
         const centerColorTexture = new THREE.DataTexture(centerColors, CENTER_COLOR_DATA_TEXTURE_WIDTH,
                                                          CENTER_COLOR_DATA_TEXTURE_HEIGHT, THREE.RGFormat, THREE.FloatType);
@@ -661,8 +665,8 @@ export class Viewer {
     buildMaterial() {
 
         const vertexShaderSource = `
-            #include <common>
             precision highp float;
+            #include <common>
 
             attribute uint splatIndex;
             attribute vec4 splatColor;
@@ -680,6 +684,29 @@ export class Viewer {
             varying vec2 vUv;
 
             varying vec2 vPosition;
+
+            void floatToRGBA (float f, out float r, out float g, out float b, out float a) {
+                r = fract(1.0 * f);
+                g = fract(255.0 * f);
+                b = fract(65025.0 * f);
+                a = fract(16581375.0 * f);
+
+                r -= (g / 255.0);
+                g -= (b / 255.0);
+                b -= (a / 255.0);
+
+                /*vec4 rgba = vec4(1.,255.,65025.,16581375.) * f;
+                rgba = fract(rgba);
+                rgba -= rgba.yzww * vec2(1./255., 0.).xxxy;
+                return rgba.gbar;*/
+            }
+
+            vec4 floatToRGBAVec (float f) {
+                vec4 rgba = vec4(1.,255.,65025.,16581375.) * f;
+                rgba = fract(rgba);
+                rgba -= rgba.yzww * vec2(1./255., 0.).xxxy;
+                return rgba.gbar;
+            }
 
             const vec2 encodeMult = vec2(1.0f, 65025.0f);
             const float encodeNorm = 1.0f / 255.0f;
@@ -707,12 +734,18 @@ export class Viewer {
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.rg, sampledCenterCovarianceB.r);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.g, sampledCenterCovarianceC.rg);
 
-                vec2 sampledCenterColorA = texture2D(centerColorTexture, getDataUV(3, 0, centerColorTextureSize)).rg;
-                vec2 sampledCenterColorB = texture2D(centerColorTexture, getDataUV(3, 1, centerColorTextureSize)).rg;
-                vec2 sampledCenterColorC = texture2D(centerColorTexture, getDataUV(3, 2, centerColorTextureSize)).rg;
-
-                vec3 splatCenter = vec3(sampledCenterColorB.rg, sampledCenterColorC.r);
-                vColor = vec4(floatToRG(sampledCenterColorA.r), floatToRG(sampledCenterColorA.g));
+                vec2 sampledCenterColorA = texture2D(centerColorTexture, getDataUV(2, 0, centerColorTextureSize)).rg;
+                vec2 sampledCenterColorB = texture2D(centerColorTexture, getDataUV(2, 1, centerColorTextureSize)).rg;
+               
+                vec3 splatCenter = vec3(sampledCenterColorA.g, sampledCenterColorB.rg);
+                
+                float cr;
+                float cg;
+                float cb;
+                float ca;
+                floatToRGBA(sampledCenterColorA.r, cr, cg, cb, ca);
+                vColor = vec4(cg, cb, ca, cr);
+                //vColor = floatToRGBAVec(sampledCenterColorA.r);
 
                 vPosition = position.xy * 2.0;
 
@@ -782,8 +815,8 @@ export class Viewer {
             }`;
 
         const fragmentShaderSource = `
-            #include <common>
             precision highp float;
+            #include <common>
 
             uniform vec3 debugColor;
 
