@@ -40,13 +40,13 @@ export class SplatBuffer {
             this.floatArray = new Float32Array(this.bufferData);
             this.uint8Array = new Uint8Array(this.bufferData);
             this.precomputedCovarianceBufferData = null;
-            this.precomputedColorBufferData = null;
+            this.separatedColorBufferData = null;
         } else {
             this.bufferData = bufferDataOrVertexCount;
             this.floatArray = new Float32Array(this.bufferData);
             this.uint8Array = new Uint8Array(this.bufferData);
             this.precomputedCovarianceBufferData = null;
-            this.precomputedColorBufferData = null;
+            this.separatedColorBufferData = null;
         }
     }
 
@@ -91,8 +91,8 @@ export class SplatBuffer {
         this.precomputedCovarianceBufferData = new ArrayBuffer(SplatBuffer.CovarianceSizeBytes * vertexCount);
         const covarianceArray = new Float32Array(this.precomputedCovarianceBufferData);
 
-        this.precomputedColorBufferData = new ArrayBuffer(SplatBuffer.ColorSizeBytes * vertexCount);
-        const colorArray = new Uint8Array(this.precomputedColorBufferData);
+        this.separatedColorBufferData = new ArrayBuffer(SplatBuffer.ColorSizeBytes * vertexCount);
+        const colorArray = new Uint8Array(this.separatedColorBufferData);
 
         const scale = new THREE.Vector3();
         const rotation = new THREE.Quaternion();
@@ -196,8 +196,8 @@ export class SplatBuffer {
         return this.precomputedCovarianceBufferData;
     }
 
-    getPrecomputedColorBufferData() {
-        return this.precomputedColorBufferData;
+    getSeparatedColorBufferData() {
+        return this.separatedColorBufferData;
     }
 
     getVertexCount() {

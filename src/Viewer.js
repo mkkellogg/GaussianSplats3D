@@ -177,23 +177,13 @@ export class Viewer {
         this.renderTargetCopyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     }
 
-    updateSplatMeshAttributes(colors, centerCovariances, vertexCount) {
+    updateSplatMeshAttributes(colors, centers, covariances, vertexCount) {
 
         const geometry = this.splatMesh.geometry;
 
-        const covariances = new Float32Array(COVARIANCE_DATA_TEXTURE_WIDTH *
-                                             COVARIANCE_DATA_TEXTURE_HEIGHT * 2);
-        for (let c = 0; c < vertexCount; c++) {
-            const centerCovarianceBase = c * 9;
-            const covariancesBase = c * 6;
-            covariances[covariancesBase] = centerCovariances[centerCovarianceBase + 3];
-            covariances[covariancesBase + 1] = centerCovariances[centerCovarianceBase + 4];
-            covariances[covariancesBase + 2] = centerCovariances[centerCovarianceBase + 5];
-            covariances[covariancesBase + 3] = centerCovariances[centerCovarianceBase + 6];
-            covariances[covariancesBase + 4] = centerCovariances[centerCovarianceBase + 7];
-            covariances[covariancesBase + 5] = centerCovariances[centerCovarianceBase + 8];
-        }
-        const covarianceTexture = new THREE.DataTexture(covariances, COVARIANCE_DATA_TEXTURE_WIDTH,
+        const paddedCovariances = new Float32Array(COVARIANCE_DATA_TEXTURE_WIDTH * COVARIANCE_DATA_TEXTURE_HEIGHT * 2);
+        paddedCovariances.set(covariances);
+        const covarianceTexture = new THREE.DataTexture(paddedCovariances, COVARIANCE_DATA_TEXTURE_WIDTH,
                                                         COVARIANCE_DATA_TEXTURE_HEIGHT, THREE.RGFormat, THREE.FloatType);
         covarianceTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.covarianceTexture.value = covarianceTexture;
@@ -201,13 +191,13 @@ export class Viewer {
         const centerColors = new Uint32Array(CENTER_COLOR_DATA_TEXTURE_WIDTH * CENTER_COLOR_DATA_TEXTURE_HEIGHT * 2);
         for (let c = 0; c < vertexCount; c++) {
             const colorsBase = c * 4;
-            const centerCovarianceBase = c * 9;
+            const centersBase = c * 3;
             const centerColorsBase = c * 4;
             centerColors[centerColorsBase] = rgbaToInteger(colors[colorsBase], colors[colorsBase + 1],
                                                            colors[colorsBase + 2], colors[colorsBase + 3]);
-            centerColors[centerColorsBase + 1] = uintEncodedFloat(centerCovariances[centerCovarianceBase]);
-            centerColors[centerColorsBase + 2] = uintEncodedFloat(centerCovariances[centerCovarianceBase + 1]);
-            centerColors[centerColorsBase + 3] = uintEncodedFloat(centerCovariances[centerCovarianceBase + 2]);
+            centerColors[centerColorsBase + 1] = uintEncodedFloat(centers[centersBase]);
+            centerColors[centerColorsBase + 2] = uintEncodedFloat(centers[centersBase + 1]);
+            centerColors[centerColorsBase + 3] = uintEncodedFloat(centers[centersBase + 2]);
         }
         const centerColorTexture = new THREE.DataTexture(centerColors, CENTER_COLOR_DATA_TEXTURE_WIDTH,
                                                          CENTER_COLOR_DATA_TEXTURE_HEIGHT, THREE.RGIntegerFormat, THREE.UnsignedIntType);
@@ -322,8 +312,8 @@ export class Viewer {
                         console.log('Sorting web worker ready.');
                         const attributeData = this.getAttributeDataFromSplatBuffer(this.splatBuffer);
                         this.updateSplatMeshIndexes(this.outIndexArray, this.splatBuffer.getVertexCount());
-                        this.updateSplatMeshAttributes(attributeData.colors,
-                                                       attributeData.centerCovariances, this.splatBuffer.getVertexCount());
+                        this.updateSplatMeshAttributes(attributeData.colors, attributeData.centers,
+                                                       attributeData.covariances, this.splatBuffer.getVertexCount());
                         this.updateView(true, true);
                         this.splatRenderingInitialized = true;
                         resolve();
@@ -839,8 +829,7 @@ export class Viewer {
             blendDstAlpha: THREE.OneFactor,
             depthTest: true,
             depthWrite: false,
-            side: THREE.DoubleSide,
-           // glslVersion: THREE.GLSL3
+            side: THREE.DoubleSide
         });
 
         return material;
@@ -896,38 +885,26 @@ export class Viewer {
 
         const splatArray = new Float32Array(splatBuffer.getBufferData());
         const pCovarianceArray = new Float32Array(splatBuffer.getPrecomputedCovarianceBufferData());
-        const pColorArray = new Uint8Array(splatBuffer.getPrecomputedColorBufferData());
-        const color = new Uint8Array(vertexCount * 4);
-        const centerCov = new Float32Array(vertexCount * 9);
+        const pColorArray = new Uint8Array(splatBuffer.getSeparatedColorBufferData());
+        const colors = new Uint8Array(vertexCount * 4);
+        const centers = new Float32Array(vertexCount * 3);
+        const covariances = new Float32Array(vertexCount * 6);
+
+        covariances.set(pCovarianceArray);
+        colors.set(pColorArray);
 
         for (let i = 0; i < vertexCount; i++) {
-
-            const centerCovBase = 9 * i;
-            const pCovarianceBase = 6 * i;
-            const colorBase = 4 * i;
-            const pcColorBase = 4 * i;
+            const centersBase = 3 * i;
             const splatArrayBase = SplatBuffer.RowSizeFloats * i;
-
-            centerCov[centerCovBase] = splatArray[splatArrayBase];
-            centerCov[centerCovBase + 1] = splatArray[splatArrayBase + 1];
-            centerCov[centerCovBase + 2] = splatArray[splatArrayBase + 2];
-
-            color[colorBase] = pColorArray[pcColorBase];
-            color[colorBase + 1] = pColorArray[pcColorBase + 1];
-            color[colorBase + 2] = pColorArray[pcColorBase + 2];
-            color[colorBase + 3] = pColorArray[pcColorBase + 3];
-
-            centerCov[centerCovBase + 3] = pCovarianceArray[pCovarianceBase];
-            centerCov[centerCovBase + 4] = pCovarianceArray[pCovarianceBase + 1];
-            centerCov[centerCovBase + 5] = pCovarianceArray[pCovarianceBase + 2];
-            centerCov[centerCovBase + 6] = pCovarianceArray[pCovarianceBase + 3];
-            centerCov[centerCovBase + 7] = pCovarianceArray[pCovarianceBase + 4];
-            centerCov[centerCovBase + 8] = pCovarianceArray[pCovarianceBase + 5];
+            centers[centersBase] = splatArray[splatArrayBase];
+            centers[centersBase + 1] = splatArray[splatArrayBase + 1];
+            centers[centersBase + 2] = splatArray[splatArrayBase + 2];
         }
 
         return {
-            'colors': color,
-            'centerCovariances': centerCov
+            'colors': colors,
+            'centers': centers,
+            'covariances': covariances
         };
 
     };
