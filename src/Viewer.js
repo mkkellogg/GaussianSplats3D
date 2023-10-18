@@ -176,6 +176,7 @@ export class Viewer {
     }
 
     updateSplatMeshAttributes(colors, centerCovariances, vertexCount) {
+
         const rgToFloat = (rg) => {
             return rg[0] + rg[1]/65025.0;
         };
@@ -200,12 +201,12 @@ export class Viewer {
         covarianceTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.covarianceTexture.value = covarianceTexture;
 
-        const centerColors = new Float32Array(CENTER_COLOR_DATA_TEXTURE_WIDTH * CENTER_COLOR_DATA_TEXTURE_HEIGHT);
+        const centerColors = new Float32Array(CENTER_COLOR_DATA_TEXTURE_WIDTH * CENTER_COLOR_DATA_TEXTURE_HEIGHT * 2);
         const tempRG = [0, 0];
         for (let c = 0; c < vertexCount; c++) {
             const colorsBase = c * 4;
             const centerCovarianceBase = c * 9;
-            const centerColorsBase = c * 5;
+            const centerColorsBase = c * 6;
             tempRG[0] = Math.min(colors[colorsBase], 254) / 255.0;
             tempRG[1] = Math.min(colors[colorsBase + 1], 254) / 255.0;
             centerColors[centerColorsBase] = rgToFloat(tempRG);
@@ -218,7 +219,7 @@ export class Viewer {
             centerColors[centerColorsBase + 4] = centerCovariances[centerCovarianceBase + 2];
         }
         const centerColorTexture = new THREE.DataTexture(centerColors, CENTER_COLOR_DATA_TEXTURE_WIDTH,
-                                                         CENTER_COLOR_DATA_TEXTURE_HEIGHT, THREE.RedFormat, THREE.FloatType);
+                                                         CENTER_COLOR_DATA_TEXTURE_HEIGHT, THREE.RGFormat, THREE.FloatType);
         centerColorTexture.needsUpdate = true;
         this.splatMesh.material.uniforms.centerColorTexture.value = centerColorTexture;
 
@@ -702,19 +703,17 @@ export class Viewer {
                 vec2 sampledCenterCovarianceA = texture2D(covarianceTexture, getDataUV(3, 0, covarianceTextureSize)).rg;
                 vec2 sampledCenterCovarianceB = texture2D(covarianceTexture, getDataUV(3, 1, covarianceTextureSize)).rg;
                 vec2 sampledCenterCovarianceC = texture2D(covarianceTexture, getDataUV(3, 2, covarianceTextureSize)).rg;
-               
-                float centerX = texture2D(centerColorTexture, getDataUV(5, 2, centerColorTextureSize)).r;
-                float centerY = texture2D(centerColorTexture, getDataUV(5, 3, centerColorTextureSize)).r;
-                float centerZ = texture2D(centerColorTexture, getDataUV(5, 4, centerColorTextureSize)).r;
-            
-                vec3 splatCenter = vec3(centerX, centerY, centerZ);
+                 
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.rg, sampledCenterCovarianceB.r);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.g, sampledCenterCovarianceC.rg);
 
-                vec4 sampledColorRG = texture2D(centerColorTexture, getDataUV(5, 0, centerColorTextureSize));
-                vec4 sampledColorBA = texture2D(centerColorTexture, getDataUV(5, 1, centerColorTextureSize));
+                vec2 sampledCenterColorA = texture2D(centerColorTexture, getDataUV(3, 0, centerColorTextureSize)).rg;
+                vec2 sampledCenterColorB = texture2D(centerColorTexture, getDataUV(3, 1, centerColorTextureSize)).rg;
+                vec2 sampledCenterColorC = texture2D(centerColorTexture, getDataUV(3, 2, centerColorTextureSize)).rg;
 
-                vColor = vec4(floatToRG(sampledColorRG.r), floatToRG(sampledColorBA.r));
+                vec3 splatCenter = vec3(sampledCenterColorB.rg, sampledCenterColorC.r);
+                vColor = vec4(floatToRG(sampledCenterColorA.r), floatToRG(sampledCenterColorA.g));
+
                 vPosition = position.xy * 2.0;
 
                 vec4 viewCenter = viewMatrix * vec4(splatCenter, 1.0);
