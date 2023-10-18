@@ -9,7 +9,8 @@
   <script type="importmap">
     {
         "imports": {
-            "three": "./lib/three.module.js"
+            "three": "./lib/three.module.js",
+            "gaussian-splat-3d": "./lib/gaussian-splat-3d.module.js"
         }
     }
   </script>
@@ -25,7 +26,20 @@
 </head>
 
 <body>
-  <script type="module" src="js/scene/stump/Main.js"></script>
+  <script type="module">
+    import * as GaussianSplat3D from 'gaussian-splat-3d';
+    const viewer = new GaussianSplat3D.Viewer({
+        'cameraUp': [0, -1, -1.0],
+        'initialCameraPosition': [-3.3816, 1.96931, -1.71890],
+        'initialCameraLookAt': [0.60910, 1.42099, 2.02511],
+        'splatAlphaRemovalThreshold': 30
+    });
+    viewer.init();
+    viewer.loadFile('assets/data/stump/stump.splat')
+    .then(() => {
+        viewer.start();
+    });
+  </script>
 </body>
 
 </html>

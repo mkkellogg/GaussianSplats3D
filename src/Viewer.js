@@ -688,12 +688,12 @@ export class Viewer {
 
             void main () {
 
-                vec2 sampledCenterCovarianceA = texture2D(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
-                vec2 sampledCenterCovarianceB = texture2D(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
-                vec2 sampledCenterCovarianceC = texture2D(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceA = texture2D(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceB = texture2D(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceC = texture2D(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
 
-                vec3 cov3D_M11_M12_M13 = vec3(sampledCenterCovarianceA.rg, sampledCenterCovarianceB.r);
-                vec3 cov3D_M22_M23_M33 = vec3(sampledCenterCovarianceB.g, sampledCenterCovarianceC.rg);
+                vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rg, sampledCovarianceB.r);
+                vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceB.g, sampledCovarianceC.rg);
 
                 uvec2 sampledCenterColorA = texture(centersColorsTexture, getDataUV(2, 0, centersColorsTextureSize)).rg;
                 uvec2 sampledCenterColorB = texture(centersColorsTexture, getDataUV(2, 1, centersColorsTextureSize)).rg;
