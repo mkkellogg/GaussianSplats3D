@@ -1,4 +1,4 @@
-export const toHalf = function() {
+export const floatToHalf = function() {
 
     const floatView = new Float32Array(1);
     const int32View = new Int32Array(floatView.buffer);
@@ -31,3 +31,19 @@ export const toHalf = function() {
     };
 
 }();
+
+export const uintEncodedFloat = function() {
+
+    const floatView = new Float32Array(1);
+    const int32View = new Int32Array(floatView.buffer);
+
+    return function(f) {
+        floatView[0] = f;
+        return int32View[0];
+    };
+
+}();
+
+export const rgbaToInteger = function(r, g, b, a) {
+    return r + (g << 8) + (b << 16) + (a << 24);
+};
