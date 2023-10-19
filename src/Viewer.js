@@ -5,7 +5,8 @@ import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { SceneHelper } from './SceneHelper.js';
-import { Octree } from './octree/Octree.js';
+import { SplatTree } from './splattree/SplatTree.js';
+import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
@@ -39,6 +40,8 @@ export class Viewer {
         this.selfDrivenMode = params.selfDrivenMode;
         this.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
+        this.showMeshCursor = false;
+        this.showInfo = false;
 
         this.sceneHelper = null;
 
@@ -51,13 +54,43 @@ export class Viewer {
         this.splatBuffer = null;
         this.splatMesh = null;
 
-        this.octree = null;
-        this.octreeNodeMap = {};
+        this.splatTree = null;
+        this.splatTreeNodeMap = {};
 
         this.sortRunning = false;
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
 
+        this.raycaster = new Raycaster();
+
+        this.infoPanel = null;
+        this.infoPanelCells = {};
+
+        this.currentFPS = 0;
+
+        this.mousePosition = new THREE.Vector2();
+        window.addEventListener('mousemove', this.onMouseMove.bind(this));
+        window.addEventListener('keydown', this.onKeyDown.bind(this));
+    }
+
+    onKeyDown(e) {
+        switch (e.code) {
+            case 'KeyC':
+                this.showMeshCursor = !this.showMeshCursor;
+            break;
+            case 'KeyI':
+                this.showInfo = !this.showInfo;
+                if (this.showInfo) {
+                    this.infoPanel.style.display = 'block';
+                } else {
+                    this.infoPanel.style.display = 'none';
+                }
+            break;
+        }
+    }
+
+    onMouseMove(mouse) {
+        this.mousePosition.set(mouse.offsetX, mouse.offsetY);
     }
 
     getRenderDimensions(outDimensions) {
@@ -70,6 +103,8 @@ export class Viewer {
     }
 
     init() {
+
+        this.setupInfoPanel();
 
         if (!this.rootElement && !this.usingExternalRenderer) {
             this.rootElement = document.createElement('div');
@@ -90,6 +125,7 @@ export class Viewer {
 
         this.scene = this.scene || new THREE.Scene();
         this.sceneHelper = new SceneHelper(this.scene);
+        this.sceneHelper.setupMeshCursor();
 
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
@@ -118,6 +154,57 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
+    }
+
+    setupInfoPanel() {
+        this.infoPanel = document.createElement('div');
+        this.infoPanel.style.position = 'absolute';
+        this.infoPanel.style.padding = '10px';
+        this.infoPanel.style.backgroundColor = '#cccccc';
+        this.infoPanel.style.border = '#aaaaaa 1px solid';
+        this.infoPanel.style.zIndex = 100;
+        this.infoPanel.style.width = '350px';
+        this.infoPanel.style.fontFamily = 'arial';
+        this.infoPanel.style.fontSize = '10pt';
+
+        const layout = [
+            ['Cursor position', 'cursorPosition'],
+            ['FPS', 'fps'],
+            ['Render window', 'renderWindow']
+        ];
+
+        const infoTable = document.createElement('div');
+        infoTable.style.display = 'table';
+
+        for (let layoutEntry of layout) {
+            const row = document.createElement('div');
+            row.style.display = 'table-row';
+
+            const labelCell = document.createElement('div');
+            labelCell.style.display = 'table-cell';
+            labelCell.innerHTML = `${layoutEntry[0]}: `;
+
+            const spacerCell = document.createElement('div');
+            spacerCell.style.display = 'table-cell';
+            spacerCell.style.width = '10px';
+            spacerCell.innerHTML = ' ';
+
+            const infoCell = document.createElement('div');
+            infoCell.style.display = 'table-cell';
+            infoCell.innerHTML = '';
+
+            this.infoPanelCells[layoutEntry[1]] = infoCell;
+
+            row.appendChild(labelCell);
+            row.appendChild(spacerCell);
+            row.appendChild(infoCell);
+
+            infoTable.appendChild(row);
+        }
+
+        this.infoPanel.appendChild(infoTable);
+        this.infoPanel.style.display = 'none';
+        document.body.appendChild(this.infoPanel);
     }
 
     updateSplatRenderTargetForRenderDimensions(width, height) {
@@ -161,14 +248,18 @@ export class Viewer {
                     vec4 color = texture2D(sourceColorTexture, vUv);
                     float fragDepth = texture2D(sourceDepthTexture, vUv).x;
                     gl_FragDepth = fragDepth;
-                    gl_FragColor = color;
+                    gl_FragColor = vec4(color.rgb, color.a * 2.0);
               }
             `,
             uniforms: uniforms,
             depthWrite: false,
             depthTest: false,
             transparent: true,
-            blending: THREE.NormalBlending
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.SrcAlphaFactor,
+            blendSrcAlpha: THREE.SrcAlphaFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+            blendDstAlpha: THREE.OneMinusSrcAlphaFactor
         });
         this.renderTargetCopyMaterial.extensions.fragDepth = true;
         this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
@@ -217,28 +308,28 @@ export class Viewer {
                 this.splatMesh.renderOrder = 10;
                 this.updateSplatMeshUniforms();
 
-                this.octree = new Octree(8, 5000);
-                console.time('Octree build');
-                this.octree.processScene(splatBuffer);
-                console.timeEnd('Octree build');
+                this.splatTree = new SplatTree(8, 5000);
+                console.time('SplatTree build');
+                this.splatTree.processSplatBuffer(splatBuffer);
+                console.timeEnd('SplatTree build');
 
                 let leavesWithVertices = 0;
                 let avgVertexCount = 0;
                 let maxVertexCount = 0;
                 let nodeCount = 0;
 
-                this.octree.visitLeaves((node) => {
+                this.splatTree.visitLeaves((node) => {
                     const vertexCount = node.data.indexes.length;
                     if (vertexCount > 0) {
-                        this.octreeNodeMap[node.id] = node;
+                        this.splatTreeNodeMap[node.id] = node;
                         avgVertexCount += vertexCount;
                         maxVertexCount = Math.max(maxVertexCount, vertexCount);
                         nodeCount++;
                         leavesWithVertices++;
                     }
                 });
-                console.log(`Octree leaves: ${this.octree.countLeaves()}`);
-                console.log(`Octree leaves with vertices:${leavesWithVertices}`);
+                console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
+                console.log(`SplatTree leaves with vertices:${leavesWithVertices}`);
                 avgVertexCount /= nodeCount;
                 console.log(`Avg vertex count per node: ${avgVertexCount}`);
 
@@ -314,9 +405,9 @@ export class Viewer {
 
             let nodeRenderCount = 0;
             let verticesToCopy = 0;
-            const nodeCount = this.octree.nodesWithIndexes.length;
+            const nodeCount = this.splatTree.nodesWithIndexes.length;
             for (let i = 0; i < nodeCount; i++) {
-                const node = this.octree.nodesWithIndexes[i];
+                const node = this.splatTree.nodesWithIndexes[i];
                 tempVector.copy(node.center).sub(this.camera.position);
                 const distanceToNode = tempVector.length();
                 tempVector.normalize();
@@ -374,7 +465,7 @@ export class Viewer {
         }
     }
 
-    fps = function() {
+    updateFPS = function() {
 
         let lastCalcTime = performance.now() / 1000;
         let frameCount = 0;
@@ -383,7 +474,7 @@ export class Viewer {
             const currentTime = performance.now() / 1000;
             const calcDelta = currentTime - lastCalcTime;
             if (calcDelta >= 1.0) {
-                console.log('FPS: ' + frameCount);
+                this.currentFPS = frameCount;
                 frameCount = 0;
                 lastCalcTime = currentTime;
             } else {
@@ -429,16 +520,72 @@ export class Viewer {
         }
         this.updateView();
         this.updateForRendererSizeChanges();
-        // this.fps();
+
+        this.rayCastScene();
+        this.updateFPS();
+        this.updateInfo();
     }
+
+    rayCastScene = function() {
+
+        const outHits = [];
+        const renderDimensions = new THREE.Vector2();
+
+        return function() {
+            if (this.showMeshCursor) {
+                this.getRenderDimensions(renderDimensions);
+                outHits.length = 0;
+                this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
+                this.raycaster.intersectSplatTree(this.splatTree, outHits);
+                if (outHits.length > 0) {
+                    this.sceneHelper.setMeshCursorVisibility(true);
+                    this.sceneHelper.positionAndOrientMeshCursor(outHits[0].origin, this.camera);
+                } else {
+                    this.sceneHelper.setMeshCursorVisibility(false);
+                }
+            } else {
+                this.sceneHelper.setMeshCursorVisibility(false);
+            }
+        };
+
+    }();
+
+    updateInfo = function() {
+
+        const renderDimensions = new THREE.Vector2();
+
+        return function() {
+            if (this.showInfo) {
+                this.getRenderDimensions(renderDimensions);
+                if (this.showMeshCursor) {
+                    const pos = this.sceneHelper.meshCursor.position;
+                    const posString = `[${pos.x.toFixed(5)}, ${pos.y.toFixed(5)}, ${pos.z.toFixed(5)}]`;
+                    this.infoPanelCells.cursorPosition.innerHTML = posString;
+                } else {
+                    this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
+                }
+                this.infoPanelCells.fps.innerHTML = this.currentFPS;
+                this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
+            }
+        };
+
+    }();
 
     render() {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
+        let sceneHasRenderables = false;
+        for (let child of this.scene.children) {
+            if (child.visible) {
+                sceneHasRenderables = true;
+                break;
+            }
+        }
+
         // A more complex rendering sequence is required if you want to render "normal" Three.js
         // objects along with the splats
-        if (this.scene.children.length > 0) {
+        if (sceneHasRenderables) {
             this.renderer.setRenderTarget(this.splatRenderTarget);
             this.renderer.clear(true, true, true);
             this.renderer.getContext().colorMask(false, false, false, false);

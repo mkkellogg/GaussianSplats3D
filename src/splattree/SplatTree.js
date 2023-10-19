@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { OctreeNode } from './OctreeNode.js';
+import { SplatTreeNode } from './SplatTreeNode.js';
 
-export class Octree {
+export class SplatTree {
 
     constructor(maxDepth, maxPositionsPerNode) {
         this.maxDepth = maxDepth;
         this.maxPositionsPerNode = maxPositionsPerNode;
+        this.splatBuffer = null;
         this.sceneDimensions = new THREE.Vector3();
         this.sceneMin = new THREE.Vector3();
         this.sceneMax = new THREE.Vector3();
@@ -14,7 +15,9 @@ export class Octree {
         this.nodesWithIndexes = [];
     }
 
-    processScene(splatBuffer) {
+    processSplatBuffer(splatBuffer) {
+        this.splatBuffer = splatBuffer;
+        this.addedIndexes = {};
         this.nodesWithIndexes = [];
         const vertexCount = splatBuffer.getVertexCount();
 
@@ -33,7 +36,7 @@ export class Octree {
 
         const indexes = [];
         for (let i = 0; i < vertexCount; i ++)indexes.push(i);
-        this.rootNode = new OctreeNode(this.sceneMin, this.sceneMax, 0);
+        this.rootNode = new SplatTreeNode(this.sceneMin, this.sceneMax, 0);
         this.rootNode.data = {
             'indexes': indexes
         };
@@ -104,7 +107,7 @@ export class Octree {
         }
 
         for (let i = 0; i < childrenBounds.length; i++) {
-            const childNode = new OctreeNode(childrenBounds[i].min, childrenBounds[i].max, node.depth + 1);
+            const childNode = new SplatTreeNode(childrenBounds[i].min, childrenBounds[i].max, node.depth + 1);
             childNode.data = {
                 'indexes': baseIndexes[i]
             };
@@ -139,4 +142,5 @@ export class Octree {
 
         return visitLeavesFromNode(this.rootNode, visitFunc);
     }
+
 }
