@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { OctreeNode } from './OctreeNode.js';
+import { Hit } from '../raycaster/Hit.js';
 
 export class Octree {
 
     constructor(maxDepth, maxPositionsPerNode) {
         this.maxDepth = maxDepth;
         this.maxPositionsPerNode = maxPositionsPerNode;
+        this.splatBuffer = null;
         this.sceneDimensions = new THREE.Vector3();
         this.sceneMin = new THREE.Vector3();
         this.sceneMax = new THREE.Vector3();
@@ -15,6 +17,8 @@ export class Octree {
     }
 
     processScene(splatBuffer) {
+        this.splatBuffer = splatBuffer;
+        this.addedIndexes = {};
         this.nodesWithIndexes = [];
         const vertexCount = splatBuffer.getVertexCount();
 
@@ -139,4 +143,48 @@ export class Octree {
 
         return visitLeavesFromNode(this.rootNode, visitFunc);
     }
+
+    castRay(ray, outHits = []) {
+        if(this.rootNode) {
+            this.castRayAtNode(ray, this.rootNode, outHits);
+        }
+        outHits.sort((a, b) => {
+            if (a.distance > b.distance) return 1;
+            else return -1;
+        })
+        return outHits;
+    }
+
+    castRayAtNode = function() {
+
+        const tempPosition = new THREE.Vector3();
+        const tempScale = new THREE.Vector3();
+        const tempHit = new Hit();
+        let c = 0;
+
+        return function(ray, node, outHits = []) {
+            if (!ray.intersectBox(node.boundingBox)) {
+                return;
+            }
+            if (node.data.indexes && node.data.indexes.length > 0) {
+                 for (let i = 0; i < node.data.indexes.length; i++) {
+                     const splatIndex = node.data.indexes[i];
+                     this.splatBuffer.getPosition(splatIndex, tempPosition);
+                     this.splatBuffer.getScale(splatIndex, tempScale);
+                     const radius = Math.max(Math.max(tempScale.x, tempScale.y), tempScale.z);
+                     if(ray.intersectSphere(tempPosition, radius, tempHit)) {
+                         outHits.push(tempHit.clone());
+                     }
+                 }
+             }
+            if (node.children && node.children.length > 0) {
+                for (let child of node.children) {
+                    this.castRayAtNode(ray, child, outHits);
+                }
+            }
+            return outHits;
+        };
+
+    }();
+
 }

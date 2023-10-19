@@ -6,6 +6,7 @@ import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { SceneHelper } from './SceneHelper.js';
 import { Octree } from './octree/Octree.js';
+import { Ray } from './raycaster/Ray.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
@@ -429,8 +430,31 @@ export class Viewer {
         }
         this.updateView();
         this.updateForRendererSizeChanges();
+
+        this.rayCastScene();
         // this.fps();
     }
+
+    rayCastScene = function() {
+
+        const ray = new Ray();
+        const outHits = [];
+
+        return function(){
+            ray.origin.set(0, 0, 0).applyMatrix4(this.camera.matrixWorld);
+            ray.direction.set(0, 0, -1);
+            ray.direction.transformDirection(this.camera.matrixWorld);
+            outHits.length = 0;
+            this.octree.castRay(ray, outHits);
+            if (outHits.length > 0) {
+                this.sceneHelper.setCursorVisibility(true);
+                this.sceneHelper.setCursorPosition(outHits[0].origin);
+            } else {
+                this.sceneHelper.setCursorVisibility(false);
+            }
+        };
+
+    }();
 
     render() {
         this.renderer.autoClear = false;
