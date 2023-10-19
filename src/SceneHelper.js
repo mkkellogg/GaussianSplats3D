@@ -4,16 +4,26 @@ export class SceneHelper {
 
     constructor(scene) {
         this.scene = scene;
-        this.cursor = null;
-        this.setupMeshCursor();
+        this.meshCursor = null;
     }
 
     setupMeshCursor() {
-        const cursorGeometry = new THREE.SphereGeometry(1, 32, 32);
-        this.meshCursor = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
-        this.meshCursor.scale.set(0.1, 0.1, 0.1);
-        this.scene.add(this.meshCursor);
-        this.meshCursor.visible = false;
+        if (!this.meshCursor) {
+            const cursorGeometry = new THREE.SphereGeometry(1, 32, 32);
+            this.meshCursor = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+            this.meshCursor.scale.set(0.1, 0.1, 0.1);
+            this.scene.add(this.meshCursor);
+            this.meshCursor.visible = false;
+        }
+    }
+
+    destroyMeshCursor() {
+        if (this.meshCursor) {
+            this.meshCursor.geometry.dispose();
+            this.meshCursor.material.dispose();
+            this.scene.remove(this.meshCursor);
+            this.meshCursor = null;
+        }
     }
 
     setMeshCursorVisibility(visible) {

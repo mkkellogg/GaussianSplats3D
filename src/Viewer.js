@@ -40,7 +40,8 @@ export class Viewer {
         this.selfDrivenMode = params.selfDrivenMode;
         this.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
-        this.showMeshCursor = params.showMeshCursor || true;
+        this.showMeshCursor = false;
+        this.showInfo = false;
 
         this.sceneHelper = null;
 
@@ -62,8 +63,35 @@ export class Viewer {
 
         this.raycaster = new Raycaster();
 
+        this.infoPanel = null;
+        this.infoPanelCells = {};
+
+        this.currentFPS = 0;
+
         this.mousePosition = new THREE.Vector2();
         window.addEventListener('mousemove', this.onMouseMove.bind(this));
+        window.addEventListener('keydown', this.onKeyDown.bind(this));
+    }
+
+    onKeyDown(e) {
+        switch (e.code) {
+            case 'KeyC':
+                this.showMeshCursor = !this.showMeshCursor;
+                if (this.showMeshCursor) {
+                    this.sceneHelper.setupMeshCursor();
+                } else {
+                    this.sceneHelper.destroyMeshCursor();
+                }
+            break;
+            case 'KeyI':
+                this.showInfo = !this.showInfo;
+                if (this.showInfo) {
+                    this.infoPanel.style.display = 'block';
+                } else {
+                    this.infoPanel.style.display = 'none';
+                }
+            break;
+        }
     }
 
     onMouseMove(mouse) {
@@ -80,6 +108,8 @@ export class Viewer {
     }
 
     init() {
+
+        this.setupInfoPanel();
 
         if (!this.rootElement && !this.usingExternalRenderer) {
             this.rootElement = document.createElement('div');
@@ -130,6 +160,56 @@ export class Viewer {
 
     }
 
+    setupInfoPanel() {
+        this.infoPanel = document.createElement('div');
+        this.infoPanel.style.position = 'absolute';
+        this.infoPanel.style.padding = '10px';
+        this.infoPanel.style.backgroundColor = '#cccccc';
+        this.infoPanel.style.border = '#aaaaaa 1px solid';
+        this.infoPanel.style.zIndex = 100;
+        this.infoPanel.style.width = '350px';
+        this.infoPanel.style.fontFamily = 'arial';
+        this.infoPanel.style.fontSize = '10pt';
+
+        const layout = [
+            ['Cursor position', 'cursorPosition'],
+            ['FPS', 'fps']
+        ];
+
+        const infoTable = document.createElement('div');
+        infoTable.style.display = 'table';
+
+        for (let layoutEntry of layout) {
+            const row = document.createElement('div');
+            row.style.display = 'table-row';
+
+            const labelCell = document.createElement('div');
+            labelCell.style.display = 'table-cell';
+            labelCell.innerHTML = `${layoutEntry[0]}: `;
+
+            const spacerCell = document.createElement('div');
+            spacerCell.style.display = 'table-cell';
+            spacerCell.style.width = '10px';
+            spacerCell.innerHTML = ' ';
+
+            const infoCell = document.createElement('div');
+            infoCell.style.display = 'table-cell';
+            infoCell.innerHTML = '';
+
+            this.infoPanelCells[layoutEntry[1]] = infoCell;
+
+            row.appendChild(labelCell);
+            row.appendChild(spacerCell);
+            row.appendChild(infoCell);
+
+            infoTable.appendChild(row);
+        }
+
+        this.infoPanel.appendChild(infoTable);
+        this.infoPanel.style.display = 'none';
+        document.body.appendChild(this.infoPanel);
+    }
+
     updateSplatRenderTargetForRenderDimensions(width, height) {
         this.splatRenderTarget = new THREE.WebGLRenderTarget(width, height, {
             format: THREE.RGBAFormat,
@@ -171,14 +251,18 @@ export class Viewer {
                     vec4 color = texture2D(sourceColorTexture, vUv);
                     float fragDepth = texture2D(sourceDepthTexture, vUv).x;
                     gl_FragDepth = fragDepth;
-                    gl_FragColor = color;
+                    gl_FragColor = vec4(color.rgb, color.a * 2.0);
               }
             `,
             uniforms: uniforms,
             depthWrite: false,
             depthTest: false,
             transparent: true,
-            blending: THREE.NormalBlending
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.SrcAlphaFactor,
+            blendSrcAlpha: THREE.SrcAlphaFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+            blendDstAlpha: THREE.OneMinusSrcAlphaFactor
         });
         this.renderTargetCopyMaterial.extensions.fragDepth = true;
         this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
@@ -384,7 +468,7 @@ export class Viewer {
         }
     }
 
-    fps = function() {
+    updateFPS = function() {
 
         let lastCalcTime = performance.now() / 1000;
         let frameCount = 0;
@@ -393,7 +477,7 @@ export class Viewer {
             const currentTime = performance.now() / 1000;
             const calcDelta = currentTime - lastCalcTime;
             if (calcDelta >= 1.0) {
-                console.log('FPS: ' + frameCount);
+                this.currentFPS = frameCount;
                 frameCount = 0;
                 lastCalcTime = currentTime;
             } else {
@@ -441,7 +525,8 @@ export class Viewer {
         this.updateForRendererSizeChanges();
 
         this.rayCastScene();
-        // this.fps();
+        this.updateFPS();
+        this.updateInfo();
     }
 
     rayCastScene = function() {
@@ -465,6 +550,19 @@ export class Viewer {
         };
 
     }();
+
+    updateInfo() {
+        if (this.showInfo) {
+            if (this.showMeshCursor) {
+                const pos = this.sceneHelper.meshCursor.position;
+                const posString = `<${pos.x.toFixed(5)}, ${pos.y.toFixed(5)}, ${pos.z.toFixed(5)}>`;
+                this.infoPanelCells.cursorPosition.innerHTML = posString;
+            } else {
+                this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
+            }
+            this.infoPanelCells.fps.innerHTML = this.currentFPS;
+        }
+    }
 
     render() {
         this.renderer.autoClear = false;

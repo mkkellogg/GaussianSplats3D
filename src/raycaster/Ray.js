@@ -96,28 +96,17 @@ export class Ray {
             if (diffSq > radiusSq) return false;
 
             const thc = Math.sqrt(radiusSq - diffSq);
-
-            // t0 = first intersect point - entrance on front of sphere
             const t0 = toClosestApproach - thc;
-
-            // t1 = second intersect point - exit point on back of sphere
             const t1 = toClosestApproach + thc;
 
-            // test to see if t1 is behind the ray - if so, return null
             if (t1 < 0) return false;
+            let t = t0 < 0 ? t1 : t0;
 
-            // test to see if t0 is behind the ray:
-            // if it is, the ray is inside the sphere, so return the second exit point scaled by t1,
-            // in order to always return an intersect point that is in front of the ray.
-            let t;
-            if (t0 < 0) {
-                t = t1;
-            } else { // else t0 is in front of the ray, so return the first collision point scaled by t0
-                t = t0;
+            if (outHit) {
+                outHit.origin.copy(this.origin).addScaledVector(this.direction, t);
+                outHit.normal.copy(outHit.origin).sub(center).normalize();
+                outHit.distance = t;
             }
-            outHit.origin.copy(this.origin).addScaledVector(this.direction, t);
-            outHit.normal.copy(outHit.origin).sub(center).normalize();
-            outHit.distance = t;
             return true;
         };
 
