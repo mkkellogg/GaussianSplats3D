@@ -71,7 +71,7 @@ plyLoader.loadFromFile('<path to .ply file>')
 ```
 This code will prompt your browser to automatically start downloading the converted `.splat` file.
 
-It is now possible to integrate your own Three.js scene into the viewer (still somewhat experimental). The `Viewer` class now accepts a `scene` parameter by which you can pass in any 'normal' Three.js objects you want to be rendered along with the splats. Rendering the splats correctly with external obejcts requires a special sequence of steps so the viewer needs to be aware of them:
+It is now possible to integrate your own Three.js scene into the viewer (still somewhat experimental). The `Viewer` class now accepts a `scene` parameter by which you can pass in any 'normal' Three.js objects you want to be rendered along with the splats. Rendering the splats correctly with external objects requires a special sequence of steps so the viewer needs to be aware of them:
 ```javascript
 const scene = new THREE.Scene();
 
