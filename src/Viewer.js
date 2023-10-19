@@ -5,8 +5,8 @@ import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { SceneHelper } from './SceneHelper.js';
-import { Octree } from './octree/Octree.js';
-import { Ray } from './raycaster/Ray.js';
+import { SplatTree } from './splattree/SplatTree.js';
+import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
@@ -40,6 +40,7 @@ export class Viewer {
         this.selfDrivenMode = params.selfDrivenMode;
         this.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
+        this.showMeshCursor = params.showMeshCursor || true;
 
         this.sceneHelper = null;
 
@@ -52,13 +53,21 @@ export class Viewer {
         this.splatBuffer = null;
         this.splatMesh = null;
 
-        this.octree = null;
-        this.octreeNodeMap = {};
+        this.splatTree = null;
+        this.splatTreeNodeMap = {};
 
         this.sortRunning = false;
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
 
+        this.raycaster = new Raycaster();
+
+        this.mousePosition = new THREE.Vector2();
+        window.addEventListener('mousemove', this.onMouseMove.bind(this));
+    }
+
+    onMouseMove(mouse) {
+        this.mousePosition.set(mouse.offsetX, mouse.offsetY);
     }
 
     getRenderDimensions(outDimensions) {
@@ -218,28 +227,28 @@ export class Viewer {
                 this.splatMesh.renderOrder = 10;
                 this.updateSplatMeshUniforms();
 
-                this.octree = new Octree(8, 5000);
-                console.time('Octree build');
-                this.octree.processScene(splatBuffer);
-                console.timeEnd('Octree build');
+                this.splatTree = new SplatTree(8, 5000);
+                console.time('SplatTree build');
+                this.splatTree.processSplatBuffer(splatBuffer);
+                console.timeEnd('SplatTree build');
 
                 let leavesWithVertices = 0;
                 let avgVertexCount = 0;
                 let maxVertexCount = 0;
                 let nodeCount = 0;
 
-                this.octree.visitLeaves((node) => {
+                this.splatTree.visitLeaves((node) => {
                     const vertexCount = node.data.indexes.length;
                     if (vertexCount > 0) {
-                        this.octreeNodeMap[node.id] = node;
+                        this.splatTreeNodeMap[node.id] = node;
                         avgVertexCount += vertexCount;
                         maxVertexCount = Math.max(maxVertexCount, vertexCount);
                         nodeCount++;
                         leavesWithVertices++;
                     }
                 });
-                console.log(`Octree leaves: ${this.octree.countLeaves()}`);
-                console.log(`Octree leaves with vertices:${leavesWithVertices}`);
+                console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
+                console.log(`SplatTree leaves with vertices:${leavesWithVertices}`);
                 avgVertexCount /= nodeCount;
                 console.log(`Avg vertex count per node: ${avgVertexCount}`);
 
@@ -315,9 +324,9 @@ export class Viewer {
 
             let nodeRenderCount = 0;
             let verticesToCopy = 0;
-            const nodeCount = this.octree.nodesWithIndexes.length;
+            const nodeCount = this.splatTree.nodesWithIndexes.length;
             for (let i = 0; i < nodeCount; i++) {
-                const node = this.octree.nodesWithIndexes[i];
+                const node = this.splatTree.nodesWithIndexes[i];
                 tempVector.copy(node.center).sub(this.camera.position);
                 const distanceToNode = tempVector.length();
                 tempVector.normalize();
@@ -437,20 +446,21 @@ export class Viewer {
 
     rayCastScene = function() {
 
-        const ray = new Ray();
         const outHits = [];
+        const renderDimensions = new THREE.Vector2();
 
-        return function(){
-            ray.origin.set(0, 0, 0).applyMatrix4(this.camera.matrixWorld);
-            ray.direction.set(0, 0, -1);
-            ray.direction.transformDirection(this.camera.matrixWorld);
-            outHits.length = 0;
-            this.octree.castRay(ray, outHits);
-            if (outHits.length > 0) {
-                this.sceneHelper.setCursorVisibility(true);
-                this.sceneHelper.setCursorPosition(outHits[0].origin);
-            } else {
-                this.sceneHelper.setCursorVisibility(false);
+        return function() {
+            if (this.showMeshCursor) {
+                this.getRenderDimensions(renderDimensions);
+                outHits.length = 0;
+                this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
+                this.raycaster.intersectSplatTree(this.splatTree, outHits);
+                if (outHits.length > 0) {
+                    this.sceneHelper.setMeshCursorVisibility(true);
+                    this.sceneHelper.setMeshCursorPosition(outHits[0].origin);
+                } else {
+                    this.sceneHelper.setMeshCursorVisibility(false);
+                }
             }
         };
 

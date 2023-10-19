@@ -5,23 +5,23 @@ export class SceneHelper {
     constructor(scene) {
         this.scene = scene;
         this.cursor = null;
-        this.setupCursor();
+        this.setupMeshCursor();
     }
 
-    setupCursor() {
+    setupMeshCursor() {
         const cursorGeometry = new THREE.SphereGeometry(1, 32, 32);
-        this.cursor = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
-        this.cursor.scale.set(0.2, 0.2, 0.2);
-        this.scene.add(this.cursor);
-        this.cursor.visible = false;
+        this.meshCursor = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+        this.meshCursor.scale.set(0.1, 0.1, 0.1);
+        this.scene.add(this.meshCursor);
+        this.meshCursor.visible = false;
     }
 
-    setCursorVisibility(visible) {
-        this.cursor.visible = visible;
+    setMeshCursorVisibility(visible) {
+        this.meshCursor.visible = visible;
     }
 
-    setCursorPosition(position) {
-        this.cursor.position.copy(position);
+    setMeshCursorPosition(position) {
+        this.meshCursor.position.copy(position);
     }
 
     addDebugMeshes() {

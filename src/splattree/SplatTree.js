@@ -1,8 +1,7 @@
 import * as THREE from 'three';
-import { OctreeNode } from './OctreeNode.js';
-import { Hit } from '../raycaster/Hit.js';
+import { SplatTreeNode } from './SplatTreeNode.js';
 
-export class Octree {
+export class SplatTree {
 
     constructor(maxDepth, maxPositionsPerNode) {
         this.maxDepth = maxDepth;
@@ -16,7 +15,7 @@ export class Octree {
         this.nodesWithIndexes = [];
     }
 
-    processScene(splatBuffer) {
+    processSplatBuffer(splatBuffer) {
         this.splatBuffer = splatBuffer;
         this.addedIndexes = {};
         this.nodesWithIndexes = [];
@@ -37,7 +36,7 @@ export class Octree {
 
         const indexes = [];
         for (let i = 0; i < vertexCount; i ++)indexes.push(i);
-        this.rootNode = new OctreeNode(this.sceneMin, this.sceneMax, 0);
+        this.rootNode = new SplatTreeNode(this.sceneMin, this.sceneMax, 0);
         this.rootNode.data = {
             'indexes': indexes
         };
@@ -108,7 +107,7 @@ export class Octree {
         }
 
         for (let i = 0; i < childrenBounds.length; i++) {
-            const childNode = new OctreeNode(childrenBounds[i].min, childrenBounds[i].max, node.depth + 1);
+            const childNode = new SplatTreeNode(childrenBounds[i].min, childrenBounds[i].max, node.depth + 1);
             childNode.data = {
                 'indexes': baseIndexes[i]
             };
@@ -143,48 +142,5 @@ export class Octree {
 
         return visitLeavesFromNode(this.rootNode, visitFunc);
     }
-
-    castRay(ray, outHits = []) {
-        if(this.rootNode) {
-            this.castRayAtNode(ray, this.rootNode, outHits);
-        }
-        outHits.sort((a, b) => {
-            if (a.distance > b.distance) return 1;
-            else return -1;
-        })
-        return outHits;
-    }
-
-    castRayAtNode = function() {
-
-        const tempPosition = new THREE.Vector3();
-        const tempScale = new THREE.Vector3();
-        const tempHit = new Hit();
-        let c = 0;
-
-        return function(ray, node, outHits = []) {
-            if (!ray.intersectBox(node.boundingBox)) {
-                return;
-            }
-            if (node.data.indexes && node.data.indexes.length > 0) {
-                 for (let i = 0; i < node.data.indexes.length; i++) {
-                     const splatIndex = node.data.indexes[i];
-                     this.splatBuffer.getPosition(splatIndex, tempPosition);
-                     this.splatBuffer.getScale(splatIndex, tempScale);
-                     const radius = Math.max(Math.max(tempScale.x, tempScale.y), tempScale.z);
-                     if(ray.intersectSphere(tempPosition, radius, tempHit)) {
-                         outHits.push(tempHit.clone());
-                     }
-                 }
-             }
-            if (node.children && node.children.length > 0) {
-                for (let child of node.children) {
-                    this.castRayAtNode(ray, child, outHits);
-                }
-            }
-            return outHits;
-        };
-
-    }();
 
 }

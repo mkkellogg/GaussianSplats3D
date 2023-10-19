@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 let idGen = 0;
 
-export class OctreeNode {
+export class SplatTreeNode {
 
     constructor(min, max, depth, id) {
         this.min = new THREE.Vector3().copy(min);

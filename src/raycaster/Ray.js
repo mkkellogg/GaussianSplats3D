@@ -18,19 +18,19 @@ export class Ray {
     }
 
     boxContainsPoint(box, point, epsilon) {
-		return point.x < box.min.x - epsilon || point.x > box.max.x + epsilon ||
-			   point.y < box.min.y - epsilon || point.y > box.max.y + epsilon ||
-			   point.z < box.min.z - epsilon || point.z > box.max.z + epsilon ? false : true;
-	}
+        return point.x < box.min.x - epsilon || point.x > box.max.x + epsilon ||
+               point.y < box.min.y - epsilon || point.y > box.max.y + epsilon ||
+               point.z < box.min.z - epsilon || point.z > box.max.z + epsilon ? false : true;
+    }
 
     intersectBox = function() {
-    
+
         const planeIntersectionPoint = new THREE.Vector3();
         const planeIntersectionPointArray = [];
         const originArray = [];
         const directionArray = [];
 
-        return function (box, outHit) {
+        return function(box, outHit) {
 
             originArray[0] = this.origin.x;
             originArray[1] = this.origin.y;
@@ -62,7 +62,9 @@ export class Ray {
                     const idx2 = (i + 2) % 3;
                     planeIntersectionPointArray[2] = directionArray[idx1] / directionArray[i] * toSide + originArray[idx1];
                     planeIntersectionPointArray[1] = directionArray[idx2] / directionArray[i] * toSide + originArray[idx2];
-                    planeIntersectionPoint.set(planeIntersectionPointArray[i], planeIntersectionPointArray[idx2], planeIntersectionPointArray[idx1]);
+                    planeIntersectionPoint.set(planeIntersectionPointArray[i],
+                                               planeIntersectionPointArray[idx2],
+                                               planeIntersectionPointArray[idx1]);
                     if (this.boxContainsPoint(box, planeIntersectionPoint, 0.0001)) {
                         if (outHit) {
                             outHit.origin.copy(planeIntersectionPoint);
@@ -110,7 +112,7 @@ export class Ray {
             let t;
             if (t0 < 0) {
                 t = t1;
-            } else {  // else t0 is in front of the ray, so return the first collision point scaled by t0
+            } else { // else t0 is in front of the ray, so return the first collision point scaled by t0
                 t = t0;
             }
             outHit.origin.copy(this.origin).addScaledVector(this.direction, t);
