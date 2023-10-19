@@ -136,3 +136,12 @@ function update() {
     viewer.render();
 }
 ```
+## Controls
+Mouse
+- Left click and drag to orbit around the focal point
+- Right click and drag to pan the camera and focal point
+  
+Keyboard
+- `C` Toggles the mesh cursor, which shows where a ray projected from the mouse cursor intersects the splat mesh
+
+- `I` Toggles an info panel that displays the mesh cursor position, current FPS, and current window size
