@@ -9,8 +9,26 @@ export class SceneHelper {
 
     setupMeshCursor() {
         if (!this.meshCursor) {
-            const cursorGeometry = new THREE.SphereGeometry(1, 32, 32);
-            this.meshCursor = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+            const coneGeometry = new THREE.ConeGeometry(0.5, 1.5, 32);
+            const coneMaterial = new THREE.MeshBasicMaterial({color: 0xFFFFFF});
+
+            const downArrow = new THREE.Mesh(coneGeometry, coneMaterial);
+            downArrow.rotation.set(0, 0, Math.PI);
+            downArrow.position.set(0, 1, 0);
+            const upArrow = new THREE.Mesh(coneGeometry, coneMaterial);
+            upArrow.position.set(0, -1, 0);
+            const leftArrow = new THREE.Mesh(coneGeometry, coneMaterial);
+            leftArrow.rotation.set(0, 0, Math.PI / 2.0);
+            leftArrow.position.set(1, 0, 0);
+            const rightArrow = new THREE.Mesh(coneGeometry, coneMaterial);
+            rightArrow.rotation.set(0, 0, -Math.PI / 2.0);
+            rightArrow.position.set(-1, 0, 0);
+
+            this.meshCursor = new THREE.Object3D();
+            this.meshCursor.add(downArrow);
+            this.meshCursor.add(upArrow);
+            this.meshCursor.add(leftArrow);
+            this.meshCursor.add(rightArrow);
             this.meshCursor.scale.set(0.1, 0.1, 0.1);
             this.scene.add(this.meshCursor);
             this.meshCursor.visible = false;
@@ -19,8 +37,10 @@ export class SceneHelper {
 
     destroyMeshCursor() {
         if (this.meshCursor) {
-            this.meshCursor.geometry.dispose();
-            this.meshCursor.material.dispose();
+            this.meshCursor.children.forEach((child) => {
+                child.geometry.dispose();
+                child.material.dispose();
+            });
             this.scene.remove(this.meshCursor);
             this.meshCursor = null;
         }
@@ -32,6 +52,12 @@ export class SceneHelper {
 
     setMeshCursorPosition(position) {
         this.meshCursor.position.copy(position);
+    }
+
+    positionAndOrientMeshCursor(position, camera) {
+        this.meshCursor.position.copy(position);
+        this.meshCursor.up.copy(camera.up);
+        this.meshCursor.lookAt(camera.position);
     }
 
     addDebugMeshes() {

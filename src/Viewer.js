@@ -77,11 +77,6 @@ export class Viewer {
         switch (e.code) {
             case 'KeyC':
                 this.showMeshCursor = !this.showMeshCursor;
-                if (this.showMeshCursor) {
-                    this.sceneHelper.setupMeshCursor();
-                } else {
-                    this.sceneHelper.destroyMeshCursor();
-                }
             break;
             case 'KeyI':
                 this.showInfo = !this.showInfo;
@@ -130,6 +125,7 @@ export class Viewer {
 
         this.scene = this.scene || new THREE.Scene();
         this.sceneHelper = new SceneHelper(this.scene);
+        this.sceneHelper.setupMeshCursor();
 
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
@@ -173,7 +169,8 @@ export class Viewer {
 
         const layout = [
             ['Cursor position', 'cursorPosition'],
-            ['FPS', 'fps']
+            ['FPS', 'fps'],
+            ['Render window', 'renderWindow']
         ];
 
         const infoTable = document.createElement('div');
@@ -542,35 +539,53 @@ export class Viewer {
                 this.raycaster.intersectSplatTree(this.splatTree, outHits);
                 if (outHits.length > 0) {
                     this.sceneHelper.setMeshCursorVisibility(true);
-                    this.sceneHelper.setMeshCursorPosition(outHits[0].origin);
+                    this.sceneHelper.positionAndOrientMeshCursor(outHits[0].origin, this.camera);
                 } else {
                     this.sceneHelper.setMeshCursorVisibility(false);
                 }
+            } else {
+                this.sceneHelper.setMeshCursorVisibility(false);
             }
         };
 
     }();
 
-    updateInfo() {
-        if (this.showInfo) {
-            if (this.showMeshCursor) {
-                const pos = this.sceneHelper.meshCursor.position;
-                const posString = `<${pos.x.toFixed(5)}, ${pos.y.toFixed(5)}, ${pos.z.toFixed(5)}>`;
-                this.infoPanelCells.cursorPosition.innerHTML = posString;
-            } else {
-                this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
+    updateInfo = function() {
+
+        const renderDimensions = new THREE.Vector2();
+
+        return function() {
+            if (this.showInfo) {
+                this.getRenderDimensions(renderDimensions);
+                if (this.showMeshCursor) {
+                    const pos = this.sceneHelper.meshCursor.position;
+                    const posString = `[${pos.x.toFixed(5)}, ${pos.y.toFixed(5)}, ${pos.z.toFixed(5)}]`;
+                    this.infoPanelCells.cursorPosition.innerHTML = posString;
+                } else {
+                    this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
+                }
+                this.infoPanelCells.fps.innerHTML = this.currentFPS;
+                this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
             }
-            this.infoPanelCells.fps.innerHTML = this.currentFPS;
-        }
-    }
+        };
+
+    }();
 
     render() {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
+        let sceneHasRenderables = false;
+        for (let child of this.scene.children) {
+            if (child.visible) {
+                sceneHasRenderables = true;
+                break;
+            }
+        }
+
         // A more complex rendering sequence is required if you want to render "normal" Three.js
         // objects along with the splats
-        if (this.scene.children.length > 0) {
+        if (sceneHasRenderables) {
             this.renderer.setRenderTarget(this.splatRenderTarget);
             this.renderer.clear(true, true, true);
             this.renderer.getContext().colorMask(false, false, false, false);
