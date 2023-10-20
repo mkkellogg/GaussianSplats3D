@@ -343,9 +343,9 @@ export class Viewer {
             }
         });
         console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
-        console.log(`SplatTree leaves with vertices:${leavesWithVertices}`);
+        console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
         avgSplatCount /= nodeCount;
-        console.log(`Avg vertex count per node: ${avgSplatCount}`);
+        console.log(`Avg splat count per node: ${avgSplatCount}`);
 
         this.splatRenderCount = splatCount;
     }

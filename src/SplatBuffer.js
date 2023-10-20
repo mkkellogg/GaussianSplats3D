@@ -71,9 +71,9 @@ export class SplatBuffer {
 
         console.log('Splat buffer optimization');
         console.log('-------------------------------');
-        console.log('Old vertex count: ' + oldSplatCount);
+        console.log('Old splat count: ' + oldSplatCount);
         console.log('Old byte count: ' + oldByteCount);
-        console.log('New vertex count: ' + splatCount);
+        console.log('New splat count: ' + splatCount);
         console.log('New byte count: ' + newByteCount);
         console.log('Splat count reduction: ' + ((oldByteCount - newByteCount) / oldByteCount * 100).toFixed(3) + '%');
         console.log('==============================');
