@@ -54,7 +54,6 @@ export class Viewer {
         this.splatMesh = null;
 
         this.splatTree = null;
-        this.splatTreeNodeMap = {};
 
         this.sortRunning = false;
         this.selfDrivenModeRunning = false;
@@ -335,7 +334,6 @@ export class Viewer {
         this.splatTree.visitLeaves((node) => {
             const nodeSplatCount = node.data.indexes.length;
             if (nodeSplatCount > 0) {
-                this.splatTreeNodeMap[node.id] = node;
                 avgSplatCount += splatCount;
                 maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
                 nodeCount++;
@@ -415,7 +413,7 @@ export class Viewer {
             tempMatrix4.copy(this.camera.matrixWorld).invert();
 
             let nodeRenderCount = 0;
-            let verticesToCopy = 0;
+            let splatRenderCount = 0;
             const nodeCount = this.splatTree.nodesWithIndexes.length;
             for (let i = 0; i < nodeCount; i++) {
                 const node = this.splatTree.nodesWithIndexes[i];
@@ -436,7 +434,7 @@ export class Viewer {
                 if (!gatherAllNodes && ((outOfFovX || outOfFovY) && distanceToNode > ns)) {
                     continue;
                 }
-                verticesToCopy += node.data.indexes.length;
+                splatRenderCount += node.data.indexes.length;
                 nodeRenderList[nodeRenderCount] = node;
                 node.data.distanceToNode = distanceToNode;
                 nodeRenderCount++;
@@ -448,7 +446,7 @@ export class Viewer {
                 else return -1;
             });
 
-            this.splatRenderCount = verticesToCopy;
+            this.splatRenderCount = splatRenderCount;
             this.splatSortCount = 0;
             let currentByteOffset = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
