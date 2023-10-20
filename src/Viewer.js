@@ -46,12 +46,11 @@ export class Viewer {
         this.sceneHelper = null;
 
         this.sortWorker = null;
-        this.vertexRenderCount = 0;
-        this.vertexSortCount = 0;
+        this.splatRenderCount = 0;
+        this.splatSortCount = 0;
 
         this.inIndexArray = null;
 
-        this.splatBuffer = null;
         this.splatMesh = null;
 
         this.splatTree = null;
@@ -274,8 +273,8 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
 
         return function() {
-            const vertexCount = this.splatBuffer.getVertexCount();
-            if (vertexCount > 0) {
+            const splatCount = this.splatMesh.getSplatCount();
+            if (splatCount > 0) {
                 this.getRenderDimensions(renderDimensions);
                 this.cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
                 this.splatMesh.updateUniforms(renderDimensions, this.cameraFocalLength);
@@ -298,86 +297,94 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
-
-                this.splatBuffer = splatBuffer;
-
-                this.splatBuffer.optimize(this.splatAlphaRemovalThreshold);
-                const vertexCount = this.splatBuffer.getVertexCount();
-                console.log(`Splat count: ${vertexCount}`);
-
-                this.splatBuffer.buildPreComputedBuffers();
-                this.splatMesh = SplatMesh.buildMesh(this.splatBuffer);
-                this.splatMesh.frustumCulled = false;
-                this.splatMesh.renderOrder = 10;
-                this.updateSplatMeshUniforms();
-
-                this.splatTree = new SplatTree(8, 5000);
-                console.time('SplatTree build');
-                this.splatTree.processSplatBuffer(splatBuffer);
-                console.timeEnd('SplatTree build');
-
-                let leavesWithVertices = 0;
-                let avgVertexCount = 0;
-                let maxVertexCount = 0;
-                let nodeCount = 0;
-
-                this.splatTree.visitLeaves((node) => {
-                    const vertexCount = node.data.indexes.length;
-                    if (vertexCount > 0) {
-                        this.splatTreeNodeMap[node.id] = node;
-                        avgVertexCount += vertexCount;
-                        maxVertexCount = Math.max(maxVertexCount, vertexCount);
-                        nodeCount++;
-                        leavesWithVertices++;
-                    }
-                });
-                console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
-                console.log(`SplatTree leaves with vertices:${leavesWithVertices}`);
-                avgVertexCount /= nodeCount;
-                console.log(`Avg vertex count per node: ${avgVertexCount}`);
-
-                this.vertexRenderCount = vertexCount;
+                this.setupSplatMesh(splatBuffer);
+                return this.setupSortWorker(splatBuffer);
+            })
+            .then(() => {
                 loadingSpinner.hide();
-
-                this.sortWorker = createSortWorker(vertexCount, SplatBuffer.RowSizeBytes);
-                this.sortWorker.onmessage = (e) => {
-                    if (e.data.sortDone) {
-                        this.sortRunning = false;
-                        this.splatMesh.updateIndexes(this.outIndexArray, e.data.vertexRenderCount);
-                        this.lastSortTime = e.data.sortTime;
-                    } else if (e.data.sortCanceled) {
-                        this.sortRunning = false;
-                    } else if (e.data.sortSetupPhase1Complete) {
-                        console.log('Sorting web worker WASM setup complete.');
-                        const workerTransferPositionArray = new Float32Array(vertexCount * SplatBuffer.PositionComponentCount);
-                        this.splatBuffer.fillPositionArray(workerTransferPositionArray);
-                        this.sortWorker.postMessage({
-                            'positions': workerTransferPositionArray.buffer
-                        });
-                        this.outIndexArray = new Uint32Array(e.data.outIndexBuffer,
-                                                             e.data.outIndexOffset, this.splatBuffer.getVertexCount());
-                        this.inIndexArray = new Uint32Array(e.data.inIndexBuffer,
-                                                            e.data.inIndexOffset, this.splatBuffer.getVertexCount());
-                        for (let i = 0; i < vertexCount; i++) this.inIndexArray[i] = i;
-                    } else if (e.data.sortSetupComplete) {
-                        console.log('Sorting web worker ready.');
-                        const attributeData = this.getAttributeDataFromSplatBuffer(this.splatBuffer);
-                        this.splatMesh.updateIndexes(this.outIndexArray, this.splatBuffer.getVertexCount());
-                        const {covariancesTextureSize, centersColorsTextureSize} =
-                            this.splatMesh.setAttributes(attributeData.colors, attributeData.centers,
-                                                         attributeData.covariances, this.splatBuffer.getVertexCount());
-                        console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
-                        console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
-                        this.updateView(true, true);
-                        this.splatRenderingInitialized = true;
-                        resolve();
-                    }
-                };
-
+                resolve();
             })
             .catch((e) => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
             });
+        });
+    }
+
+    setupSplatMesh(splatBuffer) {
+
+        splatBuffer.optimize(this.splatAlphaRemovalThreshold);
+        const splatCount = splatBuffer.getSplatCount();
+        console.log(`Splat count: ${splatCount}`);
+
+        splatBuffer.buildPreComputedBuffers();
+        this.splatMesh = SplatMesh.buildMesh(splatBuffer);
+        this.splatMesh.frustumCulled = false;
+        this.splatMesh.renderOrder = 10;
+        this.updateSplatMeshUniforms();
+
+        this.splatTree = new SplatTree(8, 5000);
+        console.time('SplatTree build');
+        this.splatTree.processSplatBuffer(splatBuffer);
+        console.timeEnd('SplatTree build');
+
+        let leavesWithVertices = 0;
+        let avgSplatCount = 0;
+        let maxSplatCount = 0;
+        let nodeCount = 0;
+
+        this.splatTree.visitLeaves((node) => {
+            const nodeSplatCount = node.data.indexes.length;
+            if (nodeSplatCount > 0) {
+                this.splatTreeNodeMap[node.id] = node;
+                avgSplatCount += splatCount;
+                maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
+                nodeCount++;
+                leavesWithVertices++;
+            }
+        });
+        console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
+        console.log(`SplatTree leaves with vertices:${leavesWithVertices}`);
+        avgSplatCount /= nodeCount;
+        console.log(`Avg vertex count per node: ${avgSplatCount}`);
+
+        this.splatRenderCount = splatCount;
+    }
+
+    setupSortWorker(splatBuffer) {
+        return new Promise((resolve) => {
+            const splatCount = splatBuffer.getSplatCount();
+            this.sortWorker = createSortWorker(splatCount, SplatBuffer.RowSizeBytes);
+            this.sortWorker.onmessage = (e) => {
+                if (e.data.sortDone) {
+                    this.sortRunning = false;
+                    this.splatMesh.updateIndexes(this.outIndexArray, e.data.splatRenderCount);
+                    this.lastSortTime = e.data.sortTime;
+                } else if (e.data.sortCanceled) {
+                    this.sortRunning = false;
+                } else if (e.data.sortSetupPhase1Complete) {
+                    console.log('Sorting web worker WASM setup complete.');
+                    const workerTransferPositionArray = new Float32Array(splatCount * SplatBuffer.PositionComponentCount);
+                    splatBuffer.fillPositionArray(workerTransferPositionArray);
+                    this.sortWorker.postMessage({
+                        'positions': workerTransferPositionArray.buffer
+                    });
+                    this.outIndexArray = new Uint32Array(e.data.outIndexBuffer, e.data.outIndexOffset, splatBuffer.getSplatCount());
+                    this.inIndexArray = new Uint32Array(e.data.inIndexBuffer, e.data.inIndexOffset, splatBuffer.getSplatCount());
+                    for (let i = 0; i < splatCount; i++) this.inIndexArray[i] = i;
+                } else if (e.data.sortSetupComplete) {
+                    console.log('Sorting web worker ready.');
+                    const attributeData = this.splatMesh.getAttributeData();
+                    this.splatMesh.updateIndexes(this.outIndexArray, splatBuffer.getSplatCount());
+                    const {covariancesTextureSize, centersColorsTextureSize} =
+                           this.splatMesh.setAttributes(attributeData.colors, attributeData.centers,
+                                                        attributeData.covariances, splatBuffer.getSplatCount());
+                    console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
+                    console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
+                    this.updateView(true, true);
+                    this.splatRenderingInitialized = true;
+                    resolve();
+                }
+            };
         });
     }
 
@@ -441,14 +448,14 @@ export class Viewer {
                 else return -1;
             });
 
-            this.vertexRenderCount = verticesToCopy;
-            this.vertexSortCount = 0;
+            this.splatRenderCount = verticesToCopy;
+            this.splatSortCount = 0;
             let currentByteOffset = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
                 const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
                 if (shouldSort) {
-                    this.vertexSortCount += node.data.indexes.length;
+                    this.splatSortCount += node.data.indexes.length;
                 }
                 const windowSizeInts = node.data.indexes.length;
                 let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset, windowSizeInts);
@@ -560,7 +567,7 @@ export class Viewer {
 
         return function() {
             if (this.showInfo) {
-                const splatCount = this.splatBuffer.getVertexCount();
+                const splatCount = this.splatMesh.getSplatCount();
                 this.getRenderDimensions(renderDimensions);
                 if (this.showMeshCursor) {
                     const pos = this.sceneHelper.meshCursor.position;
@@ -571,9 +578,9 @@ export class Viewer {
                 }
                 this.infoPanelCells.fps.innerHTML = this.currentFPS;
                 this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
-                const renderPct = this.vertexRenderCount / splatCount * 100;
+                const renderPct = this.splatRenderCount / splatCount * 100;
                 this.infoPanelCells.renderSplatCount.innerHTML =
-                    `${this.vertexRenderCount} splats out of ${splatCount} (${renderPct.toFixed(2)}%)`;
+                    `${this.splatRenderCount} splats out of ${splatCount} (${renderPct.toFixed(2)}%)`;
                 this.infoPanelCells.sortTime.innerHTML = `${this.lastSortTime.toFixed(3)} ms`;
             }
         };
@@ -647,8 +654,8 @@ export class Viewer {
                     sort: {
                         'view': tempMatrix.elements,
                         'cameraPosition': cameraPositionArray,
-                        'vertexRenderCount': this.vertexRenderCount,
-                        'vertexSortCount': this.vertexSortCount,
+                        'splatRenderCount': this.splatRenderCount,
+                        'splatSortCount': this.splatSortCount,
                         'inIndexBuffer': this.inIndexArray.buffer
                     }
                 });
@@ -659,33 +666,4 @@ export class Viewer {
 
     }();
 
-    getAttributeDataFromSplatBuffer(splatBuffer) {
-
-        const vertexCount = splatBuffer.getVertexCount();
-
-        const splatArray = new Float32Array(splatBuffer.getBufferData());
-        const pCovarianceArray = new Float32Array(splatBuffer.getPrecomputedCovarianceBufferData());
-        const pColorArray = new Uint8Array(splatBuffer.getSeparatedColorBufferData());
-        const colors = new Uint8Array(vertexCount * 4);
-        const centers = new Float32Array(vertexCount * 3);
-        const covariances = new Float32Array(vertexCount * 6);
-
-        covariances.set(pCovarianceArray);
-        colors.set(pColorArray);
-
-        for (let i = 0; i < vertexCount; i++) {
-            const centersBase = 3 * i;
-            const splatArrayBase = SplatBuffer.RowSizeFloats * i;
-            centers[centersBase] = splatArray[splatArrayBase];
-            centers[centersBase + 1] = splatArray[splatArrayBase + 1];
-            centers[centersBase + 2] = splatArray[splatArrayBase + 2];
-        }
-
-        return {
-            'colors': colors,
-            'centers': centers,
-            'covariances': covariances
-        };
-
-    };
 }

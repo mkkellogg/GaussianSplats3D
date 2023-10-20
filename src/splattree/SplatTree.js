@@ -19,10 +19,10 @@ export class SplatTree {
         this.splatBuffer = splatBuffer;
         this.addedIndexes = {};
         this.nodesWithIndexes = [];
-        const vertexCount = splatBuffer.getVertexCount();
+        const splatCount = splatBuffer.getSplatCount();
 
         const position = new THREE.Vector3();
-        for (let i = 0; i < vertexCount; i++) {
+        for (let i = 0; i < splatCount; i++) {
             splatBuffer.getPosition(i, position);
             if (i === 0 || position.x < this.sceneMin.x) this.sceneMin.x = position.x;
             if (i === 0 || position.x > this.sceneMax.x) this.sceneMax.x = position.x;
@@ -35,7 +35,7 @@ export class SplatTree {
         this.sceneDimensions.copy(this.sceneMin).sub(this.sceneMin);
 
         const indexes = [];
-        for (let i = 0; i < vertexCount; i ++)indexes.push(i);
+        for (let i = 0; i < splatCount; i ++)indexes.push(i);
         this.rootNode = new SplatTreeNode(this.sceneMin, this.sceneMax, 0);
         this.rootNode.data = {
             'indexes': indexes
@@ -44,9 +44,9 @@ export class SplatTree {
     }
 
     processNode(node, splatBuffer) {
-        const vertexCount = node.data.indexes.length;
+        const splatCount = node.data.indexes.length;
 
-        if (vertexCount < this.maxPositionsPerNode || node.depth > this.maxDepth) {
+        if (splatCount < this.maxPositionsPerNode || node.depth > this.maxDepth) {
             for (let i = 0; i < node.data.indexes.length; i++) {
                 if (this.addedIndexes[node.data.indexes[i]]) {
                     node.data.indexes.splice(i, 1);
@@ -87,20 +87,20 @@ export class SplatTree {
                            new THREE.Vector3(nodeCenter.x, nodeCenter.y, nodeCenter.z + halfDimensions.z)),
         ];
 
-        const vertexCounts = [];
+        const splatCounts = [];
         const baseIndexes = [];
         for (let i = 0; i < childrenBounds.length; i++) {
-            vertexCounts[i] = 0;
+            splatCounts[i] = 0;
             baseIndexes[i] = [];
         }
 
         const position = new THREE.Vector3();
-        for (let i = 0; i < vertexCount; i++) {
+        for (let i = 0; i < splatCount; i++) {
             const splatIndex = node.data.indexes[i];
             splatBuffer.getPosition(splatIndex, position);
             for (let j = 0; j < childrenBounds.length; j++) {
                 if (childrenBounds[j].containsPoint(position)) {
-                    vertexCounts[j]++;
+                    splatCounts[j]++;
                     baseIndexes[j].push(splatIndex);
                 }
             }

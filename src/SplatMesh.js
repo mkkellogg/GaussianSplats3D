@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SplatBuffer } from './SplatBuffer.js';
 import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
@@ -213,7 +214,7 @@ export class SplatMesh extends THREE.Mesh {
 
     static buildGeomtery(splatBuffer) {
 
-        const vertexCount = splatBuffer.getVertexCount();
+        const splatCount = splatBuffer.getSplatCount();
 
         const baseGeometry = new THREE.BufferGeometry();
 
@@ -230,17 +231,17 @@ export class SplatMesh extends THREE.Mesh {
 
         const geometry = new THREE.InstancedBufferGeometry().copy(baseGeometry);
 
-        const splatIndexArray = new Uint32Array(vertexCount);
+        const splatIndexArray = new Uint32Array(splatCount);
         const splatIndexes = new THREE.InstancedBufferAttribute(splatIndexArray, 1, false);
         splatIndexes.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatIndex', splatIndexes);
 
-        const splatColorsArray = new Float32Array(vertexCount * 4);
+        const splatColorsArray = new Float32Array(splatCount * 4);
         const splatColors = new THREE.InstancedBufferAttribute(splatColorsArray, 4, false);
         splatColors.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatColor', splatColors);
 
-        const splatCentersArray = new Float32Array(vertexCount * 9);
+        const splatCentersArray = new Float32Array(splatCount * 9);
         const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 9, false);
         splatCenters.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatCenterCovariance', splatCenters);
@@ -248,16 +249,16 @@ export class SplatMesh extends THREE.Mesh {
         return geometry;
     }
 
-    setAttributes(colors, centers, covariances, vertexCount) {
+    setAttributes(colors, centers, covariances, splatCount) {
         const ELEMENTS_PER_TEXEL = 2;
 
         const covariancesTextureSize = new THREE.Vector2(4096, 1024);
-        while (covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL < vertexCount * 6) {
+        while (covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL < splatCount * 6) {
             covariancesTextureSize.y *= 2;
         }
 
         const centersColorsTextureSize = new THREE.Vector2(4096, 1024);
-        while (centersColorsTextureSize.x * centersColorsTextureSize.y * ELEMENTS_PER_TEXEL < vertexCount * 4) {
+        while (centersColorsTextureSize.x * centersColorsTextureSize.y * ELEMENTS_PER_TEXEL < splatCount * 4) {
             centersColorsTextureSize.y *= 2;
         }
 
@@ -270,7 +271,7 @@ export class SplatMesh extends THREE.Mesh {
         this.material.uniforms.covariancesTextureSize.value.copy(covariancesTextureSize);
 
         const centerColors = new Uint32Array(centersColorsTextureSize.x * centersColorsTextureSize.y * ELEMENTS_PER_TEXEL);
-        for (let c = 0; c < vertexCount; c++) {
+        for (let c = 0; c < splatCount; c++) {
             const colorsBase = c * 4;
             const centersBase = c * 3;
             const centerColorsBase = c * 4;
@@ -287,7 +288,7 @@ export class SplatMesh extends THREE.Mesh {
         this.material.uniforms.centersColorsTexture.value = centersColorsTexture;
         this.material.uniforms.centersColorsTextureSize.value.copy(centersColorsTextureSize);
 
-        this.geometry.instanceCount = vertexCount;
+        this.geometry.instanceCount = splatCount;
 
         return {
             'covariancesTextureSize': covariancesTextureSize,
@@ -295,22 +296,56 @@ export class SplatMesh extends THREE.Mesh {
         };
     }
 
-    updateIndexes(indexes, renderVertexCount) {
+    updateIndexes(indexes, renderSplatCount) {
         const geometry = this.geometry;
 
         geometry.attributes.splatIndex.set(indexes);
         geometry.attributes.splatIndex.needsUpdate = true;
 
-        geometry.instanceCount = renderVertexCount;
+        geometry.instanceCount = renderSplatCount;
     }
 
     updateUniforms(renderDimensions, cameraFocalLength) {
-        const vertexCount = this.splatBuffer.getVertexCount();
-        if (vertexCount > 0) {
+        const splatCount = this.splatBuffer.getSplatCount();
+        if (splatCount > 0) {
             this.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
             this.material.uniforms.focal.value.set(cameraFocalLength, cameraFocalLength);
             this.material.uniformsNeedUpdate = true;
         }
+    }
+
+    getAttributeData() {
+
+        const splatCount = this.splatBuffer.getSplatCount();
+
+        const splatArray = new Float32Array(this.splatBuffer.getBufferData());
+        const pCovarianceArray = new Float32Array(this.splatBuffer.getPrecomputedCovarianceBufferData());
+        const pColorArray = new Uint8Array(this.splatBuffer.getSeparatedColorBufferData());
+        const colors = new Uint8Array(splatCount * 4);
+        const centers = new Float32Array(splatCount * 3);
+        const covariances = new Float32Array(splatCount * 6);
+
+        covariances.set(pCovarianceArray);
+        colors.set(pColorArray);
+
+        for (let i = 0; i < splatCount; i++) {
+            const centersBase = 3 * i;
+            const splatArrayBase = SplatBuffer.RowSizeFloats * i;
+            centers[centersBase] = splatArray[splatArrayBase];
+            centers[centersBase + 1] = splatArray[splatArrayBase + 1];
+            centers[centersBase + 2] = splatArray[splatArrayBase + 2];
+        }
+
+        return {
+            'colors': colors,
+            'centers': centers,
+            'covariances': covariances
+        };
+
+    };
+
+    getSplatCount() {
+        return this.splatBuffer.getSplatCount();
     }
 
 }

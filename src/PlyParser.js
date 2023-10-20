@@ -23,15 +23,15 @@ export class PlyParser {
 
         const headerLines = headerText.split('\n');
 
-        let vertexCount = 0;
+        let splatCount = 0;
         let propertyTypes = {};
 
         for (let i = 0; i < headerLines.length; i++) {
             const line = headerLines[i].trim();
             if (line.startsWith('element vertex')) {
-                const vertexCountMatch = line.match(/\d+/);
-                if (vertexCountMatch) {
-                    vertexCount = parseInt(vertexCountMatch[0]);
+                const splatCountMatch = line.match(/\d+/);
+                if (splatCountMatch) {
+                    splatCount = parseInt(splatCountMatch[0]);
                 }
             } else if (line.startsWith('property')) {
                 const propertyMatch = line.match(/(\w+)\s+(\w+)\s+(\w+)/);
@@ -49,7 +49,7 @@ export class PlyParser {
         const vertexData = new DataView(plyBuffer, vertexByteOffset);
 
         return {
-            'vertexCount': vertexCount,
+            'splatCount': splatCount,
             'propertyTypes': propertyTypes,
             'vertexData': vertexData,
             'headerOffset': headerOffset
@@ -72,7 +72,7 @@ export class PlyParser {
 
         console.time('PLY load');
 
-        const {vertexCount, propertyTypes, vertexData} = this.decodeHeader(this.plyBuffer);
+        const {splatCount, propertyTypes, vertexData} = this.decodeHeader(this.plyBuffer);
 
         // figure out the SH degree from the number of coefficients
         let nRestCoeffs = 0;
@@ -125,9 +125,9 @@ export class PlyParser {
                                   'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
         console.time('Importance computations');
-        let sizeList = new Float32Array(vertexCount);
-        let sizeIndex = new Uint32Array(vertexCount);
-        for (let row = 0; row < vertexCount; row++) {
+        let sizeList = new Float32Array(splatCount);
+        let sizeIndex = new Uint32Array(splatCount);
+        for (let row = 0; row < splatCount; row++) {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             sizeIndex[row] = row;
             if (!propertyTypes['scale_0']) continue;
@@ -142,9 +142,9 @@ export class PlyParser {
         console.timeEnd('Importance sort');
 
 
-        const splatBufferData = new ArrayBuffer(SplatBuffer.RowSizeBytes * vertexCount);
+        const splatBufferData = new ArrayBuffer(SplatBuffer.RowSizeBytes * splatCount);
 
-        for (let j = 0; j < vertexCount; j++) {
+        for (let j = 0; j < splatCount; j++) {
             const row = sizeIndex[j];
             const offset = row * plyRowSize;
             this.readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);

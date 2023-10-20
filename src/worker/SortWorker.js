@@ -4,7 +4,7 @@ import { Constants } from '../Constants.js';
 function sortWorker(self) {
 
     let wasmInstance;
-    let vertexCount;
+    let splatCount;
     let indexesOffset;
     let positionsOffset;
     let viewProjOffset;
@@ -16,7 +16,7 @@ function sortWorker(self) {
 
     let Constants;
 
-    function sort(vertexSortCount, vertexRenderCount, viewProj, cameraPosition) {
+    function sort(splatSortCount, splatRenderCount, viewProj, cameraPosition) {
 
         // console.time('WASM SORT');
         const sortStartTime = performance.now();
@@ -25,18 +25,18 @@ function sortWorker(self) {
         for (let i = 0; i < 16; i++) {
             viewProjArray[i] = Math.round(viewProj[i] * 1000.0);
         }
-        const frequencies = new Uint32Array(wasmMemory, sortBuffersOffset + vertexCount * 4, Constants.DepthMapRange);
+        const frequencies = new Uint32Array(wasmMemory, sortBuffersOffset + splatCount * 4, Constants.DepthMapRange);
         frequencies.set(countsZero);
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
-                                         cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexRenderCount, vertexCount);
+                                         cameraPosition[2], Constants.DepthMapRange, splatSortCount, splatRenderCount, splatCount);
         const sortEndTime = performance.now();
         // console.timeEnd('WASM SORT');
 
         self.postMessage({
             'sortDone': true,
-            'vertexSortCount': vertexSortCount,
-            'vertexRenderCount': vertexRenderCount,
+            'splatSortCount': splatSortCount,
+            'splatRenderCount': splatRenderCount,
             'sortTime': sortEndTime - sortStartTime
         });
     }
@@ -45,31 +45,31 @@ function sortWorker(self) {
         if (e.data.positions) {
             positions = e.data.positions;
             const floatPositions = new Float32Array(positions);
-            const intPositions = new Int32Array(vertexCount * 3);
-            for (let i = 0; i < vertexCount * 3; i++) {
+            const intPositions = new Int32Array(splatCount * 3);
+            for (let i = 0; i < splatCount * 3; i++) {
                 intPositions[i] = Math.round(floatPositions[i] * 1000.0);
             }
-            new Int32Array(wasmMemory, positionsOffset, vertexCount * 3).set(intPositions);
+            new Int32Array(wasmMemory, positionsOffset, splatCount * 3).set(intPositions);
             self.postMessage({
                 'sortSetupComplete': true,
             });
         } else if (e.data.sort) {
-            const renderCount = e.data.sort.vertexRenderCount || 0;
-            const sortCount = e.data.sort.vertexSortCount || 0;
+            const renderCount = e.data.sort.splatRenderCount || 0;
+            const sortCount = e.data.sort.splatSortCount || 0;
             sort(sortCount, renderCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.inIndexBuffer);
         } else if (e.data.init) {
             // Yep, this is super hacky and gross :(
             Constants = e.data.init.Constants;
 
-            vertexCount = e.data.init.vertexCount;
+            splatCount = e.data.init.splatCount;
 
             const INDEXES_BYTES_PER_ENTRY = Constants.BytesPerInt;
             const POSITIONS_BYTES_PER_ENTRY = Constants.BytesPerFloat * 3;
 
             const sorterWasmBytes = new Uint8Array(e.data.init.sorterWasmBytes);
             const memoryBytesPerVertex = INDEXES_BYTES_PER_ENTRY + POSITIONS_BYTES_PER_ENTRY;
-            const memoryRequiredForVertices = vertexCount * memoryBytesPerVertex;
-            const memoryRequiredForSortBuffers = vertexCount * Constants.BytesPerInt * 2 +
+            const memoryRequiredForVertices = splatCount * memoryBytesPerVertex;
+            const memoryRequiredForSortBuffers = splatCount * Constants.BytesPerInt * 2 +
                                                  Constants.DepthMapRange * Constants.BytesPerInt * 2;
             const extraMemory = Constants.MemoryPageSize * 32;
             const totalRequiredMemory = memoryRequiredForVertices + memoryRequiredForSortBuffers + extraMemory;
@@ -91,10 +91,10 @@ function sortWorker(self) {
             .then((instance) => {
                 wasmInstance = instance;
                 indexesOffset = 0;
-                positionsOffset = vertexCount * INDEXES_BYTES_PER_ENTRY;
-                viewProjOffset = positionsOffset + vertexCount * POSITIONS_BYTES_PER_ENTRY;
+                positionsOffset = splatCount * INDEXES_BYTES_PER_ENTRY;
+                viewProjOffset = positionsOffset + splatCount * POSITIONS_BYTES_PER_ENTRY;
                 sortBuffersOffset = viewProjOffset + 16 * Constants.BytesPerFloat;
-                indexesOutOffset = sortBuffersOffset + vertexCount * Constants.BytesPerInt +
+                indexesOutOffset = sortBuffersOffset + splatCount * Constants.BytesPerInt +
                                    Constants.DepthMapRange * Constants.BytesPerInt * 2;
                 wasmMemory = sorterWasmImport.env.memory.buffer;
                 self.postMessage({
@@ -109,7 +109,7 @@ function sortWorker(self) {
     };
 }
 
-export function createSortWorker(vertexCount, splatBufferRowBytes) {
+export function createSortWorker(splatCount, splatBufferRowBytes) {
     const worker = new Worker(
         URL.createObjectURL(
             new Blob(['(', sortWorker.toString(), ')(self)'], {
@@ -127,7 +127,7 @@ export function createSortWorker(vertexCount, splatBufferRowBytes) {
     worker.postMessage({
         'init': {
             'sorterWasmBytes': sorterWasmBytes.buffer,
-            'vertexCount': vertexCount,
+            'splatCount': splatCount,
             'splatBufferRowBytes': splatBufferRowBytes,
             // Super hacky
             'Constants': {

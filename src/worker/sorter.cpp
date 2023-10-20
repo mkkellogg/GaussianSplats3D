@@ -10,7 +10,7 @@
 EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positions, char* sortBuffers, int* viewProj,
                                              unsigned int* indexesOut, float cameraX, float cameraY,
                                              float cameraZ, unsigned int distanceMapRange, unsigned int sortCount,
-                                             unsigned int renderCount, unsigned int vertexCount) {
+                                             unsigned int renderCount, unsigned int splatCount) {
 
     int maxDistance = -2147483640;
     int minDistance = 2147483640;
@@ -29,7 +29,7 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
     float distancesRange = (float)maxDistance - (float)minDistance;
     float rangeMap = (float)distanceMapRange / distancesRange;
 
-    unsigned int* frequencies = ((unsigned int *)distances) + vertexCount;
+    unsigned int* frequencies = ((unsigned int *)distances) + splatCount;
 
     for (unsigned int i = 0; i < sortCount; i++) {
         unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
