@@ -67,6 +67,7 @@ export class Viewer {
         this.infoPanelCells = {};
 
         this.currentFPS = 0;
+        this.lastSortTime = 0;
 
         this.mousePosition = new THREE.Vector2();
         window.addEventListener('mousemove', this.onMouseMove.bind(this));
@@ -170,7 +171,9 @@ export class Viewer {
         const layout = [
             ['Cursor position', 'cursorPosition'],
             ['FPS', 'fps'],
-            ['Render window', 'renderWindow']
+            ['Render window', 'renderWindow'],
+            ['Rendering:', 'renderSplatCount'],
+            ['Sort time', 'sortTime']
         ];
 
         const infoTable = document.createElement('div');
@@ -341,6 +344,7 @@ export class Viewer {
                     if (e.data.sortDone) {
                         this.sortRunning = false;
                         this.splatMesh.updateIndexes(this.outIndexArray, e.data.vertexRenderCount);
+                        this.lastSortTime = e.data.sortTime;
                     } else if (e.data.sortCanceled) {
                         this.sortRunning = false;
                     } else if (e.data.sortSetupPhase1Complete) {
@@ -556,6 +560,7 @@ export class Viewer {
 
         return function() {
             if (this.showInfo) {
+                const splatCount = this.splatBuffer.getVertexCount();
                 this.getRenderDimensions(renderDimensions);
                 if (this.showMeshCursor) {
                     const pos = this.sceneHelper.meshCursor.position;
@@ -566,6 +571,10 @@ export class Viewer {
                 }
                 this.infoPanelCells.fps.innerHTML = this.currentFPS;
                 this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
+                const renderPct = this.vertexRenderCount / splatCount * 100;
+                this.infoPanelCells.renderSplatCount.innerHTML =
+                    `${this.vertexRenderCount} splats out of ${splatCount} (${renderPct.toFixed(2)}%)`;
+                this.infoPanelCells.sortTime.innerHTML = `${this.lastSortTime.toFixed(3)} ms`;
             }
         };
 

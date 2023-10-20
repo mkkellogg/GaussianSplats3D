@@ -19,6 +19,7 @@ function sortWorker(self) {
     function sort(vertexSortCount, vertexRenderCount, viewProj, cameraPosition) {
 
         // console.time('WASM SORT');
+        const sortStartTime = performance.now();
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
         const viewProjArray = new Int32Array(wasmMemory, viewProjOffset, 16);
         for (let i = 0; i < 16; i++) {
@@ -29,13 +30,14 @@ function sortWorker(self) {
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
                                          cameraPosition[2], Constants.DepthMapRange, vertexSortCount, vertexRenderCount, vertexCount);
-
+        const sortEndTime = performance.now();
         // console.timeEnd('WASM SORT');
 
         self.postMessage({
             'sortDone': true,
             'vertexSortCount': vertexSortCount,
-            'vertexRenderCount': vertexRenderCount
+            'vertexRenderCount': vertexRenderCount,
+            'sortTime': sortEndTime - sortStartTime
         });
     }
 
