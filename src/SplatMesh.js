@@ -24,8 +24,6 @@ export class SplatMesh extends THREE.Mesh {
             #include <common>
 
             attribute uint splatIndex;
-            attribute vec4 splatColor;
-            attribute mat3 splatCenterCovariance;
 
             uniform sampler2D covariancesTexture;
             uniform highp usampler2D centersColorsTexture;
@@ -235,16 +233,6 @@ export class SplatMesh extends THREE.Mesh {
         const splatIndexes = new THREE.InstancedBufferAttribute(splatIndexArray, 1, false);
         splatIndexes.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('splatIndex', splatIndexes);
-
-        const splatColorsArray = new Float32Array(splatCount * 4);
-        const splatColors = new THREE.InstancedBufferAttribute(splatColorsArray, 4, false);
-        splatColors.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('splatColor', splatColors);
-
-        const splatCentersArray = new Float32Array(splatCount * 9);
-        const splatCenters = new THREE.InstancedBufferAttribute(splatCentersArray, 9, false);
-        splatCenters.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('splatCenterCovariance', splatCenters);
 
         return geometry;
     }
