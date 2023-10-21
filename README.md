@@ -71,7 +71,7 @@ plyLoader.loadFromFile('<path to .ply file>')
 ```
 This code will prompt your browser to automatically start downloading the converted `.splat` file.
 
-It is now possible to integrate your own Three.js scene into the viewer (still somewhat experimental). The `Viewer` class now accepts a `scene` parameter by which you can pass in any 'normal' Three.js objects you want to be rendered along with the splats. Rendering the splats correctly with external objects requires a special sequence of steps so the viewer needs to be aware of them:
+It is now possible to integrate your own Three.js scene into the viewer (still somewhat experimental). The `Viewer` class now accepts two parameters by which you can pass in any 'normal' Three.js objects you want to be rendered along with the splats: `scene` and/or `simpleScene`. Rendering the splats correctly with external objects requires a special sequence of steps so the viewer needs to be aware of them:
 ```javascript
 const scene = new THREE.Scene();
 
@@ -93,6 +93,7 @@ viewer.loadFile('<path to .ply or .splat file>')
     viewer.start();
 });
 ```
+The difference between the `scene` and `simpleScene` parameters is a matter of optmization. Objects contained in `scene` will have their depths rendered using their standard shader, but objects contained in `simpleScene` will have their depths rendered using a very simple override shader.
 
 The viewer allows for various levels of customization via constructor parameters. You can control when its `update()` and `render()` methods are called by passing `false` for the `selfDrivenMode` parameter and then calling those methods whenever/wherever you decide is appropriate. You can tell the viewer to not use its built-in camera controls by passing `false` for the `useBuiltInControls` parameter. You can also use your own Three.js renderer and camera by passing those values to the viewer's constructor. The sample below shows all of these options:
 

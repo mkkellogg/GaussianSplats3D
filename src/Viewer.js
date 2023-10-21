@@ -33,6 +33,7 @@ export class Viewer {
         this.initialCameraLookAt = new THREE.Vector3().fromArray(params.initialCameraLookAt);
 
         this.scene = params.scene;
+        this.simpleScene = params.simpleScene;
         this.renderer = params.renderer;
         this.camera = params.camera;
         this.useBuiltInControls = params.useBuiltInControls;
@@ -123,7 +124,8 @@ export class Viewer {
         }
 
         this.scene = this.scene || new THREE.Scene();
-        this.sceneHelper = new SceneHelper(this.scene);
+        this.simpleScene = this.simpleScene || new THREE.Scene();
+        this.sceneHelper = new SceneHelper(this.scene, this.simpleScene);
         this.sceneHelper.setupMeshCursor();
 
         if (!this.usingExternalRenderer) {
@@ -152,6 +154,8 @@ export class Viewer {
             resizeObserver.observe(this.rootElement);
             this.rootElement.appendChild(this.renderer.domElement);
         }
+
+        this.setupSimpleObjectDepthOverrideMaterial();
 
     }
 
@@ -218,6 +222,26 @@ export class Viewer {
         this.splatRenderTarget.depthTexture = new THREE.DepthTexture(width, height);
         this.splatRenderTarget.depthTexture.format = THREE.DepthFormat;
         this.splatRenderTarget.depthTexture.type = THREE.UnsignedIntType;
+    }
+
+    setupSimpleObjectDepthOverrideMaterial() {
+        this.simpleObjectDepthOverrideMaterial = new THREE.ShaderMaterial({
+            vertexShader: `
+                #include <common>
+                void main() {
+                    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position.xyz, 1.0);   
+                }
+            `,
+            fragmentShader: `
+                #include <common>
+                void main() {
+                    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+              }
+            `,
+            depthWrite: true,
+            depthTest: true,
+            transparent: false
+        });
     }
 
     setupRenderTargetCopyObjects() {
@@ -589,28 +613,39 @@ export class Viewer {
         this.renderer.autoClear = false;
         this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
-        let sceneHasRenderables = false;
-        for (let child of this.scene.children) {
-            if (child.visible) {
-                sceneHasRenderables = true;
-                break;
+        const sceneHasRenderables = (scene) => {
+            for (let child of scene.children) {
+                if (child.visible) {
+                   return true;
+                }
             }
-        }
+            return false;
+        };
+
+        let defualtSceneHasRenderables = sceneHasRenderables(this.scene);
+        let simpleSceneHasRenderables = sceneHasRenderables(this.simpleScene);
 
         // A more complex rendering sequence is required if you want to render "normal" Three.js
         // objects along with the splats
-        if (sceneHasRenderables) {
+        if (defualtSceneHasRenderables || simpleSceneHasRenderables) {
             this.renderer.setRenderTarget(this.splatRenderTarget);
             this.renderer.clear(true, true, true);
             this.renderer.getContext().colorMask(false, false, false, false);
-            this.renderer.render(this.scene, this.camera);
+            if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
+            if (simpleSceneHasRenderables) {
+                const simpleSceneOverrideMaterial = this.simpleScene.overrideMaterial;
+                this.simpleScene.overrideMaterial = this.simpleObjectDepthOverrideMaterial;
+                this.renderer.render(this.simpleScene, this.camera);
+                this.simpleScene.overrideMaterial = simpleSceneOverrideMaterial;
+            }
             this.renderer.getContext().colorMask(true, true, true, true);
             this.renderer.render(this.splatMesh, this.camera);
 
             this.renderer.setRenderTarget(null);
             this.renderer.clear(true, true, true);
 
-            this.renderer.render(this.scene, this.camera);
+            if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
+            if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
             this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
             this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
             this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);

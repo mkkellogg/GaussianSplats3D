@@ -2,8 +2,9 @@ import * as THREE from 'three';
 
 export class SceneHelper {
 
-    constructor(scene) {
+    constructor(scene, simpleScene) {
         this.scene = scene;
+        this.simpleScene = simpleScene;
         this.meshCursor = null;
     }
 
@@ -30,7 +31,7 @@ export class SceneHelper {
             this.meshCursor.add(leftArrow);
             this.meshCursor.add(rightArrow);
             this.meshCursor.scale.set(0.1, 0.1, 0.1);
-            this.scene.add(this.meshCursor);
+            this.simpleScene.add(this.meshCursor);
             this.meshCursor.visible = false;
         }
     }
@@ -41,7 +42,7 @@ export class SceneHelper {
                 child.geometry.dispose();
                 child.material.dispose();
             });
-            this.scene.remove(this.meshCursor);
+            this.simpleScene.remove(this.meshCursor);
             this.meshCursor = null;
         }
     }
@@ -63,8 +64,8 @@ export class SceneHelper {
     addDebugMeshes() {
         this.debugRoot = this.createDebugMeshes();
         this.secondaryDebugRoot = this.createSecondaryDebugMeshes();
-        this.scene.add(this.debugRoot);
-        this.scene.add(this.secondaryDebugRoot);
+        this.simpleScene.add(this.debugRoot);
+        this.simpleScene.add(this.secondaryDebugRoot);
     }
 
     createDebugMeshes(renderOrder) {
