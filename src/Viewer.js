@@ -334,7 +334,6 @@ export class Viewer {
     }
 
     setupSplatMesh(splatBuffer) {
-
         splatBuffer.optimize(this.splatAlphaRemovalThreshold);
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
@@ -385,21 +384,18 @@ export class Viewer {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
                     console.log('Sorting web worker WASM setup complete.');
-                    const workerTransferPositionArray = new Float32Array(splatCount * SplatBuffer.PositionComponentCount);
-                    splatBuffer.fillPositionArray(workerTransferPositionArray);
                     this.sortWorker.postMessage({
-                        'positions': workerTransferPositionArray.buffer
+                        'positions': this.splatMesh.getCenters().buffer
                     });
                     this.outIndexArray = new Uint32Array(e.data.outIndexBuffer, e.data.outIndexOffset, splatBuffer.getSplatCount());
                     this.inIndexArray = new Uint32Array(e.data.inIndexBuffer, e.data.inIndexOffset, splatBuffer.getSplatCount());
                     for (let i = 0; i < splatCount; i++) this.inIndexArray[i] = i;
                 } else if (e.data.sortSetupComplete) {
                     console.log('Sorting web worker ready.');
-                    const attributeData = this.splatMesh.getAttributeData();
                     this.splatMesh.updateIndexes(this.outIndexArray, splatBuffer.getSplatCount());
-                    const {covariancesTextureSize, centersColorsTextureSize} =
-                           this.splatMesh.setAttributes(attributeData.colors, attributeData.centers,
-                                                        attributeData.covariances, splatBuffer.getSplatCount());
+                    const splatDataTextures = this.splatMesh.getSplatDataTextures();
+                    const covariancesTextureSize = splatDataTextures.covariances.size;
+                    const centersColorsTextureSize = splatDataTextures.centerColors.size;
                     console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
                     console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
                     this.updateView(true, true);
@@ -699,4 +695,7 @@ export class Viewer {
 
     }();
 
+    getSplatMesh() {
+        return this.splatMesh;
+    }
 }

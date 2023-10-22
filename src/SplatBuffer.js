@@ -40,13 +40,11 @@ export class SplatBuffer {
             this.floatArray = new Float32Array(this.bufferData);
             this.uint8Array = new Uint8Array(this.bufferData);
             this.precomputedCovarianceBufferData = null;
-            this.separatedColorBufferData = null;
         } else {
             this.bufferData = bufferDataOrSplatCount;
             this.floatArray = new Float32Array(this.bufferData);
             this.uint8Array = new Uint8Array(this.bufferData);
             this.precomputedCovarianceBufferData = null;
-            this.separatedColorBufferData = null;
         }
     }
 
@@ -91,9 +89,6 @@ export class SplatBuffer {
         this.precomputedCovarianceBufferData = new ArrayBuffer(SplatBuffer.CovarianceSizeBytes * splatCount);
         const covarianceArray = new Float32Array(this.precomputedCovarianceBufferData);
 
-        this.separatedColorBufferData = new ArrayBuffer(SplatBuffer.ColorSizeBytes * splatCount);
-        const colorArray = new Uint8Array(this.separatedColorBufferData);
-
         const scale = new THREE.Vector3();
         const rotation = new THREE.Quaternion();
         const rotationMatrix = new THREE.Matrix3();
@@ -101,13 +96,6 @@ export class SplatBuffer {
         const covarianceMatrix = new THREE.Matrix3();
         const tempMatrix4 = new THREE.Matrix4();
         for (let i = 0; i < splatCount; i++) {
-
-            const colorBase = SplatBuffer.RowSizeBytes * i + SplatBuffer.ColorRowOffsetBytes;
-            colorArray[SplatBuffer.ColorSizeBytes * i] = this.uint8Array[colorBase];
-            colorArray[SplatBuffer.ColorSizeBytes * i + 1] = this.uint8Array[colorBase + 1];
-            colorArray[SplatBuffer.ColorSizeBytes * i + 2] = this.uint8Array[colorBase + 2];
-            colorArray[SplatBuffer.ColorSizeBytes * i + 3] = this.uint8Array[colorBase + 3];
-
             const scaleBase = SplatBuffer.RowSizeFloats * i + SplatBuffer.ScaleRowOffsetFloats;
             scale.set(this.floatArray[scaleBase], this.floatArray[scaleBase + 1], this.floatArray[scaleBase + 2]);
             tempMatrix4.makeScale(scale.x, scale.y, scale.z);
@@ -194,10 +182,6 @@ export class SplatBuffer {
 
     getPrecomputedCovarianceBufferData() {
         return this.precomputedCovarianceBufferData;
-    }
-
-    getSeparatedColorBufferData() {
-        return this.separatedColorBufferData;
     }
 
     getSplatCount() {
