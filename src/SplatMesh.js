@@ -15,16 +15,7 @@ export class SplatMesh extends THREE.Mesh {
         this.geometry = geometry;
         this.material = material;
         this.splatDataTextures = null;
-
-        const splatCount = this.splatBuffer.getSplatCount();
-
-        this.colors = new Uint8Array(splatCount * 4);
-        this.centers = new Float32Array(splatCount * 3);
-        this.covariances = new Float32Array(this.splatBuffer.getPrecomputedCovarianceBufferData());
-        this.splatBuffer.fillPositionArray(this.centers);
-        this.splatBuffer.fillColorArray(this.colors);
-
-        this.storeSplatDataInTextures();
+        this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
 
     static buildMaterial() {
@@ -249,7 +240,21 @@ export class SplatMesh extends THREE.Mesh {
         return geometry;
     }
 
-    storeSplatDataInTextures() {
+    resetLocalSplatDataAndTexturesFromSplatBuffer() {
+        this.updateLocalSplatDataFromSplatBuffer();
+        this.allocateAndStoreLocalSplatDataInTextures();
+    }
+
+    updateLocalSplatDataFromSplatBuffer() {
+        const splatCount = this.splatBuffer.getSplatCount();
+        this.covariances = new Float32Array(this.splatBuffer.getPrecomputedCovarianceBufferData());
+        this.colors = new Uint8Array(splatCount * 4);
+        this.centers = new Float32Array(splatCount * 3);
+        this.splatBuffer.fillPositionArray(this.centers);
+        this.splatBuffer.fillColorArray(this.colors);
+    }
+
+    allocateAndStoreLocalSplatDataInTextures() {
         const ELEMENTS_PER_TEXEL = 2;
         const splatCount = this.splatBuffer.getSplatCount();
 
@@ -271,18 +276,18 @@ export class SplatMesh extends THREE.Mesh {
         this.material.uniforms.covariancesTexture.value = covariancesTexture;
         this.material.uniforms.covariancesTextureSize.value.copy(covariancesTextureSize);
 
-        const centerColors = new Uint32Array(centersColorsTextureSize.x * centersColorsTextureSize.y * ELEMENTS_PER_TEXEL);
+        const paddedCenterColors = new Uint32Array(centersColorsTextureSize.x * centersColorsTextureSize.y * ELEMENTS_PER_TEXEL);
         for (let c = 0; c < splatCount; c++) {
             const colorsBase = c * 4;
             const centersBase = c * 3;
             const centerColorsBase = c * 4;
-            centerColors[centerColorsBase] = rgbaToInteger(this.colors[colorsBase], this.colors[colorsBase + 1],
+            paddedCenterColors[centerColorsBase] = rgbaToInteger(this.colors[colorsBase], this.colors[colorsBase + 1],
                                                            this.colors[colorsBase + 2], this.colors[colorsBase + 3]);
-            centerColors[centerColorsBase + 1] = uintEncodedFloat(this.centers[centersBase]);
-            centerColors[centerColorsBase + 2] = uintEncodedFloat(this.centers[centersBase + 1]);
-            centerColors[centerColorsBase + 3] = uintEncodedFloat(this.centers[centersBase + 2]);
+            paddedCenterColors[centerColorsBase + 1] = uintEncodedFloat(this.centers[centersBase]);
+            paddedCenterColors[centerColorsBase + 2] = uintEncodedFloat(this.centers[centersBase + 1]);
+            paddedCenterColors[centerColorsBase + 3] = uintEncodedFloat(this.centers[centersBase + 2]);
         }
-        const centersColorsTexture = new THREE.DataTexture(centerColors, centersColorsTextureSize.x,
+        const centersColorsTexture = new THREE.DataTexture(paddedCenterColors, centersColorsTextureSize.x,
                                                            centersColorsTextureSize.y, THREE.RGIntegerFormat, THREE.UnsignedIntType);
         centersColorsTexture.internalFormat = 'RG32UI';
         centersColorsTexture.needsUpdate = true;
@@ -291,14 +296,31 @@ export class SplatMesh extends THREE.Mesh {
 
         this.splatDataTextures = {
             'covariances': {
+                'data': paddedCovariances,
                 'texture': covariancesTexture,
                 'size': covariancesTextureSize
             },
             'centerColors': {
-                'centersColorsTexture': centersColorsTexture,
+                'data': paddedCenterColors,
+                'texture': centersColorsTexture,
                 'size': centersColorsTextureSize
             }
         };
+    }
+
+    updateSplatDataToDataTextures() {
+        this.updateLocalCovarianceDataToDataTexture();
+        this.updateLocalCenterColorDataToDataTexture();
+    }
+
+    updateLocalCovarianceDataToDataTexture() {
+        this.splatDataTextures.covariances.data.set(this.covariances);
+        this.splatDataTextures.covariances.texture.needsUpdate = true;
+    }
+
+    updateLocalCenterColorDataToDataTexture() {
+        this.splatDataTextures.centerColors.data.set(this.centerColors);
+        this.splatDataTextures.centerColors.texture.needsUpdate = true;
     }
 
     updateIndexes(indexes, renderSplatCount) {
