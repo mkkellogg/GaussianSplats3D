@@ -30,13 +30,15 @@
     import * as GaussianSplat3D from 'gaussian-splat-3d';
     import * as THREE from 'three';
     const viewer = new GaussianSplat3D.Viewer({
-        'initialCameraPosition': [0, 2, 0],
-        'initialCameraLookAt': [0, 4, 0],
+        'initialCameraPosition': [-4, 0, 3],
+        'initialCameraLookAt': [0, -2, 0],
         'splatAlphaRemovalThreshold': 20
     });
-    const sceneOrientation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0)).invert();
+    const sceneOrientation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, .6).normalize());
     viewer.init();
-    viewer.loadFile('assets/data/garden/garden.splat', sceneOrientation)
+    viewer.loadFile('assets/data/garden/garden.splat', {
+      'orientation': sceneOrientation
+    })
     .then(() => {
         viewer.start();
     });

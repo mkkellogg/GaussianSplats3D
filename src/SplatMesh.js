@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SplatTree } from './splattree/SplatTree.js';
 import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
@@ -14,7 +15,9 @@ export class SplatMesh extends THREE.Mesh {
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
+        this.splatTree = null;
         this.splatDataTextures = null;
+        this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
 
@@ -238,6 +241,38 @@ export class SplatMesh extends THREE.Mesh {
         geometry.instanceCount = splatCount;
 
         return geometry;
+    }
+
+    buildSplatTree() {
+        const splatCount = this.splatBuffer.getSplatCount();
+
+        this.splatTree = new SplatTree(8, 5000);
+        console.time('SplatTree build');
+        this.splatTree.processSplatBuffer(this.splatBuffer);
+        console.timeEnd('SplatTree build');
+
+        let leavesWithVertices = 0;
+        let avgSplatCount = 0;
+        let maxSplatCount = 0;
+        let nodeCount = 0;
+
+        this.splatTree.visitLeaves((node) => {
+            const nodeSplatCount = node.data.indexes.length;
+            if (nodeSplatCount > 0) {
+                avgSplatCount += splatCount;
+                maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
+                nodeCount++;
+                leavesWithVertices++;
+            }
+        });
+        console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
+        console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
+        avgSplatCount /= nodeCount;
+        console.log(`Avg splat count per node: ${avgSplatCount}`);
+    }
+
+    getSplatTree() {
+        return this.splatTree;
     }
 
     resetLocalSplatDataAndTexturesFromSplatBuffer() {

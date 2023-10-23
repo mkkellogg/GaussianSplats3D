@@ -5,7 +5,6 @@ import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { SceneHelper } from './SceneHelper.js';
-import { SplatTree } from './splattree/SplatTree.js';
 import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
@@ -53,8 +52,6 @@ export class Viewer {
         this.inIndexArray = null;
 
         this.splatMesh = null;
-
-        this.splatTree = null;
 
         this.sortRunning = false;
         this.selfDrivenModeRunning = false;
@@ -306,7 +303,9 @@ export class Viewer {
 
     }();
 
-    loadFile(fileName, orientation = new THREE.Quaternion()) {
+    loadFile(fileName, options) {
+        options.position = options.position || new THREE.Vector3();
+        options.orientation = options.orientation || new THREE.Quaternion();
         const loadingSpinner = new LoadingSpinner();
         loadingSpinner.show();
         return new Promise((resolve, reject) => {
@@ -320,7 +319,7 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                this.setupSplatMesh(splatBuffer, orientation);
+                this.setupSplatMesh(splatBuffer, options.position, options.orientation);
                 return this.setupSortWorker(splatBuffer);
             })
             .then(() => {
@@ -333,41 +332,18 @@ export class Viewer {
         });
     }
 
-    setupSplatMesh(splatBuffer, quaternion) {
+    setupSplatMesh(splatBuffer, position, quaternion) {
         splatBuffer.optimize(this.splatAlphaRemovalThreshold);
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
         splatBuffer.buildPreComputedBuffers();
         this.splatMesh = SplatMesh.buildMesh(splatBuffer);
+        this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
         this.splatMesh.renderOrder = 10;
         this.updateSplatMeshUniforms();
-
-        this.splatTree = new SplatTree(8, 5000);
-        console.time('SplatTree build');
-        this.splatTree.processSplatBuffer(splatBuffer);
-        console.timeEnd('SplatTree build');
-
-        let leavesWithVertices = 0;
-        let avgSplatCount = 0;
-        let maxSplatCount = 0;
-        let nodeCount = 0;
-
-        this.splatTree.visitLeaves((node) => {
-            const nodeSplatCount = node.data.indexes.length;
-            if (nodeSplatCount > 0) {
-                avgSplatCount += splatCount;
-                maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
-                nodeCount++;
-                leavesWithVertices++;
-            }
-        });
-        console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
-        console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
-        avgSplatCount /= nodeCount;
-        console.log(`Avg splat count per node: ${avgSplatCount}`);
 
         this.splatRenderCount = splatCount;
     }
@@ -435,15 +411,15 @@ export class Viewer {
             tempMatrix4.copy(this.camera.matrixWorld).invert();
             tempMatrix4.multiply(this.splatMesh.matrixWorld);
 
+            const splatTree = this.splatMesh.getSplatTree();
             let nodeRenderCount = 0;
             let splatRenderCount = 0;
-            const nodeCount = this.splatTree.nodesWithIndexes.length;
+            const nodeCount = splatTree.nodesWithIndexes.length;
             for (let i = 0; i < nodeCount; i++) {
-                const node = this.splatTree.nodesWithIndexes[i];
-                tempVector.copy(node.center).sub(this.camera.position);
+                const node = splatTree.nodesWithIndexes[i];
+                tempVector.copy(node.center).applyMatrix4(tempMatrix4);
                 const distanceToNode = tempVector.length();
                 tempVector.normalize();
-                tempVector.transformDirection(tempMatrix4);
 
                 tempVectorYZ.copy(tempVector).setX(0).normalize();
                 tempVectorXZ.copy(tempVector).setY(0).normalize();
@@ -568,7 +544,7 @@ export class Viewer {
                 this.getRenderDimensions(renderDimensions);
                 outHits.length = 0;
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
-                this.raycaster.intersectSplatTree(this.splatTree, outHits);
+                this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
                     this.sceneHelper.setMeshCursorVisibility(true);
                     this.sceneHelper.positionAndOrientMeshCursor(outHits[0].origin, this.camera);
