@@ -5,7 +5,6 @@ import { SplatLoader } from './SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { SceneHelper } from './SceneHelper.js';
-import { SplatTree } from './splattree/SplatTree.js';
 import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
@@ -53,8 +52,6 @@ export class Viewer {
         this.inIndexArray = null;
 
         this.splatMesh = null;
-
-        this.splatTree = null;
 
         this.sortRunning = false;
         this.selfDrivenModeRunning = false;
@@ -166,11 +163,13 @@ export class Viewer {
         this.infoPanel.style.backgroundColor = '#cccccc';
         this.infoPanel.style.border = '#aaaaaa 1px solid';
         this.infoPanel.style.zIndex = 100;
-        this.infoPanel.style.width = '350px';
+        this.infoPanel.style.width = '375px';
         this.infoPanel.style.fontFamily = 'arial';
         this.infoPanel.style.fontSize = '10pt';
 
         const layout = [
+            ['Camera position', 'cameraPosition'],
+            ['Camera look-at', 'cameraLookAt'],
             ['Cursor position', 'cursorPosition'],
             ['FPS', 'fps'],
             ['Render window', 'renderWindow'],
@@ -187,6 +186,7 @@ export class Viewer {
 
             const labelCell = document.createElement('div');
             labelCell.style.display = 'table-cell';
+            labelCell.style.width = '110px';
             labelCell.innerHTML = `${layoutEntry[0]}: `;
 
             const spacerCell = document.createElement('div');
@@ -306,7 +306,9 @@ export class Viewer {
 
     }();
 
-    loadFile(fileName) {
+    loadFile(fileName, options = {}) {
+        options.position = options.position || new THREE.Vector3();
+        options.orientation = options.orientation || new THREE.Quaternion();
         const loadingSpinner = new LoadingSpinner();
         loadingSpinner.show();
         return new Promise((resolve, reject) => {
@@ -320,7 +322,7 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                this.setupSplatMesh(splatBuffer);
+                this.setupSplatMesh(splatBuffer, options.position, options.orientation);
                 return this.setupSortWorker(splatBuffer);
             })
             .then(() => {
@@ -333,40 +335,18 @@ export class Viewer {
         });
     }
 
-    setupSplatMesh(splatBuffer) {
+    setupSplatMesh(splatBuffer, position, quaternion) {
         splatBuffer.optimize(this.splatAlphaRemovalThreshold);
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
         splatBuffer.buildPreComputedBuffers();
         this.splatMesh = SplatMesh.buildMesh(splatBuffer);
+        this.splatMesh.position.copy(position);
+        this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
         this.splatMesh.renderOrder = 10;
         this.updateSplatMeshUniforms();
-
-        this.splatTree = new SplatTree(8, 5000);
-        console.time('SplatTree build');
-        this.splatTree.processSplatBuffer(splatBuffer);
-        console.timeEnd('SplatTree build');
-
-        let leavesWithVertices = 0;
-        let avgSplatCount = 0;
-        let maxSplatCount = 0;
-        let nodeCount = 0;
-
-        this.splatTree.visitLeaves((node) => {
-            const nodeSplatCount = node.data.indexes.length;
-            if (nodeSplatCount > 0) {
-                avgSplatCount += splatCount;
-                maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
-                nodeCount++;
-                leavesWithVertices++;
-            }
-        });
-        console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
-        console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
-        avgSplatCount /= nodeCount;
-        console.log(`Avg splat count per node: ${avgSplatCount}`);
 
         this.splatRenderCount = splatCount;
     }
@@ -431,16 +411,17 @@ export class Viewer {
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
             tempMatrix4.copy(this.camera.matrixWorld).invert();
+            tempMatrix4.multiply(this.splatMesh.matrixWorld);
 
+            const splatTree = this.splatMesh.getSplatTree();
             let nodeRenderCount = 0;
             let splatRenderCount = 0;
-            const nodeCount = this.splatTree.nodesWithIndexes.length;
+            const nodeCount = splatTree.nodesWithIndexes.length;
             for (let i = 0; i < nodeCount; i++) {
-                const node = this.splatTree.nodesWithIndexes[i];
-                tempVector.copy(node.center).sub(this.camera.position);
+                const node = splatTree.nodesWithIndexes[i];
+                tempVector.copy(node.center).applyMatrix4(tempMatrix4);
                 const distanceToNode = tempVector.length();
                 tempVector.normalize();
-                tempVector.transformDirection(tempMatrix4);
 
                 tempVectorYZ.copy(tempVector).setX(0).normalize();
                 tempVectorXZ.copy(tempVector).setY(0).normalize();
@@ -565,7 +546,7 @@ export class Viewer {
                 this.getRenderDimensions(renderDimensions);
                 outHits.length = 0;
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
-                this.raycaster.intersectSplatTree(this.splatTree, outHits);
+                this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
                     this.sceneHelper.setMeshCursorVisibility(true);
                     this.sceneHelper.positionAndOrientMeshCursor(outHits[0].origin, this.camera);
@@ -587,18 +568,30 @@ export class Viewer {
             if (this.showInfo) {
                 const splatCount = this.splatMesh.getSplatCount();
                 this.getRenderDimensions(renderDimensions);
+
+                const cameraPos = this.camera.position;
+                const cameraPosString = `[${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}]`;
+                this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
+
+                const cameraLookAt = this.controls.target;
+                const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
+                this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
+
                 if (this.showMeshCursor) {
-                    const pos = this.sceneHelper.meshCursor.position;
-                    const posString = `[${pos.x.toFixed(5)}, ${pos.y.toFixed(5)}, ${pos.z.toFixed(5)}]`;
-                    this.infoPanelCells.cursorPosition.innerHTML = posString;
+                    const cursorPos = this.sceneHelper.meshCursor.position;
+                    const cursorPosString = `[${cursorPos.x.toFixed(5)}, ${cursorPos.y.toFixed(5)}, ${cursorPos.z.toFixed(5)}]`;
+                    this.infoPanelCells.cursorPosition.innerHTML = cursorPosString;
                 } else {
                     this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
                 }
+
                 this.infoPanelCells.fps.innerHTML = this.currentFPS;
                 this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
+
                 const renderPct = this.splatRenderCount / splatCount * 100;
                 this.infoPanelCells.renderSplatCount.innerHTML =
                     `${this.splatRenderCount} splats out of ${splatCount} (${renderPct.toFixed(2)}%)`;
+
                 this.infoPanelCells.sortTime.innerHTML = `${this.lastSortTime.toFixed(3)} ms`;
             }
         };
@@ -672,6 +665,7 @@ export class Viewer {
 
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(this.camera.projectionMatrix);
+            tempMatrix.multiply(this.splatMesh.matrixWorld);
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;

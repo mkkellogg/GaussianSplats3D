@@ -31,16 +31,34 @@ export class Raycaster {
 
     }();
 
-    intersectSplatTree(splatTree, outHits = []) {
-        if (splatTree.rootNode) {
-            this.castRayAtSplatTreeNode(splatTree, splatTree.rootNode, outHits);
-        }
-        outHits.sort((a, b) => {
-            if (a.distance > b.distance) return 1;
-            else return -1;
-        });
-        return outHits;
-    }
+    intersectSplatMesh = function() {
+
+        const toLocal = new THREE.Matrix4();
+        const fromLocal = new THREE.Matrix4();
+        const localRay = new Ray();
+
+        return function(splatMesh, outHits = []) {
+            fromLocal.copy(splatMesh.matrixWorld);
+            toLocal.copy(fromLocal).invert();
+            localRay.origin.copy(this.ray.origin).applyMatrix4(toLocal);
+            localRay.direction.copy(this.ray.direction).transformDirection(toLocal);
+
+            const splatTree = splatMesh.getSplatTree();
+            if (splatTree.rootNode) {
+                this.castRayAtSplatTreeNode(localRay, splatTree, splatTree.rootNode, outHits);
+            }
+            outHits.sort((a, b) => {
+                if (a.distance > b.distance) return 1;
+                else return -1;
+            });
+            outHits.forEach((hit) => {
+                hit.origin.applyMatrix4(fromLocal);
+                hit.normal.transformDirection(fromLocal);
+            });
+            return outHits;
+        };
+
+    }();
 
     castRayAtSplatTreeNode = function() {
 
@@ -59,8 +77,8 @@ export class Raycaster {
         const tempRay = new Ray();
         */
 
-        return function(splatTree, node, outHits = []) {
-            if (!this.ray.intersectBox(node.boundingBox)) {
+        return function(ray, splatTree, node, outHits = []) {
+            if (!ray.intersectBox(node.boundingBox)) {
                 return;
             }
             if (node.data.indexes && node.data.indexes.length > 0) {
@@ -72,7 +90,7 @@ export class Raycaster {
 
                     // Simple approximated sphere intersection
                     const radius = Math.max(Math.max(tempScale.x, tempScale.y), tempScale.z);
-                    if (this.ray.intersectSphere(tempPosition, radius, tempHit)) {
+                    if (ray.intersectSphere(tempPosition, radius, tempHit)) {
                         outHits.push(tempHit.clone());
                     }
 
@@ -97,7 +115,7 @@ export class Raycaster {
              }
             if (node.children && node.children.length > 0) {
                 for (let child of node.children) {
-                    this.castRayAtSplatTreeNode(splatTree, child, outHits);
+                    this.castRayAtSplatTreeNode(ray, splatTree, child, outHits);
                 }
             }
             return outHits;
