@@ -407,7 +407,6 @@ export class Viewer {
             const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / this.cameraFocalLength);
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
-            this.splatMesh.updateMatrixWorld();
             tempMatrix4.copy(this.camera.matrixWorld).invert();
             tempMatrix4.multiply(this.splatMesh.matrixWorld);
 
@@ -649,7 +648,6 @@ export class Viewer {
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
 
-            this.splatMesh.updateMatrixWorld();
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(this.camera.projectionMatrix);
             tempMatrix.multiply(this.splatMesh.matrixWorld);
