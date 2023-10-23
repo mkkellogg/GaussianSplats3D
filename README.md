@@ -27,9 +27,13 @@ Navigate to the code directory and run
 ```
 npm install
 ```
-Followed by
+Next run the build. For Linux & Mac OS systems run:
 ```
 npm run build
+```
+For Windows I have added a Windows-compatible version of the build command:
+```
+npm run build-windows
 ```
 To view the demo scenes locally run
 ```
