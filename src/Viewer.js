@@ -163,11 +163,13 @@ export class Viewer {
         this.infoPanel.style.backgroundColor = '#cccccc';
         this.infoPanel.style.border = '#aaaaaa 1px solid';
         this.infoPanel.style.zIndex = 100;
-        this.infoPanel.style.width = '350px';
+        this.infoPanel.style.width = '375px';
         this.infoPanel.style.fontFamily = 'arial';
         this.infoPanel.style.fontSize = '10pt';
 
         const layout = [
+            ['Camera position', 'cameraPosition'],
+            ['Camera look-at', 'cameraLookAt'],
             ['Cursor position', 'cursorPosition'],
             ['FPS', 'fps'],
             ['Render window', 'renderWindow'],
@@ -184,6 +186,7 @@ export class Viewer {
 
             const labelCell = document.createElement('div');
             labelCell.style.display = 'table-cell';
+            labelCell.style.width = '110px';
             labelCell.innerHTML = `${layoutEntry[0]}: `;
 
             const spacerCell = document.createElement('div');
@@ -303,7 +306,7 @@ export class Viewer {
 
     }();
 
-    loadFile(fileName, options) {
+    loadFile(fileName, options = {}) {
         options.position = options.position || new THREE.Vector3();
         options.orientation = options.orientation || new THREE.Quaternion();
         const loadingSpinner = new LoadingSpinner();
@@ -565,18 +568,30 @@ export class Viewer {
             if (this.showInfo) {
                 const splatCount = this.splatMesh.getSplatCount();
                 this.getRenderDimensions(renderDimensions);
+
+                const cameraPos = this.camera.position;
+                const cameraPosString = `[${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}]`;
+                this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
+
+                const cameraLookAt = this.controls.target;
+                const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
+                this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
+
                 if (this.showMeshCursor) {
-                    const pos = this.sceneHelper.meshCursor.position;
-                    const posString = `[${pos.x.toFixed(5)}, ${pos.y.toFixed(5)}, ${pos.z.toFixed(5)}]`;
-                    this.infoPanelCells.cursorPosition.innerHTML = posString;
+                    const cursorPos = this.sceneHelper.meshCursor.position;
+                    const cursorPosString = `[${cursorPos.x.toFixed(5)}, ${cursorPos.y.toFixed(5)}, ${cursorPos.z.toFixed(5)}]`;
+                    this.infoPanelCells.cursorPosition.innerHTML = cursorPosString;
                 } else {
                     this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
                 }
+
                 this.infoPanelCells.fps.innerHTML = this.currentFPS;
                 this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
+
                 const renderPct = this.splatRenderCount / splatCount * 100;
                 this.infoPanelCells.renderSplatCount.innerHTML =
                     `${this.splatRenderCount} splats out of ${splatCount} (${renderPct.toFixed(2)}%)`;
+
                 this.infoPanelCells.sortTime.innerHTML = `${this.lastSortTime.toFixed(3)} ms`;
             }
         };
