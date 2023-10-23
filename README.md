@@ -61,6 +61,23 @@ viewer.loadFile('<path to .ply or .splat file>')
     viewer.start();
 });
 ```
+As an alternative to using `cameraUp` to adjust to the scene's natural orientation, you can pass an orientation and position to the `loadFile()` method to transform the entire scene:
+```javascript
+const viewer = new GaussianSplat3D.Viewer({
+    'initialCameraPosition': [-4, 0, 3],
+    'initialCameraLookAt': [0, -2, 0]
+});
+const orientation = new THREE.Quaternion();
+orientation.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, .6).normalize());
+viewer.init();
+viewer.loadFile('assets/data/garden/garden.splat', {
+    'position': [0, 0, 0],
+    'orientation': orientation.toArray(),
+})
+.then(() => {
+    viewer.start();
+});
+```
 
 The `loadFile()` method will accept the original `.ply` files as well as my custom `.splat` files.
 

@@ -307,8 +307,8 @@ export class Viewer {
     }();
 
     loadFile(fileName, options = {}) {
-        options.position = options.position || new THREE.Vector3();
-        options.orientation = options.orientation || new THREE.Quaternion();
+        if (options.position) options.position = new THREE.Vector3().fromArray(options.position);
+        if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
         const loadingSpinner = new LoadingSpinner();
         loadingSpinner.show();
         return new Promise((resolve, reject) => {
@@ -335,7 +335,7 @@ export class Viewer {
         });
     }
 
-    setupSplatMesh(splatBuffer, position, quaternion) {
+    setupSplatMesh(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion()) {
         splatBuffer.optimize(this.splatAlphaRemovalThreshold);
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
