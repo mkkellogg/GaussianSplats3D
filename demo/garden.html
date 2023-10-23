@@ -28,17 +28,14 @@
 <body>
   <script type="module">
     import * as GaussianSplat3D from 'gaussian-splat-3d';
-    import * as THREE from 'three';
     const viewer = new GaussianSplat3D.Viewer({
-        'initialCameraPosition': [-4, 0, 3],
-        'initialCameraLookAt': [0, -2, 0],
-        'splatAlphaRemovalThreshold': 20
+        'cameraUp': [0, -1, -0.6],
+        'initialCameraPosition': [-1, -4, 6],
+        'initialCameraLookAt': [0, 4, -0],
+        'splatAlphaRemovalThreshold': 10
     });
-    const sceneOrientation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, .6).normalize());
     viewer.init();
-    viewer.loadFile('assets/data/garden/garden.splat', {
-      'orientation': sceneOrientation
-    })
+    viewer.loadFile('assets/data/garden/garden.splat')
     .then(() => {
         viewer.start();
     });
