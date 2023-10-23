@@ -74,7 +74,7 @@ export class SplatMesh extends THREE.Mesh {
 
                 vPosition = position.xy * 2.0;
 
-                vec4 viewCenter = viewMatrix * vec4(splatCenter, 1.0);
+                vec4 viewCenter = modelViewMatrix * vec4(splatCenter, 1.0);
                 vec4 clipCenter = projectionMatrix * viewCenter;
 
                 float bounds = 1.2 * clipCenter.w;
@@ -95,7 +95,7 @@ export class SplatMesh extends THREE.Mesh {
                     0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) / (viewCenter.z * viewCenter.z),
                     0., 0., 0.
                 );
-                mat3 W = transpose(mat3(viewMatrix));
+                mat3 W = transpose(mat3(modelViewMatrix));
                 mat3 T = W * J;
                 mat3 cov2Dm = transpose(T) * Vrk * T;
                 cov2Dm[0][0] += 0.3;

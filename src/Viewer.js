@@ -306,7 +306,7 @@ export class Viewer {
 
     }();
 
-    loadFile(fileName) {
+    loadFile(fileName, orientation = new THREE.Quaternion()) {
         const loadingSpinner = new LoadingSpinner();
         loadingSpinner.show();
         return new Promise((resolve, reject) => {
@@ -320,7 +320,7 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                this.setupSplatMesh(splatBuffer);
+                this.setupSplatMesh(splatBuffer, orientation);
                 return this.setupSortWorker(splatBuffer);
             })
             .then(() => {
@@ -333,13 +333,14 @@ export class Viewer {
         });
     }
 
-    setupSplatMesh(splatBuffer) {
+    setupSplatMesh(splatBuffer, quaternion) {
         splatBuffer.optimize(this.splatAlphaRemovalThreshold);
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
         splatBuffer.buildPreComputedBuffers();
         this.splatMesh = SplatMesh.buildMesh(splatBuffer);
+        this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
         this.splatMesh.renderOrder = 10;
         this.updateSplatMeshUniforms();
@@ -430,7 +431,9 @@ export class Viewer {
             const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / this.cameraFocalLength);
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
+            this.splatMesh.updateMatrixWorld();
             tempMatrix4.copy(this.camera.matrixWorld).invert();
+            tempMatrix4.multiply(this.splatMesh.matrixWorld);
 
             let nodeRenderCount = 0;
             let splatRenderCount = 0;
@@ -670,8 +673,10 @@ export class Viewer {
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
 
+            this.splatMesh.updateMatrixWorld();
             tempMatrix.copy(this.camera.matrixWorld).invert();
             tempMatrix.premultiply(this.camera.projectionMatrix);
+            tempMatrix.multiply(this.splatMesh.matrixWorld);
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
