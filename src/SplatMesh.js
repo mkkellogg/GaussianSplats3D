@@ -128,11 +128,12 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = traceOver2 - term2;
+                float eigenValue2 = max(traceOver2 - term2, 0.01); // prevent negative eigen value
 
                 const float maxSplatSize = 512.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
-                vec2 eigenVector2 = normalize(vec2(b, eigenValue2 - a));
+                // since the eigen vectors are orthogonal, we derive the second one from the first
+                vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
                 vec2 basisVector1 = eigenVector1 * min(sqrt(2.0 * eigenValue1), maxSplatSize);
                 vec2 basisVector2 = eigenVector2 * min(sqrt(2.0 * eigenValue2), maxSplatSize);
 
@@ -304,7 +305,7 @@ export class SplatMesh extends THREE.Mesh {
         }
 
         const paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
-        for(let i = 0; i < this.covariances.length; i++) {
+        for (let i = 0; i < this.covariances.length; i++) {
             paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
         }
         const covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
