@@ -29,7 +29,7 @@ export class SplatMesh extends THREE.Mesh {
 
             attribute uint splatIndex;
 
-            uniform sampler2D covariancesTexture;
+            uniform highp sampler2D covariancesTexture;
             uniform highp usampler2D centersColorsTexture;
             uniform vec2 focal;
             uniform vec2 viewport;
@@ -62,9 +62,9 @@ export class SplatMesh extends THREE.Mesh {
 
             void main () {
 
-                vec2 sampledCovarianceA = texture2D(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
-                vec2 sampledCovarianceB = texture2D(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
-                vec2 sampledCovarianceC = texture2D(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceA = texture(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceB = texture(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceC = texture(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
 
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rg, sampledCovarianceB.r);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceB.g, sampledCovarianceC.rg);
@@ -303,10 +303,12 @@ export class SplatMesh extends THREE.Mesh {
             centersColorsTextureSize.y *= 2;
         }
 
-        const paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
-        paddedCovariances.set(this.covariances);
+        const paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
+        for(let i = 0; i < this.covariances.length; i++) {
+            paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
+        }
         const covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
-                                                         covariancesTextureSize.y, THREE.RGFormat, THREE.FloatType);
+                                                         covariancesTextureSize.y, THREE.RGFormat, THREE.HalfFloatType);
         covariancesTexture.needsUpdate = true;
         this.material.uniforms.covariancesTexture.value = covariancesTexture;
         this.material.uniforms.covariancesTextureSize.value.copy(covariancesTextureSize);
@@ -328,6 +330,7 @@ export class SplatMesh extends THREE.Mesh {
         centersColorsTexture.needsUpdate = true;
         this.material.uniforms.centersColorsTexture.value = centersColorsTexture;
         this.material.uniforms.centersColorsTextureSize.value.copy(centersColorsTextureSize);
+        this.material.uniformsNeedUpdate = true;
 
         this.splatDataTextures = {
             'covariances': {
