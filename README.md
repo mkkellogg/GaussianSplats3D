@@ -56,7 +56,10 @@ const viewer = new GaussianSplat3D.Viewer({
   'initialCameraLookAt': [0, 4, 0]
 });
 viewer.init();
-viewer.loadFile('<path to .ply or .splat file>')
+viewer.loadFile('<path to .ply or .splat file>', {
+    'splatAlphaRemovalThreshold': 5,
+    'halfPrecisionCovariances': true
+})
 .then(() => {
     viewer.start();
 });

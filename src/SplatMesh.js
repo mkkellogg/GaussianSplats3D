@@ -4,19 +4,20 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer) {
+    static buildMesh(splatBuffer, halfPrecisionCovariances = false) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material);
+        return new SplatMesh(splatBuffer, geometry, material, halfPrecisionCovariances);
     }
 
-    constructor(splatBuffer, geometry, material) {
+    constructor(splatBuffer, geometry, material, halfPrecisionCovariances = false) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
         this.splatTree = null;
         this.splatDataTextures = null;
+        this.halfPrecisionCovariances = halfPrecisionCovariances;
         this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
@@ -29,7 +30,7 @@ export class SplatMesh extends THREE.Mesh {
 
             attribute uint splatIndex;
 
-            uniform sampler2D covariancesTexture;
+            uniform highp sampler2D covariancesTexture;
             uniform highp usampler2D centersColorsTexture;
             uniform vec2 focal;
             uniform vec2 viewport;
@@ -62,9 +63,9 @@ export class SplatMesh extends THREE.Mesh {
 
             void main () {
 
-                vec2 sampledCovarianceA = texture2D(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
-                vec2 sampledCovarianceB = texture2D(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
-                vec2 sampledCovarianceC = texture2D(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceA = texture(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceB = texture(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceC = texture(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
 
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rg, sampledCovarianceB.r);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceB.g, sampledCovarianceC.rg);
@@ -128,11 +129,12 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = traceOver2 - term2;
+                float eigenValue2 = max(traceOver2 - term2, 0.01); // prevent negative eigen value
 
                 const float maxSplatSize = 512.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
-                vec2 eigenVector2 = normalize(vec2(b, eigenValue2 - a));
+                // since the eigen vectors are orthogonal, we derive the second one from the first
+                vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
                 vec2 basisVector1 = eigenVector1 * min(sqrt(2.0 * eigenValue1), maxSplatSize);
                 vec2 basisVector2 = eigenVector2 * min(sqrt(2.0 * eigenValue2), maxSplatSize);
 
@@ -303,10 +305,21 @@ export class SplatMesh extends THREE.Mesh {
             centersColorsTextureSize.y *= 2;
         }
 
-        const paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
-        paddedCovariances.set(this.covariances);
-        const covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
-                                                         covariancesTextureSize.y, THREE.RGFormat, THREE.FloatType);
+        let covariancesTexture;
+        let paddedCovariances;
+        if (this.halfPrecisionCovariances) {
+            paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
+            for (let i = 0; i < this.covariances.length; i++) {
+                paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
+            }
+            covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
+                                                       covariancesTextureSize.y, THREE.RGFormat, THREE.HalfFloatType);
+        } else {
+            paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
+            paddedCovariances.set(this.covariances);
+            covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
+                                                       covariancesTextureSize.y, THREE.RGFormat, THREE.FloatType);
+        }
         covariancesTexture.needsUpdate = true;
         this.material.uniforms.covariancesTexture.value = covariancesTexture;
         this.material.uniforms.covariancesTextureSize.value.copy(covariancesTextureSize);
@@ -317,7 +330,7 @@ export class SplatMesh extends THREE.Mesh {
             const centersBase = c * 3;
             const centerColorsBase = c * 4;
             paddedCenterColors[centerColorsBase] = rgbaToInteger(this.colors[colorsBase], this.colors[colorsBase + 1],
-                                                           this.colors[colorsBase + 2], this.colors[colorsBase + 3]);
+                                                                 this.colors[colorsBase + 2], this.colors[colorsBase + 3]);
             paddedCenterColors[centerColorsBase + 1] = uintEncodedFloat(this.centers[centersBase]);
             paddedCenterColors[centerColorsBase + 2] = uintEncodedFloat(this.centers[centersBase + 1]);
             paddedCenterColors[centerColorsBase + 3] = uintEncodedFloat(this.centers[centersBase + 2]);
@@ -328,6 +341,7 @@ export class SplatMesh extends THREE.Mesh {
         centersColorsTexture.needsUpdate = true;
         this.material.uniforms.centersColorsTexture.value = centersColorsTexture;
         this.material.uniforms.centersColorsTextureSize.value.copy(centersColorsTextureSize);
+        this.material.uniformsNeedUpdate = true;
 
         this.splatDataTextures = {
             'covariances': {
