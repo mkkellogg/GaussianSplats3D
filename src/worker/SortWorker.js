@@ -109,7 +109,7 @@ function sortWorker(self) {
     };
 }
 
-export function createSortWorker(splatCount, splatBufferRowBytes) {
+export function createSortWorker(splatCount) {
     const worker = new Worker(
         URL.createObjectURL(
             new Blob(['(', sortWorker.toString(), ')(self)'], {
@@ -128,7 +128,6 @@ export function createSortWorker(splatCount, splatBufferRowBytes) {
         'init': {
             'sorterWasmBytes': sorterWasmBytes.buffer,
             'splatCount': splatCount,
-            'splatBufferRowBytes': splatBufferRowBytes,
             // Super hacky
             'Constants': {
                 'BytesPerFloat': Constants.BytesPerFloat,

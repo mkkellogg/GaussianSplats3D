@@ -68,7 +68,7 @@ export class PlyParser {
         }
     }
 
-    parseToSplatBuffer() {
+    parseToSplatBuffer(compressionLevel = 0) {
 
         console.time('PLY load');
 
@@ -141,48 +141,101 @@ export class PlyParser {
         sizeIndex.sort((b, a) => sizeList[a] - sizeList[b]);
         console.timeEnd('Importance sort');
 
+        const headerSize = SplatBuffer.HeaderSizeBytes;
+        const header = new Uint8Array(new ArrayBuffer(headerSize));
+        header[0] = compressionLevel;
+        (new Uint32Array(header.buffer, 4, 1))[0] = splatCount;
 
-        const splatBufferData = new ArrayBuffer(SplatBuffer.RowSizeBytes * splatCount);
+        let bytesPerPosition = SplatBuffer.CompressionLevels[compressionLevel].BytesPerPosition;
+        let bytesPerScale = SplatBuffer.CompressionLevels[compressionLevel].BytesPerScale;
+        let bytesPerColor = SplatBuffer.CompressionLevels[compressionLevel].BytesPerColor;
+        let bytesPerRotation = SplatBuffer.CompressionLevels[compressionLevel].BytesPerRotation;
+        const positionBuffer = new ArrayBuffer(bytesPerPosition * splatCount);
+        const scaleBuffer = new ArrayBuffer(bytesPerScale * splatCount);
+        const colorBuffer = new ArrayBuffer(bytesPerColor * splatCount);
+        const rotationBuffer = new ArrayBuffer(bytesPerRotation * splatCount);
 
         for (let j = 0; j < splatCount; j++) {
             const row = sizeIndex[j];
             const offset = row * plyRowSize;
             this.readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
-            const position = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes, 3);
-            const scales = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.ScaleRowOffsetBytes, 3);
-            const rgba = new Uint8ClampedArray(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.ColorRowOffsetBytes, 4,);
-            const rot = new Float32Array(splatBufferData, j * SplatBuffer.RowSizeBytes + SplatBuffer.RotationRowOffsetBytes, 4);
 
-            if (propertyTypes['scale_0']) {
-                const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
-                quat.normalize();
-                rot.set([quat.w, quat.x, quat.y, quat.z]);
-                scales.set([Math.exp(rawVertex.scale_0), Math.exp(rawVertex.scale_1), Math.exp(rawVertex.scale_2)]);
-            } else {
-                scales.set([0.01, 0.01, 0.01]);
-                rot.set([1.0, 0.0, 0.0, 0.0]);
-            }
+            if (compressionLevel === 0) {
+                const position = new Float32Array(positionBuffer, j * bytesPerPosition, 3);
+                const scales = new Float32Array(scaleBuffer, j * bytesPerScale, 3);
+                const rgba = new Uint8ClampedArray(colorBuffer, j * bytesPerColor, 4);
+                const rot = new Float32Array(rotationBuffer, j * bytesPerRotation, 4);
 
-            position.set([rawVertex.x, rawVertex.y, rawVertex.z]);
+                if (propertyTypes['scale_0']) {
+                    const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
+                    quat.normalize();
+                    rot.set([quat.w, quat.x, quat.y, quat.z]);
+                    scales.set([Math.exp(rawVertex.scale_0), Math.exp(rawVertex.scale_1), Math.exp(rawVertex.scale_2)]);
+                } else {
+                    scales.set([0.01, 0.01, 0.01]);
+                    rot.set([1.0, 0.0, 0.0, 0.0]);
+                }
 
-            if (propertyTypes['f_dc_0']) {
-                const SH_C0 = 0.28209479177387814;
-                rgba.set([(0.5 + SH_C0 * rawVertex.f_dc_0) * 255,
-                          (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
-                          (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
+                position.set([rawVertex.x, rawVertex.y, rawVertex.z]);
+
+                if (propertyTypes['f_dc_0']) {
+                    const SH_C0 = 0.28209479177387814;
+                    rgba.set([(0.5 + SH_C0 * rawVertex.f_dc_0) * 255,
+                            (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
+                            (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
+                } else {
+                    rgba.set([255, 0, 0]);
+                }
+                if (propertyTypes['opacity']) {
+                    rgba[3] = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
+                } else {
+                    rgba[3] = 255;
+                }
             } else {
-                rgba.set([255, 0, 0]);
-            }
-            if (propertyTypes['opacity']) {
-                rgba[3] = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
-            } else {
-                rgba[3] = 255;
+                const position = new Uint16Array(positionBuffer, j * bytesPerPosition, 3);
+                const scales = new Uint16Array(scaleBuffer, j * bytesPerScale, 3);
+                const rgba = new Uint8ClampedArray(colorBuffer, j * bytesPerColor, 4);
+                const rot = new Uint16Array(rotationBuffer, j * bytesPerRotation, 4);
+                const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
+                if (propertyTypes['scale_0']) {
+                    const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
+                    quat.normalize();
+                    rot.set([thf(quat.w), thf(quat.x), thf(quat.y), thf(quat.z)]);
+                    scales.set([thf(Math.exp(rawVertex.scale_0)), thf(Math.exp(rawVertex.scale_1)), thf(Math.exp(rawVertex.scale_2))]);
+                } else {
+                    
+                    scales.set([thf(0.01), thf(0.01), thf(0.01)]);
+                    rot.set([thf(1.), 0, 0, 0]);
+                }
+
+                position.set([thf(rawVertex.x), thf(rawVertex.y), thf(rawVertex.z)]);
+
+                if (propertyTypes['f_dc_0']) {
+                    const SH_C0 = 0.28209479177387814;
+                    rgba.set([(0.5 + SH_C0 * rawVertex.f_dc_0) * 255,
+                            (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
+                            (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
+                } else {
+                    rgba.set([255, 0, 0]);
+                }
+                if (propertyTypes['opacity']) {
+                    rgba[3] = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
+                } else {
+                    rgba[3] = 255;
+                }
             }
         }
 
         console.timeEnd('PLY load');
 
-        const splatBuffer = new SplatBuffer(splatBufferData);
+        const unifiedBufferSize = headerSize + splatCount * (bytesPerPosition + bytesPerScale + bytesPerColor + bytesPerRotation);
+        const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
+        new Uint8Array(unifiedBuffer, 0, headerSize).set(header);
+        new Uint8Array(unifiedBuffer, headerSize, splatCount * bytesPerPosition).set(new Uint8Array(positionBuffer));
+        new Uint8Array(unifiedBuffer, headerSize + splatCount * bytesPerPosition, splatCount * bytesPerScale).set(new Uint8Array(scaleBuffer));
+        new Uint8Array(unifiedBuffer, headerSize + splatCount * (bytesPerPosition + bytesPerScale), splatCount * bytesPerColor).set(new Uint8Array(colorBuffer));
+        new Uint8Array(unifiedBuffer, headerSize + splatCount * (bytesPerPosition + bytesPerScale + bytesPerColor), splatCount * bytesPerRotation).set(new Uint8Array(rotationBuffer));
+        const splatBuffer = new SplatBuffer(unifiedBuffer);
         return splatBuffer;
 
     }

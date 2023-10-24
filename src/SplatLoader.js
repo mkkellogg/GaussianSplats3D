@@ -28,8 +28,9 @@ export class SplatLoader {
     }
 
     saveToFile(fileName) {
-        const splatData = new Uint8Array(this.splatBuffer.getBufferData());
-        const blob = new Blob([splatData.buffer], {
+        const headerData = new Uint8Array(this.splatBuffer.getHeaderBufferData());
+        const splatData = new Uint8Array(this.splatBuffer.getSplatBufferData());
+        const blob = new Blob([headerData.buffer, splatData.buffer], {
             type: 'application/octet-stream',
         });
 

@@ -58,7 +58,7 @@ const viewer = new GaussianSplat3D.Viewer({
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>', {
     'splatAlphaRemovalThreshold': 5, // out of 255
-    'halfPrecisionCovariances': true
+    'halfPrecisionCovariancesOnGPU': true
 })
 .then(() => {
     viewer.start();
@@ -75,7 +75,7 @@ orientation.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>', {
     'splatAlphaRemovalThreshold': 5, // out of 255
-    'halfPrecisionCovariances': true,
+    'halfPrecisionCovariancesOnGPU': true,
     'position': [0, 0, 0],
     'orientation': orientation.toArray(),
 })

@@ -4,20 +4,20 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer, halfPrecisionCovariances = false) {
+    static buildMesh(splatBuffer, halfPrecisionCovariancesOnGPU = false) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material, halfPrecisionCovariances);
+        return new SplatMesh(splatBuffer, geometry, material, halfPrecisionCovariancesOnGPU);
     }
 
-    constructor(splatBuffer, geometry, material, halfPrecisionCovariances = false) {
+    constructor(splatBuffer, geometry, material, halfPrecisionCovariancesOnGPU = false) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
         this.splatTree = null;
         this.splatDataTextures = null;
-        this.halfPrecisionCovariances = halfPrecisionCovariances;
+        this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
@@ -306,7 +306,7 @@ export class SplatMesh extends THREE.Mesh {
 
         let covariancesTexture;
         let paddedCovariances;
-        if (this.halfPrecisionCovariances) {
+        if (this.halfPrecisionCovariancesOnGPU) {
             paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
             for (let i = 0; i < this.covariances.length; i++) {
                 paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
