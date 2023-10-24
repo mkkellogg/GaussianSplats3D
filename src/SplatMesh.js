@@ -259,7 +259,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatTree.visitLeaves((node) => {
             const nodeSplatCount = node.data.indexes.length;
             if (nodeSplatCount > 0) {
-                avgSplatCount += splatCount;
+                avgSplatCount += nodeSplatCount;
                 maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
                 nodeCount++;
                 leavesWithVertices++;
@@ -267,7 +267,7 @@ export class SplatMesh extends THREE.Mesh {
         });
         console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
         console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
-        avgSplatCount /= nodeCount;
+        avgSplatCount = avgSplatCount / nodeCount;
         console.log(`Avg splat count per node: ${avgSplatCount}`);
     }
 

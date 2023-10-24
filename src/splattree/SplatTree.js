@@ -47,13 +47,14 @@ export class SplatTree {
         const splatCount = node.data.indexes.length;
 
         if (splatCount < this.maxPositionsPerNode || node.depth > this.maxDepth) {
+            const newIndexes = [];
             for (let i = 0; i < node.data.indexes.length; i++) {
-                if (this.addedIndexes[node.data.indexes[i]]) {
-                    node.data.indexes.splice(i, 1);
-                } else {
+                if (!this.addedIndexes[node.data.indexes[i]]) {
+                    newIndexes.push(node.data.indexes[i]);
                     this.addedIndexes[node.data.indexes[i]] = true;
                 }
             }
+            node.data.indexes = newIndexes;
             this.nodesWithIndexes.push(node);
             return;
         }
