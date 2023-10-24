@@ -35,7 +35,8 @@
     });
     viewer.init();
     viewer.loadFile('assets/data/truck/truck.splat', {
-      'splatAlphaRemovalThreshold': 10
+      'splatAlphaRemovalThreshold': 10,
+      'halfPrecisionCovariances': true
     })
     .then(() => {
         viewer.start();
