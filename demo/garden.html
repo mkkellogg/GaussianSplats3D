@@ -35,7 +35,8 @@
     });
     viewer.init();
     viewer.loadFile('assets/data/garden/garden.splat', {
-      'splatAlphaRemovalThreshold': 20
+      'splatAlphaRemovalThreshold': 20,
+      'halfPrecisionCovariances': true
     })
     .then(() => {
         viewer.start();

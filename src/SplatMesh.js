@@ -4,19 +4,20 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer) {
+    static buildMesh(splatBuffer, halfPrecisionCovariances = false) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material);
+        return new SplatMesh(splatBuffer, geometry, material, halfPrecisionCovariances);
     }
 
-    constructor(splatBuffer, geometry, material) {
+    constructor(splatBuffer, geometry, material, halfPrecisionCovariances = false) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
         this.splatTree = null;
         this.splatDataTextures = null;
+        this.halfPrecisionCovariances = halfPrecisionCovariances;
         this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
@@ -304,12 +305,21 @@ export class SplatMesh extends THREE.Mesh {
             centersColorsTextureSize.y *= 2;
         }
 
-        const paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
-        for (let i = 0; i < this.covariances.length; i++) {
-            paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
+        let covariancesTexture;
+        let paddedCovariances;
+        if (this.halfPrecisionCovariances) {
+            paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
+            for (let i = 0; i < this.covariances.length; i++) {
+                paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
+            }
+            covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
+                                                       covariancesTextureSize.y, THREE.RGFormat, THREE.HalfFloatType);
+        } else {
+            paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
+            paddedCovariances.set(this.covariances);
+            covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
+                                                       covariancesTextureSize.y, THREE.RGFormat, THREE.FloatType);
         }
-        const covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
-                                                         covariancesTextureSize.y, THREE.RGFormat, THREE.HalfFloatType);
         covariancesTexture.needsUpdate = true;
         this.material.uniforms.covariancesTexture.value = covariancesTexture;
         this.material.uniforms.covariancesTextureSize.value.copy(covariancesTextureSize);
