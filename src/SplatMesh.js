@@ -70,11 +70,9 @@ export class SplatMesh extends THREE.Mesh {
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rg, sampledCovarianceB.r);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceB.g, sampledCovarianceC.rg);
 
-                uvec2 sampledCenterColorA = texture(centersColorsTexture, getDataUV(2, 0, centersColorsTextureSize)).rg;
-                uvec2 sampledCenterColorB = texture(centersColorsTexture, getDataUV(2, 1, centersColorsTextureSize)).rg;
-
-                vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColorA.g, sampledCenterColorB.rg));
-                vColor = uintToRGBAVec(sampledCenterColorA.r);
+                uvec4 sampledCenterColor = texture(centersColorsTexture, getDataUV(1, 0, centersColorsTextureSize));
+                vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));
+                vColor = uintToRGBAVec(sampledCenterColor.r);
 
                 vPosition = position.xy * 2.0;
 
@@ -292,30 +290,31 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     allocateAndStoreLocalSplatDataInTextures() {
-        const ELEMENTS_PER_TEXEL = 2;
+        const COVARIANCES_ELEMENTS_PER_TEXEL = 2;
+        const CENTER_COLORS_ELEMENTS_PER_TEXEL = 4;
         const splatCount = this.splatBuffer.getSplatCount();
 
         const covariancesTextureSize = new THREE.Vector2(4096, 1024);
-        while (covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL < splatCount * 6) {
+        while (covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL < splatCount * 6) {
             covariancesTextureSize.y *= 2;
         }
 
         const centersColorsTextureSize = new THREE.Vector2(4096, 1024);
-        while (centersColorsTextureSize.x * centersColorsTextureSize.y * ELEMENTS_PER_TEXEL < splatCount * 4) {
+        while (centersColorsTextureSize.x * centersColorsTextureSize.y * CENTER_COLORS_ELEMENTS_PER_TEXEL < splatCount * 4) {
             centersColorsTextureSize.y *= 2;
         }
 
         let covariancesTexture;
         let paddedCovariances;
         if (this.halfPrecisionCovariances) {
-            paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
+            paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
             for (let i = 0; i < this.covariances.length; i++) {
                 paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
             }
             covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
                                                        covariancesTextureSize.y, THREE.RGFormat, THREE.HalfFloatType);
         } else {
-            paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * ELEMENTS_PER_TEXEL);
+            paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
             paddedCovariances.set(this.covariances);
             covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
                                                        covariancesTextureSize.y, THREE.RGFormat, THREE.FloatType);
@@ -324,7 +323,8 @@ export class SplatMesh extends THREE.Mesh {
         this.material.uniforms.covariancesTexture.value = covariancesTexture;
         this.material.uniforms.covariancesTextureSize.value.copy(covariancesTextureSize);
 
-        const paddedCenterColors = new Uint32Array(centersColorsTextureSize.x * centersColorsTextureSize.y * ELEMENTS_PER_TEXEL);
+        const paddedCenterColors = new Uint32Array(centersColorsTextureSize.x *
+                                                   centersColorsTextureSize.y * CENTER_COLORS_ELEMENTS_PER_TEXEL);
         for (let c = 0; c < splatCount; c++) {
             const colorsBase = c * 4;
             const centersBase = c * 3;
@@ -336,8 +336,8 @@ export class SplatMesh extends THREE.Mesh {
             paddedCenterColors[centerColorsBase + 3] = uintEncodedFloat(this.centers[centersBase + 2]);
         }
         const centersColorsTexture = new THREE.DataTexture(paddedCenterColors, centersColorsTextureSize.x,
-                                                           centersColorsTextureSize.y, THREE.RGIntegerFormat, THREE.UnsignedIntType);
-        centersColorsTexture.internalFormat = 'RG32UI';
+                                                           centersColorsTextureSize.y, THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
+        centersColorsTexture.internalFormat = 'RGBA32UI';
         centersColorsTexture.needsUpdate = true;
         this.material.uniforms.centersColorsTexture.value = centersColorsTexture;
         this.material.uniforms.centersColorsTextureSize.value.copy(centersColorsTextureSize);
