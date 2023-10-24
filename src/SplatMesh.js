@@ -320,7 +320,7 @@ export class SplatMesh extends THREE.Mesh {
             const centersBase = c * 3;
             const centerColorsBase = c * 4;
             paddedCenterColors[centerColorsBase] = rgbaToInteger(this.colors[colorsBase], this.colors[colorsBase + 1],
-                                                           this.colors[colorsBase + 2], this.colors[colorsBase + 3]);
+                                                                 this.colors[colorsBase + 2], this.colors[colorsBase + 3]);
             paddedCenterColors[centerColorsBase + 1] = uintEncodedFloat(this.centers[centersBase]);
             paddedCenterColors[centerColorsBase + 2] = uintEncodedFloat(this.centers[centersBase + 1]);
             paddedCenterColors[centerColorsBase + 3] = uintEncodedFloat(this.centers[centersBase + 2]);

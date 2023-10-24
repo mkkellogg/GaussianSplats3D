@@ -21,7 +21,6 @@ export class Viewer {
         if (!params.initialCameraLookAt) params.initialCameraLookAt = [0, 0, 0];
         if (params.selfDrivenMode === undefined) params.selfDrivenMode = true;
         if (params.useBuiltInControls === undefined) params.useBuiltInControls = true;
-        params.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold || 0;
 
         this.rootElement = params.rootElement;
         this.usingExternalCamera = params.camera ? true : false;
@@ -38,7 +37,6 @@ export class Viewer {
         this.useBuiltInControls = params.useBuiltInControls;
         this.controls = null;
         this.selfDrivenMode = params.selfDrivenMode;
-        this.splatAlphaRemovalThreshold = params.splatAlphaRemovalThreshold;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
         this.showMeshCursor = false;
         this.showInfo = false;
@@ -309,6 +307,7 @@ export class Viewer {
     loadFile(fileName, options = {}) {
         if (options.position) options.position = new THREE.Vector3().fromArray(options.position);
         if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
+        options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 0;
         const loadingSpinner = new LoadingSpinner();
         loadingSpinner.show();
         return new Promise((resolve, reject) => {
@@ -322,7 +321,7 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                this.setupSplatMesh(splatBuffer, options.position, options.orientation);
+                this.setupSplatMesh(splatBuffer, options.position, options.orientation, options.splatAlphaRemovalThreshold);
                 return this.setupSortWorker(splatBuffer);
             })
             .then(() => {
@@ -335,8 +334,8 @@ export class Viewer {
         });
     }
 
-    setupSplatMesh(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion()) {
-        splatBuffer.optimize(this.splatAlphaRemovalThreshold);
+    setupSplatMesh(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), splatAlphaRemovalThreshold = 0) {
+        splatBuffer.optimize(splatAlphaRemovalThreshold);
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
