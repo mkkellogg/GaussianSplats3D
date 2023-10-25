@@ -314,7 +314,11 @@ export class Viewer {
             if (percent == 100) {
                 loadingSpinner.setMessage(`Download complete!`);
             } else {
-                loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
+                if (percentLabel) {
+                    loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
+                } else {
+                    loadingSpinner.setMessage(`Downloading...`);
+                }
             }
         };
         return new Promise((resolve, reject) => {

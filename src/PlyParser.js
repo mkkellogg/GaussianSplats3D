@@ -228,8 +228,7 @@ export class PlyParser {
                         rot.set([1.0, 0.0, 0.0, 0.0]);
                     }
 
-                    bucketDelta.set(rawVertex.x, rawVertex.y, rawVertex.z).sub(bucketCenter);
-                    position.set([bucketDelta.x, bucketDelta.y, bucketDelta.z]);
+                    position.set([rawVertex.x, rawVertex.y, rawVertex.z]);
 
                     if (propertyTypes['f_dc_0']) {
                         const SH_C0 = 0.28209479177387814;
@@ -295,17 +294,20 @@ export class PlyParser {
 
         const bytesPerBucket = 12;
 
-        (new Uint32Array(header.buffer, 8, 1))[0] = SplatBufferBucketSize;
-        (new Uint32Array(header.buffer, 12, 1))[0] = buckets.length;
-        (new Float32Array(header.buffer, 16, 1))[0] = SplatBufferBucketBlockSize;
-        (new Uint32Array(header.buffer, 20, 1))[0] = bytesPerBucket;
-
         const bucketsSize = bytesPerBucket * buckets.length;
 
         const splatDataBufferSize = positionBuffer.byteLength + scaleBuffer.byteLength +
                                     colorBuffer.byteLength + rotationBuffer.byteLength;
 
-        const unifiedBufferSize = headerSize + splatDataBufferSize + bucketsSize;
+        let unifiedBufferSize = headerSize + splatDataBufferSize;
+        if (compressionLevel > 0) {
+            unifiedBufferSize += bucketsSize;
+            (new Uint32Array(header.buffer, 8, 1))[0] = SplatBufferBucketSize;
+            (new Uint32Array(header.buffer, 12, 1))[0] = buckets.length;
+            (new Float32Array(header.buffer, 16, 1))[0] = SplatBufferBucketBlockSize;
+            (new Uint32Array(header.buffer, 20, 1))[0] = bytesPerBucket;
+        }
+
         const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
         new Uint8Array(unifiedBuffer, 0, headerSize).set(header);
         new Uint8Array(unifiedBuffer, headerSize, positionBuffer.byteLength).set(new Uint8Array(positionBuffer));
@@ -315,13 +317,15 @@ export class PlyParser {
         new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength,
                        rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
 
-        const bucketArray = new Float32Array(unifiedBuffer, headerSize + splatDataBufferSize, buckets.length * 3);
-        for (let i = 0; i < buckets.length; i++) {
-            const bucket = buckets[i];
-            const base = i * 3;
-            bucketArray[base] = bucket.center[0];
-            bucketArray[base + 1] = bucket.center[1];
-            bucketArray[base + 2] = bucket.center[2];
+        if (compressionLevel > 0) {
+            const bucketArray = new Float32Array(unifiedBuffer, headerSize + splatDataBufferSize, buckets.length * 3);
+            for (let i = 0; i < buckets.length; i++) {
+                const bucket = buckets[i];
+                const base = i * 3;
+                bucketArray[base] = bucket.center[0];
+                bucketArray[base + 1] = bucket.center[1];
+                bucketArray[base + 2] = bucket.center[2];
+            }
         }
 
         const splatBuffer = new SplatBuffer(unifiedBuffer);
@@ -339,6 +343,7 @@ export class PlyParser {
         const min = new THREE.Vector3();
         const max = new THREE.Vector3();
 
+        // ignore the first splat since it's the invalid designator
         for (let i = 1; i < splatCount; i++) {
             const position = positions[i];
             if (i === 0 || position[0] < min.x) min.x = position[0];
@@ -356,6 +361,8 @@ export class PlyParser {
         const blockCenter = new THREE.Vector3();
         const fullBuckets = [];
         const partiallyFullBuckets = {};
+
+        // ignore the first splat since it's the invalid designator
         for (let i = 1; i < splatCount; i++) {
             const position = positions[i];
             const xBlock = Math.ceil((position[0] - min.x) / blockSize);

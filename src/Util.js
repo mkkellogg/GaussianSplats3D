@@ -64,6 +64,9 @@ export const fetchWithProgress = function(path, onProgress) {
                 try {
                     const { value: chunk, done } = await reader.read();
                     if (done) {
+                        if (onProgress) {
+                            onProgress(100, '100%', chunk);
+                        }
                         const buffer = new Blob(chunks).arrayBuffer();
                         resolve(buffer);
                         break;

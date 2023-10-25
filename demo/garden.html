@@ -39,7 +39,7 @@
       });
       viewer.init();
       viewer.loadFile('assets/data/garden/garden.splat', {
-          'splatAlphaRemovalThreshold': 10,
+          'splatAlphaRemovalThreshold': 15,
           'halfPrecisionCovariancesOnGPU': true
       })
       .then(() => {
@@ -47,7 +47,7 @@
       });
     } else {
       const plyLoader = new GaussianSplat3D.PlyLoader();
-      plyLoader.loadFromFile('assets/data/garden/point_cloud/iteration_7000/point_cloud.ply', 1, 10)
+      plyLoader.loadFromFile('assets/data/garden/point_cloud/iteration_7000/point_cloud.ply', 1, 15)
       .then((splatBuffer) => {
           new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('garden.splat');
       });

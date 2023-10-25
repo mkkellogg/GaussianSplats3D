@@ -156,8 +156,11 @@ export class SplatBuffer {
     }
 
     getPosition(index, outPosition = new THREE.Vector3()) {
-        const bucketIndex = Math.floor(index / this.bucketSize);
-        const bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
+        let bucket = [0, 0, 0];
+        if (this.bucketCount > 0) {
+            const bucketIndex = Math.floor(index / this.bucketSize);
+            bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
+        }
         const fbf = this.fbf.bind(this);
         const positionBase = index * SplatBuffer.PositionComponentCount;
         outPosition.set(fbf(this.positionArray[positionBase]) + bucket[0], fbf(this.positionArray[positionBase + 1]) + bucket[1],
@@ -166,8 +169,11 @@ export class SplatBuffer {
     }
 
     setPosition(index, position) {
-        const bucketIndex = Math.floor(index / this.bucketSize);
-        const bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
+        let bucket = [0, 0, 0];
+        if (this.bucketCount > 0) {
+            const bucketIndex = Math.floor(index / this.bucketSize);
+            bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
+        }
         const tbf = this.tbf.bind(this);
         const positionBase = index * SplatBuffer.PositionComponentCount;
         this.positionArray[positionBase] = tbf(position.x - bucket[0]);
@@ -233,9 +239,12 @@ export class SplatBuffer {
     fillPositionArray(outPositionArray) {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
+        let bucket = [0, 0, 0];
         for (let i = 0; i < splatCount; i++) {
-            const bucketIndex = Math.floor(i / this.bucketSize);
-            const bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
+            if (this.bucketCount > 0) {
+                const bucketIndex = Math.floor(i / this.bucketSize);
+                bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
+            }
             const positionBase = i * SplatBuffer.PositionComponentCount;
             outPositionArray[positionBase] = fbf(this.positionArray[positionBase]) + bucket[0];
             outPositionArray[positionBase + 1] = fbf(this.positionArray[positionBase + 1]) + bucket[1];
