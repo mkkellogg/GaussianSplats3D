@@ -89,13 +89,15 @@ The `loadFile()` method will accept the original `.ply` files as well as my cust
 To convert a `.ply` file into the stripped-down `.splat` format (currently only compatible with this viewer):
 
 ```javascript
+const compressionLevel = 1;
+const splatAlphaRemovalThreshold = 10;
 const plyLoader = new GaussianSplat3D.PlyLoader();
-plyLoader.loadFromFile('<path to .ply file>')
+plyLoader.loadFromFile('<path to .ply file>', compressionLevel, splatAlphaRemovalThreshold)
 .then((splatBuffer) => {
     new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('converted_file.splat');
 });
 ```
-This code will prompt your browser to automatically start downloading the converted `.splat` file.
+This code will prompt your browser to automatically start downloading the converted `.splat` file. Currently supported values for `compressionLevel` are `0` or `1`. `0` means no compression, `1` means compression of scale, rotation, and position values from 32-bit to 16-bit.
 
 It is now possible to integrate your own Three.js scene into the viewer (still somewhat experimental). The `Viewer` class now accepts two parameters by which you can pass in any 'normal' Three.js objects you want to be rendered along with the splats: `scene` and/or `simpleScene`. Rendering the splats correctly with external objects requires a special sequence of steps so the viewer needs to be aware of them:
 ```javascript
