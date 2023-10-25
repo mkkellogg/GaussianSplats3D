@@ -38,18 +38,17 @@
           'initialCameraLookAt': [0, 4, 0]
       });
       viewer.init();
-      viewer.loadFile('assets/data/garden/garden_new.splat', {
-        'splatAlphaRemovalThreshold': 20,
-        'halfPrecisionCovariancesOnGPU': true
+      viewer.loadFile('assets/data/garden/garden.splat', {
+        'halfPrecisionCovariancesOnGPU': false
       })
       .then(() => {
           viewer.start();
       });
     } else {
       const plyLoader = new GaussianSplat3D.PlyLoader();
-      plyLoader.loadFromFile('assets/data/garden/point_cloud/iteration_7000/point_cloud.ply', 0)
+      plyLoader.loadFromFile('assets/data/garden/point_cloud/iteration_7000/point_cloud.ply', 0, 20)
       .then((splatBuffer) => {
-          new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('garden_new.splat');
+          new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('garden.splat');
       });
     }
   </script>

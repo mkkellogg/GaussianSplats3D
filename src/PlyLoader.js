@@ -21,13 +21,13 @@ export class PlyLoader {
         });
     }
 
-    loadFromFile(fileName, compressionLevel = 0) {
+    loadFromFile(fileName, compressionLevel = 0, minimumAlpha = 1) {
         return new Promise((resolve, reject) => {
             const loadPromise = this.fetchFile(fileName);
             loadPromise
             .then((plyFileData) => {
                 const plyParser = new PlyParser(plyFileData);
-                const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel);
+                const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, minimumAlpha);
                 this.splatBuffer = splatBuffer;
                 resolve(splatBuffer);
             })

@@ -72,7 +72,7 @@ export class PlyParser {
         }
     }
 
-    parseToSplatBuffer(compressionLevel = 0) {
+    parseToSplatBuffer(compressionLevel = 0, minimumAlpha = 1) {
 
         console.time('PLY to SPLAT');
 
@@ -128,9 +128,57 @@ export class PlyParser {
         const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
                                   'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
-        const positionsForBucketCalcs = [];
+        const validVertexes = [];
+        // dummy vertex
+        validVertexes.push({
+            'scale_0': .01,
+            'scale_1': .01,
+            'scale_2': .01,
+            'rot_0': 1.0,
+            'rot_1': 0.0,
+            'rot_2': 0.0,
+            'rot_3': 0.0,
+            'x': 10000,
+            'y': 10000,
+            'z': 10000,
+            'f_dc_0': .0001,
+            'f_dc_1': .0001,
+            'f_dc_2': .0001,
+            'opacity': 1.0,
+        });
         for (let row = 0; row < splatCount; row++) {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
+            let alpha;
+            if (propertyTypes['opacity']) {
+                alpha = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
+            } else {
+                alpha = 255;
+            }
+            if (alpha > minimumAlpha) {
+                validVertexes.push({
+                    'scale_0': rawVertex.scale_0,
+                    'scale_1': rawVertex.scale_1,
+                    'scale_2': rawVertex.scale_2,
+                    'rot_0': rawVertex.rot_0,
+                    'rot_1': rawVertex.rot_1,
+                    'rot_2': rawVertex.rot_2,
+                    'rot_3': rawVertex.rot_3,
+                    'x': rawVertex.x,
+                    'y': rawVertex.y,
+                    'z': rawVertex.z,
+                    'f_dc_0': rawVertex.f_dc_0,
+                    'f_dc_1': rawVertex.f_dc_1,
+                    'f_dc_2': rawVertex.f_dc_2,
+                    'opacity': rawVertex.opacity,
+                });
+            }
+        }
+
+        console.log('Total valid splats: ', validVertexes.length, 'out of', splatCount);
+
+        const positionsForBucketCalcs = [];
+        for (let row = 0; row < validVertexes.length; row++) {
+            rawVertex = validVertexes[row];
             positionsForBucketCalcs.push([rawVertex.x, rawVertex.y, rawVertex.z]);
         }
         const buckets = this.computeBuckets(positionsForBucketCalcs);
@@ -163,7 +211,7 @@ export class PlyParser {
                     invalidBucket = true;
                     row = 0;
                 }
-                this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
+                rawVertex = validVertexes[row];
 
                 if (compressionLevel === 0) {
                     const position = new Float32Array(positionBuffer, outSplatIndex * bytesPerPosition, 3);
@@ -280,7 +328,6 @@ export class PlyParser {
         console.timeEnd('PLY to SPLAT');
 
         return splatBuffer;
-
     }
 
     computeBuckets(positions) {

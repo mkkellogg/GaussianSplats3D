@@ -24,6 +24,7 @@ export class SplatTree {
         const position = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
             splatBuffer.getPosition(i, position);
+            if (position.x >= 9900) continue;
             if (i === 0 || position.x < this.sceneMin.x) this.sceneMin.x = position.x;
             if (i === 0 || position.x > this.sceneMax.x) this.sceneMax.x = position.x;
             if (i === 0 || position.y < this.sceneMin.y) this.sceneMin.y = position.y;
@@ -35,7 +36,11 @@ export class SplatTree {
         this.sceneDimensions.copy(this.sceneMin).sub(this.sceneMin);
 
         const indexes = [];
-        for (let i = 0; i < splatCount; i ++)indexes.push(i);
+        for (let i = 0; i < splatCount; i ++){
+            splatBuffer.getPosition(i, position);
+            if (position.x >= 9900) continue;
+            indexes.push(i);
+        }
         this.rootNode = new SplatTreeNode(this.sceneMin, this.sceneMax, 0);
         this.rootNode.data = {
             'indexes': indexes

@@ -322,8 +322,7 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                this.setupSplatMesh(splatBuffer, options.position, options.orientation,
-                                    options.splatAlphaRemovalThreshold, options.halfPrecisionCovariancesOnGPU);
+                this.setupSplatMesh(splatBuffer, options.position, options.orientation, options.halfPrecisionCovariancesOnGPU);
                 return this.setupSortWorker(splatBuffer);
             })
             .then(() => {
@@ -337,8 +336,7 @@ export class Viewer {
     }
 
     setupSplatMesh(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
-                   splatAlphaRemovalThreshold = 0, halfPrecisionCovariancesOnGPU = false) {
-        splatBuffer.optimize(splatAlphaRemovalThreshold);
+                   halfPrecisionCovariancesOnGPU = false) {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 

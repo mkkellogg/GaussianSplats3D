@@ -35,7 +35,7 @@
     });
     viewer.init();
     viewer.loadFile('assets/data/stump/stump.splat', {
-      'splatAlphaRemovalThreshold': 30
+      'halfPrecisionCovariancesOnGPU': true
     })
     .then(() => {
         viewer.start();

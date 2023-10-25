@@ -83,57 +83,6 @@ export class SplatBuffer {
         this.bucketsBase = this.splatCount * this.bytesPerSplat;
     }
 
-    optimize(minAlpha) {
-        return;
-        let splatCount = this.splatCount;
-        const oldSplatCount = splatCount;
-        const oldByteCount = this.splatBufferData.byteLength;
-
-        let index = 0;
-        while (index < splatCount) {
-            const alpha = this.colorArray[index * SplatBuffer.ColorComponentCount + 3];
-            if (alpha <= minAlpha) {
-                this.swapVertices(index, splatCount - 1);
-                splatCount--;
-            } else {
-                index++;
-            }
-        }
-
-        this.splatCount = splatCount;
-        const newByteCount = this.splatCount * this.bytesPerSplat + this.bucketCount * this.bytesPerBucket;
-
-        console.log('Splat buffer optimization');
-        console.log('-------------------------------');
-        console.log('Old splat count: ' + oldSplatCount);
-        console.log('Old byte count: ' + oldByteCount);
-        console.log('New splat count: ' + splatCount);
-        console.log('New byte count: ' + newByteCount);
-        console.log('Splat count reduction: ' + ((oldByteCount - newByteCount) / oldByteCount * 100).toFixed(3) + '%');
-        console.log('==============================');
-        console.log('');
-
-        const newSplatBufferData = new ArrayBuffer(newByteCount);
-
-        let tempWindow = new Uint8Array(newSplatBufferData, 0, splatCount * this.bytesPerPosition);
-        tempWindow.set(new Uint8Array(this.splatBufferData, 0, splatCount * this.bytesPerPosition));
-
-        tempWindow = new Uint8Array(newSplatBufferData, splatCount * this.bytesPerPosition, splatCount * this.bytesPerScale);
-        tempWindow.set(new Uint8Array(this.splatBufferData, oldSplatCount * this.bytesPerPosition, splatCount * this.bytesPerScale));
-
-        tempWindow = new Uint8Array(newSplatBufferData, splatCount * (this.bytesPerPosition + this.bytesPerScale), splatCount * this.bytesPerColor);
-        tempWindow.set(new Uint8Array(this.splatBufferData, oldSplatCount * (this.bytesPerPosition + this.bytesPerScale), splatCount * this.bytesPerColor));
-    
-        tempWindow = new Uint8Array(newSplatBufferData, splatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor), splatCount * this.bytesPerRotation);
-        tempWindow.set(new Uint8Array(this.splatBufferData, oldSplatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor), splatCount * this.bytesPerRotation));
-
-        tempWindow = new Uint8Array(newSplatBufferData, splatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor + this.bytesPerRotation), this.bucketCount * this.bytesPerBucket);
-        tempWindow.set(new Uint8Array(this.splatBufferData, oldSplatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor  + this.bytesPerRotation), this.bucketCount * this.bytesPerBucket));
-
-        this.splatBufferData = newSplatBufferData;
-        this.linkBufferArrays();
-    }
-
     fbf(f) {
         if (this.compressionLevel === 0) {
             return f;
