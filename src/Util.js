@@ -47,3 +47,45 @@ export const uintEncodedFloat = function() {
 export const rgbaToInteger = function(r, g, b, a) {
     return r + (g << 8) + (b << 16) + (a << 24);
 };
+
+export const fetchWithProgress = function(path, onProgress) {
+
+    return new Promise((resolve, reject) => {
+        fetch(path)
+        .then(async (data) => {
+            const reader = data.body.getReader();
+            let bytesDownloaded = 0;
+            let _fileSize = data.headers.get('Content-Length');
+            let fileSize = _fileSize ? parseInt(_fileSize) : undefined;
+
+            const chunks = [];
+
+            while (true) {
+                try {
+                    const { value: chunk, done } = await reader.read();
+                    if (done) {
+                        const buffer = new Blob(chunks).arrayBuffer();
+                        resolve(buffer);
+                        break;
+                    }
+                    bytesDownloaded += chunk.length;
+                    let percent;
+                    let percentLabel;
+                    if (fileSize !== undefined) {
+                        percent = bytesDownloaded / fileSize * 100;
+                        percentLabel = `${percent.toFixed(2)}%`;
+                    }
+                    chunks.push(chunk);
+                    if (onProgress) {
+                        onProgress(percent, percentLabel, chunk);
+                    }
+                } catch (error) {
+                    reject(error);
+                    break;
+                }
+            }
+        });
+    });
+
+};
+

@@ -1,4 +1,5 @@
 import { PlyParser } from './PlyParser.js';
+import { fetchWithProgress } from './Util.js';
 
 export class PlyLoader {
 
@@ -6,12 +7,9 @@ export class PlyLoader {
         this.splatBuffer = null;
     }
 
-    fetchFile(fileName) {
+    fetchFile(fileName, onProgress) {
         return new Promise((resolve, reject) => {
-            fetch(fileName)
-            .then((res) => {
-                return res.arrayBuffer();
-            })
+            fetchWithProgress(fileName, onProgress)
             .then((data) => {
                 resolve(data);
             })

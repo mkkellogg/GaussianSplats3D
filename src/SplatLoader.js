@@ -1,4 +1,5 @@
 import { SplatBuffer } from './SplatBuffer.js';
+import { fetchWithProgress } from './Util.js';
 
 export class SplatLoader {
 
@@ -7,12 +8,9 @@ export class SplatLoader {
         this.downLoadLink = null;
     }
 
-    loadFromFile(fileName) {
+    loadFromFile(fileName, onProgress) {
         return new Promise((resolve, reject) => {
-            fetch(fileName)
-            .then((res) => {
-                return res.arrayBuffer();
-            })
+            fetchWithProgress(fileName, onProgress)
             .then((bufferData) => {
                 const splatBuffer = new SplatBuffer(bufferData);
                 resolve(splatBuffer);

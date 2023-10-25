@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
 import { SplatLoader } from './SplatLoader.js';
-import { SplatBuffer } from './SplatBuffer.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { SceneHelper } from './SceneHelper.js';
 import { Raycaster } from './raycaster/Raycaster.js';
@@ -307,22 +306,31 @@ export class Viewer {
     loadFile(fileName, options = {}) {
         if (options.position) options.position = new THREE.Vector3().fromArray(options.position);
         if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
-        options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 0;
+        options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 1;
         options.halfPrecisionCovariancesOnGPU = !!options.halfPrecisionCovariancesOnGPU;
         const loadingSpinner = new LoadingSpinner();
         loadingSpinner.show();
+        const loadingProgress = (percent, percentLabel) => {
+            if (percent == 100) {
+                loadingSpinner.setMessage(`Download complete!`);
+            } else {
+                loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
+            }
+        };
         return new Promise((resolve, reject) => {
             let fileLoadPromise;
             if (fileName.endsWith('.splat')) {
-                fileLoadPromise = new SplatLoader().loadFromFile(fileName);
+                fileLoadPromise = new SplatLoader().loadFromFile(fileName, loadingProgress);
             } else if (fileName.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromFile(fileName);
+                fileLoadPromise = new PlyLoader().loadFromFile(fileName, loadingProgress);
             } else {
                 reject(new Error(`Viewer::loadFile -> File format not supported: ${fileName}`));
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                this.setupSplatMesh(splatBuffer, options.position, options.orientation, options.halfPrecisionCovariancesOnGPU);
+                loadingSpinner.setMessage(`Processing splats...`);
+                this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
+                                    options.orientation, options.halfPrecisionCovariancesOnGPU);
                 return this.setupSortWorker(splatBuffer);
             })
             .then(() => {
@@ -335,13 +343,13 @@ export class Viewer {
         });
     }
 
-    setupSplatMesh(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
+    setupSplatMesh(splatBuffer, splatAlphaRemovalThreshold = 1, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
                    halfPrecisionCovariancesOnGPU = false) {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
         splatBuffer.buildPreComputedBuffers();
-        this.splatMesh = SplatMesh.buildMesh(splatBuffer, halfPrecisionCovariancesOnGPU);
+        this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU);
         this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
