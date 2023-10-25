@@ -4,20 +4,21 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer, halfPrecisionCovariances = false) {
+    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material, halfPrecisionCovariances);
+        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU);
     }
 
-    constructor(splatBuffer, geometry, material, halfPrecisionCovariances = false) {
+    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
         this.splatTree = null;
         this.splatDataTextures = null;
-        this.halfPrecisionCovariances = halfPrecisionCovariances;
+        this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
+        this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
@@ -127,7 +128,7 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = max(traceOver2 - term2, 0.01); // prevent negative eigen value
+                float eigenValue2 = max(traceOver2 - term2, 0.000000); // prevent negative eigen value
 
                 const float maxSplatSize = 512.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
@@ -139,6 +140,7 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) / viewport * 2.0;
 
                 gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                
 
             }`;
 
@@ -244,11 +246,14 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     buildSplatTree() {
-        const splatCount = this.splatBuffer.getSplatCount();
 
         this.splatTree = new SplatTree(8, 5000);
         console.time('SplatTree build');
-        this.splatTree.processSplatBuffer(this.splatBuffer);
+        const splatColor = new THREE.Vector4();
+        this.splatTree.processSplatBuffer(this.splatBuffer, (splatIndex) => {
+            this.splatBuffer.getColor(splatIndex, splatColor);
+            return splatColor.w > this.splatAlphaRemovalThreshold;
+        });
         console.timeEnd('SplatTree build');
 
         let leavesWithVertices = 0;
@@ -259,7 +264,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatTree.visitLeaves((node) => {
             const nodeSplatCount = node.data.indexes.length;
             if (nodeSplatCount > 0) {
-                avgSplatCount += splatCount;
+                avgSplatCount += nodeSplatCount;
                 maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
                 nodeCount++;
                 leavesWithVertices++;
@@ -267,7 +272,7 @@ export class SplatMesh extends THREE.Mesh {
         });
         console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
         console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
-        avgSplatCount /= nodeCount;
+        avgSplatCount = avgSplatCount / nodeCount;
         console.log(`Avg splat count per node: ${avgSplatCount}`);
     }
 
@@ -306,7 +311,7 @@ export class SplatMesh extends THREE.Mesh {
 
         let covariancesTexture;
         let paddedCovariances;
-        if (this.halfPrecisionCovariances) {
+        if (this.halfPrecisionCovariancesOnGPU) {
             paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
             for (let i = 0; i < this.covariances.length; i++) {
                 paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);

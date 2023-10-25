@@ -24,14 +24,15 @@ export class LoadingSpinner {
                 color: #ffffff;
                 text-align: center;
                 padding-top:15px;
+                width:180px;
             }
 
             .loaderContainer {
                 position: absolute;
                 top: 50%;
                 left: 50%;
-                transform: translate(-60px, -60px);
-                width: 120px;
+                transform: translate(-80px, -80px);
+                width: 180px;
             }
 
             .loader {
@@ -51,6 +52,7 @@ export class LoadingSpinner {
                     mask-composite: subtract;
                 box-sizing: border-box;
                 animation: load 1s linear infinite;
+                margin-left: 30px;
             }
             
             @keyframes load {
@@ -67,5 +69,9 @@ export class LoadingSpinner {
 
     hide() {
         this.spinnerDivContainer.style.display = 'none';
+    }
+
+    setMessage(msg) {
+        this.messageDiv.innerHTML = msg;
     }
 }

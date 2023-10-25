@@ -34,9 +34,8 @@
         'initialCameraLookAt': [0, 4, 0]
     });
     viewer.init();
-    viewer.loadFile('assets/data/garden/garden.splat', {
-      'splatAlphaRemovalThreshold': 20,
-      'halfPrecisionCovariances': true
+    viewer.loadFile('assets/data/garden/garden_high.splat', {
+        'halfPrecisionCovariancesOnGPU': true
     })
     .then(() => {
         viewer.start();

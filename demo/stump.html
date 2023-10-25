@@ -34,8 +34,8 @@
         'initialCameraLookAt': [0.60910, 1.42099, 2.02511]
     });
     viewer.init();
-    viewer.loadFile('assets/data/stump/stump.splat', {
-      'splatAlphaRemovalThreshold': 30
+    viewer.loadFile('assets/data/stump/stump_high.splat', {
+        'halfPrecisionCovariancesOnGPU': true
     })
     .then(() => {
         viewer.start();

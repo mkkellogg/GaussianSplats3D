@@ -34,9 +34,8 @@
         'initialCameraLookAt': [1, 1, 0]
     });
     viewer.init();
-    viewer.loadFile('assets/data/truck/truck.splat', {
-      'splatAlphaRemovalThreshold': 10,
-      'halfPrecisionCovariances': true
+    viewer.loadFile('assets/data/truck/truck_high.splat', {
+        'halfPrecisionCovariancesOnGPU': true
     })
     .then(() => {
         viewer.start();

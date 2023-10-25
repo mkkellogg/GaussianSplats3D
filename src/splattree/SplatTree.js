@@ -15,7 +15,7 @@ export class SplatTree {
         this.nodesWithIndexes = [];
     }
 
-    processSplatBuffer(splatBuffer) {
+    processSplatBuffer(splatBuffer, filterFunc = () => true) {
         this.splatBuffer = splatBuffer;
         this.addedIndexes = {};
         this.nodesWithIndexes = [];
@@ -23,19 +23,25 @@ export class SplatTree {
 
         const position = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
-            splatBuffer.getPosition(i, position);
-            if (i === 0 || position.x < this.sceneMin.x) this.sceneMin.x = position.x;
-            if (i === 0 || position.x > this.sceneMax.x) this.sceneMax.x = position.x;
-            if (i === 0 || position.y < this.sceneMin.y) this.sceneMin.y = position.y;
-            if (i === 0 || position.y > this.sceneMax.y) this.sceneMax.y = position.y;
-            if (i === 0 || position.z < this.sceneMin.z) this.sceneMin.z = position.z;
-            if (i === 0 || position.z > this.sceneMax.z) this.sceneMax.z = position.z;
+            if (filterFunc(i)) {
+                splatBuffer.getPosition(i, position);
+                if (i === 0 || position.x < this.sceneMin.x) this.sceneMin.x = position.x;
+                if (i === 0 || position.x > this.sceneMax.x) this.sceneMax.x = position.x;
+                if (i === 0 || position.y < this.sceneMin.y) this.sceneMin.y = position.y;
+                if (i === 0 || position.y > this.sceneMax.y) this.sceneMax.y = position.y;
+                if (i === 0 || position.z < this.sceneMin.z) this.sceneMin.z = position.z;
+                if (i === 0 || position.z > this.sceneMax.z) this.sceneMax.z = position.z;
+            }
         }
 
         this.sceneDimensions.copy(this.sceneMin).sub(this.sceneMin);
 
         const indexes = [];
-        for (let i = 0; i < splatCount; i ++)indexes.push(i);
+        for (let i = 0; i < splatCount; i ++) {
+            if (filterFunc(i)) {
+                indexes.push(i);
+            }
+        }
         this.rootNode = new SplatTreeNode(this.sceneMin, this.sceneMax, 0);
         this.rootNode.data = {
             'indexes': indexes
@@ -47,13 +53,14 @@ export class SplatTree {
         const splatCount = node.data.indexes.length;
 
         if (splatCount < this.maxPositionsPerNode || node.depth > this.maxDepth) {
+            const newIndexes = [];
             for (let i = 0; i < node.data.indexes.length; i++) {
-                if (this.addedIndexes[node.data.indexes[i]]) {
-                    node.data.indexes.splice(i, 1);
-                } else {
+                if (!this.addedIndexes[node.data.indexes[i]]) {
+                    newIndexes.push(node.data.indexes[i]);
                     this.addedIndexes[node.data.indexes[i]] = true;
                 }
             }
+            node.data.indexes = newIndexes;
             this.nodesWithIndexes.push(node);
             return;
         }

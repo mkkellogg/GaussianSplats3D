@@ -53,6 +53,16 @@ http
       console.log("-----------------------------------------------");
     }
 
+    try {
+      const stats = fs.statSync(filePath);
+      if (stats && stats.size) {
+        const fileSizeInBytes = stats.size;
+        response.setHeader("Content-Length", fileSizeInBytes);
+      }
+    } catch(err) {
+      // ignore
+    }
+
     fs.readFile(filePath, function (error, content) {
       if (error) {
         if (error.code == "ENOENT") {
