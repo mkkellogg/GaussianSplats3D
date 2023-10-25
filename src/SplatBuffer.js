@@ -71,14 +71,22 @@ export class SplatBuffer {
     linkBufferArrays() {
         if (this.compressionLevel === 0) {
             this.positionArray = new Float32Array(this.splatBufferData, 0, this.splatCount * SplatBuffer.PositionComponentCount);
-            this.scaleArray = new Float32Array(this.splatBufferData, this.bytesPerPosition * this.splatCount, this.splatCount * SplatBuffer.ScaleComponentCount);
-            this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount, this.splatCount * SplatBuffer.ColorComponentCount);
-            this.rotationArray = new Float32Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount, this.splatCount * SplatBuffer.RotationComponentCount);
+            this.scaleArray = new Float32Array(this.splatBufferData, this.bytesPerPosition * this.splatCount,
+                                               this.splatCount * SplatBuffer.ScaleComponentCount);
+            this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount,
+                                             this.splatCount * SplatBuffer.ColorComponentCount);
+            this.rotationArray = new Float32Array(this.splatBufferData,
+                                                 (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount,
+                                                  this.splatCount * SplatBuffer.RotationComponentCount);
         } else {
             this.positionArray = new Uint16Array(this.splatBufferData, 0, this.splatCount * SplatBuffer.PositionComponentCount);
-            this.scaleArray = new Uint16Array(this.splatBufferData, this.bytesPerPosition * this.splatCount, this.splatCount * SplatBuffer.ScaleComponentCount);
-            this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount, this.splatCount * SplatBuffer.ColorComponentCount);
-            this.rotationArray = new Uint16Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount, this.splatCount * SplatBuffer.RotationComponentCount);
+            this.scaleArray = new Uint16Array(this.splatBufferData, this.bytesPerPosition * this.splatCount,
+                                              this.splatCount * SplatBuffer.ScaleComponentCount);
+            this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount,
+                                             this.splatCount * SplatBuffer.ColorComponentCount);
+            this.rotationArray = new Uint16Array(this.splatBufferData,
+                                                (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount,
+                                                 this.splatCount * SplatBuffer.RotationComponentCount);
         }
         this.bucketsBase = this.splatCount * this.bytesPerSplat;
     }

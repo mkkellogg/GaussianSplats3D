@@ -4,19 +4,20 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer, halfPrecisionCovariancesOnGPU = false) {
+    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material, halfPrecisionCovariancesOnGPU);
+        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU);
     }
 
-    constructor(splatBuffer, geometry, material, halfPrecisionCovariancesOnGPU = false) {
+    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
         this.splatTree = null;
         this.splatDataTextures = null;
+        this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
@@ -245,11 +246,14 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     buildSplatTree() {
-        const splatCount = this.splatBuffer.getSplatCount();
 
         this.splatTree = new SplatTree(8, 5000);
         console.time('SplatTree build');
-        this.splatTree.processSplatBuffer(this.splatBuffer);
+        const splatColor = new THREE.Vector4();
+        this.splatTree.processSplatBuffer(this.splatBuffer, (splatIndex) => {
+            this.splatBuffer.getColor(splatIndex, splatColor);
+            return splatColor.w > this.splatAlphaRemovalThreshold;
+        });
         console.timeEnd('SplatTree build');
 
         let leavesWithVertices = 0;

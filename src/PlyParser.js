@@ -129,7 +129,7 @@ export class PlyParser {
                                   'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
         const validVertexes = [];
-        // dummy vertex
+        // dummy vertex used for invalid vertexes
         validVertexes.push({
             'scale_0': .01,
             'scale_1': .01,
@@ -138,13 +138,13 @@ export class PlyParser {
             'rot_1': 0.0,
             'rot_2': 0.0,
             'rot_3': 0.0,
-            'x': 10000,
-            'y': 10000,
-            'z': 10000,
+            'x': 0,
+            'y': 0,
+            'z': 0,
             'f_dc_0': .0001,
             'f_dc_1': .0001,
             'f_dc_2': .0001,
-            'opacity': 1.0,
+            'opacity': 0.0,
         });
         for (let row = 0; row < splatCount; row++) {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
@@ -207,9 +207,8 @@ export class PlyParser {
             for (let i = 0; i < bucket.splats.length; i++) {
                 let row = bucket.splats[i];
                 let invalidBucket = false;
-                if (row == -1) {
+                if (row === 0) {
                     invalidBucket = true;
-                    row = 0;
                 }
                 rawVertex = validVertexes[row];
 
@@ -263,7 +262,6 @@ export class PlyParser {
                         rot.set([thf(quat.w), thf(quat.x), thf(quat.y), thf(quat.z)]);
                         scales.set([thf(Math.exp(rawVertex.scale_0)), thf(Math.exp(rawVertex.scale_1)), thf(Math.exp(rawVertex.scale_2))]);
                     } else {
-                        
                         scales.set([thf(0.01), thf(0.01), thf(0.01)]);
                         rot.set([thf(1.), 0, 0, 0]);
                     }
@@ -304,16 +302,19 @@ export class PlyParser {
 
         const bucketsSize = bytesPerBucket * buckets.length;
 
-        const splatDataBufferSize = positionBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength + rotationBuffer.byteLength ;
+        const splatDataBufferSize = positionBuffer.byteLength + scaleBuffer.byteLength +
+                                    colorBuffer.byteLength + rotationBuffer.byteLength;
 
         const unifiedBufferSize = headerSize + splatDataBufferSize + bucketsSize;
         const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
         new Uint8Array(unifiedBuffer, 0, headerSize).set(header);
         new Uint8Array(unifiedBuffer, headerSize, positionBuffer.byteLength).set(new Uint8Array(positionBuffer));
         new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength, scaleBuffer.byteLength).set(new Uint8Array(scaleBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength + scaleBuffer.byteLength, colorBuffer.byteLength).set(new Uint8Array(colorBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength, rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
-        
+        new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength + scaleBuffer.byteLength,
+                       colorBuffer.byteLength).set(new Uint8Array(colorBuffer));
+        new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength,
+                       rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
+
         const bucketArray = new Float32Array(unifiedBuffer, headerSize + splatDataBufferSize, buckets.length * 3);
         for (let i = 0; i < buckets.length; i++) {
             const bucket = buckets[i];
@@ -338,7 +339,7 @@ export class PlyParser {
         const min = new THREE.Vector3();
         const max = new THREE.Vector3();
 
-        for (let i = 0; i < splatCount; i++) {
+        for (let i = 1; i < splatCount; i++) {
             const position = positions[i];
             if (i === 0 || position[0] < min.x) min.x = position[0];
             if (i === 0 || position[0] > max.x) max.x = position[0];
@@ -349,14 +350,13 @@ export class PlyParser {
         }
 
         const dimensions = new THREE.Vector3().copy(max).sub(min);
-        const xBlocks = Math.ceil(dimensions.x / blockSize);
         const yBlocks = Math.ceil(dimensions.y / blockSize);
         const zBlocks = Math.ceil(dimensions.z / blockSize);
 
         const blockCenter = new THREE.Vector3();
         const fullBuckets = [];
         const partiallyFullBuckets = {};
-        for (let i = 0; i < splatCount; i++) {
+        for (let i = 1; i < splatCount; i++) {
             const position = positions[i];
             const xBlock = Math.ceil((position[0] - min.x) / blockSize);
             const yBlock = Math.ceil((position[1] - min.y) / blockSize);
@@ -382,15 +382,15 @@ export class PlyParser {
             }
         }
 
-        let partiallyFullBucketCount = 0;
         for (let bucketId in partiallyFullBuckets) {
-            const bucket = partiallyFullBuckets[bucketId];
-            if (bucket) {
-                while(bucket.splats.length < SplatBufferBucketSize) {
-                    bucket.splats.push(-1);
+            if (partiallyFullBuckets.hasOwnProperty(bucketId)) {
+                const bucket = partiallyFullBuckets[bucketId];
+                if (bucket) {
+                    while (bucket.splats.length < SplatBufferBucketSize) {
+                        bucket.splats.push(0);
+                    }
+                    fullBuckets.push(bucket);
                 }
-                fullBuckets.push(bucket);
-                partiallyFullBucketCount++;
             }
         }
 
