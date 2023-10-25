@@ -1,4 +1,5 @@
 import { SplatBuffer } from './SplatBuffer.js';
+import { clamp } from './Util.js';
 import * as THREE from 'three';
 
 
@@ -198,6 +199,11 @@ export class PlyParser {
         const colorBuffer = new ArrayBuffer(bytesPerColor * paddedSplatCount);
         const rotationBuffer = new ArrayBuffer(bytesPerRotation * paddedSplatCount);
 
+        const blockHalfSize = SplatBufferBucketBlockSize / 2.0;
+        const compressionScaleRange = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
+        const compressionScaleFactor = compressionScaleRange / blockHalfSize;
+        const doubleCompressionScaleRange = compressionScaleRange * 2 + 1;
+
         const bucketCenter = new THREE.Vector3();
         const bucketDelta = new THREE.Vector3();
         let outSplatIndex = 0;
@@ -266,7 +272,13 @@ export class PlyParser {
                     }
 
                     bucketDelta.set(rawVertex.x, rawVertex.y, rawVertex.z).sub(bucketCenter);
-                    position.set([thf(bucketDelta.x), thf(bucketDelta.y), thf(bucketDelta.z)]);
+                    bucketDelta.x = Math.round(bucketDelta.x * compressionScaleFactor) + compressionScaleRange;
+                    bucketDelta.x = clamp(bucketDelta.x, 0, doubleCompressionScaleRange);
+                    bucketDelta.y = Math.round(bucketDelta.y * compressionScaleFactor) + compressionScaleRange;
+                    bucketDelta.y = clamp(bucketDelta.y, 0, doubleCompressionScaleRange);
+                    bucketDelta.z = Math.round(bucketDelta.z * compressionScaleFactor) + compressionScaleRange;
+                    bucketDelta.z = clamp(bucketDelta.z, 0, doubleCompressionScaleRange);
+                    position.set([bucketDelta.x, bucketDelta.y, bucketDelta.z]);
 
                     if (propertyTypes['f_dc_0']) {
                         const SH_C0 = 0.28209479177387814;
@@ -369,9 +381,9 @@ export class PlyParser {
             const yBlock = Math.ceil((position[1] - min.y) / blockSize);
             const zBlock = Math.ceil((position[2] - min.z) / blockSize);
 
-            blockCenter.x = xBlock * blockSize + min.x + halfBlockSize;
-            blockCenter.y = yBlock * blockSize + min.y + halfBlockSize;
-            blockCenter.z = zBlock * blockSize + min.z + halfBlockSize;
+            blockCenter.x = (xBlock - 1) * blockSize + min.x + halfBlockSize;
+            blockCenter.y = (yBlock - 1) * blockSize + min.y + halfBlockSize;
+            blockCenter.z = (zBlock - 1) * blockSize + min.z + halfBlockSize;
 
             const bucketId = xBlock * (yBlocks * zBlocks) + yBlock * zBlocks + zBlock;
             let bucket = partiallyFullBuckets[bucketId];
