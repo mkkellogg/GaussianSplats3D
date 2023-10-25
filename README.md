@@ -15,11 +15,14 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
  - Allows a Three.js scene or object group to be rendered along with the splats
 ## Future work
 This is still very much a work in progress! There are several things that still need to be done:
-  - Improve the method by which splat data is stored in textures (currently much texture space is wasted or packed inefficiently)
+  - Improve the method by which splat data is stored in textures
   - Properly incorporate spherical harmonics data to achieve view dependent lighting effects
-  - Improve the layout of the SplatBuffer object for better efficiency and reduced file size
+  - Continue improving compression for splat files
   - Improve splat sorting -- maybe an incremental sort of some kind?
   - Implement double buffering so that the next splat index array in the main thread can be filled while the current one is sorted in the worker thread
+  - Add editing mode, allowing users to modify scene and export changes
+  - Add WebXR compatibility
+  - Support very large scenes and/or multiple splat files
 
 ## Online demo
 [https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php](https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php)
