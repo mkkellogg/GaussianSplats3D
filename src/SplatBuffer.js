@@ -47,6 +47,11 @@ export class SplatBuffer {
         this.compressionLevel = this.headerArray[0];
         this.splatCount = (new Uint32Array(this.headerBufferData, 4, 1))[0];
 
+        this.bucketSize = (new Uint32Array(this.headerBufferData, 8, 1))[0];
+        this.bucketCount = (new Uint32Array(this.headerBufferData, 12, 1))[0];
+        this.bucketBlockSize = (new Float32Array(this.headerBufferData, 16, 1))[0];
+        this.bytesPerBucket = (new Uint32Array(this.headerBufferData, 20, 1))[0];
+
         const dataBufferSizeBytes = bufferData.byteLength - SplatBuffer.HeaderSizeBytes;
         this.splatBufferData = new ArrayBuffer(dataBufferSizeBytes);
         new Uint8Array(this.splatBufferData).set(new Uint8Array(bufferData, SplatBuffer.HeaderSizeBytes, dataBufferSizeBytes));
@@ -75,9 +80,11 @@ export class SplatBuffer {
             this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount, this.splatCount * SplatBuffer.ColorComponentCount);
             this.rotationArray = new Uint16Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount, this.splatCount * SplatBuffer.RotationComponentCount);
         }
+        this.bucketsBase = this.splatCount * this.bytesPerSplat;
     }
 
     optimize(minAlpha) {
+        return;
         let splatCount = this.splatCount;
         const oldSplatCount = splatCount;
         const oldByteCount = this.splatBufferData.byteLength;
@@ -94,7 +101,7 @@ export class SplatBuffer {
         }
 
         this.splatCount = splatCount;
-        const newByteCount = this.splatCount * this.bytesPerSplat;
+        const newByteCount = this.splatCount * this.bytesPerSplat + this.bucketCount * this.bytesPerBucket;
 
         console.log('Splat buffer optimization');
         console.log('-------------------------------');
@@ -119,6 +126,9 @@ export class SplatBuffer {
     
         tempWindow = new Uint8Array(newSplatBufferData, splatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor), splatCount * this.bytesPerRotation);
         tempWindow.set(new Uint8Array(this.splatBufferData, oldSplatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor), splatCount * this.bytesPerRotation));
+
+        tempWindow = new Uint8Array(newSplatBufferData, splatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor + this.bytesPerRotation), this.bucketCount * this.bytesPerBucket);
+        tempWindow.set(new Uint8Array(this.splatBufferData, oldSplatCount * (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor  + this.bytesPerRotation), this.bucketCount * this.bytesPerBucket));
 
         this.splatBufferData = newSplatBufferData;
         this.linkBufferArrays();
@@ -189,18 +199,23 @@ export class SplatBuffer {
     }
 
     getPosition(index, outPosition = new THREE.Vector3()) {
+        const bucketIndex = Math.floor(index / this.bucketSize);
+        const bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
         const fbf = this.fbf.bind(this);
         const positionBase = index * SplatBuffer.PositionComponentCount;
-        outPosition.set(fbf(this.positionArray[positionBase]), fbf(this.positionArray[positionBase + 1]), fbf(this.positionArray[positionBase + 2]));
+        outPosition.set(fbf(this.positionArray[positionBase]) + bucket[0], fbf(this.positionArray[positionBase + 1]) + bucket[1],
+                        fbf(this.positionArray[positionBase + 2]) + bucket[2]);
         return outPosition;
     }
 
     setPosition(index, position) {
+        const bucketIndex = Math.floor(index / this.bucketSize);
+        const bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
         const tbf = this.tbf.bind(this);
         const positionBase = index * SplatBuffer.PositionComponentCount;
-        this.positionArray[positionBase] = tbf(position.x);
-        this.positionArray[positionBase + 1] = tbf(position.y);
-        this.positionArray[positionBase + 2] = tbf(position.z);
+        this.positionArray[positionBase] = tbf(position.x - bucket[0]);
+        this.positionArray[positionBase + 1] = tbf(position.y - bucket[1]);
+        this.positionArray[positionBase + 2] = tbf(position.z - bucket[2]);
     }
 
     getScale(index, outScale = new THREE.Vector3()) {
@@ -262,10 +277,12 @@ export class SplatBuffer {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
+            const bucketIndex = Math.floor(i / this.bucketSize);
+            const bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
             const positionBase = i * SplatBuffer.PositionComponentCount;
-            outPositionArray[positionBase] = fbf(this.positionArray[positionBase]);
-            outPositionArray[positionBase + 1] = fbf(this.positionArray[positionBase + 1]);
-            outPositionArray[positionBase + 2] = fbf(this.positionArray[positionBase + 2]);
+            outPositionArray[positionBase] = fbf(this.positionArray[positionBase]) + bucket[0];
+            outPositionArray[positionBase + 1] = fbf(this.positionArray[positionBase + 1]) + bucket[1];
+            outPositionArray[positionBase + 2] = fbf(this.positionArray[positionBase + 2]) + bucket[2];
         }
     }
 
