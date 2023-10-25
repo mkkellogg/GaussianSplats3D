@@ -28,30 +28,18 @@
 <body>
   <script type="module">
     import * as GaussianSplat3D from 'gaussian-splat-3d';
-    
-    const mode = 0;
-
-    if (mode == 0) {
-      const viewer = new GaussianSplat3D.Viewer({
-          'cameraUp': [0, -1, -0.6],
-          'initialCameraPosition': [-1, -4, 6],
-          'initialCameraLookAt': [0, 4, 0]
-      });
-      viewer.init();
-      viewer.loadFile('assets/data/garden/garden.splat', {
-          'splatAlphaRemovalThreshold': 15,
-          'halfPrecisionCovariancesOnGPU': true
-      })
-      .then(() => {
-          viewer.start();
-      });
-    } else {
-      const plyLoader = new GaussianSplat3D.PlyLoader();
-      plyLoader.loadFromFile('assets/data/garden/point_cloud/iteration_7000/point_cloud.ply', 1, 15)
-      .then((splatBuffer) => {
-          new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('garden.splat');
-      });
-    }
+    const viewer = new GaussianSplat3D.Viewer({
+        'cameraUp': [0, -1, -0.6],
+        'initialCameraPosition': [-1, -4, 6],
+        'initialCameraLookAt': [0, 4, 0]
+    });
+    viewer.init();
+    viewer.loadFile('assets/data/garden/garden_high.splat', {
+        'halfPrecisionCovariancesOnGPU': true
+    })
+    .then(() => {
+        viewer.start();
+    });
   </script>
 </body>
 

@@ -75,7 +75,9 @@ export class PlyParser {
 
     parseToSplatBuffer(compressionLevel = 0, minimumAlpha = 1) {
 
-        console.time('PLY to SPLAT');
+        const startTime = performance.now();
+
+        console.log('Parsing PLY to SPLAT...');
 
         const {splatCount, propertyTypes, vertexData} = this.decodeHeader(this.plyBuffer);
 
@@ -342,7 +344,10 @@ export class PlyParser {
 
         const splatBuffer = new SplatBuffer(unifiedBuffer);
 
-        console.timeEnd('PLY to SPLAT');
+        const endTime = performance.now();
+
+        console.log('Parsing PLY to SPLAT complete!');
+        console.log('Total time: ', (endTime - startTime).toFixed(2) + ' ms');
 
         return splatBuffer;
     }

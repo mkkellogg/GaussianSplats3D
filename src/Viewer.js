@@ -333,13 +333,14 @@ export class Viewer {
             fileLoadPromise
             .then((splatBuffer) => {
                 loadingSpinner.setMessage(`Processing splats...`);
-                this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
-                                    options.orientation, options.halfPrecisionCovariancesOnGPU);
-                return this.setupSortWorker(splatBuffer);
-            })
-            .then(() => {
-                loadingSpinner.hide();
-                resolve();
+                window.setTimeout(() => {
+                    this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
+                                        options.orientation, options.halfPrecisionCovariancesOnGPU);
+                    this.setupSortWorker(splatBuffer).then(() => {
+                        loadingSpinner.hide();
+                        resolve();
+                    });
+                }, 1);
             })
             .catch((e) => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
