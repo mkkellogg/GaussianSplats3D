@@ -7,13 +7,10 @@ const tempVector4B = new THREE.Vector4();
 const tempQuaternion4A = new THREE.Quaternion();
 const tempQuaternion4B = new THREE.Quaternion();
 
-export class SplatBuffer {
+let fbf;
+let tbf;
 
-    // Row format:
-    //     Center position (XYZ) - Float32 * 3
-    //     Scale (XYZ)  - Float32 * 3
-    //     Color (RGBA) - Uint8 * 4
-    //     Rotation (IJKW) - Float32 * 4
+export class SplatBuffer {
 
     static PositionComponentCount = 3;
     static ScaleComponentCount = 3;
@@ -46,16 +43,20 @@ export class SplatBuffer {
         this.headerBufferData = new ArrayBuffer(SplatBuffer.HeaderSizeBytes);
         this.headerArray = new Uint8Array(this.headerBufferData);
         this.headerArray.set(new Uint8Array(bufferData, 0, SplatBuffer.HeaderSizeBytes));
-        this.compressionLevel = this.headerArray[0];
+        this.versionMajor = this.headerArray[0];
+        this.versionMinor = this.headerArray[1];
+        this.HeaderExtraK = this.headerArray[2];
+        this.compressionLevel = this.headerArray[3];
         this.splatCount = (new Uint32Array(this.headerBufferData, 4, 1))[0];
-
         this.bucketSize = (new Uint32Array(this.headerBufferData, 8, 1))[0];
         this.bucketCount = (new Uint32Array(this.headerBufferData, 12, 1))[0];
         this.bucketBlockSize = (new Float32Array(this.headerBufferData, 16, 1))[0];
         this.halfBucketBlockSize = this.bucketBlockSize / 2.0;
         this.bytesPerBucket = (new Uint32Array(this.headerBufferData, 20, 1))[0];
-
-        this.compressionScaleRange = SplatBuffer.CompressionLevels[this.compressionLevel].ScaleRange;
+        this.compressionScaleRange = (new Uint32Array(this.headerBufferData, 24, 1))[0];
+        if (this.compressionScaleRange === 0) {
+            this.compressionScaleRange = SplatBuffer.CompressionLevels[this.compressionLevel].ScaleRange;
+        }
         this.compressionScaleFactor = this.halfBucketBlockSize / this.compressionScaleRange;
 
         const dataBufferSizeBytes = bufferData.byteLength - SplatBuffer.HeaderSizeBytes;
@@ -69,31 +70,24 @@ export class SplatBuffer {
 
         this.bytesPerSplat = this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor + this.bytesPerRotation;
 
+        fbf = this.fbf.bind(this);
+        tbf = this.tbf.bind(this);
+
         this.linkBufferArrays();
 
         this.precomputedCovarianceBufferData = null;
     }
 
     linkBufferArrays() {
-        if (this.compressionLevel === 0) {
-            this.positionArray = new Float32Array(this.splatBufferData, 0, this.splatCount * SplatBuffer.PositionComponentCount);
-            this.scaleArray = new Float32Array(this.splatBufferData, this.bytesPerPosition * this.splatCount,
-                                               this.splatCount * SplatBuffer.ScaleComponentCount);
-            this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount,
-                                             this.splatCount * SplatBuffer.ColorComponentCount);
-            this.rotationArray = new Float32Array(this.splatBufferData,
-                                                 (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount,
-                                                  this.splatCount * SplatBuffer.RotationComponentCount);
-        } else {
-            this.positionArray = new Uint16Array(this.splatBufferData, 0, this.splatCount * SplatBuffer.PositionComponentCount);
-            this.scaleArray = new Uint16Array(this.splatBufferData, this.bytesPerPosition * this.splatCount,
-                                              this.splatCount * SplatBuffer.ScaleComponentCount);
-            this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount,
-                                             this.splatCount * SplatBuffer.ColorComponentCount);
-            this.rotationArray = new Uint16Array(this.splatBufferData,
-                                                (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount,
-                                                 this.splatCount * SplatBuffer.RotationComponentCount);
-        }
+        let FloatArray = (this.compressionLevel === 0) ? Float32Array : Uint16Array;
+        this.positionArray = new FloatArray(this.splatBufferData, 0, this.splatCount * SplatBuffer.PositionComponentCount);
+        this.scaleArray = new FloatArray(this.splatBufferData, this.bytesPerPosition * this.splatCount,
+                                         this.splatCount * SplatBuffer.ScaleComponentCount);
+        this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount,
+                                         this.splatCount * SplatBuffer.ColorComponentCount);
+        this.rotationArray = new FloatArray(this.splatBufferData,
+                                             (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount,
+                                              this.splatCount * SplatBuffer.RotationComponentCount);
         this.bucketsBase = this.splatCount * this.bytesPerSplat;
     }
 
@@ -125,8 +119,6 @@ export class SplatBuffer {
         const scaleMatrix = new THREE.Matrix3();
         const covarianceMatrix = new THREE.Matrix3();
         const tempMatrix4 = new THREE.Matrix4();
-
-        const fbf = this.fbf.bind(this);
 
         for (let i = 0; i < splatCount; i++) {
             const scaleBase = i * SplatBuffer.ScaleComponentCount;
@@ -200,14 +192,12 @@ export class SplatBuffer {
     }
 
     getScale(index, outScale = new THREE.Vector3()) {
-        const fbf = this.fbf.bind(this);
         const scaleBase = index * SplatBuffer.ScaleComponentCount;
         outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
         return outScale;
     }
 
     setScale(index, scale) {
-        const tbf = this.tbf.bind(this);
         const scaleBase = index * SplatBuffer.ScaleComponentCount;
         this.scaleArray[scaleBase] = tbf(scale.x);
         this.scaleArray[scaleBase + 1] = tbf(scale.y);
@@ -215,7 +205,6 @@ export class SplatBuffer {
     }
 
     getRotation(index, outRotation = new THREE.Quaternion()) {
-        const fbf = this.fbf.bind(this);
         const rotationBase = index * SplatBuffer.RotationComponentCount;
         outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
                         fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
@@ -223,7 +212,6 @@ export class SplatBuffer {
     }
 
     setRotation(index, rotation) {
-        const tbf = this.tbf.bind(this);
         const rotationBase = index * SplatBuffer.RotationComponentCount;
         this.rotationArray[rotationBase] = tbf(rotation.w);
         this.rotationArray[rotationBase + 1] = tbf(rotation.x);

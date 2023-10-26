@@ -189,7 +189,7 @@ export class PlyParser {
         const paddedSplatCount = buckets.length * SplatBufferBucketSize;
         const headerSize = SplatBuffer.HeaderSizeBytes;
         const header = new Uint8Array(new ArrayBuffer(headerSize));
-        header[0] = compressionLevel;
+        header[3] = compressionLevel;
         (new Uint32Array(header.buffer, 4, 1))[0] = paddedSplatCount;
 
         let bytesPerPosition = SplatBuffer.CompressionLevels[compressionLevel].BytesPerPosition;
@@ -320,6 +320,7 @@ export class PlyParser {
             (new Uint32Array(header.buffer, 12, 1))[0] = buckets.length;
             (new Float32Array(header.buffer, 16, 1))[0] = SplatBufferBucketBlockSize;
             (new Uint32Array(header.buffer, 20, 1))[0] = bytesPerBucket;
+            (new Uint32Array(header.buffer, 24, 1))[0] = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
         }
 
         const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
