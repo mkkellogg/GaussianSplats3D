@@ -133,22 +133,9 @@ export class PlyParser {
 
         const validVertexes = [];
         // dummy vertex used for invalid vertexes
-        validVertexes.push({
-            'scale_0': .01,
-            'scale_1': .01,
-            'scale_2': .01,
-            'rot_0': 1.0,
-            'rot_1': 0.0,
-            'rot_2': 0.0,
-            'rot_3': 0.0,
-            'x': 0,
-            'y': 0,
-            'z': 0,
-            'f_dc_0': .0001,
-            'f_dc_1': .0001,
-            'f_dc_2': .0001,
-            'opacity': 0.0,
-        });
+        const vertexZero = {};
+        for (let propertyToRead of propertiesToRead) vertexZero[propertyToRead] = 0;
+        validVertexes.push(vertexZero);
         for (let row = 0; row < splatCount; row++) {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             let alpha;
@@ -158,22 +145,9 @@ export class PlyParser {
                 alpha = 255;
             }
             if (alpha > minimumAlpha) {
-                validVertexes.push({
-                    'scale_0': rawVertex.scale_0,
-                    'scale_1': rawVertex.scale_1,
-                    'scale_2': rawVertex.scale_2,
-                    'rot_0': rawVertex.rot_0,
-                    'rot_1': rawVertex.rot_1,
-                    'rot_2': rawVertex.rot_2,
-                    'rot_3': rawVertex.rot_3,
-                    'x': rawVertex.x,
-                    'y': rawVertex.y,
-                    'z': rawVertex.z,
-                    'f_dc_0': rawVertex.f_dc_0,
-                    'f_dc_1': rawVertex.f_dc_1,
-                    'f_dc_2': rawVertex.f_dc_2,
-                    'opacity': rawVertex.opacity,
-                });
+                const newVertex = {};
+                for (let propertyToRead of propertiesToRead) newVertex[propertyToRead] = rawVertex[propertyToRead];
+                validVertexes.push(newVertex);
             }
         }
 
@@ -207,25 +181,23 @@ export class PlyParser {
         const doubleCompressionScaleRange = compressionScaleRange * 2 + 1;
 
         const bucketCenter = new THREE.Vector3();
-        const bucketDelta = new THREE.Vector3();
+        const bucketCenterDelta = new THREE.Vector3();
         let outSplatIndex = 0;
         for (let b = 0; b < buckets.length; b++) {
             const bucket = buckets[b];
             bucketCenter.fromArray(bucket.center);
             for (let i = 0; i < bucket.splats.length; i++) {
                 let row = bucket.splats[i];
-                let invalidBucket = false;
+                let invalidSplat = false;
                 if (row === 0) {
-                    invalidBucket = true;
+                    invalidSplat = true;
                 }
                 rawVertex = validVertexes[row];
 
                 if (compressionLevel === 0) {
                     const position = new Float32Array(positionBuffer, outSplatIndex * bytesPerPosition, 3);
                     const scales = new Float32Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
-                    const rgba = new Uint8ClampedArray(colorBuffer, outSplatIndex * bytesPerColor, 4);
                     const rot = new Float32Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
-
                     if (propertyTypes['scale_0']) {
                         const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
                         quat.normalize();
@@ -235,32 +207,10 @@ export class PlyParser {
                         scales.set([0.01, 0.01, 0.01]);
                         rot.set([1.0, 0.0, 0.0, 0.0]);
                     }
-
                     position.set([rawVertex.x, rawVertex.y, rawVertex.z]);
-
-                    if (propertyTypes['f_dc_0']) {
-                        const SH_C0 = 0.28209479177387814;
-                        rgba.set([(0.5 + SH_C0 * rawVertex.f_dc_0) * 255,
-                                (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
-                                (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
-                    } else {
-                        rgba.set([255, 0, 0]);
-                    }
-                    if (propertyTypes['opacity']) {
-                        rgba[3] = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
-                    } else {
-                        rgba[3] = 255;
-                    }
-                    if (invalidBucket) {
-                        rgba[0] = 255;
-                        rgba[1] = 0;
-                        rgba[2] = 0;
-                        rgba[3] = 0;
-                    }
                 } else {
                     const position = new Uint16Array(positionBuffer, outSplatIndex * bytesPerPosition, 3);
                     const scales = new Uint16Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
-                    const rgba = new Uint8ClampedArray(colorBuffer, outSplatIndex * bytesPerColor, 4);
                     const rot = new Uint16Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
                     const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
                     if (propertyTypes['scale_0']) {
@@ -272,21 +222,28 @@ export class PlyParser {
                         scales.set([thf(0.01), thf(0.01), thf(0.01)]);
                         rot.set([thf(1.), 0, 0, 0]);
                     }
+                    bucketCenterDelta.set(rawVertex.x, rawVertex.y, rawVertex.z).sub(bucketCenter);
+                    bucketCenterDelta.x = Math.round(bucketCenterDelta.x * compressionScaleFactor) + compressionScaleRange;
+                    bucketCenterDelta.x = clamp(bucketCenterDelta.x, 0, doubleCompressionScaleRange);
+                    bucketCenterDelta.y = Math.round(bucketCenterDelta.y * compressionScaleFactor) + compressionScaleRange;
+                    bucketCenterDelta.y = clamp(bucketCenterDelta.y, 0, doubleCompressionScaleRange);
+                    bucketCenterDelta.z = Math.round(bucketCenterDelta.z * compressionScaleFactor) + compressionScaleRange;
+                    bucketCenterDelta.z = clamp(bucketCenterDelta.z, 0, doubleCompressionScaleRange);
+                    position.set([bucketCenterDelta.x, bucketCenterDelta.y, bucketCenterDelta.z]);
+                }
 
-                    bucketDelta.set(rawVertex.x, rawVertex.y, rawVertex.z).sub(bucketCenter);
-                    bucketDelta.x = Math.round(bucketDelta.x * compressionScaleFactor) + compressionScaleRange;
-                    bucketDelta.x = clamp(bucketDelta.x, 0, doubleCompressionScaleRange);
-                    bucketDelta.y = Math.round(bucketDelta.y * compressionScaleFactor) + compressionScaleRange;
-                    bucketDelta.y = clamp(bucketDelta.y, 0, doubleCompressionScaleRange);
-                    bucketDelta.z = Math.round(bucketDelta.z * compressionScaleFactor) + compressionScaleRange;
-                    bucketDelta.z = clamp(bucketDelta.z, 0, doubleCompressionScaleRange);
-                    position.set([bucketDelta.x, bucketDelta.y, bucketDelta.z]);
-
+                const rgba = new Uint8ClampedArray(colorBuffer, outSplatIndex * bytesPerColor, 4);
+                if (invalidSplat) {
+                    rgba[0] = 255;
+                    rgba[1] = 0;
+                    rgba[2] = 0;
+                    rgba[3] = 0;
+                } else {
                     if (propertyTypes['f_dc_0']) {
                         const SH_C0 = 0.28209479177387814;
                         rgba.set([(0.5 + SH_C0 * rawVertex.f_dc_0) * 255,
-                                (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
-                                (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
+                                  (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
+                                  (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
                     } else {
                         rgba.set([255, 0, 0]);
                     }
@@ -295,32 +252,27 @@ export class PlyParser {
                     } else {
                         rgba[3] = 255;
                     }
-                    if (invalidBucket) {
-                        rgba[0] = 255;
-                        rgba[1] = 0;
-                        rgba[2] = 0;
-                        rgba[3] = 0;
-                    }
                 }
+
                 outSplatIndex++;
             }
         }
 
         const bytesPerBucket = 12;
-
         const bucketsSize = bytesPerBucket * buckets.length;
-
         const splatDataBufferSize = positionBuffer.byteLength + scaleBuffer.byteLength +
                                     colorBuffer.byteLength + rotationBuffer.byteLength;
 
+        const headerArrayUint32 = new Uint32Array(header.buffer);
+        const headerArrayFloat32 = new Float32Array(header.buffer);
         let unifiedBufferSize = headerSize + splatDataBufferSize;
         if (compressionLevel > 0) {
             unifiedBufferSize += bucketsSize;
-            (new Uint32Array(header.buffer, 8, 1))[0] = SplatBufferBucketSize;
-            (new Uint32Array(header.buffer, 12, 1))[0] = buckets.length;
-            (new Float32Array(header.buffer, 16, 1))[0] = SplatBufferBucketBlockSize;
-            (new Uint32Array(header.buffer, 20, 1))[0] = bytesPerBucket;
-            (new Uint32Array(header.buffer, 24, 1))[0] = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
+            headerArrayUint32[2] = SplatBufferBucketSize;
+            headerArrayUint32[3] = buckets.length;
+            headerArrayFloat32[4] = SplatBufferBucketBlockSize;
+            headerArrayUint32[5] = bytesPerBucket;
+            headerArrayUint32[6] = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
         }
 
         const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
@@ -407,6 +359,8 @@ export class PlyParser {
             }
         }
 
+        // fill partially full buckets with invalid splats (splat 0)
+        // to get them up to SplatBufferBucketSize
         for (let bucketId in partiallyFullBuckets) {
             if (partiallyFullBuckets.hasOwnProperty(bucketId)) {
                 const bucket = partiallyFullBuckets[bucketId];

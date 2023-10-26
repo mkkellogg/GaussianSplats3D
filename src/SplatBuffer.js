@@ -41,22 +41,21 @@ export class SplatBuffer {
 
     constructor(bufferData) {
         this.headerBufferData = new ArrayBuffer(SplatBuffer.HeaderSizeBytes);
-        this.headerArray = new Uint8Array(this.headerBufferData);
-        this.headerArray.set(new Uint8Array(bufferData, 0, SplatBuffer.HeaderSizeBytes));
-        this.versionMajor = this.headerArray[0];
-        this.versionMinor = this.headerArray[1];
-        this.HeaderExtraK = this.headerArray[2];
-        this.compressionLevel = this.headerArray[3];
-        this.splatCount = (new Uint32Array(this.headerBufferData, 4, 1))[0];
-        this.bucketSize = (new Uint32Array(this.headerBufferData, 8, 1))[0];
-        this.bucketCount = (new Uint32Array(this.headerBufferData, 12, 1))[0];
-        this.bucketBlockSize = (new Float32Array(this.headerBufferData, 16, 1))[0];
+        this.headerArrayUint8 = new Uint8Array(this.headerBufferData);
+        this.headerArrayUint32 = new Uint32Array(this.headerBufferData);
+        this.headerArrayFloat32 = new Float32Array(this.headerBufferData);
+        this.headerArrayUint8.set(new Uint8Array(bufferData, 0, SplatBuffer.HeaderSizeBytes));
+        this.versionMajor = this.headerArrayUint8[0];
+        this.versionMinor = this.headerArrayUint8[1];
+        this.headerExtraK = this.headerArrayUint8[2];
+        this.compressionLevel = this.headerArrayUint8[3];
+        this.splatCount = this.headerArrayUint32[1];
+        this.bucketSize = this.headerArrayUint32[2];
+        this.bucketCount = this.headerArrayUint32[3];
+        this.bucketBlockSize = this.headerArrayFloat32[4];
         this.halfBucketBlockSize = this.bucketBlockSize / 2.0;
-        this.bytesPerBucket = (new Uint32Array(this.headerBufferData, 20, 1))[0];
-        this.compressionScaleRange = (new Uint32Array(this.headerBufferData, 24, 1))[0];
-        if (this.compressionScaleRange === 0) {
-            this.compressionScaleRange = SplatBuffer.CompressionLevels[this.compressionLevel].ScaleRange;
-        }
+        this.bytesPerBucket = this.headerArrayUint32[5];
+        this.compressionScaleRange = this.headerArrayUint32[6] || SplatBuffer.CompressionLevels[this.compressionLevel].ScaleRange;
         this.compressionScaleFactor = this.halfBucketBlockSize / this.compressionScaleRange;
 
         const dataBufferSizeBytes = bufferData.byteLength - SplatBuffer.HeaderSizeBytes;

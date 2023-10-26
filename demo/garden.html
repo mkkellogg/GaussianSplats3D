@@ -10,7 +10,7 @@
     {
         "imports": {
             "three": "./lib/three.module.js",
-            "gaussian-splat-3d": "./lib/gaussian-splat-3d.module.js"
+            "gaussian-splats-3d": "./lib/gaussian-splat-3d.module.js"
         }
     }
   </script>
@@ -27,8 +27,8 @@
 
 <body>
   <script type="module">
-    import * as GaussianSplat3D from 'gaussian-splat-3d';
-    const viewer = new GaussianSplat3D.Viewer({
+    import * as GaussianSplats3D from 'gaussian-splats-3d';
+    const viewer = new GaussianSplats3D.Viewer({
         'cameraUp': [0, -1, -0.6],
         'initialCameraPosition': [-1, -4, 6],
         'initialCameraLookAt': [0, 4, 0]
