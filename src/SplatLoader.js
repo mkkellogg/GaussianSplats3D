@@ -8,7 +8,7 @@ export class SplatLoader {
         this.downLoadLink = null;
     }
 
-    loadFromFile(fileName, onProgress) {
+    loadFromURL(fileName, onProgress) {
         return new Promise((resolve, reject) => {
             fetchWithProgress(fileName, onProgress)
             .then((bufferData) => {
@@ -25,7 +25,7 @@ export class SplatLoader {
         this.splatBuffer = splatBuffer;
     }
 
-    saveToFile(fileName) {
+    downloadFile(fileName) {
         const headerData = new Uint8Array(this.splatBuffer.getHeaderBufferData());
         const splatData = new Uint8Array(this.splatBuffer.getSplatBufferData());
         const blob = new Blob([headerData.buffer, splatData.buffer], {

@@ -173,10 +173,11 @@ export class Viewer {
 
         if (this.useBuiltInControls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-            this.controls.rotateSpeed = 0.5;
-            this.controls.maxPolarAngle = (0.9 * Math.PI) / 2;
+            this.controls.rotateSpeed = 0.3;
+            this.controls.maxPolarAngle = Math.PI * .75;
+            this.controls.minPolarAngle = 0.1;
             this.controls.enableDamping = true;
-            this.controls.dampingFactor = 0.15;
+            this.controls.dampingFactor = 0.05;
             this.controls.target.copy(this.initialCameraLookAt);
         }
 
@@ -343,7 +344,7 @@ export class Viewer {
 
     }();
 
-    loadFile(fileName, options = {}) {
+    loadFile(fileURL, options = {}) {
         if (options.position) options.position = new THREE.Vector3().fromArray(options.position);
         if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
         options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 1;
@@ -363,12 +364,12 @@ export class Viewer {
         };
         return new Promise((resolve, reject) => {
             let fileLoadPromise;
-            if (fileName.endsWith('.splat')) {
-                fileLoadPromise = new SplatLoader().loadFromFile(fileName, loadingProgress);
-            } else if (fileName.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromFile(fileName, loadingProgress);
+            if (fileURL.endsWith('.splat')) {
+                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, loadingProgress);
+            } else if (fileURL.endsWith('.ply')) {
+                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, loadingProgress);
             } else {
-                reject(new Error(`Viewer::loadFile -> File format not supported: ${fileName}`));
+                reject(new Error(`Viewer::loadFile -> File format not supported: ${fileURL}`));
             }
             fileLoadPromise
             .then((splatBuffer) => {
@@ -383,7 +384,7 @@ export class Viewer {
                 }, 1);
             })
             .catch((e) => {
-                reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
+                reject(new Error(`Viewer::loadFile -> Could not load file ${fileURL}`));
             });
         });
     }
@@ -484,8 +485,8 @@ export class Viewer {
                 const cameraAngleYZDot = forward.dot(tempVectorYZ);
 
                 const ns = nodeSize(node);
-                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .3);
-                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .3);
+                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .5);
+                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .5);
                 if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
                     continue;
                 }
