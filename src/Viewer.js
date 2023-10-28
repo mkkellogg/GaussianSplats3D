@@ -682,10 +682,7 @@ export class Viewer {
 
     render() {
         this.renderer.autoClear = false;
-        this.renderer.autoClearColor = false;
-        this.renderer.autoClearDepth = false;
-        this.renderer.autoClearStencil= false;
-        this.renderer.setClearColor(1.0, 0.0, 0.0, 0.0);
+        this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
         const sceneHasRenderables = (scene) => {
             for (let child of scene.children) {
