@@ -96,18 +96,26 @@ The `loadFile()` method will accept the original `.ply` files as well as my cust
 <br>
 <br>
 ### Creating SPLAT files
-To convert a `.ply` file into the stripped-down `.splat` format (currently only compatible with this viewer):
+To convert a `.ply` file into the stripped-down `.splat` format (currently only compatible with this viewer), run the following in a browser:
 
 ```javascript
 const compressionLevel = 1;
-const splatAlphaRemovalThreshold = 10;
+const splatAlphaRemovalThreshold = 5;
 const plyLoader = new GaussianSplat3D.PlyLoader();
-plyLoader.loadFromFile('<path to .ply file>', compressionLevel, splatAlphaRemovalThreshold)
+plyLoader.loadFromURL('<URL for .ply file>', compressionLevel, splatAlphaRemovalThreshold)
 .then((splatBuffer) => {
     new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('converted_file.splat');
 });
 ```
-This code will prompt your browser to automatically start downloading the converted `.splat` file. Currently supported values for `compressionLevel` are `0` or `1`. `0` means no compression, `1` means compression of scale, rotation, and position values from 32-bit to 16-bit.
+This code will prompt your browser to automatically start downloading the converted `.splat` file.
+
+To convert a .PLY file on your machine, run the included nodejs script:
+
+```
+node util/create-splat.js [path to .PLY] [output file] [compression level = 0] [alpha removal threshold = 1]
+```
+
+Currently supported values for `compressionLevel` are `0` or `1`. `0` means no compression, `1` means compression of scale, rotation, and position values from 32-bit to 16-bit.
 <br>
 <br>
 ### Integrating THREE.js scenes
