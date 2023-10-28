@@ -95,3 +95,7 @@ export const fetchWithProgress = function(path, onProgress) {
 export const clamp = function(val, min, max) {
     return Math.max(Math.min(val, max), min);
 };
+
+export const getCurrentTime = function() {
+    return performance.now() / 1000;
+}

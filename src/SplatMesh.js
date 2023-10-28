@@ -35,7 +35,6 @@ export class SplatMesh extends THREE.Mesh {
             uniform highp usampler2D centersColorsTexture;
             uniform vec2 focal;
             uniform vec2 viewport;
-
             uniform vec2 covariancesTextureSize;
             uniform vec2 centersColorsTextureSize;
 
@@ -128,7 +127,7 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = max(traceOver2 - term2, 0.000000); // prevent negative eigen value
+                float eigenValue2 = max(traceOver2 - term2, 0.0); // prevent negative eigen value
 
                 const float maxSplatSize = 512.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
@@ -140,7 +139,6 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) / viewport * 2.0;
 
                 gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
-                
 
             }`;
 
@@ -156,8 +154,8 @@ export class SplatMesh extends THREE.Mesh {
             varying vec2 vPosition;
 
             void main () {
-                // compute the squared distance from the center of the splat to the current fragment in the
-                // splat's local space.
+                // compute the negative squared distance from the center of the splat to the
+                // current fragment in the splat's local space.
                 float A = -dot(vPosition, vPosition);
                 if (A < -4.0) discard;
                 vec3 color = vColor.rgb;
