@@ -98,4 +98,4 @@ export const clamp = function(val, min, max) {
 
 export const getCurrentTime = function() {
     return performance.now() / 1000;
-}
+};

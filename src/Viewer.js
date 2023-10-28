@@ -106,7 +106,7 @@ export class Viewer {
         const clickOffset = new THREE.Vector2();
         const outHits = [];
 
-        return function (mouse) {
+        return function(mouse) {
             clickOffset.copy(this.mousePosition).sub(this.mouseDownPosition);
             const mouseUpTime = getCurrentTime();
             const wasClick = mouseUpTime - this.mouseDownTime < 0.5 && clickOffset.length() < 2;
@@ -601,7 +601,6 @@ export class Viewer {
 
             const currentTime = getCurrentTime();
             if (!lastUpdateTime) lastUpdateTime = currentTime;
-            const timeDelta = currentTime - lastUpdateTime;
 
             if (this.transitioningCameraTarget) {
                 const t = (currentTime - this.transitioningCameraTargetStartTime) / 0.25;
@@ -610,7 +609,7 @@ export class Viewer {
                 this.controls.target.copy(tempCameraTarget);
                 if (t >= 1.0) {
                     this.transitioningCameraTarget = false;
-                } 
+                }
             }
 
             lastUpdateTime = currentTime;
