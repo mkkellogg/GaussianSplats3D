@@ -58,7 +58,7 @@ The demo scene data is available here: [https://projects.markkellogg.org/downloa
 To run the built-in viewer:
 
 ```javascript
-const viewer = new GaussianSplat3D.Viewer({
+const viewer = new GaussianSplats3D.Viewer({
   'cameraUp': [0, -1, -0.6],
   'initialCameraPosition': [-1, -4, 6],
   'initialCameraLookAt': [0, 4, 0]
@@ -74,7 +74,7 @@ viewer.loadFile('<path to .ply or .splat file>', {
 ```
 As an alternative to using `cameraUp` to adjust to the scene's natural orientation, you can pass an orientation (and/or position) to the `loadFile()` method to transform the entire scene:
 ```javascript
-const viewer = new GaussianSplat3D.Viewer({
+const viewer = new GaussianSplats3D.Viewer({
     'initialCameraPosition': [-1, -4, 6],
     'initialCameraLookAt': [0, 4, 0]
 });
@@ -101,10 +101,10 @@ To convert a `.ply` file into the stripped-down `.splat` format (currently only 
 ```javascript
 const compressionLevel = 1;
 const splatAlphaRemovalThreshold = 5;
-const plyLoader = new GaussianSplat3D.PlyLoader();
+const plyLoader = new GaussianSplats3D.PlyLoader();
 plyLoader.loadFromURL('<URL for .ply file>', compressionLevel, splatAlphaRemovalThreshold)
 .then((splatBuffer) => {
-    new GaussianSplat3D.SplatLoader(splatBuffer).saveToFile('converted_file.splat');
+    new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.splat');
 });
 ```
 This code will prompt your browser to automatically start downloading the converted `.splat` file.
@@ -129,7 +129,7 @@ const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color'
 scene.add(boxMesh);
 boxMesh.position.set(3, 2, 2);
 
-const viewer = new GaussianSplat3D.Viewer({
+const viewer = new GaussianSplats3D.Viewer({
   'scene': scene,
   'cameraUp': [0, -1, -0.6],
   'initialCameraPosition': [-1, -4, 6],
@@ -165,7 +165,7 @@ camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
 camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
 camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
 
-const viewer = new GaussianSplat3D.Viewer({
+const viewer = new GaussianSplats3D.Viewer({
     'selfDrivenMode': false,
     'renderer': renderer,
     'camera': camera,
