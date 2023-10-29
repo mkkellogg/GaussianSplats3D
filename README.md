@@ -119,7 +119,7 @@ Currently supported values for `compressionLevel` are `0` or `1`. `0` means no c
 <br>
 <br>
 ### Integrating THREE.js scenes
-You can integrate your own Three.js scene into the viewer if you want rendering to be handled for you. Just pass a Three.js scene object as a the 'scene' parameter to the constructor:
+You can integrate your own Three.js scene into the viewer if you want rendering to be handled for you. Just pass a Three.js scene object as the 'scene' parameter to the constructor:
 ```javascript
 const scene = new THREE.Scene();
 

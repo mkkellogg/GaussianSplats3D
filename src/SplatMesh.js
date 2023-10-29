@@ -201,8 +201,6 @@ export class SplatMesh extends THREE.Mesh {
             transparent: true,
             alphaTest: 1.0,
             blending: THREE.NormalBlending,
-            blendSrc: THREE.SrcAlphaFactor,
-            blendDst: THREE.OneMinusSrcAlphaFactor,
             depthTest: true,
             depthWrite: false,
             side: THREE.DoubleSide
