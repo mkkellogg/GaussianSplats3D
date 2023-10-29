@@ -15,6 +15,7 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
     int maxDistance = -2147483640;
     int minDistance = 2147483640;
     int* distances = (int*)sortBuffers;
+
     for (unsigned int i = 0; i < sortCount; i++) {
         unsigned int indexOffset = 3 * (unsigned int)indexes[i];
         int depth =
@@ -51,8 +52,14 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
     for (int i = (int)sortCount - 1; i >= 0; i--) {
         unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
         unsigned int freq = frequencies[frequenciesIndex];
-        indexesOut[freq - 1] = indexes[i];
+        indexesOut[sortCount - 1 - freq - 1] = indexes[i];
         frequencies[frequenciesIndex] = freq - 1;
     }
 
+   /* unsigned int halfSortCount = sortCount / 2;
+    for (unsigned int i = 0; i < halfSortCount ; i++) {
+        unsigned int tmp = indexesOut[i];
+        indexesOut[i] = indexesOut[sortCount - 1 - i];
+        indexesOut[ sortCount - 1 - i] = tmp;
+    }*/
 }

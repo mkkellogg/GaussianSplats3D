@@ -160,7 +160,7 @@ export class SplatMesh extends THREE.Mesh {
                 if (A < -4.0) discard;
                 vec3 color = vColor.rgb;
                 A = exp(A) * vColor.a;
-                gl_FragColor = vec4(A * color.rgb, A);
+                gl_FragColor = vec4(color.rgb, A);
             }`;
 
         const uniforms = {
@@ -200,12 +200,9 @@ export class SplatMesh extends THREE.Mesh {
             fragmentShader: fragmentShaderSource,
             transparent: true,
             alphaTest: 1.0,
-            blending: THREE.CustomBlending,
-            blendEquation: THREE.AddEquation,
-            blendSrc: THREE.OneMinusDstAlphaFactor,
-            blendDst: THREE.OneFactor,
-            blendSrcAlpha: THREE.OneMinusDstAlphaFactor,
-            blendDstAlpha: THREE.OneFactor,
+            blending: THREE.NormalBlending,
+            blendSrc: THREE.SrcAlphaFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
             depthTest: true,
             depthWrite: false,
             side: THREE.DoubleSide
