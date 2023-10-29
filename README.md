@@ -187,6 +187,7 @@ function update() {
 ```
 ## Controls
 Mouse
+- Left click to set the focal point
 - Left click and drag to orbit around the focal point
 - Right click and drag to pan the camera and focal point
   
