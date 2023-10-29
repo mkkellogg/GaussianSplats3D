@@ -16,7 +16,9 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
     int minDistance = 2147483640;
     int* distances = (int*)sortBuffers;
 
-    for (unsigned int i = 0; i < sortCount; i++) {
+    unsigned int sortStart = renderCount - sortCount;
+
+    for (unsigned int i = sortStart; i < renderCount; i++) {
         unsigned int indexOffset = 3 * (unsigned int)indexes[i];
         int depth =
             (int)((viewProj[2] * positions[indexOffset] +
@@ -32,7 +34,7 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
 
     unsigned int* frequencies = ((unsigned int *)distances) + splatCount;
 
-    for (unsigned int i = 0; i < sortCount; i++) {
+    for (unsigned int i = sortStart; i < renderCount; i++) {
         unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
         unsigned int cFreq = frequencies[frequenciesIndex];
         frequencies[frequenciesIndex] = cFreq + 1;   
@@ -45,21 +47,14 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* positio
         frequencies[i] = cumulativeFreq;
     }
 
-    for (int i = renderCount - 1; i >= (int)sortCount; i--) {
+    for (int i = (int)sortStart - 1; i >= 0; i--) {
         indexesOut[i] = indexes[i];
     }
 
-    for (int i = (int)sortCount - 1; i >= 0; i--) {
+    for (int i = (int)renderCount - 1; i >= (int)sortStart; i--) {
         unsigned int frequenciesIndex = (int)((float)(distances[i] - minDistance) * rangeMap);
         unsigned int freq = frequencies[frequenciesIndex];
-        indexesOut[sortCount - 1 - freq - 1] = indexes[i];
+        indexesOut[renderCount - 1 - (freq - 1)] = indexes[i];
         frequencies[frequenciesIndex] = freq - 1;
     }
-
-   /* unsigned int halfSortCount = sortCount / 2;
-    for (unsigned int i = 0; i < halfSortCount ; i++) {
-        unsigned int tmp = indexesOut[i];
-        indexesOut[i] = indexesOut[sortCount - 1 - i];
-        indexesOut[ sortCount - 1 - i] = tmp;
-    }*/
 }
