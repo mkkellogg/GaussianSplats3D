@@ -167,6 +167,8 @@ export class Viewer {
                 antialias: false,
                 precision: 'highp'
             });
+            this.renderer.autoClear = true;
+            this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
         }
         this.setupRenderTargetCopyObjects();
@@ -456,7 +458,7 @@ export class Viewer {
         };
 
         const MaximumDistanceToSort = 125;
-        const MaximumDistanceToRender = 125;
+        const MaximumDistanceToRender = 150;
 
         return function(gatherAllNodes) {
 
@@ -504,7 +506,7 @@ export class Viewer {
 
             this.splatRenderCount = splatRenderCount;
             this.splatSortCount = 0;
-            let currentByteOffset = 0;
+            let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
                 const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
@@ -512,9 +514,10 @@ export class Viewer {
                     this.splatSortCount += node.data.indexes.length;
                 }
                 const windowSizeInts = node.data.indexes.length;
-                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset, windowSizeInts);
+                const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
+                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
                 destView.set(node.data.indexes);
-                currentByteOffset += windowSizeInts * Constants.BytesPerInt;
+                currentByteOffset -= windowSizeBytes;
             }
 
         };
@@ -681,8 +684,6 @@ export class Viewer {
     }();
 
     render() {
-        this.renderer.autoClear = false;
-        this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
 
         const sceneHasRenderables = (scene) => {
             for (let child of scene.children) {
@@ -696,32 +697,14 @@ export class Viewer {
         let defualtSceneHasRenderables = sceneHasRenderables(this.scene);
         let simpleSceneHasRenderables = sceneHasRenderables(this.simpleScene);
 
-        // A more complex rendering sequence is required if you want to render "normal" Three.js
-        // objects along with the splats
         if (defualtSceneHasRenderables || simpleSceneHasRenderables) {
-            this.renderer.setRenderTarget(this.splatRenderTarget);
-            this.renderer.clear(true, true, true);
-            this.renderer.getContext().colorMask(false, false, false, false);
-            if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
-            if (simpleSceneHasRenderables) {
-                const simpleSceneOverrideMaterial = this.simpleScene.overrideMaterial;
-                this.simpleScene.overrideMaterial = this.simpleObjectDepthOverrideMaterial;
-                this.renderer.render(this.simpleScene, this.camera);
-                this.simpleScene.overrideMaterial = simpleSceneOverrideMaterial;
-            }
-            this.renderer.getContext().colorMask(true, true, true, true);
-            this.renderer.render(this.splatMesh, this.camera);
-
-            this.renderer.setRenderTarget(null);
-            this.renderer.clear(true, true, true);
-
+            const savedAuoClear = this.renderer.autoClear;
+            this.renderer.autoClear = false;
             if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
             if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
-            this.renderTargetCopyMaterial.uniforms.sourceColorTexture.value = this.splatRenderTarget.texture;
-            this.renderTargetCopyMaterial.uniforms.sourceDepthTexture.value = this.splatRenderTarget.depthTexture;
-            this.renderer.render(this.renderTargetCopyQuad, this.renderTargetCopyCamera);
+            this.renderer.render(this.splatMesh, this.camera);
+            this.renderer.autoClear = savedAuoClear;
         } else {
-            this.renderer.clear(true, true, true);
             this.renderer.render(this.splatMesh, this.camera);
         }
     }
