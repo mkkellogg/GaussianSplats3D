@@ -514,9 +514,10 @@ export class Viewer {
                     this.splatSortCount += node.data.indexes.length;
                 }
                 const windowSizeInts = node.data.indexes.length;
-                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeInts * Constants.BytesPerInt, windowSizeInts);
+                const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
+                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
                 destView.set(node.data.indexes);
-                currentByteOffset -= windowSizeInts * Constants.BytesPerInt;
+                currentByteOffset -= windowSizeBytes;
             }
 
         };

@@ -27,7 +27,6 @@ function sortWorker(self) {
         }
         const frequencies = new Uint32Array(wasmMemory, sortBuffersOffset + splatCount * 4, Constants.DepthMapRange);
         frequencies.set(countsZero);
-        console.log(splatRenderCount, splatSortCount)
         wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
                                          indexesOutOffset, cameraPosition[0], cameraPosition[1],
                                          cameraPosition[2], Constants.DepthMapRange, splatSortCount, splatRenderCount, splatCount);
