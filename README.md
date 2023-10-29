@@ -59,9 +59,9 @@ To run the built-in viewer:
 
 ```javascript
 const viewer = new GaussianSplats3D.Viewer({
-  'cameraUp': [0, -1, -0.6],
-  'initialCameraPosition': [-1, -4, 6],
-  'initialCameraLookAt': [0, 4, 0]
+    'cameraUp': [0, -1, -0.6],
+    'initialCameraPosition': [-1, -4, 6],
+    'initialCameraLookAt': [0, 4, 0]
 });
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>', {
@@ -100,7 +100,7 @@ To convert a `.ply` file into the stripped-down `.splat` format (currently only 
 
 ```javascript
 const compressionLevel = 1;
-const splatAlphaRemovalThreshold = 5;
+const splatAlphaRemovalThreshold = 5; // out of 255
 const plyLoader = new GaussianSplats3D.PlyLoader();
 plyLoader.loadFromURL('<URL for .ply file>', compressionLevel, splatAlphaRemovalThreshold)
 .then((splatBuffer) => {
@@ -130,10 +130,10 @@ scene.add(boxMesh);
 boxMesh.position.set(3, 2, 2);
 
 const viewer = new GaussianSplats3D.Viewer({
-  'scene': scene,
-  'cameraUp': [0, -1, -0.6],
-  'initialCameraPosition': [-1, -4, 6],
-  'initialCameraLookAt': [0, 4, -0]
+    'scene': scene,
+    'cameraUp': [0, -1, -0.6],
+    'initialCameraPosition': [-1, -4, 6],
+    'initialCameraLookAt': [0, 4, -0]
 });
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>')
