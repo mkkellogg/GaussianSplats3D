@@ -8,6 +8,7 @@ import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
+import { getCurrentTime } from './Util.js';
 
 const THREE_CAMERA_FOV = 60;
 
@@ -62,8 +63,15 @@ export class Viewer {
         this.currentFPS = 0;
         this.lastSortTime = 0;
 
+        this.previousCameraTarget = new THREE.Vector3();
+        this.nextCameraTarget = new THREE.Vector3();
+
         this.mousePosition = new THREE.Vector2();
+        this.mouseDownPosition = new THREE.Vector2();
+        this.mouseDownTime = null;
         window.addEventListener('mousemove', this.onMouseMove.bind(this));
+        window.addEventListener('mousedown', this.onMouseDown.bind(this));
+        window.addEventListener('mouseup', this.onMouseUp.bind(this));
         window.addEventListener('keydown', this.onKeyDown.bind(this));
     }
 
@@ -86,6 +94,38 @@ export class Viewer {
     onMouseMove(mouse) {
         this.mousePosition.set(mouse.offsetX, mouse.offsetY);
     }
+
+    onMouseDown() {
+        this.mouseDownPosition.copy(this.mousePosition);
+        this.mouseDownTime = getCurrentTime();
+    }
+
+    onMouseUp = function() {
+
+        const renderDimensions = new THREE.Vector2();
+        const clickOffset = new THREE.Vector2();
+        const outHits = [];
+
+        return function(mouse) {
+            clickOffset.copy(this.mousePosition).sub(this.mouseDownPosition);
+            const mouseUpTime = getCurrentTime();
+            const wasClick = mouseUpTime - this.mouseDownTime < 0.5 && clickOffset.length() < 2;
+            if (!this.transitioningCameraTarget && wasClick) {
+                this.getRenderDimensions(renderDimensions);
+                outHits.length = 0;
+                this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
+                this.mousePosition.set(mouse.offsetX, mouse.offsetY);
+                this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
+                if (outHits.length > 0) {
+                    this.previousCameraTarget.copy(this.controls.target);
+                    this.nextCameraTarget.copy(outHits[0].origin);
+                    this.transitioningCameraTarget = true;
+                    this.transitioningCameraTargetStartTime = getCurrentTime();
+                }
+            }
+        };
+
+    }();
 
     getRenderDimensions(outDimensions) {
         if (this.rootElement) {
@@ -133,10 +173,11 @@ export class Viewer {
 
         if (this.useBuiltInControls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-            this.controls.rotateSpeed = 0.5;
-            this.controls.maxPolarAngle = (0.9 * Math.PI) / 2;
+            this.controls.rotateSpeed = 0.3;
+            this.controls.maxPolarAngle = Math.PI * .75;
+            this.controls.minPolarAngle = 0.1;
             this.controls.enableDamping = true;
-            this.controls.dampingFactor = 0.15;
+            this.controls.dampingFactor = 0.05;
             this.controls.target.copy(this.initialCameraLookAt);
         }
 
@@ -303,7 +344,7 @@ export class Viewer {
 
     }();
 
-    loadFile(fileName, options = {}) {
+    loadFile(fileURL, options = {}) {
         if (options.position) options.position = new THREE.Vector3().fromArray(options.position);
         if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
         options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 1;
@@ -323,12 +364,12 @@ export class Viewer {
         };
         return new Promise((resolve, reject) => {
             let fileLoadPromise;
-            if (fileName.endsWith('.splat')) {
-                fileLoadPromise = new SplatLoader().loadFromFile(fileName, loadingProgress);
-            } else if (fileName.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromFile(fileName, loadingProgress);
+            if (fileURL.endsWith('.splat')) {
+                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, loadingProgress);
+            } else if (fileURL.endsWith('.ply')) {
+                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, loadingProgress);
             } else {
-                reject(new Error(`Viewer::loadFile -> File format not supported: ${fileName}`));
+                reject(new Error(`Viewer::loadFile -> File format not supported: ${fileURL}`));
             }
             fileLoadPromise
             .then((splatBuffer) => {
@@ -343,7 +384,7 @@ export class Viewer {
                 }, 1);
             })
             .catch((e) => {
-                reject(new Error(`Viewer::loadFile -> Could not load file ${fileName}`));
+                reject(new Error(`Viewer::loadFile -> Could not load file ${fileURL}`));
             });
         });
     }
@@ -415,6 +456,7 @@ export class Viewer {
         };
 
         const MaximumDistanceToSort = 125;
+        const MaximumDistanceToRender = 125;
 
         return function(gatherAllNodes) {
 
@@ -443,9 +485,9 @@ export class Viewer {
                 const cameraAngleYZDot = forward.dot(tempVectorYZ);
 
                 const ns = nodeSize(node);
-                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .4);
-                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .4);
-                if (!gatherAllNodes && ((outOfFovX || outOfFovY) && distanceToNode > ns)) {
+                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .5);
+                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .5);
+                if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
                     continue;
                 }
                 splatRenderCount += node.data.indexes.length;
@@ -490,11 +532,11 @@ export class Viewer {
 
     updateFPS = function() {
 
-        let lastCalcTime = performance.now() / 1000;
+        let lastCalcTime = getCurrentTime();
         let frameCount = 0;
 
         return function() {
-            const currentTime = performance.now() / 1000;
+            const currentTime = getCurrentTime();
             const calcDelta = currentTime - lastCalcTime;
             if (calcDelta >= 1.0) {
                 this.currentFPS = frameCount;
@@ -546,8 +588,35 @@ export class Viewer {
 
         this.rayCastScene();
         this.updateFPS();
+        this.timingSensitiveUpdates();
         this.updateInfo();
     }
+
+    timingSensitiveUpdates = function() {
+
+        let lastUpdateTime;
+        let tempCameraTarget = new THREE.Vector3();
+
+        return function() {
+
+            const currentTime = getCurrentTime();
+            if (!lastUpdateTime) lastUpdateTime = currentTime;
+
+            if (this.transitioningCameraTarget) {
+                const t = (currentTime - this.transitioningCameraTargetStartTime) / 0.25;
+                tempCameraTarget.copy(this.previousCameraTarget).lerp(this.nextCameraTarget, t);
+                this.camera.lookAt(tempCameraTarget);
+                this.controls.target.copy(tempCameraTarget);
+                if (t >= 1.0) {
+                    this.transitioningCameraTarget = false;
+                }
+            }
+
+            lastUpdateTime = currentTime;
+
+        };
+
+    }();
 
     rayCastScene = function() {
 

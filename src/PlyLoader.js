@@ -19,7 +19,7 @@ export class PlyLoader {
         });
     }
 
-    loadFromFile(fileName, compressionLevel = 0, minimumAlpha = 1) {
+    loadFromURL(fileName, compressionLevel = 0, minimumAlpha = 1) {
         return new Promise((resolve, reject) => {
             const loadPromise = this.fetchFile(fileName);
             loadPromise
