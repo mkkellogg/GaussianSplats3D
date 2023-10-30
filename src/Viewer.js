@@ -73,6 +73,9 @@ export class Viewer {
         window.addEventListener('mousedown', this.onMouseDown.bind(this));
         window.addEventListener('mouseup', this.onMouseUp.bind(this));
         window.addEventListener('keydown', this.onKeyDown.bind(this));
+
+        this.loadingSpinner = new LoadingSpinner();
+        this.loadingSpinner.hide();
     }
 
     onKeyDown(e) {
@@ -138,8 +141,6 @@ export class Viewer {
 
     init() {
 
-        this.setupInfoPanel();
-
         if (!this.rootElement && !this.usingExternalRenderer) {
             this.rootElement = document.createElement('div');
             this.rootElement.style.width = '100%';
@@ -193,6 +194,7 @@ export class Viewer {
         }
 
         this.setupSimpleObjectDepthOverrideMaterial();
+        this.setupInfoPanel();
 
     }
 
@@ -249,7 +251,7 @@ export class Viewer {
 
         this.infoPanel.appendChild(infoTable);
         this.infoPanel.style.display = 'none';
-        document.body.appendChild(this.infoPanel);
+        this.renderer.domElement.parentElement.prepend(this.infoPanel);
     }
 
     updateSplatRenderTargetForRenderDimensions(width, height) {
@@ -351,16 +353,15 @@ export class Viewer {
         if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
         options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 1;
         options.halfPrecisionCovariancesOnGPU = !!options.halfPrecisionCovariancesOnGPU;
-        const loadingSpinner = new LoadingSpinner();
-        loadingSpinner.show();
+        this.loadingSpinner.show();
         const loadingProgress = (percent, percentLabel) => {
             if (percent == 100) {
-                loadingSpinner.setMessage(`Download complete!`);
+                this.loadingSpinner.setMessage(`Download complete!`);
             } else {
                 if (percentLabel) {
-                    loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
+                    this.loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
                 } else {
-                    loadingSpinner.setMessage(`Downloading...`);
+                    this.loadingSpinner.setMessage(`Downloading...`);
                 }
             }
         };
@@ -375,19 +376,29 @@ export class Viewer {
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                loadingSpinner.setMessage(`Processing splats...`);
-                window.setTimeout(() => {
-                    this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
-                                        options.orientation, options.halfPrecisionCovariancesOnGPU);
-                    this.setupSortWorker(splatBuffer).then(() => {
-                        loadingSpinner.hide();
-                        resolve();
-                    });
-                }, 1);
+                this.loadingSpinner.hide();
+                this.loadSplatBuffer(splatBuffer, options).then(() => {
+                    resolve();
+                });
             })
             .catch((e) => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileURL}`));
             });
+        });
+    }
+
+    loadSplatBuffer(splatBuffer, options) {
+        return new Promise((resolve) => {
+            this.loadingSpinner.show();
+            this.loadingSpinner.setMessage(`Processing splats...`);
+            window.setTimeout(() => {
+                this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
+                                    options.orientation, options.halfPrecisionCovariancesOnGPU);
+                this.setupSortWorker(splatBuffer).then(() => {
+                    this.loadingSpinner.hide();
+                    resolve();
+                });
+            }, 1);
         });
     }
 
@@ -530,6 +541,13 @@ export class Viewer {
             this.selfDrivenModeRunning = true;
         } else {
             throw new Error('Cannot start viewer unless it is in self driven mode.');
+        }
+    }
+
+    stop() {
+        if (this.selfDrivenMode && this.selfDrivenModeRunning) {
+            cancelAnimationFrame();
+            this.selfDrivenModeRunning = false;
         }
     }
 

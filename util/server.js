@@ -53,6 +53,13 @@ http
       console.log("-----------------------------------------------");
     }
 
+    let queryString;
+    let queryStringStart = filePath.indexOf('?');
+    if (queryStringStart && queryStringStart > 0) {
+      queryString = filePath.substring(queryStringStart + 1);
+      filePath = filePath.substring(0, queryStringStart);
+    }
+
     try {
       const stats = fs.statSync(filePath);
       if (stats && stats.size) {
