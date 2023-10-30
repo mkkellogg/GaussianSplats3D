@@ -149,9 +149,6 @@
   </script>
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
-    if (history.state === "ViewSplat") {
-      history.go(-1);
-    }
 
     function convertPLY(plyBuffer, compressionLevel, alphaRemovalThreshold) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
@@ -168,8 +165,10 @@
       fileNameLabel.innerHTML = url.substring(lastSlash + 1);
     }
 
-    window.convertFile = function() {
-      const convertFile = document.getElementById("convertFile");
+    let conversionInProgress = false;
+    window.convertPlyFile = function() {
+      if (conversionInProgress) return;
+      const conversionFile = document.getElementById("conversionFile");
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
 
@@ -179,7 +178,7 @@
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
         setConversionError("Invalid alpha remval threshold.");
         return;
-      } else if (!convertFile.files[0]) {
+      } else if (!conversionFile.files[0]) {
         setConversionError("Please choose a file to convert.");
         return;
       }
@@ -196,13 +195,16 @@
             convertPLY(fileReader.result, compressionLevel, alphaRemovalThreshold);
             setConversionStatus("Conversion complete!");
             convertButton.disabled = false;
+            conversionInProgress = false;
           }, 1);
         }
+        conversionInProgress = true;
         setConversionStatus("Loading .PLY...");
-        fileReader.readAsArrayBuffer(convertFile.files[0]);
+        fileReader.readAsArrayBuffer(conversionFile.files[0]);
       } catch (e) {
         console.error(e);
         setConversionError("Could not convert file.");
+        conversionInProgress = false;
       }
     }
 
@@ -321,7 +323,7 @@
       viewer.init();
       viewer.loadSplatBuffer(splatBuffer, {
         'halfPrecisionCovariancesOnGPU': true,
-        'alphaRemovalThreshold': alphaRemovalThreshold
+        'splatAlphaRemovalThreshold': alphaRemovalThreshold
       })
       .then(() => {
           viewer.start();
@@ -333,21 +335,8 @@
     function openDemo(demoName) {
       window.location = demoName + '.html';
     }
-    if (window.location.search) {
-      const tokens = window.location.search.substring(1).split("&");
-      for (token of tokens) {
-        const component = token.split("=");
-        const varName = component[0];
-        if (varName == "art") {
-          currentAlphaRemovalThreshold  =component[1];
-        } else if (varName == "cu") {
-          currentCameraUpArray = component[1];
-        } else if (varName == "cp") {
-          currentCameraPositionArray = component[1];
-        } else if (varName == "cla") {
-          currentCameraLookAtArray = component[1];
-        }
-      }
+    function reset() {
+      window.location = 'index.html';
     }
   </script>
 </head>
@@ -387,11 +376,11 @@
             <table style="text-align: left;">
               <tr>
                 <td colspan="2">
-                  <label for="convertFile">
+                  <label for="conversionFile">
                     <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
-                    <input type="file" id="convertFile" style="display:none" onchange="window.onFileChange(this, 'convertFileName')">
+                    <input type="file" id="conversionFile" style="display:none" onchange="window.onFileChange(this, 'conversionFileName')">
                   </label>
-                  <span id="convertFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
+                  <span id="conversionFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
                 </td>
               </tr>
               <tr>
@@ -415,7 +404,7 @@
               </tr>
             </table>
             <br>
-            <span id="convertButton" class="button" onclick="window.convertFile()">Convert</span>
+            <span id="convertButton" class="button" onclick="window.convertPlyFile()">Convert</span>
             <br>
             <br>
             <span id="conversionStatus" style="color: #333333"></span>
@@ -454,7 +443,7 @@
                   Camera up:&nbsp;
                 </td>
                 <td>
-                  <input id="cameraUp" type="text" style="width: 50px" value="0, -1, -0.54"></input>
+                  <input id="cameraUp" type="text" style="width: 50px" value="0, 1, 0"></input>
                 </td>
               </tr>
               <tr>
@@ -462,7 +451,7 @@
                   Camera position:&nbsp;
                 </td>
                 <td>
-                  <input id="cameraPosition" type="text" style="width: 100px" value="-3.15, -0.16, -0.51"></input>
+                  <input id="cameraPosition" type="text" style="width: 100px" value="0, 1, 0"></input>
                 </td>
               </tr>
               <tr>
@@ -470,12 +459,14 @@
                   Camera look-at:&nbsp;
                 </td>
                 <td>
-                  <input id="cameraLookAt" type="text" style="width: 100px" value="1.52, 2.27, 1.65"></input>
+                  <input id="cameraLookAt" type="text" style="width: 100px" value="1, 0, 0"></input>
                 </td>
               </tr>
             </table>
             <br>
             <span class="button" onclick="window.viewSplat()">View</span>
+            &nbsp;&nbsp;
+            <span class="button" onclick="reset()">Reset</span>
             <br>
             <br>
             <span id="viewStatus" style="color: #333333"></span>
@@ -489,5 +480,33 @@
     </div>
   </div>
 </body>
+
+<script>
+   document.body.onload = function () {
+    if (window.location.search) {
+      const tokens = window.location.search.substring(1).split("&");
+      for (token of tokens) {
+        const component = token.split("=");
+        const varName = component[0];
+        if (varName == "art") {
+          currentAlphaRemovalThreshold = component[1];
+          document.getElementById('alphaRemovalThresholdView').value = currentAlphaRemovalThreshold;
+        } else if (varName == "cu") {
+          currentCameraUpArray = component[1];
+          document.getElementById('cameraUp').value = currentCameraUpArray;
+        } else if (varName == "cp") {
+          currentCameraPositionArray = component[1];
+          document.getElementById('cameraPosition').value = currentCameraPositionArray;
+        } else if (varName == "cla") {
+          currentCameraLookAtArray = component[1];
+          document.getElementById('cameraLookAt').value = currentCameraLookAtArray;
+        }
+      }
+    }
+    if (history.state === "ViewSplat") {
+      history.go(-1);
+    }
+  };
+</script>
 
 </html>
