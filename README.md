@@ -96,7 +96,7 @@ The `loadFile()` method will accept the original `.ply` files as well as my cust
 <br>
 <br>
 ### Creating SPLAT files
-To convert a `.ply` file into the stripped-down `.splat` format (currently only compatible with this viewer), run the following in a browser:
+To convert a `.ply` file into the stripped-down `.splat` format (currently only compatible with this viewer), there are several options. The easiest method is to use the UI in the main demo page at [http://127.0.0.1:8080/index.html](http://127.0.0.1:8080/index.html). If you want to run the conversion programatically, run the following in a browser:
 
 ```javascript
 const compressionLevel = 1;
@@ -107,9 +107,9 @@ plyLoader.loadFromURL('<URL for .ply file>', compressionLevel, splatAlphaRemoval
     new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.splat');
 });
 ```
-This code will prompt your browser to automatically start downloading the converted `.splat` file.
+Both of the above methods will prompt your browser to automatically start downloading the converted `.splat` file.
 
-To convert a .PLY file on your machine, run the included nodejs script:
+The third option is to use the included nodejs script:
 
 ```
 node util/create-splat.js [path to .PLY] [output file] [compression level = 0] [alpha removal threshold = 1]
