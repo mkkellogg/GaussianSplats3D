@@ -6,87 +6,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
   <title>3D Gaussian Splat Viewer Examples</title>
-  <script type="importmap">
-    {
-        "imports": {
-            "three": "./lib/three.module.js",
-            "gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js"
-        }
-    }
-  </script>
-  <script type="module">
-    import * as GaussianSplats3D from 'gaussian-splats-3d';
-    let conversionFileName;
-
-    function convertPLY(plyBuffer, compressionLevel, alphaRemovalThreshold) {
-      const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
-      const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold);
-      new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.splat');
-    }
-
-    window.onFileChange = function(arg) {
-      const fileNameLabel = document.getElementById("uploadFileName");
-      const url = arg.value;
-      let lastForwardSlash = url.lastIndexOf('/');
-      let lastBackwardSlash = url.lastIndexOf('\\');
-      const lastSlash = Math.max(lastForwardSlash, lastBackwardSlash);
-      conversionFileName = url.substring(lastSlash + 1);
-      fileNameLabel.innerHTML = conversionFileName;
-    }
-
-    window.convertFile = function() {
-      const uploadFile = document.getElementById("uploadFile");
-      const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
-      const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
-
-      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
-        setConversionError("Invalid compression level.");
-        return;
-      } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
-        setConversionError("Invalid alpha remval threshold.");
-        return;
-      } else if (!conversionFileName) {
-        setConversionError("Please choose a file to convert.");
-        return;
-      }
-
-      setConversionError("");
-      const convertButton = document.getElementById("convertButton");
-
-      const fileReader = new FileReader();
-      fileReader.onload = function(){
-        convertButton.disabled = true;
-        setConversionStatus("Parsing .PLY...");
-        window.setTimeout(() => {
-          convertPLY(fileReader.result, compressionLevel, alphaRemovalThreshold);
-          setConversionStatus("Conversion complete!");
-          convertButton.disabled = false;
-        }, 1);
-      }
-      setConversionStatus("Loading .PLY...");
-      fileReader.readAsArrayBuffer(uploadFile.files[0]);
-    }
-
-    function setConversionError(msg) {
-      document.getElementById("conversionStatus").innerHTML = "";
-      document.getElementById("conversionError").innerHTML = msg;
-    }
-
-    function setConversionStatus(msg) {
-      document.getElementById("conversionError").innerHTML = "";
-      document.getElementById("conversionStatus").innerHTML = msg;
-    }
-  </script>
-  <script>
-    function openDemo(demoName) {
-        window.location = demoName + '.html';
-    }
-  </script>
   <style>
 
     body {
       background-color: #c8d0de;
       height: 100vh;
+    }
+
+    .title {
+      font-family: arial;
+      font-size: 14pt;
+      font-weight: bold;
     }
 
     .table-of-contents-container {
@@ -162,6 +92,21 @@
       background-color: #eeeeee;
     }
 
+    .splat-panel {
+      font-family: arial;
+      width: 300px;
+      height: 280px;
+      text-align: center;
+      margin-left: auto;
+      margin-right: auto;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      border: #aaaaaa 1px solid;
+      background-color: #efefef;
+      border-radius: 5px;
+      padding: 15px;
+    }
+
     @media (max-width: 1100px){
 
       .table-of-contents-inner-container {
@@ -188,11 +133,231 @@
     }
 
   </style>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js"
+        }
+    }
+  </script>
+  <script>
+    let currentAlphaRemovalThreshold;
+    let currentCameraUpArray;
+    let currentCameraPositionArray;
+    let currentCameraLookAtArray;
+  </script>
+  <script type="module">
+    import * as GaussianSplats3D from 'gaussian-splats-3d';
+    if (history.state === "ViewSplat") {
+      history.go(-1);
+    }
+
+    function convertPLY(plyBuffer, compressionLevel, alphaRemovalThreshold) {
+      const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
+      const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold);
+      new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.splat');
+    }
+
+    window.onFileChange = function(arg, fileNameLabelID) {
+      const fileNameLabel = document.getElementById(fileNameLabelID);
+      const url = arg.value;
+      let lastForwardSlash = url.lastIndexOf('/');
+      let lastBackwardSlash = url.lastIndexOf('\\');
+      const lastSlash = Math.max(lastForwardSlash, lastBackwardSlash);
+      fileNameLabel.innerHTML = url.substring(lastSlash + 1);
+    }
+
+    window.convertFile = function() {
+      const convertFile = document.getElementById("convertFile");
+      const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
+      const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
+
+      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
+        setConversionError("Invalid compression level.");
+        return;
+      } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
+        setConversionError("Invalid alpha remval threshold.");
+        return;
+      } else if (!convertFile.files[0]) {
+        setConversionError("Please choose a file to convert.");
+        return;
+      }
+
+      setConversionError("");
+      const convertButton = document.getElementById("convertButton");
+
+      try {
+        const fileReader = new FileReader();
+        fileReader.onload = function(){
+          convertButton.disabled = true;
+          setConversionStatus("Parsing .PLY...");
+          window.setTimeout(() => {
+            convertPLY(fileReader.result, compressionLevel, alphaRemovalThreshold);
+            setConversionStatus("Conversion complete!");
+            convertButton.disabled = false;
+          }, 1);
+        }
+        setConversionStatus("Loading .PLY...");
+        fileReader.readAsArrayBuffer(convertFile.files[0]);
+      } catch (e) {
+        console.error(e);
+        setConversionError("Could not convert file.");
+      }
+    }
+
+    function setConversionError(msg) {
+      document.getElementById("conversionStatus").innerHTML = "";
+      document.getElementById("conversionError").innerHTML = msg;
+    }
+
+    function setConversionStatus(msg) {
+      document.getElementById("conversionError").innerHTML = "";
+      document.getElementById("conversionStatus").innerHTML = msg;
+    }
+
+    window.viewSplat = function() {
+
+      const viewFile = document.getElementById("viewFile");
+      const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThresholdView").value);
+
+      let cameraUpArray = document.getElementById("cameraUp").value;
+      let cameraPositionArray = document.getElementById("cameraPosition").value;
+      let cameraLookAtArray = document.getElementById("cameraLookAt").value;
+
+      cameraUpArray = cameraUpArray.split(',');
+      cameraPositionArray = cameraPositionArray.split(',');
+      cameraLookAtArray = cameraLookAtArray.split(',');
+
+      if (!viewFile.files[0]) {
+        setViewError("Please choose a file to view.");
+        return;
+      } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
+        setViewError("Invalid alpha remval threshold.");
+        return;
+      }
+
+      if (cameraUpArray.length !== 3) {
+        setViewError("Camera up must contain 3 elements.");
+        return;
+      }
+
+      if (cameraPositionArray.length !== 3) {
+        setViewError("Camera position must contain 3 elements.");
+        return;
+      }
+
+      if (cameraLookAtArray.length !== 3) {
+        setViewError("Camera look-at must contain 3 elements.");
+        return;
+      }
+
+      for (let i = 0; i < 3; i++) {
+        cameraUpArray[i] = parseFloat(cameraUpArray[i]);
+        cameraPositionArray[i] = parseFloat(cameraPositionArray[i]);
+        cameraLookAtArray[i] = parseFloat(cameraLookAtArray[i]);
+
+        if (isNaN(cameraUpArray[i])) {
+          setViewError("Invalid camera up.");
+          return;
+        }
+
+        if (isNaN(cameraPositionArray[i])) {
+          setViewError("Invalid camera position.");
+          return;
+        }
+
+        if (isNaN(cameraLookAtArray[i])) {
+          setViewError("Invalid camera look-at.");
+          return;
+        }
+      }
+
+      currentAlphaRemovalThreshold = alphaRemovalThreshold;
+      currentCameraUpArray = cameraUpArray;
+      currentCameraPositionArray = cameraPositionArray;
+      currentCameraLookAtArray = cameraLookAtArray;
+      try {
+        const fileReader = new FileReader();
+        fileReader.onload = function(){
+          document.getElementById("table-of-contents-container").style.display = 'none';
+          document.body.style.backgroundColor = "#000000";
+          history.pushState("ViewSplat", null);
+          runViewer(fileReader.result, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+        }
+        setViewStatus("Loading .SPLAT...");
+        fileReader.readAsArrayBuffer(viewFile.files[0]);
+      } catch (e) {
+        console.error(e);
+        setViewError("Could not view .SPLAT file");
+      }
+    }
+
+    function setViewError(msg) {
+      document.getElementById("viewStatus").innerHTML = "";
+      document.getElementById("viewError").innerHTML = msg;
+    }
+
+    function setViewStatus(msg) {
+      document.getElementById("viewError").innerHTML = "";
+      document.getElementById("viewStatus").innerHTML = msg;
+    }
+
+    window.addEventListener("popstate", (event) => {
+      if (currentAlphaRemovalThreshold !== undefined) {
+        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray;
+      } else {
+        window.location = 'index.html';
+      }
+    });
+
+    function runViewer(splatBufferData, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
+      const splatBuffer = new GaussianSplats3D.SplatBuffer(splatBufferData);
+      const viewer = new GaussianSplats3D.Viewer({
+        'cameraUp': cameraUpArray,
+        'initialCameraPosition': cameraPositionArray,
+        'initialCameraLookAt': cameraLookAtArray
+      });
+      viewer.init();
+      viewer.loadSplatBuffer(splatBuffer, {
+        'halfPrecisionCovariancesOnGPU': true,
+        'alphaRemovalThreshold': alphaRemovalThreshold
+      })
+      .then(() => {
+          viewer.start();
+      });
+    }
+
+  </script>
+  <script>
+    function openDemo(demoName) {
+      window.location = demoName + '.html';
+    }
+    if (window.location.search) {
+      const tokens = window.location.search.substring(1).split("&");
+      for (token of tokens) {
+        const component = token.split("=");
+        const varName = component[0];
+        if (varName == "art") {
+          currentAlphaRemovalThreshold  =component[1];
+        } else if (varName == "cu") {
+          currentCameraUpArray = component[1];
+        } else if (varName == "cp") {
+          currentCameraPositionArray = component[1];
+        } else if (varName == "cla") {
+          currentCameraLookAtArray = component[1];
+        }
+      }
+    }
+  </script>
 </head>
 
 <body class="body">
-  <div class="table-of-contents-container">
+  <div id="table-of-contents-container" class="table-of-contents-container">
     <div class="table-of-contents-inner-container">
+      <br>
+      <span class="title">View demo scene</span>
+      <br>
       <div class="table-of-contents">
         <div class="table-of-contents-entry" onclick="openDemo('garden')">
           <img src="assets/images/garden.png" class="table-of-contents-entry-image">
@@ -207,53 +372,120 @@
           Stump
         </div>
       </div>
-      <div style="width:100%; text-align: center">
-        <div id ="conversionPanel" style="font-family:arial; width: 300px; text-align: center; margin: auto; border: #aaaaaa 1px solid; background-color: #efefef; padding: 15px">
-          <br>
-          <span style="font-weight: bold">Convert your own .PLY to .SPLAT</span>
-          <br>
-          <br>
-          <table style="text-align: left;">
-            <tr>
-              <td colspan="2">
-                <label for="uploadFile">
-                  <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
-                  <input type="file" id="uploadFile" style="display:none" onchange="window.onFileChange(this)">
-                </label>
-                <span id="uploadFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
-              </td>
-            </tr>
-            <tr>
-              <td colspan="2" style="height: 10px;"></td>
-            </tr>
-            <tr>
-              <td>
-                Compression level:
-              </td>
-              <td>
-                <input id="compressionLevel" type="text" style="width: 50px" value="1"></input>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                Alpha removal threshold:&nbsp;
-              </td>
-              <td>
-                <input id="alphaRemovalThreshold" type="text" style="width: 50px" value="1"></input>
-              </td>
-            </tr>
-          </table>
-          <br>
-          <span id="convertButton" class="button" onclick="window.convertFile()">Convert</span>
-          <br>
-          <br>
-          <span id="conversionStatus" style="color: #333333"></span>
-          <span id="conversionError" style="color: #ff0000"></span>
-          <br>
+      <br>
+      <br>
+      <span class="title">View your own scene</span>
+      <br>
+      <br>
+      <div style="width: 100%; text-align: center;">
+        <div style="max-width: 700px; display: flex; flex-wrap: wrap; align-items: center; margin: auto;">
+          <div id ="conversionPanel" class="splat-panel">
+            <br>
+            <span style="font-weight: bold">Convert your own .PLY to .SPLAT</span>
+            <br>
+            <br>
+            <table style="text-align: left;">
+              <tr>
+                <td colspan="2">
+                  <label for="convertFile">
+                    <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
+                    <input type="file" id="convertFile" style="display:none" onchange="window.onFileChange(this, 'convertFileName')">
+                  </label>
+                  <span id="convertFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="height: 10px;"></td>
+              </tr>
+              <tr>
+                <td>
+                  Compression level:
+                </td>
+                <td>
+                  <input id="compressionLevel" type="text" style="width: 50px" value="1"></input>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Alpha removal threshold:&nbsp;
+                </td>
+                <td>
+                  <input id="alphaRemovalThreshold" type="text" style="width: 50px" value="1"></input>
+                </td>
+              </tr>
+            </table>
+            <br>
+            <span id="convertButton" class="button" onclick="window.convertFile()">Convert</span>
+            <br>
+            <br>
+            <span id="conversionStatus" style="color: #333333"></span>
+            <span id="conversionError" style="color: #ff0000"></span>
+            <br>
+          </div>
+
+          <div id ="conversionPanel" class="splat-panel">
+            <br>
+            <span style="font-weight: bold">View a .SPLAT file</span>
+            <br>
+            <br>
+            <table style="text-align: left;">
+              <tr>
+                <td colspan="2">
+                  <label for="viewFile">
+                    <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
+                    <input type="file" id="viewFile" style="display:none" onchange="window.onFileChange(this, 'viewFileName')">
+                  </label>
+                  <span id="viewFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="height: 10px;"></td>
+              </tr>
+              <tr>
+                <td>
+                  Alpha removal threshold:&nbsp;
+                </td>
+                <td>
+                  <input id="alphaRemovalThresholdView" type="text" style="width: 50px" value="1"></input>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Camera up:&nbsp;
+                </td>
+                <td>
+                  <input id="cameraUp" type="text" style="width: 50px" value="0, -1, -0.54"></input>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Camera position:&nbsp;
+                </td>
+                <td>
+                  <input id="cameraPosition" type="text" style="width: 100px" value="-3.15, -0.16, -0.51"></input>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Camera look-at:&nbsp;
+                </td>
+                <td>
+                  <input id="cameraLookAt" type="text" style="width: 100px" value="1.52, 2.27, 1.65"></input>
+                </td>
+              </tr>
+            </table>
+            <br>
+            <span class="button" onclick="window.viewSplat()">View</span>
+            <br>
+            <br>
+            <span id="viewStatus" style="color: #333333"></span>
+            <span id="viewError" style="color: #ff0000"></span>
+            <br>
+          </div>
         </div>
-        <br>
-        <br>
       </div>
+      <br>
+      <br>
     </div>
   </div>
 </body>
