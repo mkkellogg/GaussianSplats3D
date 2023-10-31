@@ -25,7 +25,6 @@ http
     response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
 
     let filePath = baseDirectory + request.url;
-    if (filePath == "./") filePath = "./index.html";
 
     const extname = path.extname(filePath);
     let contentType = "text/html";
@@ -58,6 +57,24 @@ http
     if (queryStringStart && queryStringStart > 0) {
       queryString = filePath.substring(queryStringStart + 1);
       filePath = filePath.substring(0, queryStringStart);
+    }
+
+    let testDirectory = filePath;
+    if (testDirectory.endsWith("/")) {
+      testDirectory = testDirectory.substring(0, testDirectory.length - 1);
+    }
+    try {
+      if (fs.lstatSync(filePath).isDirectory()) {
+        let testDirectory = filePath;
+        if (!testDirectory.endsWith("/")) testDirectory = testDirectory + "/";
+        if (fs.existsSync(testDirectory + "index.html")) {
+          filePath = testDirectory + "index.html";
+        } else if (fs.existsSync(testDirectory + "index.htm")) {
+          filePath = testDirectory + "index.htm";
+        }
+      }
+    } catch(err) {
+      // ignore
     }
 
     try {
