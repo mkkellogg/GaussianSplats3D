@@ -62,14 +62,6 @@ export class SplatMesh extends THREE.Mesh {
             }
 
             void main () {
-
-                vec2 sampledCovarianceA = texture(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
-                vec2 sampledCovarianceB = texture(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
-                vec2 sampledCovarianceC = texture(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
-
-                vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rg, sampledCovarianceB.r);
-                vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceB.g, sampledCovarianceC.rg);
-
                 uvec4 sampledCenterColor = texture(centersColorsTexture, getDataUV(1, 0, centersColorsTextureSize));
                 vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));
                 vColor = uintToRGBAVec(sampledCenterColor.r);
@@ -79,12 +71,12 @@ export class SplatMesh extends THREE.Mesh {
                 vec4 viewCenter = modelViewMatrix * vec4(splatCenter, 1.0);
                 vec4 clipCenter = projectionMatrix * viewCenter;
 
-                float bounds = 1.2 * clipCenter.w;
-                if (clipCenter.z < -clipCenter.w || clipCenter.x < -bounds || clipCenter.x > bounds
-                    || clipCenter.y < -bounds || clipCenter.y > bounds) {
-                    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
-                    return;
-                }
+                vec2 sampledCovarianceA = texture(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceB = texture(covariancesTexture, getDataUV(3, 1, covariancesTextureSize)).rg;
+                vec2 sampledCovarianceC = texture(covariancesTexture, getDataUV(3, 2, covariancesTextureSize)).rg;
+
+                vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rg, sampledCovarianceB.r);
+                vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceB.g, sampledCovarianceC.rg);
 
                 // Compute the 2D covariance matrix from the upper-right portion of the 3D covariance matrix
                 mat3 Vrk = mat3(
@@ -92,9 +84,10 @@ export class SplatMesh extends THREE.Mesh {
                     cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
                     cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
                 );
+                float s = 1.0 / (viewCenter.z * viewCenter.z);
                 mat3 J = mat3(
-                    focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) / (viewCenter.z * viewCenter.z),
-                    0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) / (viewCenter.z * viewCenter.z),
+                    focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
+                    0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) * s,
                     0., 0., 0.
                 );
                 mat3 W = transpose(mat3(modelViewMatrix));
@@ -139,7 +132,6 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) / viewport * 2.0;
 
                 gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
-
             }`;
 
         const fragmentShaderSource = `
@@ -214,16 +206,15 @@ export class SplatMesh extends THREE.Mesh {
         const splatCount = splatBuffer.getSplatCount();
 
         const baseGeometry = new THREE.BufferGeometry();
+        baseGeometry.setIndex([0, 1, 2, 0, 2, 3]);
 
-        const positionsArray = new Float32Array(6 * 3);
+        const positionsArray = new Float32Array(4 * 3);
         const positions = new THREE.BufferAttribute(positionsArray, 3);
         baseGeometry.setAttribute('position', positions);
-        positions.setXYZ(2, -1.0, 1.0, 0.0);
-        positions.setXYZ(1, -1.0, -1.0, 0.0);
-        positions.setXYZ(0, 1.0, 1.0, 0.0);
-        positions.setXYZ(5, -1.0, -1.0, 0.0);
-        positions.setXYZ(4, 1.0, -1.0, 0.0);
-        positions.setXYZ(3, 1.0, 1.0, 0.0);
+        positions.setXYZ(0, -1.0, -1.0, 0.0);
+        positions.setXYZ(1, -1.0, 1.0, 0.0);
+        positions.setXYZ(2, 1.0, 1.0, 0.0);
+        positions.setXYZ(3, 1.0, -1.0, 0.0);
         positions.needsUpdate = true;
 
         const geometry = new THREE.InstancedBufferGeometry().copy(baseGeometry);
@@ -240,7 +231,7 @@ export class SplatMesh extends THREE.Mesh {
 
     buildSplatTree() {
 
-        this.splatTree = new SplatTree(8, 5000);
+        this.splatTree = new SplatTree(10, 500);
         console.time('SplatTree build');
         const splatColor = new THREE.Vector4();
         this.splatTree.processSplatBuffer(this.splatBuffer, (splatIndex) => {

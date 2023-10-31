@@ -10,7 +10,7 @@ import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
 
-const THREE_CAMERA_FOV = 60;
+const THREE_CAMERA_FOV = 50;
 
 export class Viewer {
 
@@ -176,7 +176,7 @@ export class Viewer {
 
         if (this.useBuiltInControls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-            this.controls.rotateSpeed = 0.3;
+            this.controls.rotateSpeed = 0.5;
             this.controls.maxPolarAngle = Math.PI * .75;
             this.controls.minPolarAngle = 0.1;
             this.controls.enableDamping = true;
@@ -469,7 +469,7 @@ export class Viewer {
         };
 
         const MaximumDistanceToSort = 125;
-        const MaximumDistanceToRender = 150;
+        const MaximumDistanceToRender = 125;
 
         return function(gatherAllNodes) {
 
@@ -511,7 +511,7 @@ export class Viewer {
 
             nodeRenderList.length = nodeRenderCount;
             nodeRenderList.sort((a, b) => {
-                if (a.data.distanceToNode > b.data.distanceToNode) return 1;
+                if (a.data.distanceToNode < b.data.distanceToNode) return 1;
                 else return -1;
             });
 
@@ -701,31 +701,34 @@ export class Viewer {
 
     }();
 
-    render() {
+    render = function() {
 
-        const sceneHasRenderables = (scene) => {
-            for (let child of scene.children) {
-                if (child.visible) {
-                   return true;
+        return function() {
+            const sceneHasRenderables = (scene) => {
+                for (let child of scene.children) {
+                    if (child.visible) {
+                    return true;
+                    }
                 }
+                return false;
+            };
+
+            let defualtSceneHasRenderables = sceneHasRenderables(this.scene);
+            let simpleSceneHasRenderables = sceneHasRenderables(this.simpleScene);
+
+            if (defualtSceneHasRenderables || simpleSceneHasRenderables) {
+                const savedAuoClear = this.renderer.autoClear;
+                this.renderer.autoClear = false;
+                if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
+                if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
+                this.renderer.render(this.splatMesh, this.camera);
+                this.renderer.autoClear = savedAuoClear;
+            } else {
+                this.renderer.render(this.splatMesh, this.camera);
             }
-            return false;
         };
 
-        let defualtSceneHasRenderables = sceneHasRenderables(this.scene);
-        let simpleSceneHasRenderables = sceneHasRenderables(this.simpleScene);
-
-        if (defualtSceneHasRenderables || simpleSceneHasRenderables) {
-            const savedAuoClear = this.renderer.autoClear;
-            this.renderer.autoClear = false;
-            if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
-            if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
-            this.renderer.render(this.splatMesh, this.camera);
-            this.renderer.autoClear = savedAuoClear;
-        } else {
-            this.renderer.render(this.splatMesh, this.camera);
-        }
-    }
+    }();
 
     updateView = function() {
 
