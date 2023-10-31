@@ -79,7 +79,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'initialCameraLookAt': [0, 4, 0]
 });
 const orientation = new THREE.Quaternion();
-orientation.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0.6).normalize());
+orientation.setFromUnitVectors(new THREE.Vector3(0, -1, -0.6).normalize(), new THREE.Vector3(0, 1, 0));
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>', {
     'splatAlphaRemovalThreshold': 5, // out of 255
