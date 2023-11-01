@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
   <title>3D Gaussian Splat Demo - Truck</title>
+  <script type="text/javascript" src="js/util.js"></script>
   <script type="importmap">
     {
         "imports": {
@@ -34,7 +35,9 @@
         'initialCameraLookAt': [1, 1, 0]
     });
     viewer.init();
-    viewer.loadFile('assets/data/truck/truck_high.splat', {
+    let path = 'assets/data/truck/truck';
+    path += isMobile() ? '.splat' : '_high.splat';
+    viewer.loadFile(path, {
         'halfPrecisionCovariancesOnGPU': true
     })
     .then(() => {
