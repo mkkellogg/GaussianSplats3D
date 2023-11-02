@@ -85,9 +85,11 @@ export class SplatMesh extends THREE.Mesh {
                     cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
                 );
                 float s = 1.0 / (viewCenter.z * viewCenter.z);
+                float focalX = projectionMatrix[0][0] * viewport.x * 0.45;
+                float focalY = projectionMatrix[1][1] * viewport.y * 0.45;
                 mat3 J = mat3(
-                    focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
-                    0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) * s,
+                    focalX / viewCenter.z, 0., -(focalX * viewCenter.x) * s,
+                    0., focalY / viewCenter.z, -(focalY * viewCenter.y) * s,
                     0., 0., 0.
                 );
                 mat3 W = transpose(mat3(modelViewMatrix));
@@ -120,9 +122,9 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = max(traceOver2 - term2, 0.0); // prevent negative eigen value
+                float eigenValue2 = max(traceOver2 - term2, 0.1); // prevent negative eigen value
 
-                const float maxSplatSize = 512.0;
+                const float maxSplatSize = 1024.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
                 // since the eigen vectors are orthogonal, we derive the second one from the first
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
@@ -370,11 +372,11 @@ export class SplatMesh extends THREE.Mesh {
         geometry.instanceCount = renderSplatCount;
     }
 
-    updateUniforms(renderDimensions, cameraFocalLength) {
+    updateUniforms(renderDimensions, cameraFocalLengthX, cameraFocalLengthY) {
         const splatCount = this.splatBuffer.getSplatCount();
         if (splatCount > 0) {
-            this.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
-            this.material.uniforms.focal.value.set(cameraFocalLength, cameraFocalLength);
+            this.material.uniforms.viewport.value.set(renderDimensions.x * window.devicePixelRatio, renderDimensions.y * window.devicePixelRatio);
+            this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
             this.material.uniformsNeedUpdate = true;
         }
     }

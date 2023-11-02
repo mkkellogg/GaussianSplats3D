@@ -341,8 +341,9 @@ export class Viewer {
             const splatCount = this.splatMesh.getSplatCount();
             if (splatCount > 0) {
                 this.getRenderDimensions(renderDimensions);
-                this.cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
-                this.splatMesh.updateUniforms(renderDimensions, this.cameraFocalLength);
+                this.cameraFocalLengthX = this.camera.projectionMatrix.elements[0] * renderDimensions.x * 0.5;
+                this.cameraFocalLengthY = this.camera.projectionMatrix.elements[5] * renderDimensions.y * 0.5;
+                this.splatMesh.updateUniforms(renderDimensions, this.cameraFocalLengthX, this.cameraFocalLengthY);
             }
         };
 
@@ -474,8 +475,9 @@ export class Viewer {
         return function(gatherAllNodes) {
 
             this.getRenderDimensions(renderDimensions);
-            const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / this.cameraFocalLength);
-            const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / this.cameraFocalLength);
+            const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
+            const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / cameraFocalLength);
+            const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / cameraFocalLength);
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
             tempMatrix4.copy(this.camera.matrixWorld).invert();
