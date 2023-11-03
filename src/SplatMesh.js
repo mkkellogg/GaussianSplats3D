@@ -4,13 +4,14 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
+    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU);
+        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU, devicePixelRatio);
     }
 
-    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
+    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1,
+                halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
@@ -19,6 +20,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatDataTextures = null;
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
+        this.devicePixelRatio = devicePixelRatio;
         this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
@@ -35,6 +37,7 @@ export class SplatMesh extends THREE.Mesh {
             uniform highp usampler2D centersColorsTexture;
             uniform vec2 focal;
             uniform vec2 viewport;
+            uniform vec2 basisViewport;
             uniform vec2 covariancesTextureSize;
             uniform vec2 centersColorsTextureSize;
 
@@ -120,16 +123,16 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = max(traceOver2 - term2, 0.0); // prevent negative eigen value
+                float eigenValue2 = max(traceOver2 - term2, 0.01);
 
-                const float maxSplatSize = 512.0;
+                const float maxSplatSize = 1024.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
                 // since the eigen vectors are orthogonal, we derive the second one from the first
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
                 vec2 basisVector1 = eigenVector1 * min(sqrt(2.0 * eigenValue1), maxSplatSize);
                 vec2 basisVector2 = eigenVector2 * min(sqrt(2.0 * eigenValue2), maxSplatSize);
 
-                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) / viewport * 2.0;
+                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) * basisViewport;
 
                 gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
             }`;
@@ -169,6 +172,10 @@ export class SplatMesh extends THREE.Mesh {
                 'value': new THREE.Vector2()
             },
             'viewport': {
+                'type': 'v2',
+                'value': new THREE.Vector2()
+            },
+            'basisViewport': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
             },
@@ -370,14 +377,23 @@ export class SplatMesh extends THREE.Mesh {
         geometry.instanceCount = renderSplatCount;
     }
 
-    updateUniforms(renderDimensions, cameraFocalLength) {
-        const splatCount = this.splatBuffer.getSplatCount();
-        if (splatCount > 0) {
-            this.material.uniforms.viewport.value.set(renderDimensions.x, renderDimensions.y);
-            this.material.uniforms.focal.value.set(cameraFocalLength, cameraFocalLength);
-            this.material.uniformsNeedUpdate = true;
-        }
-    }
+    updateUniforms = function() {
+
+        const viewport = new THREE.Vector2();
+
+        return function(renderDimensions, cameraFocalLengthX, cameraFocalLengthY) {
+            const splatCount = this.splatBuffer.getSplatCount();
+            if (splatCount > 0) {
+                viewport.set(renderDimensions.x * this.devicePixelRatio,
+                             renderDimensions.y * this.devicePixelRatio);
+                this.material.uniforms.viewport.value.copy(viewport);
+                this.material.uniforms.basisViewport.value.set(2.0 / viewport.x, 2.0 / viewport.y);
+                this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
+                this.material.uniformsNeedUpdate = true;
+            }
+        };
+
+    }();
 
     getSplatDataTextures() {
         return this.splatDataTextures;

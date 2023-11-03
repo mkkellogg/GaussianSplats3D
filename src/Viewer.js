@@ -36,6 +36,10 @@ export class Viewer {
         this.camera = params.camera;
         this.useBuiltInControls = params.useBuiltInControls;
         this.controls = null;
+
+        this.ignoreDevicePixelRatio = params.ignoreDevicePixelRatio || false;
+        this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
+
         this.selfDrivenMode = params.selfDrivenMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
         this.showMeshCursor = false;
@@ -168,6 +172,7 @@ export class Viewer {
                 antialias: false,
                 precision: 'highp'
             });
+            this.renderer.setPixelRatio(this.devicePixelRatio);
             this.renderer.autoClear = true;
             this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
@@ -341,8 +346,11 @@ export class Viewer {
             const splatCount = this.splatMesh.getSplatCount();
             if (splatCount > 0) {
                 this.getRenderDimensions(renderDimensions);
-                this.cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
-                this.splatMesh.updateUniforms(renderDimensions, this.cameraFocalLength);
+                this.cameraFocalLengthX = this.camera.projectionMatrix.elements[0] *
+                                          this.devicePixelRatio * renderDimensions.x * 0.45;
+                                          this.cameraFocalLengthY = this.camera.projectionMatrix.elements[5] *
+                                          this.devicePixelRatio * renderDimensions.y * 0.45;
+                this.splatMesh.updateUniforms(renderDimensions, this.cameraFocalLengthX, this.cameraFocalLengthY);
             }
         };
 
@@ -393,7 +401,7 @@ export class Viewer {
             this.loadingSpinner.setMessage(`Processing splats...`);
             window.setTimeout(() => {
                 this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
-                                    options.orientation, options.halfPrecisionCovariancesOnGPU);
+                                    options.orientation, options.halfPrecisionCovariancesOnGPU, this.devicePixelRatio);
                 this.setupSortWorker(splatBuffer).then(() => {
                     this.loadingSpinner.hide();
                     resolve();
@@ -403,12 +411,12 @@ export class Viewer {
     }
 
     setupSplatMesh(splatBuffer, splatAlphaRemovalThreshold = 1, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
-                   halfPrecisionCovariancesOnGPU = false) {
+                   halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
         splatBuffer.buildPreComputedBuffers();
-        this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU);
+        this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU, devicePixelRatio);
         this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
@@ -474,8 +482,9 @@ export class Viewer {
         return function(gatherAllNodes) {
 
             this.getRenderDimensions(renderDimensions);
-            const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / this.cameraFocalLength);
-            const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / this.cameraFocalLength);
+            const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
+            const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / cameraFocalLength);
+            const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / cameraFocalLength);
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
             tempMatrix4.copy(this.camera.matrixWorld).invert();
