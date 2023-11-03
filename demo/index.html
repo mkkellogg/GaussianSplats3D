@@ -186,25 +186,36 @@
       setConversionError("");
       const convertButton = document.getElementById("convertButton");
 
+      const conversionDone = (error) => {
+        if (error) {
+          console.error(error);
+          setConversionError("Could not convert file.");
+        } else {
+          setConversionStatus("Conversion complete!");
+        }
+        convertButton.disabled = false;
+        conversionInProgress = false;
+      }
+
       try {
         const fileReader = new FileReader();
         fileReader.onload = function(){
           convertButton.disabled = true;
           setConversionStatus("Parsing .PLY...");
           window.setTimeout(() => {
-            convertPLY(fileReader.result, compressionLevel, alphaRemovalThreshold);
-            setConversionStatus("Conversion complete!");
-            convertButton.disabled = false;
-            conversionInProgress = false;
+            try {
+              convertPLY(fileReader.result, compressionLevel, alphaRemovalThreshold);
+              conversionDone();
+            } catch (e) {
+              conversionDone(e);
+            }
           }, 1);
         }
         conversionInProgress = true;
         setConversionStatus("Loading .PLY...");
         fileReader.readAsArrayBuffer(conversionFile.files[0]);
       } catch (e) {
-        console.error(e);
-        setConversionError("Could not convert file.");
-        conversionInProgress = false;
+        conversionDone(e);
       }
     }
 

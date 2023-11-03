@@ -16,11 +16,21 @@ export class PlyParser {
         let headerOffset = 0;
         let headerText = '';
 
+        console.log('.PLY size: ' +  plyBuffer.byteLength + ' bytes');
+
+        const readChunkSize = 100;
+
         while (true) {
-            const headerChunk = new Uint8Array(plyBuffer, headerOffset, 50);
+            if (headerOffset + readChunkSize >= plyBuffer.byteLength) {
+                throw new Error ("End of file reached while searching for end of header");
+            }
+            const headerChunk = new Uint8Array(plyBuffer, headerOffset, readChunkSize);
             headerText += decoder.decode(headerChunk);
-            headerOffset += 50;
-            if (headerText.includes('end_header')) {
+            headerOffset += readChunkSize;
+
+            const endHeaderTestChunk = new Uint8Array(plyBuffer, Math.max(0, headerOffset - readChunkSize * 2), readChunkSize * 2);
+            const endHeaderTestText = decoder.decode(endHeaderTestChunk);
+            if (endHeaderTestText.includes('end_header')) {
                 break;
             }
         }
