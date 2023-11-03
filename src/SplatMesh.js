@@ -122,7 +122,7 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = max(traceOver2 - term2, 0.1); // prevent negative eigen value
+                float eigenValue2 = max(traceOver2 - term2, 0.01);
 
                 const float maxSplatSize = 1024.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
@@ -375,7 +375,8 @@ export class SplatMesh extends THREE.Mesh {
     updateUniforms(renderDimensions, cameraFocalLengthX, cameraFocalLengthY) {
         const splatCount = this.splatBuffer.getSplatCount();
         if (splatCount > 0) {
-            this.material.uniforms.viewport.value.set(renderDimensions.x * window.devicePixelRatio, renderDimensions.y * window.devicePixelRatio);
+            this.material.uniforms.viewport.value.set(renderDimensions.x * window.devicePixelRatio,
+                                                      renderDimensions.y * window.devicePixelRatio);
             this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
             this.material.uniformsNeedUpdate = true;
         }
