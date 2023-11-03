@@ -4,13 +4,14 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
+    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU);
+        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU, devicePixelRatio);
     }
 
-    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false) {
+    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1,
+                halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
@@ -19,6 +20,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatDataTextures = null;
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
+        this.devicePixelRatio = devicePixelRatio;
         this.buildSplatTree();
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
@@ -382,8 +384,8 @@ export class SplatMesh extends THREE.Mesh {
         return function(renderDimensions, cameraFocalLengthX, cameraFocalLengthY) {
             const splatCount = this.splatBuffer.getSplatCount();
             if (splatCount > 0) {
-                viewport.set(renderDimensions.x * window.devicePixelRatio,
-                             renderDimensions.y * window.devicePixelRatio);
+                viewport.set(renderDimensions.x * this.devicePixelRatio,
+                             renderDimensions.y * this.devicePixelRatio);
                 this.material.uniforms.viewport.value.copy(viewport);
                 this.material.uniforms.basisViewport.value.set(2.0 / viewport.x, 2.0 / viewport.y);
                 this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
