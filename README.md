@@ -61,7 +61,8 @@ To run the built-in viewer:
 const viewer = new GaussianSplats3D.Viewer({
     'cameraUp': [0, -1, -0.6],
     'initialCameraPosition': [-1, -4, 6],
-    'initialCameraLookAt': [0, 4, 0]
+    'initialCameraLookAt': [0, 4, 0],
+    'ignoreDevicePixelRatio': false
 });
 viewer.init();
 viewer.loadFile('<path to .ply or .splat file>', {
@@ -72,6 +73,13 @@ viewer.loadFile('<path to .ply or .splat file>', {
     viewer.start();
 });
 ```
+`ignoreDevicePixelRatio` tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality.
+<br>
+`splatAlphaRemovalThreshold` tells `loadFile()` to ignore any splats with an alpha less than the specified value.
+<br>
+`halfPrecisionCovariancesOnGPU` tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit.
+<br>
+<br>
 As an alternative to using `cameraUp` to adjust to the scene's natural orientation, you can pass an orientation (and/or position) to the `loadFile()` method to transform the entire scene:
 ```javascript
 const viewer = new GaussianSplats3D.Viewer({
