@@ -341,8 +341,10 @@ export class Viewer {
             const splatCount = this.splatMesh.getSplatCount();
             if (splatCount > 0) {
                 this.getRenderDimensions(renderDimensions);
-                this.cameraFocalLengthX = this.camera.projectionMatrix.elements[0] * renderDimensions.x * 0.5;
-                this.cameraFocalLengthY = this.camera.projectionMatrix.elements[5] * renderDimensions.y * 0.5;
+                this.cameraFocalLengthX = this.camera.projectionMatrix.elements[0] *
+                                          window.devicePixelRatio * renderDimensions.x * 0.45;
+                this.cameraFocalLengthY = this.camera.projectionMatrix.elements[5] *
+                                          window.devicePixelRatio * renderDimensions.y * 0.45;
                 this.splatMesh.updateUniforms(renderDimensions, this.cameraFocalLengthX, this.cameraFocalLengthY);
             }
         };
