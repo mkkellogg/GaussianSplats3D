@@ -168,6 +168,7 @@ export class Viewer {
                 antialias: false,
                 precision: 'highp'
             });
+            this.renderer.setPixelRatio(window.devicePixelRatio);
             this.renderer.autoClear = true;
             this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
