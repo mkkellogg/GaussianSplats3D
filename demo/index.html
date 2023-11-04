@@ -120,7 +120,7 @@
       padding: 15px;
     }
 
-    .loader {
+    .ply-loader {
         width: 35px;
         padding: 15px;
         background: #324d70;
@@ -135,10 +135,10 @@
         -webkit-mask-composite: source-out;
             mask-composite: subtract;
         box-sizing: border-box;
-        animation: load 1s linear infinite;
+        animation: ply-load 1s linear infinite;
     }
 
-    @keyframes load {
+    @keyframes ply-load {
         to{transform: rotate(1turn)}
     }
 
@@ -471,7 +471,7 @@
             <div style="text-align: center;">
               <div style="display: flex; flex-direction: row; width: 230px; margin: auto;">
                 <div style="width: 50px;">
-                  <div id="loading-icon" class="loader" style="display: none;">
+                  <div id="loading-icon" class="ply-loader" style="display: none;">
                   </div>
                   <div id="check-icon" class="check" style="display: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" height="35px" width="35px" version="1.1" id="Capa_1" viewBox="0 0 17.837 17.837" xml:space="preserve" style="background:#ffffff00;">
