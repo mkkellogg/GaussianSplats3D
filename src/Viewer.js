@@ -626,15 +626,33 @@ export class Viewer {
     timingSensitiveUpdates = function() {
 
         let lastUpdateTime;
-        let tempCameraTarget = new THREE.Vector3();
 
         return function() {
             const currentTime = getCurrentTime();
             if (!lastUpdateTime) lastUpdateTime = currentTime;
             const timeDelta = currentTime - lastUpdateTime;
 
+            this.updateCameraTransition(currentTime);
+            this.updateFocusMarker(timeDelta);
+
+            lastUpdateTime = currentTime;
+        };
+
+    }();
+
+    updateCameraTransition = function() {
+
+        let tempCameraTarget = new THREE.Vector3();
+        let toPreviousTarget = new THREE.Vector3();
+        let toNextTarget = new THREE.Vector3();
+
+        return function(currentTime) {
             if (this.transitioningCameraTarget) {
-                const t = (currentTime - this.transitioningCameraTargetStartTime) / 0.25;
+                toPreviousTarget.copy(this.previousCameraTarget).sub(this.camera.position).normalize();
+                toNextTarget.copy(this.nextCameraTarget).sub(this.camera.position).normalize();
+                const rotationAngle = Math.acos(toPreviousTarget.dot(toNextTarget));
+                const rotationSpeed = rotationAngle / (Math.PI / 3) * .65 + .3;
+                const t = (rotationSpeed / rotationAngle * (currentTime - this.transitioningCameraTargetStartTime));
                 tempCameraTarget.copy(this.previousCameraTarget).lerp(this.nextCameraTarget, t);
                 this.camera.lookAt(tempCameraTarget);
                 this.controls.target.copy(tempCameraTarget);
@@ -642,10 +660,6 @@ export class Viewer {
                     this.transitioningCameraTarget = false;
                 }
             }
-
-            this.updateFocusMarker(timeDelta);
-
-            lastUpdateTime = currentTime;
         };
 
     }();
@@ -657,7 +671,7 @@ export class Viewer {
         return function(timeDelta) {
             this.getRenderDimensions(renderDimensions);
             const fadeInSpeed = 10.0;
-            const fadeOutSpeed = 5.0;
+            const fadeOutSpeed = 2.5;
             if (this.transitioningCameraTarget) {
                 this.sceneHelper.setFocusMarkerVisibility(true);
                 const currentFocusMarkerOpacity = Math.max(this.sceneHelper.getFocusMarkerOpacity(), 0.0);

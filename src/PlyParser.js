@@ -16,13 +16,13 @@ export class PlyParser {
         let headerOffset = 0;
         let headerText = '';
 
-        console.log('.PLY size: ' +  plyBuffer.byteLength + ' bytes');
+        console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
 
         const readChunkSize = 100;
 
         while (true) {
             if (headerOffset + readChunkSize >= plyBuffer.byteLength) {
-                throw new Error ("End of file reached while searching for end of header");
+                throw new Error('End of file reached while searching for end of header');
             }
             const headerChunk = new Uint8Array(plyBuffer, headerOffset, readChunkSize);
             headerText += decoder.decode(headerChunk);
