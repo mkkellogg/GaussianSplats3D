@@ -684,9 +684,12 @@ export class Viewer {
                 let currentFocusMarkerOpacity;
                 if (wasTransitioning) currentFocusMarkerOpacity = 1.0;
                 else currentFocusMarkerOpacity = Math.min(this.sceneHelper.getFocusMarkerOpacity(), 1.0);
-                let newFocusMarkerOpacity = Math.max(currentFocusMarkerOpacity - fadeOutSpeed * timeDelta, 0.0);
-                this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
-                if (newFocusMarkerOpacity === 0.0) this.sceneHelper.setFocusMarkerVisibility(false);
+                if (currentFocusMarkerOpacity > 0) {
+                    this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
+                    let newFocusMarkerOpacity = Math.max(currentFocusMarkerOpacity - fadeOutSpeed * timeDelta, 0.0);
+                    this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
+                    if (newFocusMarkerOpacity === 0.0) this.sceneHelper.setFocusMarkerVisibility(false);
+                }
                 wasTransitioning = false;
             }
         };
