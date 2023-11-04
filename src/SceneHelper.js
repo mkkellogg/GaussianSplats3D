@@ -85,6 +85,7 @@ export class SceneHelper {
             tempPosition.normalize().multiplyScalar(10);
             tempPosition.applyMatrix4(camera.matrixWorld);
             this.focusMarker.position.copy(tempPosition);
+            this.focusMarker.material.uniforms.realFocusPosition.value.copy(position);
             this.focusMarker.material.uniforms.viewport.value.copy(viewport);
             this.focusMarker.material.uniformsNeedUpdate = true;
         };
@@ -95,6 +96,14 @@ export class SceneHelper {
         this.focusMarker.visible = visible;
     }
 
+    setFocusMarkerOpacity(opacity) {
+        this.focusMarker.material.uniforms.opacity.value = opacity;
+        this.focusMarker.material.uniformsNeedUpdate = true;
+    }
+
+    getFocusMarkerOpacity() {
+        return this.focusMarker.material.uniforms.opacity.value;
+    }
 
     addDebugMeshes() {
         this.debugRoot = this.createDebugMeshes();
@@ -196,9 +205,11 @@ export class SceneHelper {
             #include <common>
 
             uniform vec2 viewport;
+            uniform vec3 realFocusPosition;
 
             varying vec4 ndcPosition;
             varying vec4 ndcCenter;
+            varying vec4 ndcFocusPosition;
 
             void main() {
                 float radius = 0.01;
@@ -206,8 +217,15 @@ export class SceneHelper {
                 vec4 viewPosition = modelViewMatrix * vec4(position.xyz, 1.0);
                 vec4 viewCenter = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
 
+                vec4 viewFocusPosition = modelViewMatrix * vec4(realFocusPosition, 1.0);
+
                 ndcPosition = projectionMatrix * viewPosition;
+                ndcPosition = ndcPosition * vec4(1.0 / ndcPosition.w);
                 ndcCenter = projectionMatrix * viewCenter;
+                ndcCenter = ndcCenter * vec4(1.0 / ndcCenter.w);
+
+                ndcFocusPosition = projectionMatrix * viewFocusPosition;
+                ndcFocusPosition = ndcFocusPosition * vec4(1.0 / ndcFocusPosition.w);
 
                 gl_Position = projectionMatrix * viewPosition;
 
@@ -218,23 +236,27 @@ export class SceneHelper {
             #include <common>
             uniform vec3 color;
             uniform vec2 viewport;
+            uniform float opacity;
 
             varying vec4 ndcPosition;
             varying vec4 ndcCenter;
+            varying vec4 ndcFocusPosition;
 
             void main() {
-                vec2 screenPosition = vec2(ndcPosition * vec4(1.0 / ndcPosition.w)) * viewport;
-                vec2 screenCenter = vec2(ndcCenter * vec4(1.0 / ndcCenter.w)) * viewport;
+                vec2 screenPosition = vec2(ndcPosition) * viewport;
+                vec2 screenCenter = vec2(ndcCenter) * viewport;
 
                 vec2 screenVec = screenPosition - screenCenter;
 
                 float projectedRadius = length(screenVec);
 
-                float lineWidth = 2.0;
-                float radDiff = abs(projectedRadius - 70.0) - lineWidth;
-                float alpha = 1.0 - clamp(radDiff / 10.0, 0.0, 1.0); 
+                float lineWidth = 0.0005 * viewport.y;
+                float aaRange = 0.0025 * viewport.y;
+                float radius = 0.06 * viewport.y;
+                float radDiff = abs(projectedRadius - radius) - lineWidth;
+                float alpha = 1.0 - clamp(radDiff / 5.0, 0.0, 1.0); 
 
-                gl_FragColor = vec4(color.rgb, alpha);
+                gl_FragColor = vec4(color.rgb, alpha * opacity);
             }
         `;
 
@@ -243,10 +265,17 @@ export class SceneHelper {
                 'type': 'v3',
                 'value': new THREE.Color(color)
             },
+            'realFocusPosition': {
+                'type': 'v3',
+                'value': new THREE.Vector3()
+            },
             'viewport': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
             },
+            'opacity': {
+                'value': 0.0
+            }
         };
 
         const material = new THREE.ShaderMaterial({

@@ -627,15 +627,13 @@ export class Viewer {
 
         let lastUpdateTime;
         let tempCameraTarget = new THREE.Vector3();
-        const renderDimensions = new THREE.Vector2();
 
         return function() {
-
             const currentTime = getCurrentTime();
             if (!lastUpdateTime) lastUpdateTime = currentTime;
+            const timeDelta = currentTime - lastUpdateTime;
 
             if (this.transitioningCameraTarget) {
-                this.getRenderDimensions(renderDimensions);
                 const t = (currentTime - this.transitioningCameraTargetStartTime) / 0.25;
                 tempCameraTarget.copy(this.previousCameraTarget).lerp(this.nextCameraTarget, t);
                 this.camera.lookAt(tempCameraTarget);
@@ -643,14 +641,35 @@ export class Viewer {
                 if (t >= 1.0) {
                     this.transitioningCameraTarget = false;
                 }
-                this.sceneHelper.setFocusMarkerVisibility(true);
-                this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
-            } else {
-                this.sceneHelper.setFocusMarkerVisibility(false);
             }
 
-            lastUpdateTime = currentTime;
+            this.updateFocusMarker(timeDelta);
 
+            lastUpdateTime = currentTime;
+        };
+
+    }();
+
+    updateFocusMarker = function() {
+
+        const renderDimensions = new THREE.Vector2();
+
+        return function(timeDelta) {
+            this.getRenderDimensions(renderDimensions);
+            const fadeInSpeed = 10.0;
+            const fadeOutSpeed = 5.0;
+            if (this.transitioningCameraTarget) {
+                this.sceneHelper.setFocusMarkerVisibility(true);
+                const currentFocusMarkerOpacity = Math.max(this.sceneHelper.getFocusMarkerOpacity(), 0.0);
+                let newFocusMarkerOpacity = Math.min(currentFocusMarkerOpacity + fadeInSpeed * timeDelta, 1.0);
+                this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
+                this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
+            } else {
+                const currentFocusMarkerOpacity = Math.min(this.sceneHelper.getFocusMarkerOpacity(), 1.0);
+                let newFocusMarkerOpacity = Math.max(currentFocusMarkerOpacity - fadeOutSpeed * timeDelta, 0.0);
+                this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
+                if (newFocusMarkerOpacity === 0.0) this.sceneHelper.setFocusMarkerVisibility(false);
+            }
         };
 
     }();
@@ -739,7 +758,7 @@ export class Viewer {
                 if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
             }
             this.renderer.render(this.splatMesh, this.camera);
-            if (this.transitioningCameraTarget) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
+            if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
             this.renderer.autoClear = savedAuoClear;
         };
 
