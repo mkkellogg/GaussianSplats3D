@@ -6,6 +6,7 @@ export class SceneHelper {
         this.scene = scene;
         this.simpleScene = simpleScene;
         this.meshCursor = null;
+        this.focusMarker = null;
     }
 
     setupMeshCursor() {
@@ -60,6 +61,40 @@ export class SceneHelper {
         this.meshCursor.up.copy(camera.up);
         this.meshCursor.lookAt(camera.position);
     }
+
+    setupFocusMarker() {
+        if (!this.focusMarker) {
+            const sphereGeometry = new THREE.SphereGeometry(.5, 32, 32);
+            const focusMarkerMaterial = SceneHelper.buildFocusMarkerMaterial();
+            focusMarkerMaterial.depthTest = false;
+            focusMarkerMaterial.depthWrite = false;
+            focusMarkerMaterial.transparent = true;
+            const sphereMesh = new THREE.Mesh(sphereGeometry, focusMarkerMaterial);
+            this.focusMarker = sphereMesh;
+        }
+    }
+
+    updateFocusMarker = function() {
+
+        const tempPosition = new THREE.Vector3();
+        const tempMatrix = new THREE.Matrix4();
+
+        return function(position, camera, viewport) {
+            tempMatrix.copy(camera.matrixWorld).invert();
+            tempPosition.copy(position).applyMatrix4(tempMatrix);
+            tempPosition.normalize().multiplyScalar(10);
+            tempPosition.applyMatrix4(camera.matrixWorld);
+            this.focusMarker.position.copy(tempPosition);
+            this.focusMarker.material.uniforms.viewport.value.copy(viewport);
+            this.focusMarker.material.uniformsNeedUpdate = true;
+        };
+
+    }();
+
+    setFocusMarkerVisibility(visible) {
+        this.focusMarker.visible = visible;
+    }
+
 
     addDebugMeshes() {
         this.debugRoot = this.createDebugMeshes();
@@ -156,4 +191,74 @@ export class SceneHelper {
         return material;
     }
 
+    static buildFocusMarkerMaterial(color) {
+        const vertexShaderSource = `
+            #include <common>
+
+            uniform vec2 viewport;
+
+            varying vec4 ndcPosition;
+            varying vec4 ndcCenter;
+
+            void main() {
+                float radius = 0.01;
+
+                vec4 viewPosition = modelViewMatrix * vec4(position.xyz, 1.0);
+                vec4 viewCenter = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+
+                ndcPosition = projectionMatrix * viewPosition;
+                ndcCenter = projectionMatrix * viewCenter;
+
+                gl_Position = projectionMatrix * viewPosition;
+
+            }
+        `;
+
+        const fragmentShaderSource = `
+            #include <common>
+            uniform vec3 color;
+            uniform vec2 viewport;
+
+            varying vec4 ndcPosition;
+            varying vec4 ndcCenter;
+
+            void main() {
+                vec2 screenPosition = vec2(ndcPosition * vec4(1.0 / ndcPosition.w)) * viewport;
+                vec2 screenCenter = vec2(ndcCenter * vec4(1.0 / ndcCenter.w)) * viewport;
+
+                vec2 screenVec = screenPosition - screenCenter;
+
+                float projectedRadius = length(screenVec);
+
+                float lineWidth = 2.0;
+                float radDiff = abs(projectedRadius - 70.0) - lineWidth;
+                float alpha = 1.0 - clamp(radDiff / 10.0, 0.0, 1.0); 
+
+                gl_FragColor = vec4(color.rgb, alpha);
+            }
+        `;
+
+        const uniforms = {
+            'color': {
+                'type': 'v3',
+                'value': new THREE.Color(color)
+            },
+            'viewport': {
+                'type': 'v2',
+                'value': new THREE.Vector2()
+            },
+        };
+
+        const material = new THREE.ShaderMaterial({
+            uniforms: uniforms,
+            vertexShader: vertexShaderSource,
+            fragmentShader: fragmentShaderSource,
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            side: THREE.FrontSide
+        });
+
+        return material;
+    }
 }

@@ -166,6 +166,7 @@ export class Viewer {
         this.simpleScene = this.simpleScene || new THREE.Scene();
         this.sceneHelper = new SceneHelper(this.scene, this.simpleScene);
         this.sceneHelper.setupMeshCursor();
+        this.sceneHelper.setupFocusMarker();
 
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
@@ -626,6 +627,7 @@ export class Viewer {
 
         let lastUpdateTime;
         let tempCameraTarget = new THREE.Vector3();
+        const renderDimensions = new THREE.Vector2();
 
         return function() {
 
@@ -633,6 +635,7 @@ export class Viewer {
             if (!lastUpdateTime) lastUpdateTime = currentTime;
 
             if (this.transitioningCameraTarget) {
+                this.getRenderDimensions(renderDimensions);
                 const t = (currentTime - this.transitioningCameraTargetStartTime) / 0.25;
                 tempCameraTarget.copy(this.previousCameraTarget).lerp(this.nextCameraTarget, t);
                 this.camera.lookAt(tempCameraTarget);
@@ -640,6 +643,10 @@ export class Viewer {
                 if (t >= 1.0) {
                     this.transitioningCameraTarget = false;
                 }
+                this.sceneHelper.setFocusMarkerVisibility(true);
+                this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
+            } else {
+                this.sceneHelper.setFocusMarkerVisibility(false);
             }
 
             lastUpdateTime = currentTime;
@@ -725,16 +732,15 @@ export class Viewer {
             let defualtSceneHasRenderables = sceneHasRenderables(this.scene);
             let simpleSceneHasRenderables = sceneHasRenderables(this.simpleScene);
 
+            const savedAuoClear = this.renderer.autoClear;
+            this.renderer.autoClear = false;
             if (defualtSceneHasRenderables || simpleSceneHasRenderables) {
-                const savedAuoClear = this.renderer.autoClear;
-                this.renderer.autoClear = false;
                 if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
                 if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
-                this.renderer.render(this.splatMesh, this.camera);
-                this.renderer.autoClear = savedAuoClear;
-            } else {
-                this.renderer.render(this.splatMesh, this.camera);
             }
+            this.renderer.render(this.splatMesh, this.camera);
+            if (this.transitioningCameraTarget) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
+            this.renderer.autoClear = savedAuoClear;
         };
 
     }();
