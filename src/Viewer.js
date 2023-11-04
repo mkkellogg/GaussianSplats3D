@@ -166,6 +166,7 @@ export class Viewer {
         this.simpleScene = this.simpleScene || new THREE.Scene();
         this.sceneHelper = new SceneHelper(this.scene, this.simpleScene);
         this.sceneHelper.setupMeshCursor();
+        this.sceneHelper.setupFocusMarker();
 
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
@@ -625,15 +626,33 @@ export class Viewer {
     timingSensitiveUpdates = function() {
 
         let lastUpdateTime;
-        let tempCameraTarget = new THREE.Vector3();
 
         return function() {
-
             const currentTime = getCurrentTime();
             if (!lastUpdateTime) lastUpdateTime = currentTime;
+            const timeDelta = currentTime - lastUpdateTime;
 
+            this.updateCameraTransition(currentTime);
+            this.updateFocusMarker(timeDelta);
+
+            lastUpdateTime = currentTime;
+        };
+
+    }();
+
+    updateCameraTransition = function() {
+
+        let tempCameraTarget = new THREE.Vector3();
+        let toPreviousTarget = new THREE.Vector3();
+        let toNextTarget = new THREE.Vector3();
+
+        return function(currentTime) {
             if (this.transitioningCameraTarget) {
-                const t = (currentTime - this.transitioningCameraTargetStartTime) / 0.25;
+                toPreviousTarget.copy(this.previousCameraTarget).sub(this.camera.position).normalize();
+                toNextTarget.copy(this.nextCameraTarget).sub(this.camera.position).normalize();
+                const rotationAngle = Math.acos(toPreviousTarget.dot(toNextTarget));
+                const rotationSpeed = rotationAngle / (Math.PI / 3) * .65 + .3;
+                const t = (rotationSpeed / rotationAngle * (currentTime - this.transitioningCameraTargetStartTime));
                 tempCameraTarget.copy(this.previousCameraTarget).lerp(this.nextCameraTarget, t);
                 this.camera.lookAt(tempCameraTarget);
                 this.controls.target.copy(tempCameraTarget);
@@ -641,9 +660,30 @@ export class Viewer {
                     this.transitioningCameraTarget = false;
                 }
             }
+        };
 
-            lastUpdateTime = currentTime;
+    }();
 
+    updateFocusMarker = function() {
+
+        const renderDimensions = new THREE.Vector2();
+
+        return function(timeDelta) {
+            this.getRenderDimensions(renderDimensions);
+            const fadeInSpeed = 10.0;
+            const fadeOutSpeed = 2.5;
+            if (this.transitioningCameraTarget) {
+                this.sceneHelper.setFocusMarkerVisibility(true);
+                const currentFocusMarkerOpacity = Math.max(this.sceneHelper.getFocusMarkerOpacity(), 0.0);
+                let newFocusMarkerOpacity = Math.min(currentFocusMarkerOpacity + fadeInSpeed * timeDelta, 1.0);
+                this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
+                this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
+            } else {
+                const currentFocusMarkerOpacity = Math.min(this.sceneHelper.getFocusMarkerOpacity(), 1.0);
+                let newFocusMarkerOpacity = Math.max(currentFocusMarkerOpacity - fadeOutSpeed * timeDelta, 0.0);
+                this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
+                if (newFocusMarkerOpacity === 0.0) this.sceneHelper.setFocusMarkerVisibility(false);
+            }
         };
 
     }();
@@ -725,16 +765,15 @@ export class Viewer {
             let defualtSceneHasRenderables = sceneHasRenderables(this.scene);
             let simpleSceneHasRenderables = sceneHasRenderables(this.simpleScene);
 
+            const savedAuoClear = this.renderer.autoClear;
+            this.renderer.autoClear = false;
             if (defualtSceneHasRenderables || simpleSceneHasRenderables) {
-                const savedAuoClear = this.renderer.autoClear;
-                this.renderer.autoClear = false;
                 if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
                 if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
-                this.renderer.render(this.splatMesh, this.camera);
-                this.renderer.autoClear = savedAuoClear;
-            } else {
-                this.renderer.render(this.splatMesh, this.camera);
             }
+            this.renderer.render(this.splatMesh, this.camera);
+            if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
+            this.renderer.autoClear = savedAuoClear;
         };
 
     }();
