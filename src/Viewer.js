@@ -214,6 +214,7 @@ export class Viewer {
         this.infoPanel.style.width = '375px';
         this.infoPanel.style.fontFamily = 'arial';
         this.infoPanel.style.fontSize = '10pt';
+        this.infoPanel.style.textAlign = 'left';
 
         const layout = [
             ['Camera position', 'cameraPosition'],
