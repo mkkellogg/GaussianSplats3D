@@ -667,6 +667,7 @@ export class Viewer {
     updateFocusMarker = function() {
 
         const renderDimensions = new THREE.Vector2();
+        let wasTransitioning = false;
 
         return function(timeDelta) {
             this.getRenderDimensions(renderDimensions);
@@ -678,11 +679,15 @@ export class Viewer {
                 let newFocusMarkerOpacity = Math.min(currentFocusMarkerOpacity + fadeInSpeed * timeDelta, 1.0);
                 this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
                 this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
+                wasTransitioning = true;
             } else {
-                const currentFocusMarkerOpacity = Math.min(this.sceneHelper.getFocusMarkerOpacity(), 1.0);
+                let currentFocusMarkerOpacity;
+                if (wasTransitioning) currentFocusMarkerOpacity = 1.0;
+                else currentFocusMarkerOpacity = Math.min(this.sceneHelper.getFocusMarkerOpacity(), 1.0);
                 let newFocusMarkerOpacity = Math.max(currentFocusMarkerOpacity - fadeOutSpeed * timeDelta, 0.0);
                 this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
                 if (newFocusMarkerOpacity === 0.0) this.sceneHelper.setFocusMarkerVisibility(false);
+                wasTransitioning = false;
             }
         };
 
