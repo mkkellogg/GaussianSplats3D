@@ -205,3 +205,9 @@ Keyboard
 - `C` Toggles the mesh cursor, which shows where a ray projected from the mouse cursor intersects the splat mesh
 
 - `I` Toggles an info panel that displays the mesh cursor position, current FPS, and current window size
+
+- `P` Toggles a debug object that shows the orientation of the camera controls. It includes a green arrow representing the camera's orbital axis and a white square representing the plane at which the camera's elevation angle is 0.
+
+- `Left arrow` Rotate the camera's up vector counter-clockwise
+
+- `Right arrow` Rotate the camera's up vector clockwise
