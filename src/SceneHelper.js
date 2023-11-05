@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ArrowHelper } from './ArrowHelper.js';
 
 export class SceneHelper {
 
@@ -7,6 +8,7 @@ export class SceneHelper {
         this.simpleScene = simpleScene;
         this.meshCursor = null;
         this.focusMarker = null;
+        this.controlPlane = null;
     }
 
     setupMeshCursor() {
@@ -104,6 +106,47 @@ export class SceneHelper {
     getFocusMarkerOpacity() {
         return this.focusMarker.material.uniforms.opacity.value;
     }
+
+    setupControlPlane() {
+        const planeGeometry = new THREE.PlaneGeometry(1, 1);
+        planeGeometry.rotateX(-Math.PI / 2);
+        const planeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
+        planeMaterial.transparent = true;
+        planeMaterial.opacity = 0.6;
+        planeMaterial.depthTest = false;
+        planeMaterial.depthWrite = false;
+        planeMaterial.side = THREE.DoubleSide;
+        const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+
+        const arrowDir = new THREE.Vector3(0, 1, 0);
+        arrowDir.normalize();
+        const arrowOrigin = new THREE.Vector3(0, 0, 0);
+        const arrowLength = 0.5;
+        const arrowRadius = 0.01;
+        const arrowColor = 0x00dd00;
+        const arrowHelper = new ArrowHelper(arrowDir, arrowOrigin, arrowLength, arrowRadius, arrowColor, 0.1, 0.03);
+
+        this.controlPlane = new THREE.Object3D();
+        this.controlPlane.add(planeMesh);
+        this.controlPlane.add(arrowHelper);
+    }
+
+    setControlPlaneVisibility(visible) {
+        this.controlPlane.visible = visible;
+    }
+
+    positionAndOrientControlPlane = function() {
+
+        const tempQuaternion = new THREE.Quaternion();
+        const defaultUp = new THREE.Vector3(0, 1, 0);
+
+        return function(position, up) {
+            tempQuaternion.setFromUnitVectors(defaultUp, up);
+            this.controlPlane.position.copy(position);
+            this.controlPlane.quaternion.copy(tempQuaternion);
+        };
+
+    }();
 
     addDebugMeshes() {
         this.debugRoot = this.createDebugMeshes();

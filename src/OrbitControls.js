@@ -74,7 +74,7 @@ class OrbitControls extends EventDispatcher {
         this.rotateSpeed = 1.0;
 
         // Set to false to disable panning
-        this.enablePan = true;
+        this.enablePan = false;
         this.panSpeed = 1.0;
         this.screenSpacePanning = true; // if false, pan orthogonal to world-space direction camera.up
         this.keyPanSpeed = 7.0; // pixels moved per arrow key push
@@ -177,6 +177,9 @@ class OrbitControls extends EventDispatcher {
             const twoPI = 2 * Math.PI;
 
             return function update() {
+
+                quat.setFromUnitVectors( object.up, new Vector3( 0, 1, 0 ) );
+                quatInverse.copy(quat).invert();
 
                 const position = scope.object.position;
 

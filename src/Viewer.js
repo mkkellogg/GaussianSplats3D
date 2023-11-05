@@ -42,7 +42,9 @@ export class Viewer {
 
         this.selfDrivenMode = params.selfDrivenMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
+
         this.showMeshCursor = false;
+        this.showControlPlane = false;
         this.showInfo = false;
 
         this.sceneHelper = null;
@@ -82,21 +84,42 @@ export class Viewer {
         this.loadingSpinner.hide();
     }
 
-    onKeyDown(e) {
-        switch (e.code) {
-            case 'KeyC':
-                this.showMeshCursor = !this.showMeshCursor;
-            break;
-            case 'KeyI':
-                this.showInfo = !this.showInfo;
-                if (this.showInfo) {
-                    this.infoPanel.style.display = 'block';
-                } else {
-                    this.infoPanel.style.display = 'none';
-                }
-            break;
-        }
-    }
+    onKeyDown = function() {
+
+        const forward = new THREE.Vector3();
+        const tempMatrixLeft = new THREE.Matrix4();
+        const tempMatrixRight = new THREE.Matrix4();
+
+        return function(e) {
+            forward.set(0, 0, -1);
+            forward.transformDirection(this.camera.matrixWorld);
+            tempMatrixLeft.makeRotationAxis(forward, Math.PI / 128);
+            tempMatrixRight.makeRotationAxis(forward, -Math.PI / 128);
+            switch (e.code) {
+                case 'ArrowLeft':
+                    this.camera.up.transformDirection(tempMatrixLeft);
+                break;
+                case 'ArrowRight':
+                    this.camera.up.transformDirection(tempMatrixRight);
+                break;
+                case 'KeyC':
+                    this.showMeshCursor = !this.showMeshCursor;
+                break;
+                case 'KeyP':
+                    this.showControlPlane = !this.showControlPlane;
+                break;
+                case 'KeyI':
+                    this.showInfo = !this.showInfo;
+                    if (this.showInfo) {
+                        this.infoPanel.style.display = 'block';
+                    } else {
+                        this.infoPanel.style.display = 'none';
+                    }
+                break;
+            }
+        };
+
+    }();
 
     onMouseMove(mouse) {
         this.mousePosition.set(mouse.offsetX, mouse.offsetY);
@@ -167,6 +190,7 @@ export class Viewer {
         this.sceneHelper = new SceneHelper(this.scene, this.simpleScene);
         this.sceneHelper.setupMeshCursor();
         this.sceneHelper.setupFocusMarker();
+        this.sceneHelper.setupControlPlane();
 
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
@@ -219,6 +243,7 @@ export class Viewer {
         const layout = [
             ['Camera position', 'cameraPosition'],
             ['Camera look-at', 'cameraLookAt'],
+            ['Camera up', 'cameraUp'],
             ['Cursor position', 'cursorPosition'],
             ['FPS', 'fps'],
             ['Render window', 'renderWindow'],
@@ -618,10 +643,11 @@ export class Viewer {
         this.updateView();
         this.updateForRendererSizeChanges();
 
-        this.rayCastScene();
+        this.updateMeshCursor();
         this.updateFPS();
         this.timingSensitiveUpdates();
         this.updateInfo();
+        this.updateControlPlane();
     }
 
     timingSensitiveUpdates = function() {
@@ -697,7 +723,7 @@ export class Viewer {
 
     }();
 
-    rayCastScene = function() {
+    updateMeshCursor = function() {
 
         const outHits = [];
         const renderDimensions = new THREE.Vector2();
@@ -738,6 +764,10 @@ export class Viewer {
                 const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
                 this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
 
+                const cameraUp = this.camera.up;
+                const cameraUpString = `[${cameraUp.x.toFixed(5)}, ${cameraUp.y.toFixed(5)}, ${cameraUp.z.toFixed(5)}]`;
+                this.infoPanelCells.cameraUp.innerHTML = cameraUpString;
+
                 if (this.showMeshCursor) {
                     const cursorPos = this.sceneHelper.meshCursor.position;
                     const cursorPosString = `[${cursorPos.x.toFixed(5)}, ${cursorPos.y.toFixed(5)}, ${cursorPos.z.toFixed(5)}]`;
@@ -758,6 +788,15 @@ export class Viewer {
         };
 
     }();
+
+    updateControlPlane() {
+        if (this.showControlPlane) {
+            this.sceneHelper.setControlPlaneVisibility(true);
+            this.sceneHelper.positionAndOrientControlPlane(this.controls.target, this.camera.up);
+        } else {
+            this.sceneHelper.setControlPlaneVisibility(false);
+        }
+    }
 
     render = function() {
 
@@ -782,6 +821,7 @@ export class Viewer {
             }
             this.renderer.render(this.splatMesh, this.camera);
             if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
+            if (this.showControlPlane) this.renderer.render(this.sceneHelper.controlPlane, this.camera);
             this.renderer.autoClear = savedAuoClear;
         };
 
