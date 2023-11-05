@@ -34,9 +34,17 @@ Mouse
 - Right click and drag to pan the camera and focal point
   
 Keyboard
-- `C` Toggles the mesh cursor, which shows where a ray projected from the mouse cursor intersects the splat mesh
+- `C` Toggles the mesh cursor, showing the intersection point of a mouse-projected ray and the splat mesh
 
-- `I` Toggles an info panel that displays the mesh cursor position, current FPS, and current window size
+- `I` Toggles an info panel that displays debugging info:
+  - Camera position
+  - Camera focal point/look-at point
+  - Camera up vector
+  - Mesh cursor position
+  - Current FPS
+  - Renderer window size
+  - Ratio of rendered splats to total splats
+  - Last splat sort duration
 
 - `P` Toggles a debug object that shows the orientation of the camera controls. It includes a green arrow representing the camera's orbital axis and a white square representing the plane at which the camera's elevation angle is 0.
 
@@ -69,7 +77,9 @@ The demo will be accessible locally at [http://127.0.0.1:8080/index.html](http:/
 ```
 The demo scene data is available here: [https://projects.markkellogg.org/downloads/gaussian_splat_data.zip](https://projects.markkellogg.org/downloads/gaussian_splat_data.zip)
 <br>
-## Usage
+<br>
+
+## Basic Usage
 
 To run the built-in viewer:
 
