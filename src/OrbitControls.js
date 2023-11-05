@@ -74,7 +74,7 @@ class OrbitControls extends EventDispatcher {
         this.rotateSpeed = 1.0;
 
         // Set to false to disable panning
-        this.enablePan = false;
+        this.enablePan = true;
         this.panSpeed = 1.0;
         this.screenSpacePanning = true; // if false, pan orthogonal to world-space direction camera.up
         this.keyPanSpeed = 7.0; // pixels moved per arrow key push
@@ -126,7 +126,7 @@ class OrbitControls extends EventDispatcher {
 
         this.listenToKeyEvents = function( domElement ) {
 
-            domElement.addEventListener( 'keydown', onKeyDown );
+            //domElement.addEventListener( 'keydown', onKeyDown );
             this._domElementKeyEvents = domElement;
 
         };
