@@ -66,14 +66,15 @@ export class Raycaster {
         const tempScale = new THREE.Vector3();
         const tempRotation = new THREE.Quaternion();
         const tempHit = new Hit();
+        const scaleEpsilon = 0.0000001;
 
         // Used for raycasting against splat ellipsoid
         /*
-        const origin = new THREE.Vector3();
+        const origin = new THREE.Vector3(0, 0, 0);
         const tempRotationMatrix = new THREE.Matrix4();
         const tempScaleMatrix = new THREE.Matrix4();
-        const tempMatrix = new THREE.Matrix4();
-        const tempMatrix3 = new THREE.Matrix3();
+        const toSphereSpace = new THREE.Matrix4();
+        const fromSphereSpace = new THREE.Matrix4();
         const tempRay = new Ray();
         */
 
@@ -88,8 +89,12 @@ export class Raycaster {
                     splatTree.splatBuffer.getRotation(splatIndex, tempRotation);
                     splatTree.splatBuffer.getScale(splatIndex, tempScale);
 
+                    if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
+                        continue;
+                    }
+
                     // Simple approximated sphere intersection
-                    const radius = Math.max(Math.max(tempScale.x, tempScale.y), tempScale.z);
+                    const radius = (tempScale.x + tempScale.y + tempScale.z) / 3;
                     if (ray.intersectSphere(tempPosition, radius, tempHit)) {
                         outHits.push(tempHit.clone());
                     }
@@ -99,14 +104,13 @@ export class Raycaster {
                     /*
                     tempScaleMatrix.makeScale(tempScale.x, tempScale.y, tempScale.z);
                     tempRotationMatrix.makeRotationFromQuaternion(tempRotation);
-                    tempMatrix.copy(tempScaleMatrix).premultiply(tempRotationMatrix).invert();
-                    tempMatrix3.setFromMatrix4(tempMatrix);
-                    tempRay.origin.copy(this.ray.origin).sub(tempPosition).applyMatrix4(tempMatrix);
-                    tempRay.direction.copy(this.ray.direction).transformDirection(tempMatrix).normalize();
+                    fromSphereSpace.copy(tempScaleMatrix).premultiply(tempRotationMatrix);
+                    toSphereSpace.copy(fromSphereSpace).invert();
+                    tempRay.origin.copy(this.ray.origin).sub(tempPosition).applyMatrix4(toSphereSpace);
+                    tempRay.direction.copy(this.ray.direction).transformDirection(toSphereSpace).normalize();
                     if (tempRay.intersectSphere(origin, 1.0, tempHit)) {
                         const hitClone = tempHit.clone();
-                        tempMatrix.invert();
-                        hitClone.origin.applyMatrix4(tempMatrix).add(tempPosition);
+                        hitClone.origin.applyMatrix4(fromSphereSpace).add(tempPosition);
                         outHits.push(hitClone);
                     }
                     */
