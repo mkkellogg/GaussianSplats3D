@@ -121,7 +121,7 @@
         margin-right: 8px;
     }
 
-    .ply-loader {
+    .loading-icon {
         width: 35px;
         padding: 15px;
         background: #324d70;
@@ -198,10 +198,9 @@
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
 
-    function convertPLY(plyBuffer, compressionLevel, alphaRemovalThreshold) {
+    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
-      const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold);
-      new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.splat');
+      return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold);
     }
 
     window.onFileChange = function(arg, fileNameLabelID) {
@@ -256,7 +255,8 @@
           setConversionCheckIconVisibility(false);
           window.setTimeout(() => {
             try {
-              convertPLY(fileReader.result, compressionLevel, alphaRemovalThreshold);
+              const splatBuffer = convertPLYToSplatBuffer(fileReader.result, compressionLevel, alphaRemovalThreshold);
+              new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.splat');
               conversionDone();
             } catch (e) {
               conversionDone(e);
@@ -285,7 +285,7 @@
     }
 
     function setConversionLoadingIconVisibility(visible) {
-      document.getElementById('loading-icon').style.display = visible ? 'block' : 'none';
+      document.getElementById('conversion-loading-icon').style.display = visible ? 'block' : 'none';
     }
 
     function setConversionCheckIconVisibility(visible) {
@@ -308,7 +308,7 @@
       if (!viewFile.files[0]) {
         setViewError("Please choose a file to view.");
         return;
-      } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
+      } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold < 0 || alphaRemovalThreshold > 255) {
         setViewError("Invalid alpha remval threshold.");
         return;
       }
@@ -327,6 +327,9 @@
         setViewError("Camera look-at must contain 3 elements.");
         return;
       }
+
+      const viewFileName = viewFile.files[0].name;
+      const isPly = viewFileName.toLowerCase().trim().endsWith('.ply');
 
       for (let i = 0; i < 3; i++) {
         cameraUpArray[i] = parseFloat(cameraUpArray[i]);
@@ -356,12 +359,13 @@
       try {
         const fileReader = new FileReader();
         fileReader.onload = function(){
-          document.getElementById("table-of-contents-container").style.display = 'none';
-          document.body.style.backgroundColor = "#000000";
-          history.pushState("ViewSplat", null);
-          runViewer(fileReader.result, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+          try {
+           runViewer(fileReader.result, isPly, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+          } catch (e) {
+            setViewError("Could not view .SPLAT file");
+          }
         }
-        setViewStatus("Loading .SPLAT...");
+        setViewStatus("Loading scene...");
         fileReader.readAsArrayBuffer(viewFile.files[0]);
       } catch (e) {
         console.error(e);
@@ -370,15 +374,21 @@
     }
 
     function setViewError(msg) {
+      setViewLoadingIconVisibility(false);
       document.getElementById("viewStatus").innerHTML = "";
       document.getElementById("viewError").innerHTML = msg;
     }
 
     function setViewStatus(msg) {
+      setViewLoadingIconVisibility(true);
       document.getElementById("viewError").innerHTML = "";
       document.getElementById("viewStatus").innerHTML = msg;
     }
 
+    function setViewLoadingIconVisibility(visible) {
+      document.getElementById('view-loading-icon').style.display = visible ? 'block' : 'none';
+    }
+  
     window.addEventListener("popstate", (event) => {
       if (currentAlphaRemovalThreshold !== undefined) {
         window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray;
@@ -387,17 +397,28 @@
       }
     });
 
-    function runViewer(splatBufferData, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
-      const splatBuffer = new GaussianSplats3D.SplatBuffer(splatBufferData);
-      const viewer = new GaussianSplats3D.Viewer({
+    function runViewer(splatBufferData, isPly, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
+      const viewerOptions = {
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
         'initialCameraLookAt': cameraLookAtArray
-      });
-      viewer.loadSplatBuffer(splatBuffer, {
+      };
+      const sceneOptions = {
         'halfPrecisionCovariancesOnGPU': true,
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
-      })
+      };
+      let splatBuffer;
+      if (isPly) {
+        splatBuffer = convertPLYToSplatBuffer(splatBufferData, 0, alphaRemovalThreshold);
+      } else {
+        splatBuffer = new GaussianSplats3D.SplatBuffer(splatBufferData);
+      }
+
+      document.getElementById("table-of-contents-container").style.display = 'none';
+      document.body.style.backgroundColor = "#000000";
+      history.pushState("ViewSplat", null);
+      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+      viewer.loadSplatBuffer(splatBuffer, sceneOptions)
       .then(() => {
           viewer.start();
       });
@@ -418,7 +439,7 @@
   <div id="table-of-contents-container" class="table-of-contents-container">
     <div class="table-of-contents-inner-container">
         <br>
-        <span class="title">View demo scene</span>
+        <span class="title">Demo scenes</span>
         <br>
         <div class="table-of-contents-row">
             <div class="table-of-contents-entry" onclick="openDemo('garden')">
@@ -437,68 +458,10 @@
         <br>
         <br>
         <div class="table-of-contents-row">
-            <div id ="conversion-panel" class="splat-panel">
-                <br>
-                <span style="font-weight: bold">Convert your own .PLY to .SPLAT</span>
-                <br>
-                <br>
-                <table style="text-align: left;">
-                    <tr>
-                    <td colspan="2">
-                        <label for="conversionFile">
-                        <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
-                        <input type="file" id="conversionFile" style="display:none" onchange="window.onFileChange(this, 'conversionFileName')">
-                        </label>
-                        <span id="conversionFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
-                    </td>
-                    </tr>
-                    <tr>
-                    <td colspan="2" style="height: 10px;"></td>
-                    </tr>
-                    <tr>
-                    <td>
-                        Compression level:
-                    </td>
-                    <td>
-                        <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1"></input>
-                    </td>
-                    </tr>
-                    <tr>
-                    <td>
-                        Alpha removal threshold:&nbsp;
-                    </td>
-                    <td>
-                        <input id="alphaRemovalThreshold" type="text" class="text-input" style="width: 50px" value="1"></input>
-                    </td>
-                    </tr>
-                </table>
-                <br>
-                <span id="convertButton" class="button" onclick="window.convertPlyFile()">Convert</span>
-                <br>
-                <br>
-                <div style="text-align: center;">
-                <div style="display: flex; flex-direction: row; width: 230px; margin: auto;">
-                    <div style="width: 50px;">
-                    <div id="loading-icon" class="ply-loader" style="display: none;">
-                    </div>
-                    <div id="check-icon" class="check" style="display: none;">
-                        <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" height="35px" width="35px" version="1.1" id="Capa_1" viewBox="0 0 17.837 17.837" xml:space="preserve" style="background:#ffffff00;">
-                        <g>
-                            <path style="fill:#00790a;" d="M16.145,2.571c-0.272-0.273-0.718-0.273-0.99,0L6.92,10.804l-4.241-4.27   c-0.272-0.274-0.715-0.274-0.989,0L0.204,8.019c-0.272,0.271-0.272,0.717,0,0.99l6.217,6.258c0.272,0.271,0.715,0.271,0.99,0   L17.63,5.047c0.276-0.273,0.276-0.72,0-0.994L16.145,2.571z"/>
-                        </g>
-                        </svg>
-                    </div>
-                    </div>
-                    <div id="conversionStatus" style="text-align: left; color: #333333; margin-top: 7px; margin-left: 15px; width: 175px"></div>
-                </div>
-                </div>
-                <span id="conversionError" style="color: #ff0000"></span>
-                <br>
-            </div>
 
-            <div id ="view-panel" class="splat-panel">
+            <div id ="view-panel" class="splat-panel" style="height:300px;">
                 <br>
-                <span style="font-weight: bold">View a .SPLAT file</span>
+                <span style="font-weight: bold">View a .PLY or .SPLAT file</span>
                 <br>
                 <br>
                 <table style="text-align: left;">
@@ -516,10 +479,11 @@
                     </tr>
                     <tr>
                     <td>
-                        Alpha removal threshold:&nbsp;
+                        Minimum alpha:&nbsp;
                     </td>
                     <td>
                         <input id="alphaRemovalThresholdView" type="text" class="text-input" style="width: 50px" value="1"></input>
+                        <span style="color:#888888">(1 - 255)</span>
                     </td>
                     </tr>
                     <tr>
@@ -553,8 +517,75 @@
                 <span class="button" onclick="reset()">Reset</span>
                 <br>
                 <br>
-                <span id="viewStatus" style="color: #333333"></span>
+                <div style="display: flex; flex-direction: row; width: 230px; margin: auto;">
+                    <div style="width: 50px;">
+                        <div id="view-loading-icon" class="loading-icon" style="display: none;">
+                        </div>
+                    </div>
+                    <div id="viewStatus" style="text-align: left; color: #333333; margin-top: 7px; margin-left: 15px; width: 175px"></div>
+                </div>
                 <span id="viewError" style="color: #ff0000"></span>
+                <br>
+            </div>
+      
+            <div id ="conversion-panel" class="splat-panel">
+                <br>
+                <span style="font-weight: bold">Convert your own .PLY to .SPLAT</span>
+                <br>
+                <br>
+                <table style="text-align: left;">
+                    <tr>
+                    <td colspan="2">
+                        <label for="conversionFile">
+                        <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
+                        <input type="file" id="conversionFile" style="display:none" onchange="window.onFileChange(this, 'conversionFileName')">
+                        </label>
+                        <span id="conversionFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
+                    </td>
+                    </tr>
+                    <tr>
+                    <td colspan="2" style="height: 10px;"></td>
+                    </tr>
+                    <tr>
+                    <td>
+                        Compression level:
+                    </td>
+                    <td>
+                        <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1"></input>
+                        <span style="color:#888888">(0 or 1)</span>
+                    </td>
+                    </tr>
+                    <tr>
+                    <td>
+                        Minimum alpha:&nbsp;
+                    </td>
+                    <td>
+                        <input id="alphaRemovalThreshold" type="text" class="text-input" style="width: 50px" value="1"></input>
+                        <span style="color:#888888">(1 - 255)</span>
+                    </td>
+                    </tr>
+                </table>
+                <br>
+                <span id="convertButton" class="button" onclick="window.convertPlyFile()">Convert</span>
+                <br>
+                <br>
+                <div style="text-align: center;">
+                <div style="display: flex; flex-direction: row; width: 230px; margin: auto;">
+                    <div style="width: 50px;">
+                        <div id="conversion-loading-icon" class="loading-icon" style="display: none;">
+                        </div>
+                        <div id="check-icon" class="check" style="display: none;">
+                            <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" height="35px" width="35px" version="1.1" id="Capa_1" viewBox="0 0 17.837 17.837" xml:space="preserve" style="background:#ffffff00;">
+                            <g>
+                                <path style="fill:#00790a;" d="M16.145,2.571c-0.272-0.273-0.718-0.273-0.99,0L6.92,10.804l-4.241-4.27   c-0.272-0.274-0.715-0.274-0.989,0L0.204,8.019c-0.272,0.271-0.272,0.717,0,0.99l6.217,6.258c0.272,0.271,0.715,0.271,0.99,0   L17.63,5.047c0.276-0.273,0.276-0.72,0-0.994L16.145,2.571z"/>
+                            </g>
+                            </svg>
+                        </div>
+                    </div>
+                    <div id="conversionStatus" style="text-align: left; color: #333333; margin-top: 7px; margin-left: 15px; width: 175px"></div>
+                </div>
+                </div>
+                <span id="conversionError" style="color: #ff0000"></span>
                 <br>
             </div>
 
