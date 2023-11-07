@@ -90,7 +90,6 @@ const viewer = new GaussianSplats3D.Viewer({
     'initialCameraLookAt': [0, 4, 0],
     'ignoreDevicePixelRatio': false
 });
-viewer.init();
 viewer.loadFile('<path to .ply or .splat file>', {
     'splatAlphaRemovalThreshold': 5, // out of 255
     'halfPrecisionCovariancesOnGPU': true
@@ -114,7 +113,6 @@ const viewer = new GaussianSplats3D.Viewer({
 });
 const orientation = new THREE.Quaternion();
 orientation.setFromUnitVectors(new THREE.Vector3(0, -1, -0.6).normalize(), new THREE.Vector3(0, 1, 0));
-viewer.init();
 viewer.loadFile('<path to .ply or .splat file>', {
     'splatAlphaRemovalThreshold': 5, // out of 255
     'halfPrecisionCovariancesOnGPU': true,
@@ -169,7 +167,6 @@ const viewer = new GaussianSplats3D.Viewer({
     'initialCameraPosition': [-1, -4, 6],
     'initialCameraLookAt': [0, 4, -0]
 });
-viewer.init();
 viewer.loadFile('<path to .ply or .splat file>')
 .then(() => {
     viewer.start();
@@ -207,7 +204,6 @@ const viewer = new GaussianSplats3D.Viewer({
     'camera': camera,
     'useBuiltInControls': false
 });
-viewer.init();
 viewer.loadFile('<path to .ply or .splat file>')
 .then(() => {
     requestAnimationFrame(update);

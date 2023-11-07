@@ -78,6 +78,79 @@ export class Viewer {
 
         this.loadingSpinner = new LoadingSpinner();
         this.loadingSpinner.hide();
+
+        this.initialized = false;
+        this.init();
+    }
+
+    init() {
+
+        if (this.initialized) return;
+
+        if (!this.rootElement && !this.usingExternalRenderer) {
+            this.rootElement = document.createElement('div');
+            this.rootElement.style.width = '100%';
+            this.rootElement.style.height = '100%';
+            document.body.appendChild(this.rootElement);
+        }
+
+        const renderDimensions = new THREE.Vector2();
+        this.getRenderDimensions(renderDimensions);
+
+        if (!this.usingExternalCamera) {
+            this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
+            this.camera.position.copy(this.initialCameraPosition);
+            this.camera.lookAt(this.initialCameraLookAt);
+            this.camera.up.copy(this.cameraUp).normalize();
+        }
+
+        this.scene = this.scene || new THREE.Scene();
+        this.simpleScene = this.simpleScene || new THREE.Scene();
+        this.sceneHelper = new SceneHelper(this.scene, this.simpleScene);
+        this.sceneHelper.setupMeshCursor();
+        this.sceneHelper.setupFocusMarker();
+        this.sceneHelper.setupControlPlane();
+
+        if (!this.usingExternalRenderer) {
+            this.renderer = new THREE.WebGLRenderer({
+                antialias: false,
+                precision: 'highp'
+            });
+            this.renderer.setPixelRatio(this.devicePixelRatio);
+            this.renderer.autoClear = true;
+            this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
+            this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+        }
+        this.setupRenderTargetCopyObjects();
+
+        if (this.useBuiltInControls) {
+            this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+            this.controls.listenToKeyEvents(window);
+            this.controls.rotateSpeed = 0.5;
+            this.controls.maxPolarAngle = Math.PI * .75;
+            this.controls.minPolarAngle = 0.1;
+            this.controls.enableDamping = true;
+            this.controls.dampingFactor = 0.05;
+            this.controls.target.copy(this.initialCameraLookAt);
+            this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
+            this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
+            this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
+            window.addEventListener('keydown', this.onKeyDown.bind(this), false);
+        }
+
+        if (!this.usingExternalRenderer) {
+            const resizeObserver = new ResizeObserver(() => {
+                this.getRenderDimensions(renderDimensions);
+                this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+            });
+            resizeObserver.observe(this.rootElement);
+            this.rootElement.appendChild(this.renderer.domElement);
+        }
+
+        this.setupSimpleObjectDepthOverrideMaterial();
+        this.setupInfoPanel();
+
+        this.initialized = true;
     }
 
     onKeyDown = function() {
@@ -160,73 +233,6 @@ export class Viewer {
         } else {
             this.renderer.getSize(outDimensions);
         }
-    }
-
-    init() {
-
-        if (!this.rootElement && !this.usingExternalRenderer) {
-            this.rootElement = document.createElement('div');
-            this.rootElement.style.width = '100%';
-            this.rootElement.style.height = '100%';
-            document.body.appendChild(this.rootElement);
-        }
-
-        const renderDimensions = new THREE.Vector2();
-        this.getRenderDimensions(renderDimensions);
-
-        if (!this.usingExternalCamera) {
-            this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
-            this.camera.position.copy(this.initialCameraPosition);
-            this.camera.lookAt(this.initialCameraLookAt);
-            this.camera.up.copy(this.cameraUp).normalize();
-        }
-
-        this.scene = this.scene || new THREE.Scene();
-        this.simpleScene = this.simpleScene || new THREE.Scene();
-        this.sceneHelper = new SceneHelper(this.scene, this.simpleScene);
-        this.sceneHelper.setupMeshCursor();
-        this.sceneHelper.setupFocusMarker();
-        this.sceneHelper.setupControlPlane();
-
-        if (!this.usingExternalRenderer) {
-            this.renderer = new THREE.WebGLRenderer({
-                antialias: false,
-                precision: 'highp'
-            });
-            this.renderer.setPixelRatio(this.devicePixelRatio);
-            this.renderer.autoClear = true;
-            this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
-            this.renderer.setSize(renderDimensions.x, renderDimensions.y);
-        }
-        this.setupRenderTargetCopyObjects();
-
-        if (this.useBuiltInControls) {
-            this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-            this.controls.listenToKeyEvents(window);
-            this.controls.rotateSpeed = 0.5;
-            this.controls.maxPolarAngle = Math.PI * .75;
-            this.controls.minPolarAngle = 0.1;
-            this.controls.enableDamping = true;
-            this.controls.dampingFactor = 0.05;
-            this.controls.target.copy(this.initialCameraLookAt);
-            this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
-            this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
-            this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
-            window.addEventListener('keydown', this.onKeyDown.bind(this), false);
-        }
-
-        if (!this.usingExternalRenderer) {
-            const resizeObserver = new ResizeObserver(() => {
-                this.getRenderDimensions(renderDimensions);
-                this.renderer.setSize(renderDimensions.x, renderDimensions.y);
-            });
-            resizeObserver.observe(this.rootElement);
-            this.rootElement.appendChild(this.renderer.domElement);
-        }
-
-        this.setupSimpleObjectDepthOverrideMaterial();
-        this.setupInfoPanel();
-
     }
 
     setupInfoPanel() {

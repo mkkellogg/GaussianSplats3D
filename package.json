@@ -41,9 +41,10 @@
         "three",
         "threejs",
         "three.js",
-        "splat",
+        "splatting",
         "3D",
-        "gaussian"
+        "gaussian",
+        "webgl"
     ],
     "devDependencies": {
         "@babel/core": "7.22.0",
