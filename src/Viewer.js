@@ -75,10 +75,6 @@ export class Viewer {
         this.mousePosition = new THREE.Vector2();
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
-        window.addEventListener('mousemove', this.onMouseMove.bind(this));
-        window.addEventListener('mousedown', this.onMouseDown.bind(this));
-        window.addEventListener('mouseup', this.onMouseUp.bind(this));
-        window.addEventListener('keydown', this.onKeyDown.bind(this));
 
         this.loadingSpinner = new LoadingSpinner();
         this.loadingSpinner.hide();
@@ -206,12 +202,17 @@ export class Viewer {
 
         if (this.useBuiltInControls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+            this.controls.listenToKeyEvents(window);
             this.controls.rotateSpeed = 0.5;
             this.controls.maxPolarAngle = Math.PI * .75;
             this.controls.minPolarAngle = 0.1;
             this.controls.enableDamping = true;
             this.controls.dampingFactor = 0.05;
             this.controls.target.copy(this.initialCameraLookAt);
+            this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
+            this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
+            this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
+            window.addEventListener('keydown', this.onKeyDown.bind(this), false);
         }
 
         if (!this.usingExternalRenderer) {
