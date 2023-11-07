@@ -9,76 +9,93 @@
   <style>
 
     body {
-      background-color: #a3b0be;
+      background-color: #CCD5DE;
       height: 100vh;
       margin: 0px;
     }
 
-    .title {
-      font-family: arial;
-      font-size: 14pt;
-      font-weight: bold;
+    a {
+      text-decoration: none;
+      color: #3333CC;
     }
 
-    .table-of-contents-container {
-      height: 100%;
-      width: 100%;
-      text-align: center;
-      margin: auto;
+    a:hover {
+      text-decoration: underline;
+      color: #1111AA;
     }
 
-    .table-of-contents-inner-container {
-      text-align: center;
-      margin: 0;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 1175px;
-      border-radius: 5px;
-      border: #a8b0bd 1px solid;
+    .demo-content {
+      display: block;
+      margin: 10px;
+    }
+
+    .header-content-container {
       background-color: #e7e9eb;
-      box-shadow: 5px 5px 10px #888888;
+      border-radius: 7px;
+      -moz-box-shadow: 0px 2px 10px -1px rgb(0 0 0 / 39%);
+      -webkit-box-shadow: 0px 2px 10px -1px rgb(0 0 0 / 39%);
+      box-shadow: 0px 2px 10px -1px rgb(0 0 0 / 39%);
+      max-width: 1065px;
+      min-width: 350px;
+      margin: auto;
+      font-family: "PT Sans", Arial, serif;
+      font-size: 12pt;
     }
 
-    .table-of-contents-row {
-      padding-left: 20px;
-      padding-right: 20px;
+    .title {
+      display: flex;
+      text-align: center;
+      padding: 10px;
+      -moz-box-shadow: 0 5px 10px -5px #aaa;
+      -webkit-box-shadow: 0 5px 10px -5px #aaa;
+      box-shadow: 0 5px 10px -5px #aaa;
+      margin-bottom: 15px;
+      font-family: "PT Sans", Arial, serif;
+      font-size: 15pt;
+      color: #111111;
+    }
+
+    .small-title {
+      font-family: "PT Sans", Arial, serif;
+      font-size: 12pt;
+      font-weight: bold;
+      color: #333333;
+    }
+
+    .content-row {
+      padding-left: 10px;
+      padding-right: 10px;
       padding-top: 10px;
       padding-bottom: 10px;
       display: flex;
       flex-direction: row;
-      flex-wrap:wrap;
+      flex-wrap: wrap;
       text-align: center;
     }
 
-    .table-of-contents-entry {
+    .demo-scene-panel {
       margin-top: 10px;
       margin-bottom: 10px;
       padding: 10px;
       color: #111111;
-      font-size: 14pt;
-      font-weight: bold;
-      font-family: arial;
-      border-radius: 10px;
+      border-radius: 7px;
       border: #bbbbbb 1px solid;
       background-color: #f1f1f1;
-      width: 340px;
+      width: 310px;
       margin-left: 8px;
       margin-right: 8px;
     }
 
-    .table-of-contents-entry:hover {
+    .demo-scene-panel:hover {
       color: #333333;
       border-color: #8a9ba8;
       background-color: #e4edfc;
       cursor: pointer;
     }
 
-    .table-of-contents-entry-image {
-      width: 330px;
-      height: 250px;
-      border-radius: 8px;
+    .demo-scene-panel-image {
+      width: 95%;
+      border-radius: 5px;
       margin-bottom: 10px;
     }
 
@@ -106,19 +123,19 @@
     }
 
     .splat-panel {
-        margin-top: 10px;
-        margin-bottom: 10px;
-        padding: 10px;
-        color: #111111;
-        font-size: 12pt;
-        font-family: arial;
-        border-radius: 10px;
-        border: #bbbbbb 1px solid;
-        background-color: #f1f1f1;
-        width: 340px;
-        height: 280px;
-        margin-left: 8px;
-        margin-right: 8px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      padding: 10px;
+      color: #111111;
+      font-size: 12pt;
+      font-family: "PT Sans", Arial, serif;
+      border-radius: 7px;
+      border: #bbbbbb 1px solid;
+      background-color: #f1f1f1;
+      width: 310px;
+      height: 280px;
+      margin-left: 8px;
+      margin-right: 8px;
     }
 
     .loading-icon {
@@ -151,32 +168,47 @@
         padding-left: 10px;
     }
 
+    .file-ext {
+        border: #bababa 1px solid;
+        border-radius: 3px;
+        background-color: #e6e6e6;
+        padding-left: 5px;
+        padding-right: 5px;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        margin-left: 3px;
+        margin-right: 3px;
+    }
+
     @keyframes ply-load {
         to{transform: rotate(1turn)}
     }
 
-    @media (max-width: 1100px){
+    @media (max-width: 740px){
+  
+        .demo-scene-panel {
+            width: 340px;
+        }
 
-      .table-of-contents-inner-container {
-        width: 800px;
-      }
+        .splat-panel {
+            width: 340px;
+        }
 
     }
 
-    @media (max-width: 800px){
+    @media (max-width: 370px){
+  
+        .demo-scene-panel {
+            max-width: 300px;
+        }
 
-      .table-of-contents-inner-container {
-        width: 400px;
-        top: 0%;
-        left: 50%;
-        transform: translate(-50%, 0%);
-      }
+        .splat-panel {
+            max-width: 300px;
+        }
 
-      .table-of-contents {
-        padding-left: 15px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-      }
+        .header-content-container {
+          min-width: 330px;
+        }
 
     }
 
@@ -328,9 +360,6 @@
         return;
       }
 
-      const viewFileName = viewFile.files[0].name;
-      const isPly = viewFileName.toLowerCase().trim().endsWith('.ply');
-
       for (let i = 0; i < 3; i++) {
         cameraUpArray[i] = parseFloat(cameraUpArray[i]);
         cameraPositionArray[i] = parseFloat(cameraPositionArray[i]);
@@ -352,6 +381,9 @@
         }
       }
 
+      const viewFileName = viewFile.files[0].name;
+      const isPly = viewFileName.toLowerCase().trim().endsWith('.ply');
+
       currentAlphaRemovalThreshold = alphaRemovalThreshold;
       currentCameraUpArray = cameraUpArray;
       currentCameraPositionArray = cameraPositionArray;
@@ -362,14 +394,14 @@
           try {
            runViewer(fileReader.result, isPly, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
           } catch (e) {
-            setViewError("Could not view .SPLAT file");
+            setViewError("Could not view scene.");
           }
         }
         setViewStatus("Loading scene...");
         fileReader.readAsArrayBuffer(viewFile.files[0]);
       } catch (e) {
         console.error(e);
-        setViewError("Could not view .SPLAT file");
+        setViewError("Could not view scene.");
       }
     }
 
@@ -407,6 +439,7 @@
         'halfPrecisionCovariancesOnGPU': true,
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
+
       let splatBuffer;
       if (isPly) {
         splatBuffer = convertPLYToSplatBuffer(splatBufferData, 0, alphaRemovalThreshold);
@@ -414,7 +447,7 @@
         splatBuffer = new GaussianSplats3D.SplatBuffer(splatBufferData);
       }
 
-      document.getElementById("table-of-contents-container").style.display = 'none';
+      document.getElementById("demo-content").style.display = 'none';
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
       const viewer = new GaussianSplats3D.Viewer(viewerOptions);
@@ -436,33 +469,47 @@
 </head>
 
 <body class="body">
-  <div id="table-of-contents-container" class="table-of-contents-container">
-    <div class="table-of-contents-inner-container">
-        <br>
-        <span class="title">Demo scenes</span>
-        <br>
-        <div class="table-of-contents-row">
-            <div class="table-of-contents-entry" onclick="openDemo('garden')">
-                <img src="assets/images/garden.png" class="table-of-contents-entry-image">
-                Garden
+  <div id="demo-content" class="demo-content">
+    <br>
+    <div class="header-content-container">
+      <div class="title">
+        <div style="margin: auto">
+          3D Gaussian Splatting with Three.js
+        </div>
+      </div>
+      <div style="padding-left: 20px; padding-right: 20px;">
+        This is a Three.js-based implementation of <a href="https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/">3D Gaussian Splatting for Real-Time Radiance Field Rendering</a>, a technique for the real-time visualization of real-world scenes. Their project was CUDA-based and needed to run natively on your machine. This version is viewable via the web and runs in any modern browser.
+      </div>
+      <br>
+    </div>
+    <br>
+    <div class="header-content-container">
+        <div class="title">
+          <div style="margin: auto; font-size: 14pt;">
+            Demo scenes
+          </div>
+        </div>
+        <div class="content-row">
+            <div class="demo-scene-panel" onclick="openDemo('garden')">
+                <img src="assets/images/garden.png" class="demo-scene-panel-image">
+                <span class="small-title">Garden</span>
             </div>
-            <div class="table-of-contents-entry" onclick="openDemo('truck')">
-                <img src="assets/images/truck.png" class="table-of-contents-entry-image">
-                Truck
+            <div class="demo-scene-panel" onclick="openDemo('truck')">
+                <img src="assets/images/truck.png" class="demo-scene-panel-image">
+                <span class="small-title">Truck</span>
             </div>
-            <div class="table-of-contents-entry" onclick="openDemo('stump')">
-                <img src="assets/images/stump.png" class="table-of-contents-entry-image">
-                Stump
+            <div class="demo-scene-panel" onclick="openDemo('stump')">
+                <img src="assets/images/stump.png" class="demo-scene-panel-image">
+                <span class="small-title">Stump</span>
             </div>
         </div>
-        <br>
-        <br>
-        <div class="table-of-contents-row">
-
+    </div>
+    <br>
+    <div class="header-content-container">
+        <div class="content-row">
             <div id ="view-panel" class="splat-panel" style="height:300px;">
                 <br>
-                <span style="font-weight: bold">View a .PLY or .SPLAT file</span>
-                <br>
+                <div class="small-title">View a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> file</div>
                 <br>
                 <table style="text-align: left;">
                     <tr>
@@ -525,12 +572,11 @@
                     <div id="viewStatus" style="text-align: left; color: #333333; margin-top: 7px; margin-left: 15px; width: 175px"></div>
                 </div>
                 <span id="viewError" style="color: #ff0000"></span>
-                <br>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel">
+            <div id ="conversion-panel" class="splat-panel" style="height:300px;">
                 <br>
-                <span style="font-weight: bold">Convert your own .PLY to .SPLAT</span>
+                <span class="small-title">Convert your own <span class="file-ext">.ply</span> to <span class="file-ext">.splat</span></span>
                 <br>
                 <br>
                 <table style="text-align: left;">
@@ -586,14 +632,12 @@
                 </div>
                 </div>
                 <span id="conversionError" style="color: #ff0000"></span>
-                <br>
             </div>
 
-            <div id ="controls-panel" class="splat-panel" style="height:340px;">
+            <div id ="controls-panel" class="splat-panel" style="height:360px;">
 
                 <br>
-                <span style="font-weight: bold">Mouse input</span>
-                <br>
+                <span class="small-title">Mouse input</span>
                 <div style="text-align: left;">
                     <ul>
                         <li style="margin-bottom:3px;">Left click to set the focal point</li>
@@ -601,9 +645,8 @@
                         <li style="margin-bottom:3px;">Right click and drag to pan</li>
                     </ul>
                 </div>
-                <br>
-                <span style="font-weight: bold">Keyboard input</span>
-                <br>
+                <span class="small-title">Keyboard input</span>
+                <div style="height: 10px"></div>
                 <table>
                     <tr>
                         <td><div class ="controls-key">I</div></td>
@@ -642,15 +685,10 @@
                         <td class="controls-key-description">Rotate camera-up clockwise</td>
                     </tr>
                 </table>
-                <br>
-                <br>
-                <br>
             </div>
         </div>
-        <br>
-        <br>
     </div>
-</div>
+  </div>
 </body>
 
 <script>
