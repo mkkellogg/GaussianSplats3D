@@ -11,6 +11,7 @@ import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
 
 const THREE_CAMERA_FOV = 50;
+const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 
 export class Viewer {
 
@@ -203,6 +204,7 @@ export class Viewer {
 
         const renderDimensions = new THREE.Vector2();
         const clickOffset = new THREE.Vector2();
+        const toNewFocalPoint = new THREE.Vector3();
         const outHits = [];
 
         return function(mouse) {
@@ -216,10 +218,14 @@ export class Viewer {
                 this.mousePosition.set(mouse.offsetX, mouse.offsetY);
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
-                    this.previousCameraTarget.copy(this.controls.target);
-                    this.nextCameraTarget.copy(outHits[0].origin);
-                    this.transitioningCameraTarget = true;
-                    this.transitioningCameraTargetStartTime = getCurrentTime();
+                    const intersectionPoint = outHits[0].origin;
+                    toNewFocalPoint.copy(intersectionPoint).sub(this.camera.position);
+                    if (toNewFocalPoint.length() > MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT) {
+                        this.previousCameraTarget.copy(this.controls.target);
+                        this.nextCameraTarget.copy(intersectionPoint);
+                        this.transitioningCameraTarget = true;
+                        this.transitioningCameraTargetStartTime = getCurrentTime();
+                    }
                 }
             }
         };
