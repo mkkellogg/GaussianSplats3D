@@ -3,12 +3,74 @@ import { ArrowHelper } from './ArrowHelper.js';
 
 export class SceneHelper {
 
-    constructor(scene, simpleScene) {
+    constructor(scene) {
         this.scene = scene;
-        this.simpleScene = simpleScene;
+        this.splatRenderTarget = null;
+        this.renderTargetCopyMaterial = null;
+        this.renderTargetCopyQuad = null;
+        this.renderTargetCopyCamera = null;
         this.meshCursor = null;
         this.focusMarker = null;
         this.controlPlane = null;
+    }
+
+    updateSplatRenderTargetForRenderDimensions(width, height) {
+        this.splatRenderTarget = new THREE.WebGLRenderTarget(width, height, {
+            format: THREE.RGBAFormat,
+            stencilBuffer: false,
+            depthBuffer: true,
+
+        });
+        this.splatRenderTarget.depthTexture = new THREE.DepthTexture(width, height);
+        this.splatRenderTarget.depthTexture.format = THREE.DepthFormat;
+        this.splatRenderTarget.depthTexture.type = THREE.UnsignedIntType;
+    }
+
+    setupRenderTargetCopyObjects() {
+        const uniforms = {
+            'sourceColorTexture': {
+                'type': 't',
+                'value': null
+            },
+            'sourceDepthTexture': {
+                'type': 't',
+                'value': null
+            },
+        };
+        this.renderTargetCopyMaterial = new THREE.ShaderMaterial({
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = vec4( position.xy, 0.0, 1.0 );    
+                }
+            `,
+            fragmentShader: `
+                #include <common>
+                #include <packing>
+                varying vec2 vUv;
+                uniform sampler2D sourceColorTexture;
+                uniform sampler2D sourceDepthTexture;
+                void main() {
+                    vec4 color = texture2D(sourceColorTexture, vUv);
+                    float fragDepth = texture2D(sourceDepthTexture, vUv).x;
+                    gl_FragDepth = fragDepth;
+                    gl_FragColor = vec4(color.rgb, color.a * 2.0);
+              }
+            `,
+            uniforms: uniforms,
+            depthWrite: false,
+            depthTest: false,
+            transparent: true,
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.SrcAlphaFactor,
+            blendSrcAlpha: THREE.SrcAlphaFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+            blendDstAlpha: THREE.OneMinusSrcAlphaFactor
+        });
+        this.renderTargetCopyMaterial.extensions.fragDepth = true;
+        this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
+        this.renderTargetCopyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     }
 
     setupMeshCursor() {
@@ -34,7 +96,7 @@ export class SceneHelper {
             this.meshCursor.add(leftArrow);
             this.meshCursor.add(rightArrow);
             this.meshCursor.scale.set(0.1, 0.1, 0.1);
-            this.simpleScene.add(this.meshCursor);
+            this.scene.add(this.meshCursor);
             this.meshCursor.visible = false;
         }
     }
@@ -45,7 +107,7 @@ export class SceneHelper {
                 child.geometry.dispose();
                 child.material.dispose();
             });
-            this.simpleScene.remove(this.meshCursor);
+            this.scene.remove(this.meshCursor);
             this.meshCursor = null;
         }
     }
@@ -151,8 +213,8 @@ export class SceneHelper {
     addDebugMeshes() {
         this.debugRoot = this.createDebugMeshes();
         this.secondaryDebugRoot = this.createSecondaryDebugMeshes();
-        this.simpleScene.add(this.debugRoot);
-        this.simpleScene.add(this.secondaryDebugRoot);
+        this.scene.add(this.debugRoot);
+        this.scene.add(this.secondaryDebugRoot);
     }
 
     createDebugMeshes(renderOrder) {

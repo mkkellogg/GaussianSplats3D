@@ -278,9 +278,10 @@ export class SplatMesh extends THREE.Mesh {
 
     updateLocalSplatDataFromSplatBuffer() {
         const splatCount = this.splatBuffer.getSplatCount();
-        this.covariances = new Float32Array(this.splatBuffer.getPrecomputedCovarianceBufferData());
+        this.covariances = new Float32Array(splatCount * 6);
         this.colors = new Uint8Array(splatCount * 4);
         this.centers = new Float32Array(splatCount * 3);
+        this.splatBuffer.fillCovarianceArray(this.covariances);
         this.splatBuffer.fillPositionArray(this.centers);
         this.splatBuffer.fillColorArray(this.colors);
     }
