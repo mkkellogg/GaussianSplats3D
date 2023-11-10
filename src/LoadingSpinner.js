@@ -1,7 +1,8 @@
 export class LoadingSpinner {
 
-    constructor(message) {
+    constructor(message, container) {
         this.message = message || 'Loading...';
+        this.container = container || document.body;
 
         this.spinnerDivContainer = document.createElement('div');
         this.spinnerDiv = document.createElement('div');
@@ -13,7 +14,7 @@ export class LoadingSpinner {
         this.messageDiv.innerHTML = this.message;
         this.spinnerDivContainer.appendChild(this.spinnerDiv);
         this.spinnerDivContainer.appendChild(this.messageDiv);
-        document.body.appendChild(this.spinnerDivContainer);
+        this.container.appendChild(this.spinnerDivContainer);
 
         const style = document.createElement('style');
         style.innerHTML = `
@@ -24,7 +25,7 @@ export class LoadingSpinner {
                 color: #ffffff;
                 text-align: center;
                 padding-top:15px;
-                width:180px;
+                width: 180px;
             }
 
             .loaderContainer {
@@ -60,7 +61,7 @@ export class LoadingSpinner {
             }
 
         `;
-        document.getElementsByTagName('head')[0].appendChild(style);
+        this.spinnerDivContainer.appendChild(style);
     }
 
     show() {

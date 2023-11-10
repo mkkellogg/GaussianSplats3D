@@ -32,7 +32,6 @@ export class Viewer {
         this.initialCameraLookAt = new THREE.Vector3().fromArray(params.initialCameraLookAt);
 
         this.scene = params.scene;
-        this.simpleScene = params.simpleScene;
         this.renderer = params.renderer;
         this.camera = params.camera;
         this.useBuiltInControls = params.useBuiltInControls;
@@ -77,9 +76,6 @@ export class Viewer {
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
 
-        this.loadingSpinner = new LoadingSpinner();
-        this.loadingSpinner.hide();
-
         this.initialized = false;
         this.init();
     }
@@ -105,13 +101,6 @@ export class Viewer {
             this.camera.up.copy(this.cameraUp).normalize();
         }
 
-        this.scene = this.scene || new THREE.Scene();
-        this.simpleScene = this.simpleScene || new THREE.Scene();
-        this.sceneHelper = new SceneHelper(this.scene, this.simpleScene);
-        this.sceneHelper.setupMeshCursor();
-        this.sceneHelper.setupFocusMarker();
-        this.sceneHelper.setupControlPlane();
-
         if (!this.usingExternalRenderer) {
             this.renderer = new THREE.WebGLRenderer({
                 antialias: false,
@@ -122,7 +111,12 @@ export class Viewer {
             this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
         }
-        this.setupRenderTargetCopyObjects();
+
+        this.scene = this.scene || new THREE.Scene();
+        this.sceneHelper = new SceneHelper(this.scene);
+        this.sceneHelper.setupMeshCursor();
+        this.sceneHelper.setupFocusMarker();
+        this.sceneHelper.setupControlPlane();
 
         if (this.useBuiltInControls) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -148,8 +142,10 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
-        this.setupSimpleObjectDepthOverrideMaterial();
         this.setupInfoPanel();
+
+        this.loadingSpinner = new LoadingSpinner(null, this.rootElement);
+        this.loadingSpinner.hide();
 
         this.initialized = true;
     }
@@ -299,85 +295,6 @@ export class Viewer {
         this.renderer.domElement.parentElement.prepend(this.infoPanel);
     }
 
-    updateSplatRenderTargetForRenderDimensions(width, height) {
-        this.splatRenderTarget = new THREE.WebGLRenderTarget(width, height, {
-            format: THREE.RGBAFormat,
-            stencilBuffer: false,
-            depthBuffer: true,
-
-        });
-        this.splatRenderTarget.depthTexture = new THREE.DepthTexture(width, height);
-        this.splatRenderTarget.depthTexture.format = THREE.DepthFormat;
-        this.splatRenderTarget.depthTexture.type = THREE.UnsignedIntType;
-    }
-
-    setupSimpleObjectDepthOverrideMaterial() {
-        this.simpleObjectDepthOverrideMaterial = new THREE.ShaderMaterial({
-            vertexShader: `
-                #include <common>
-                void main() {
-                    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position.xyz, 1.0);   
-                }
-            `,
-            fragmentShader: `
-                #include <common>
-                void main() {
-                    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-              }
-            `,
-            depthWrite: true,
-            depthTest: true,
-            transparent: false
-        });
-    }
-
-    setupRenderTargetCopyObjects() {
-        const uniforms = {
-            'sourceColorTexture': {
-                'type': 't',
-                'value': null
-            },
-            'sourceDepthTexture': {
-                'type': 't',
-                'value': null
-            },
-        };
-        this.renderTargetCopyMaterial = new THREE.ShaderMaterial({
-            vertexShader: `
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = vec4( position.xy, 0.0, 1.0 );    
-                }
-            `,
-            fragmentShader: `
-                #include <common>
-                #include <packing>
-                varying vec2 vUv;
-                uniform sampler2D sourceColorTexture;
-                uniform sampler2D sourceDepthTexture;
-                void main() {
-                    vec4 color = texture2D(sourceColorTexture, vUv);
-                    float fragDepth = texture2D(sourceDepthTexture, vUv).x;
-                    gl_FragDepth = fragDepth;
-                    gl_FragColor = vec4(color.rgb, color.a * 2.0);
-              }
-            `,
-            uniforms: uniforms,
-            depthWrite: false,
-            depthTest: false,
-            transparent: true,
-            blending: THREE.CustomBlending,
-            blendSrc: THREE.SrcAlphaFactor,
-            blendSrcAlpha: THREE.SrcAlphaFactor,
-            blendDst: THREE.OneMinusSrcAlphaFactor,
-            blendDstAlpha: THREE.OneMinusSrcAlphaFactor
-        });
-        this.renderTargetCopyMaterial.extensions.fragDepth = true;
-        this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
-        this.renderTargetCopyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    }
-
     updateSplatMeshUniforms = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -401,31 +318,36 @@ export class Viewer {
         if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
         options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 1;
         options.halfPrecisionCovariancesOnGPU = !!options.halfPrecisionCovariancesOnGPU;
-        this.loadingSpinner.show();
-        const loadingProgress = (percent, percentLabel) => {
-            if (percent == 100) {
-                this.loadingSpinner.setMessage(`Download complete!`);
-            } else {
-                if (percentLabel) {
-                    this.loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
+        if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
+
+        if (options.showLoadingSpinner) this.loadingSpinner.show();
+        const downloadProgress = (percent, percentLabel) => {
+            if (options.showLoadingSpinner) {
+                if (percent == 100) {
+                    this.loadingSpinner.setMessage(`Download complete!`);
                 } else {
-                    this.loadingSpinner.setMessage(`Downloading...`);
+                    const suffix = percentLabel ? `: ${percentLabel}` : `...`;
+                    this.loadingSpinner.setMessage(`Downloading${suffix}`);
                 }
             }
+            if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
         };
+
         return new Promise((resolve, reject) => {
             let fileLoadPromise;
             if (fileURL.endsWith('.splat')) {
-                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, loadingProgress);
+                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
             } else if (fileURL.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, loadingProgress);
+                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress);
             } else {
                 reject(new Error(`Viewer::loadFile -> File format not supported: ${fileURL}`));
             }
             fileLoadPromise
             .then((splatBuffer) => {
-                this.loadingSpinner.hide();
+                if (options.showLoadingSpinner) this.loadingSpinner.hide();
+                if (options.onProgress) options.onProgress(0, '0%', 'processing');
                 this.loadSplatBuffer(splatBuffer, options).then(() => {
+                    if (options.onProgress) options.onProgress(100, '100%', 'processing');
                     resolve();
                 });
             })
@@ -436,14 +358,17 @@ export class Viewer {
     }
 
     loadSplatBuffer(splatBuffer, options) {
+        if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
         return new Promise((resolve) => {
-            this.loadingSpinner.show();
-            this.loadingSpinner.setMessage(`Processing splats...`);
+            if (options.showLoadingSpinner) {
+                this.loadingSpinner.show();
+                this.loadingSpinner.setMessage(`Processing splats...`);
+            }
             window.setTimeout(() => {
                 this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
                                     options.orientation, options.halfPrecisionCovariancesOnGPU, this.devicePixelRatio);
                 this.setupSortWorker(splatBuffer).then(() => {
-                    this.loadingSpinner.hide();
+                    if (options.showLoadingSpinner) this.loadingSpinner.hide();
                     resolve();
                 });
             }, 1);
@@ -455,12 +380,10 @@ export class Viewer {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
-        splatBuffer.buildPreComputedBuffers();
         this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU, devicePixelRatio);
         this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
-        this.splatMesh.renderOrder = 10;
         this.updateSplatMeshUniforms();
 
         this.splatRenderCount = splatCount;
@@ -633,7 +556,6 @@ export class Viewer {
                 }
                 if (this.splatRenderingInitialized) {
                     this.updateSplatMeshUniforms();
-                    this.updateSplatRenderTargetForRenderDimensions(currentRendererSize.x, currentRendererSize.y);
                 }
                 lastRendererSize.copy(currentRendererSize);
             }
@@ -655,7 +577,6 @@ export class Viewer {
         }
         this.updateView();
         this.updateForRendererSizeChanges();
-
         this.updateMeshCursor();
         this.updateFPS();
         this.timingSensitiveUpdates();
@@ -814,7 +735,7 @@ export class Viewer {
     render = function() {
 
         return function() {
-            const sceneHasRenderables = (scene) => {
+            const hasRenderables = (scene) => {
                 for (let child of scene.children) {
                     if (child.visible) {
                     return true;
@@ -823,15 +744,9 @@ export class Viewer {
                 return false;
             };
 
-            let defualtSceneHasRenderables = sceneHasRenderables(this.scene);
-            let simpleSceneHasRenderables = sceneHasRenderables(this.simpleScene);
-
             const savedAuoClear = this.renderer.autoClear;
             this.renderer.autoClear = false;
-            if (defualtSceneHasRenderables || simpleSceneHasRenderables) {
-                if (defualtSceneHasRenderables) this.renderer.render(this.scene, this.camera);
-                if (simpleSceneHasRenderables) this.renderer.render(this.simpleScene, this.camera);
-            }
+            if (hasRenderables(this.scene)) this.renderer.render(this.scene, this.camera);
             this.renderer.render(this.splatMesh, this.camera);
             if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
             if (this.showControlPlane) this.renderer.render(this.sceneHelper.controlPlane, this.camera);
