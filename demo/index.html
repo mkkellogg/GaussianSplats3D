@@ -335,7 +335,7 @@
       document.getElementById('check-icon').style.display = visible ? 'block' : 'none';
     }
 
-    window.viewSplat = function() {
+    window.viewSplat = function(options = {}) {
 
       const viewFile = document.getElementById("viewFile");
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThresholdView").value);
@@ -399,11 +399,12 @@
       currentCameraUpArray = cameraUpArray;
       currentCameraPositionArray = cameraPositionArray;
       currentCameraLookAtArray = cameraLookAtArray;
+
       try {
         const fileReader = new FileReader();
         fileReader.onload = function(){
           try {
-           runViewer(fileReader.result, isPly, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+           runViewer(fileReader.result, isPly, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, options.editMode);
           } catch (e) {
             setViewError("Could not view scene.");
           }
@@ -440,11 +441,11 @@
       }
     });
 
-    function runViewer(splatBufferData, isPly, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
+    function runViewer(splatBufferData, isPly, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, editMode) {
       const viewerOptions = {
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
-        'initialCameraLookAt': cameraLookAtArray
+        'initialCameraLookAt': cameraLookAtArray,
       };
       const sceneOptions = {
         'halfPrecisionCovariancesOnGPU': true,
@@ -461,7 +462,12 @@
       document.getElementById("demo-content").style.display = 'none';
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
-      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+      let viewer;
+      if (editMode) {
+        viewer = new GaussianSplats3D.Editor(viewerOptions);
+      } else {
+        viewer = new GaussianSplats3D.Viewer(viewerOptions);
+      }
       viewer.loadSplatBuffer(splatBuffer, sceneOptions)
       .then(() => {
           viewer.start();
@@ -573,6 +579,8 @@
                 </table>
                 <br>
                 <span class="button" onclick="window.viewSplat()">View</span>
+                &nbsp;&nbsp;
+                <span class="button" onclick="window.viewSplat({editMode: true})">Edit</span>
                 &nbsp;&nbsp;
                 <span class="button" onclick="reset()">Reset</span>
                 <br>

@@ -1,14 +1,14 @@
 import * as THREE from 'three';
+import { Constants } from './Constants.js';
+import { LoadingSpinner } from './LoadingSpinner.js';
 import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './PlyLoader.js';
-import { SplatLoader } from './SplatLoader.js';
-import { LoadingSpinner } from './LoadingSpinner.js';
-import { SceneHelper } from './SceneHelper.js';
 import { Raycaster } from './raycaster/Raycaster.js';
+import { SceneHelper } from './SceneHelper.js';
+import { SplatLoader } from './SplatLoader.js';
 import { SplatMesh } from './SplatMesh.js';
-import { createSortWorker } from './worker/SortWorker.js';
-import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
+import { createSortWorker } from './worker/SortWorker.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -76,6 +76,12 @@ export class Viewer {
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
 
+        this.loadingSpinner = new LoadingSpinner();
+        this.loadingSpinner.hide();
+
+        this.frameloop = 'demand'; // 'demand' | 'always'
+        this.viewerNeedsUpdate = true;
+
         this.initialized = false;
         this.init();
     }
@@ -125,11 +131,12 @@ export class Viewer {
             this.controls.maxPolarAngle = Math.PI * .75;
             this.controls.minPolarAngle = 0.1;
             this.controls.enableDamping = true;
-            this.controls.dampingFactor = 0.05;
+            this.controls.dampingFactor = 0.25;
             this.controls.target.copy(this.initialCameraLookAt);
             this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
             this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
             this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
+            this.controls.addEventListener('change', this.onControlsChange.bind(this), false);
             window.addEventListener('keydown', this.onKeyDown.bind(this), false);
         }
 
@@ -170,6 +177,7 @@ export class Viewer {
                 break;
                 case 'KeyC':
                     this.showMeshCursor = !this.showMeshCursor;
+                    this.invalidate();
                 break;
                 case 'KeyP':
                     this.showControlPlane = !this.showControlPlane;
@@ -189,6 +197,9 @@ export class Viewer {
 
     onMouseMove(mouse) {
         this.mousePosition.set(mouse.offsetX, mouse.offsetY);
+        if (this.showMeshCursor) {
+            this.invalidate();
+        }
     }
 
     onMouseDown() {
@@ -227,6 +238,14 @@ export class Viewer {
         };
 
     }();
+
+    onControlsChange() {
+        this.invalidate();
+    }
+
+    invalidate() {
+        this.viewerNeedsUpdate = true;
+    }
 
     getRenderDimensions(outDimensions) {
         if (this.rootElement) {
@@ -558,6 +577,7 @@ export class Viewer {
                     this.updateSplatMeshUniforms();
                 }
                 lastRendererSize.copy(currentRendererSize);
+                this.invalidate();
             }
         };
 
@@ -568,7 +588,11 @@ export class Viewer {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.update();
-        this.render();
+
+        if (this.frameloop === 'always' || this.viewerNeedsUpdate) {
+            this.render();
+            this.viewerNeedsUpdate = false;
+        }
     }
 
     update() {
