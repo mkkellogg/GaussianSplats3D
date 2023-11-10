@@ -446,6 +446,7 @@
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
         'initialCameraLookAt': cameraLookAtArray,
+        'frameloop': 'demand',
       };
       const sceneOptions = {
         'halfPrecisionCovariancesOnGPU': true,
@@ -462,12 +463,15 @@
       document.getElementById("demo-content").style.display = 'none';
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
-      let viewer;
+
+      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+
+      let editor;
       if (editMode) {
-        viewer = new GaussianSplats3D.Editor(viewerOptions);
-      } else {
-        viewer = new GaussianSplats3D.Viewer(viewerOptions);
+        const editorOptions = {};
+        editor = new GaussianSplats3D.Editor(viewer, editorOptions);
       }
+
       viewer.loadSplatBuffer(splatBuffer, sceneOptions)
       .then(() => {
           viewer.start();

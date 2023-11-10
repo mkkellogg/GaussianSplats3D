@@ -22,6 +22,7 @@ export class Viewer {
         if (!params.initialCameraLookAt) params.initialCameraLookAt = [0, 0, 0];
         if (params.selfDrivenMode === undefined) params.selfDrivenMode = true;
         if (params.useBuiltInControls === undefined) params.useBuiltInControls = true;
+        if (!params.frameloop) params.frameloop = 'always';
 
         this.rootElement = params.rootElement;
         this.usingExternalCamera = params.camera ? true : false;
@@ -76,11 +77,13 @@ export class Viewer {
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
 
+        this.pointerUpHandler = this.onMouseUp.bind(this);
+
         this.loadingSpinner = new LoadingSpinner();
         this.loadingSpinner.hide();
 
-        this.frameloop = 'demand'; // 'demand' | 'always'
         this.viewerNeedsUpdate = true;
+        this.frameloop = params.frameloop; // 'demand' | 'always'
 
         this.initialized = false;
         this.init();
@@ -92,8 +95,8 @@ export class Viewer {
 
         if (!this.rootElement && !this.usingExternalRenderer) {
             this.rootElement = document.createElement('div');
-            this.rootElement.style.width = '100%';
-            this.rootElement.style.height = '100%';
+            this.rootElement.style.width = '100vw';
+            this.rootElement.style.height = '100vh';
             document.body.appendChild(this.rootElement);
         }
 
@@ -132,10 +135,11 @@ export class Viewer {
             this.controls.minPolarAngle = 0.1;
             this.controls.enableDamping = true;
             this.controls.dampingFactor = 0.25;
+            this.controls.zoomToCursor = true;
             this.controls.target.copy(this.initialCameraLookAt);
             this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
             this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
-            this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
+            this.rootElement.addEventListener('pointerup', this.pointerUpHandler, false);
             this.controls.addEventListener('change', this.onControlsChange.bind(this), false);
             window.addEventListener('keydown', this.onKeyDown.bind(this), false);
         }
@@ -177,7 +181,6 @@ export class Viewer {
                 break;
                 case 'KeyC':
                     this.showMeshCursor = !this.showMeshCursor;
-                    this.invalidate();
                 break;
                 case 'KeyP':
                     this.showControlPlane = !this.showControlPlane;
@@ -191,6 +194,8 @@ export class Viewer {
                     }
                 break;
             }
+
+            this.invalidate();
         };
 
     }();
@@ -236,7 +241,6 @@ export class Viewer {
                 }
             }
         };
-
     }();
 
     onControlsChange() {
@@ -259,6 +263,7 @@ export class Viewer {
     setupInfoPanel() {
         this.infoPanel = document.createElement('div');
         this.infoPanel.style.position = 'absolute';
+        this.infoPanel.style.right = '0px';
         this.infoPanel.style.padding = '10px';
         this.infoPanel.style.backgroundColor = '#cccccc';
         this.infoPanel.style.border = '#aaaaaa 1px solid';
