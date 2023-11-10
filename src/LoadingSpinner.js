@@ -61,7 +61,7 @@ export class LoadingSpinner {
             }
 
         `;
-        document.getElementsByTagName('head')[0].appendChild(style);
+        this.spinnerDivContainer.appendChild(style);
     }
 
     show() {
