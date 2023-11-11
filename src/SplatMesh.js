@@ -260,6 +260,24 @@ export class SplatMesh extends THREE.Mesh {
                 nodeCount++;
                 leavesWithVertices++;
             }
+
+            let color = new THREE.Vector4();
+            node.data.opacities = [];
+            node.data.indexes.forEach((splatIndex) => {
+                this.splatBuffer.getColor(splatIndex, color);
+                node.data.opacities.push(color.w);
+            });
+
+            node.data.indexes.sort((indexA, indexB) => {
+                const opacityA = node.data.opacities[indexA];
+                const opacityB = node.data.opacities[indexB];
+                if (opacityA > opacityB) return 1;
+                else if (opacityA < opacityB) return -1;
+                else return 0;
+            });
+
+            node.data.indexesUint32 = new Uint32Array(nodeSplatCount);
+            node.data.indexesUint32.set(node.data.indexes);
         });
         console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
         console.log(`SplatTree leaves with splats:${leavesWithVertices}`);

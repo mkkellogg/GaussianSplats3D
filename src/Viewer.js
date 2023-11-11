@@ -8,7 +8,7 @@ import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
-import { getCurrentTime } from './Util.js';
+import { getCurrentTime, clamp } from './Util.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -441,6 +441,7 @@ export class Viewer {
 
         const MaximumDistanceToSort = 125;
         const MaximumDistanceToRender = 125;
+        const MaxDistanceBeforeLODReduction = 10;
 
         return function(gatherAllNodes) {
 
@@ -475,7 +476,16 @@ export class Viewer {
                 if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
                     continue;
                 }
-                splatRenderCount += node.data.indexes.length;
+
+                let lodFraction;
+                if (distanceToNode <= MaxDistanceBeforeLODReduction) {
+                    lodFraction = 1;
+                } else {
+                    lodFraction = clamp(1.0 - (distanceToNode - MaxDistanceBeforeLODReduction) / (MaximumDistanceToRender - MaxDistanceBeforeLODReduction), 0, 1);
+                }
+                node.data.renderIndexCount = clamp(Math.round(lodFraction * node.data.indexes.length), 0, node.data.indexes.length);
+
+                splatRenderCount += node.data.renderIndexCount;
                 nodeRenderList[nodeRenderCount] = node;
                 node.data.distanceToNode = distanceToNode;
                 nodeRenderCount++;
@@ -494,12 +504,13 @@ export class Viewer {
                 const node = nodeRenderList[i];
                 const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
                 if (shouldSort) {
-                    this.splatSortCount += node.data.indexes.length;
+                    this.splatSortCount += node.data.renderIndexCount;
                 }
-                const windowSizeInts = node.data.indexes.length;
+                const windowSizeInts = node.data.renderIndexCount;
                 const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
                 let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
-                destView.set(node.data.indexes);
+                let srcView = new Uint32Array(node.data.indexesUint32.buffer, 0, node.data.renderIndexCount);
+                destView.set(srcView);
                 currentByteOffset -= windowSizeBytes;
             }
 
