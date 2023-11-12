@@ -369,13 +369,17 @@ export class SplatMesh extends THREE.Mesh {
         this.splatDataTextures.centerColors.texture.needsUpdate = true;
     }
 
-    updateIndexes(indexes, renderSplatCount) {
+    updateIndexes(indexes, offset, copyCount, totalRenderCount) {
         const geometry = this.geometry;
 
-        geometry.attributes.splatIndex.set(indexes);
+        const srcWindow = new Uint32Array(indexes.buffer, 0, copyCount);
+        const destWindow = new Uint32Array(geometry.attributes.splatIndex.array.buffer, offset * 4, copyCount);
+        // destWindow.set(srcWindow);
+        // geometry.attributes.splatIndex.set(indexes, offset);
+        for (let i = 0; i < copyCount; i++) geometry.attributes.splatIndex.array[i + offset] = indexes[i];
         geometry.attributes.splatIndex.needsUpdate = true;
 
-        geometry.instanceCount = renderSplatCount;
+        geometry.instanceCount = totalRenderCount;
     }
 
     updateUniforms = function() {

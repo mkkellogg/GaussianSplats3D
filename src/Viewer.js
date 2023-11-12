@@ -12,6 +12,7 @@ import { getCurrentTime } from './Util.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
+const MAX_SPLATS_PER_WORKER = 1355264;
 
 export class Viewer {
 
@@ -49,15 +50,19 @@ export class Viewer {
 
         this.sceneHelper = null;
 
-        this.sortWorker = null;
+        this.sortWorkers = [];
+        this.sortWorkerRunning = [];
+        this.sortRunning = false;
+        this.sortStartTime = 0;
+        this.splatRenderCounts = [];
         this.splatRenderCount = 0;
-        this.splatSortCount = 0;
+        this.splatRenderStarts = [];
 
-        this.inIndexArray = null;
+        this.inIndexArrays = [];
+        this.outIndexArrays = [];
 
         this.splatMesh = null;
 
-        this.sortRunning = false;
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
 
@@ -385,42 +390,69 @@ export class Viewer {
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
         this.updateSplatMeshUniforms();
-
-        this.splatRenderCount = splatCount;
     }
 
     setupSortWorker(splatBuffer) {
+
+        const setWorkerRunningFalse = (index) => {
+            this.sortWorkerRunning[index] = false;
+            this.sortRunning = false;
+            for (let s = 0; s < this.sortWorkerRunning.length; s++) {
+                if (this.sortWorkerRunning[s]) {
+                    this.sortRunning = true;
+                    break;
+                }
+            }
+        };
+
         return new Promise((resolve) => {
             const splatCount = splatBuffer.getSplatCount();
-            this.sortWorker = createSortWorker(splatCount);
-            this.sortWorker.onmessage = (e) => {
-                if (e.data.sortDone) {
-                    this.sortRunning = false;
-                    this.splatMesh.updateIndexes(this.outIndexArray, e.data.splatRenderCount);
-                    this.lastSortTime = e.data.sortTime;
-                } else if (e.data.sortCanceled) {
-                    this.sortRunning = false;
-                } else if (e.data.sortSetupPhase1Complete) {
-                    console.log('Sorting web worker WASM setup complete.');
-                    this.sortWorker.postMessage({
-                        'positions': this.splatMesh.getCenters().buffer
-                    });
-                    this.outIndexArray = new Uint32Array(e.data.outIndexBuffer, e.data.outIndexOffset, splatBuffer.getSplatCount());
-                    this.inIndexArray = new Uint32Array(e.data.inIndexBuffer, e.data.inIndexOffset, splatBuffer.getSplatCount());
-                    for (let i = 0; i < splatCount; i++) this.inIndexArray[i] = i;
-                } else if (e.data.sortSetupComplete) {
-                    console.log('Sorting web worker ready.');
-                    this.splatMesh.updateIndexes(this.outIndexArray, splatBuffer.getSplatCount());
-                    const splatDataTextures = this.splatMesh.getSplatDataTextures();
-                    const covariancesTextureSize = splatDataTextures.covariances.size;
-                    const centersColorsTextureSize = splatDataTextures.centerColors.size;
-                    console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
-                    console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
-                    this.updateView(true, true);
-                    this.splatRenderingInitialized = true;
-                    resolve();
-                }
-            };
+            this.splatRenderCount = splatCount;
+            this.sortWorkers = [];
+            const workerCount = Math.ceil(splatCount / MAX_SPLATS_PER_WORKER);
+            let workersFinishedSettingUp = 0;
+            for (let i = 0; i < workerCount; i++) {
+                (function setupWorker(scope, workerIndex) {
+                    const assignedSoFar = workerIndex * MAX_SPLATS_PER_WORKER;
+                    const initialSplatCountForWorker = Math.min(MAX_SPLATS_PER_WORKER, splatCount - assignedSoFar);
+                    scope.splatRenderCounts[workerIndex] = initialSplatCountForWorker;
+                    scope.splatRenderStarts[workerIndex] = assignedSoFar;
+                    const sortWorker = createSortWorker(MAX_SPLATS_PER_WORKER);
+                    scope.sortWorkers[workerIndex] = sortWorker;
+                    sortWorker.onmessage = (e) => {
+                        if (e.data.sortDone) {
+                            setWorkerRunningFalse(workerIndex);
+                            scope.splatMesh.updateIndexes(scope.outIndexArrays[workerIndex], scope.splatRenderStarts[workerIndex], scope.splatRenderCounts[workerIndex], splatCount);
+                            if (!scope.sortRunning) scope.lastSortTime = performance.now() - scope.sortStartTime;
+                        } else if (e.data.sortCanceled) {
+                            setWorkerRunningFalse(workerIndex);
+                        } else if (e.data.sortSetupPhase1Complete) {
+                            sortWorker.postMessage({
+                                'positions': scope.splatMesh.getCenters().buffer
+                            });
+                            scope.outIndexArrays[workerIndex] = new Uint32Array(e.data.outIndexBuffer, e.data.outIndexOffset, MAX_SPLATS_PER_WORKER);
+                            scope.inIndexArrays[workerIndex] = new Uint32Array(e.data.inIndexBuffer, e.data.inIndexOffset, MAX_SPLATS_PER_WORKER);
+                            for (let i = 0; i < initialSplatCountForWorker; i++) {
+                                scope.inIndexArrays[workerIndex][i] = assignedSoFar + i;
+                            }
+                        } else if (e.data.sortSetupComplete) {
+                            scope.splatMesh.updateIndexes(scope.outIndexArrays[workerIndex], scope.splatRenderStarts[workerIndex], scope.splatRenderCounts[workerIndex], splatCount);
+                            workersFinishedSettingUp++;
+                            if (workersFinishedSettingUp === workerCount) {
+                                console.log('Sorting web workers ready.');
+                                const splatDataTextures = scope.splatMesh.getSplatDataTextures();
+                                const covariancesTextureSize = splatDataTextures.covariances.size;
+                                const centersColorsTextureSize = splatDataTextures.centerColors.size;
+                                console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
+                                console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
+                                scope.updateView(true, true);
+                                scope.splatRenderingInitialized = true;
+                                resolve();
+                            }
+                        }
+                    };
+                })(this, i);
+            }
         });
     }
 
@@ -483,24 +515,31 @@ export class Viewer {
 
             nodeRenderList.length = nodeRenderCount;
             nodeRenderList.sort((a, b) => {
-                if (a.data.distanceToNode < b.data.distanceToNode) return 1;
+                if (a.data.distanceToNode > b.data.distanceToNode) return 1;
                 else return -1;
             });
 
             this.splatRenderCount = splatRenderCount;
-            this.splatSortCount = 0;
-            let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
+            let indexArrayIndex = 0;
+            let indexesInCurrentList = 0;
+            let currentByteOffset = 0;
+            let currentIndexArrayStart = 0;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
-                const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
-                if (shouldSort) {
-                    this.splatSortCount += node.data.indexes.length;
+                if (indexesInCurrentList + node.data.indexes.length >= MAX_SPLATS_PER_WORKER) {
+                    this.splatRenderCounts[indexArrayIndex] = indexesInCurrentList;
+                    this.splatRenderStarts[indexArrayIndex] = currentIndexArrayStart;
+                    indexArrayIndex++;
+                    indexesInCurrentList = 0;
+                    currentByteOffset = 0;
+                    currentIndexArrayStart = indexesInCurrentList;
                 }
                 const windowSizeInts = node.data.indexes.length;
                 const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
-                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
+                let destView = new Uint32Array(this.inIndexArrays[indexArrayIndex].buffer, currentByteOffset, windowSizeInts);
                 destView.set(node.data.indexes);
-                currentByteOffset -= windowSizeBytes;
+                currentByteOffset += windowSizeBytes;
+                indexesInCurrentList += node.data.indexes.length;
             }
 
         };
@@ -782,17 +821,20 @@ export class Viewer {
             cameraPositionArray[2] = this.camera.position.z;
 
             if (!this.sortRunning) {
+                this.sortStartTime = performance.now();
                 this.gatherSceneNodes(gatherAllNodes);
                 this.sortRunning = true;
-                this.sortWorker.postMessage({
-                    sort: {
-                        'view': tempMatrix.elements,
-                        'cameraPosition': cameraPositionArray,
-                        'splatRenderCount': this.splatRenderCount,
-                        'splatSortCount': this.splatSortCount,
-                        'inIndexBuffer': this.inIndexArray.buffer
-                    }
-                });
+                for (let i = 0; i < this.sortWorkers.length; i++) {
+                    this.sortWorkers[i].postMessage({
+                        sort: {
+                            'view': tempMatrix.elements,
+                            'cameraPosition': cameraPositionArray,
+                            'splatRenderCount': this.splatRenderCounts[i],
+                            'splatSortCount': this.splatRenderCounts[i],
+                            'inIndexBuffer': this.inIndexArrays[i].buffer
+                        }
+                    });
+                }
                 lastSortViewPos.copy(this.camera.position);
                 lastSortViewDir.copy(sortViewDir);
             }
