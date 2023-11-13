@@ -338,7 +338,7 @@ export class Viewer {
             if (fileURL.endsWith('.splat')) {
                 fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
             } else if (fileURL.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress);
+                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress, 0, options.splatAlphaRemovalThreshold);
             } else {
                 reject(new Error(`Viewer::loadFile -> File format not supported: ${fileURL}`));
             }

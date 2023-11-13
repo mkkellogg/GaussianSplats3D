@@ -19,9 +19,9 @@ export class PlyLoader {
         });
     }
 
-    loadFromURL(fileName, compressionLevel = 0, minimumAlpha = 1) {
+    loadFromURL(fileName, onProgress, compressionLevel = 0, minimumAlpha = 1) {
         return new Promise((resolve, reject) => {
-            const loadPromise = this.fetchFile(fileName);
+            const loadPromise = this.fetchFile(fileName, onProgress);
             loadPromise
             .then((plyFileData) => {
                 const plyParser = new PlyParser(plyFileData);
