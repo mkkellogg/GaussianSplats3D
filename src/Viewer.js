@@ -317,6 +317,7 @@ export class Viewer {
         if (options.position) options.position = new THREE.Vector3().fromArray(options.position);
         if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
         options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 1;
+        options.compressionLevel = options.compressionLevel || 0;
         options.halfPrecisionCovariancesOnGPU = !!options.halfPrecisionCovariancesOnGPU;
         if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
 
@@ -338,7 +339,7 @@ export class Viewer {
             if (fileURL.endsWith('.splat')) {
                 fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
             } else if (fileURL.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress);
+                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, options.compressionLevel, options.splatAlphaRemovalThreshold);
             } else {
                 reject(new Error(`Viewer::loadFile -> File format not supported: ${fileURL}`));
             }

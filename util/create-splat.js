@@ -1,4 +1,4 @@
-import * as GaussianSplats3D from '../build/gaussian-splat-3d.module.js';
+import * as GaussianSplats3D from '../build/gaussian-splats-3d.module.js';
 import * as fs from 'fs';
 
 if (process.argv.length < 4) {
