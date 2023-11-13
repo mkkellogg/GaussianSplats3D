@@ -422,7 +422,7 @@ export class Viewer {
                     sortWorker.onmessage = (e) => {
                         if (e.data.sortDone) {
                             setWorkerRunningFalse(workerIndex);
-                            scope.splatMesh.updateIndexes(scope.outIndexArrays[workerIndex], scope.splatRenderStarts[workerIndex], scope.splatRenderCounts[workerIndex], splatCount);
+                            scope.splatMesh.updateIndexes(scope.outIndexArrays[workerIndex], scope.splatRenderStarts[workerIndex], scope.splatRenderCounts[workerIndex], scope.splatRenderCount);
                             if (!scope.sortRunning) scope.lastSortTime = performance.now() - scope.sortStartTime;
                         } else if (e.data.sortCanceled) {
                             setWorkerRunningFalse(workerIndex);
@@ -436,7 +436,7 @@ export class Viewer {
                                 scope.inIndexArrays[workerIndex][i] = assignedSoFar + i;
                             }
                         } else if (e.data.sortSetupComplete) {
-                            scope.splatMesh.updateIndexes(scope.outIndexArrays[workerIndex], scope.splatRenderStarts[workerIndex], scope.splatRenderCounts[workerIndex], splatCount);
+                            scope.splatMesh.updateIndexes(scope.outIndexArrays[workerIndex], scope.splatRenderStarts[workerIndex], scope.splatRenderCounts[workerIndex], scope.splatRenderCount);
                             workersFinishedSettingUp++;
                             if (workersFinishedSettingUp === workerCount) {
                                 console.log('Sorting web workers ready.');
@@ -529,10 +529,10 @@ export class Viewer {
                 if (indexesInCurrentList + node.data.indexes.length >= MAX_SPLATS_PER_WORKER) {
                     this.splatRenderCounts[indexArrayIndex] = indexesInCurrentList;
                     this.splatRenderStarts[indexArrayIndex] = currentIndexArrayStart;
-                    indexArrayIndex++;
-                    indexesInCurrentList = 0;
-                    currentByteOffset = 0;
                     currentIndexArrayStart = indexesInCurrentList;
+                    indexesInCurrentList = 0;
+                    indexArrayIndex++;
+                    currentByteOffset = 0;
                 }
                 const windowSizeInts = node.data.indexes.length;
                 const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
@@ -540,6 +540,11 @@ export class Viewer {
                 destView.set(node.data.indexes);
                 currentByteOffset += windowSizeBytes;
                 indexesInCurrentList += node.data.indexes.length;
+                if (i === nodeRenderCount - 1) {
+                    this.splatRenderCounts[indexArrayIndex] = indexesInCurrentList;
+                    this.splatRenderStarts[indexArrayIndex] = currentIndexArrayStart;
+                }
+
             }
 
         };
