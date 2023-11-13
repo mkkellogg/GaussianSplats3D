@@ -12,7 +12,7 @@ import { getCurrentTime } from './Util.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
-const MAX_SPLATS_PER_WORKER = 750000;
+const MAX_SPLATS_PER_WORKER = 1000000;
 
 export class Viewer {
 
@@ -533,7 +533,7 @@ export class Viewer {
                 if (indexesInCurrentList + node.data.indexes.length >= MAX_SPLATS_PER_WORKER) {
                     this.splatRenderCounts[indexArrayIndex] = indexesInCurrentList;
                     this.splatRenderStarts[indexArrayIndex] = currentIndexArrayStart;
-                    currentIndexArrayStart = indexesInCurrentList;
+                    currentIndexArrayStart += indexesInCurrentList;
                     indexesInCurrentList = 0;
                     indexArrayIndex++;
                     currentByteOffset = 0;
