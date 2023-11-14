@@ -1,4 +1,4 @@
-import * as GaussianSplats3D from '../build/gaussian-splat-3d.module.js';
+import * as GaussianSplats3D from '../build/gaussian-splats-3d.module.js';
 import * as fs from 'fs';
 
 if (process.argv.length < 4) {
@@ -18,8 +18,8 @@ const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, splatAlphaRem
 
 const headerData = new Uint8Array(splatBuffer.getHeaderBufferData());
 const splatData = new Uint8Array(splatBuffer.getSplatBufferData());
-const combined = new Uint8Array(headerData.buffer.byteLength + splatData.buffer.byteLength);
-combined.set(headerData.buffer, 0);
-combined.set(splatData.buffer, headerData.buffer.byteLength);
+const combined = new Uint8Array(headerData.byteLength + splatData.byteLength);
+combined.set(headerData, 0);
+combined.set(splatData, headerData.byteLength);
 
 fs.writeFileSync(outputFile, combined);
