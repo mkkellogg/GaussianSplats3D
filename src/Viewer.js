@@ -8,7 +8,7 @@ import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
-import { getCurrentTime } from './Util.js';
+import { getCurrentTime, clamp } from './Util.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -51,7 +51,6 @@ export class Viewer {
 
         this.sortWorker = null;
         this.splatRenderCount = 0;
-        this.splatSortCount = 0;
 
         this.inIndexArray = null;
 
@@ -439,7 +438,6 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
-        const MaximumDistanceToSort = 125;
         const MaximumDistanceToRender = 125;
 
         return function(gatherAllNodes) {
@@ -478,24 +476,21 @@ export class Viewer {
                 splatRenderCount += node.data.indexes.length;
                 nodeRenderList[nodeRenderCount] = node;
                 node.data.distanceToNode = distanceToNode;
+                node.data.distanceScore = Math.pow(distanceToNode / MaximumDistanceToRender, 2.0);
+                node.data.angleScore = 1 - clamp((cameraAngleXZDot + cameraAngleYZDot) / 2, 0, 1);
                 nodeRenderCount++;
             }
 
             nodeRenderList.length = nodeRenderCount;
             nodeRenderList.sort((a, b) => {
-                if (a.data.distanceToNode < b.data.distanceToNode) return 1;
-                else return -1;
+                if (a.data.distanceToNode < b.data.distanceToNode) return -1;
+                else return 1;
             });
 
             this.splatRenderCount = splatRenderCount;
-            this.splatSortCount = 0;
             let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
-                const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
-                if (shouldSort) {
-                    this.splatSortCount += node.data.indexes.length;
-                }
                 const windowSizeInts = node.data.indexes.length;
                 const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
                 let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
@@ -763,14 +758,20 @@ export class Viewer {
         const sortViewDir = new THREE.Vector3(0, 0, -1);
         const lastSortViewPos = new THREE.Vector3();
         const sortViewOffset = new THREE.Vector3();
+        const queuedTiers = [];
 
         return function(force = false, gatherAllNodes = false) {
-            if (!force) {
-                sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
-                let needsRefreshForRotation = false;
-                let needsRefreshForPosition = false;
-                if (sortViewDir.dot(lastSortViewDir) <= 0.95) needsRefreshForRotation = true;
-                if (sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length() >= 1.0) needsRefreshForPosition = true;
+            let angleDiff = 0;
+            let positionDiff = 0;
+            sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+            let needsRefreshForRotation = false;
+            let needsRefreshForPosition = false;
+            angleDiff = sortViewDir.dot(lastSortViewDir);
+            positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
+
+            if (!force && queuedTiers.length === 0) {
+                if (angleDiff <= 0.95) needsRefreshForRotation = true;
+                if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
 
@@ -782,19 +783,37 @@ export class Viewer {
             cameraPositionArray[2] = this.camera.position.z;
 
             if (!this.sortRunning) {
-                this.gatherSceneNodes(gatherAllNodes);
+                let sortCount;
                 this.sortRunning = true;
+                this.gatherSceneNodes(gatherAllNodes);
+                if (queuedTiers.length === 0) {
+                   // console.log(angleDiff)
+                    if (angleDiff < 0.55) {
+                        queuedTiers.push(Math.floor(this.splatRenderCount / 8));
+                        queuedTiers.push(Math.floor(this.splatRenderCount / 3));
+                        queuedTiers.push(Math.floor(this.splatRenderCount * 3 / 4));
+                    } else if (angleDiff < 0.65) {
+                        queuedTiers.push(Math.floor(this.splatRenderCount / 3));
+                        queuedTiers.push(Math.floor(this.splatRenderCount * 2 / 3));
+                    } else if (angleDiff < .8) {
+                        queuedTiers.push(Math.floor(this.splatRenderCount / 2));
+                    }
+                    queuedTiers.push(this.splatRenderCount);
+                }
+                sortCount = Math.min(queuedTiers.shift(), this.splatRenderCount);
                 this.sortWorker.postMessage({
                     sort: {
                         'view': tempMatrix.elements,
                         'cameraPosition': cameraPositionArray,
                         'splatRenderCount': this.splatRenderCount,
-                        'splatSortCount': this.splatSortCount,
+                        'splatSortCount': sortCount,
                         'inIndexBuffer': this.inIndexArray.buffer
                     }
                 });
-                lastSortViewPos.copy(this.camera.position);
-                lastSortViewDir.copy(sortViewDir);
+                if (queuedTiers.length === 0) {
+                    lastSortViewPos.copy(this.camera.position);
+                    lastSortViewDir.copy(sortViewDir);
+                }
             }
         };
 

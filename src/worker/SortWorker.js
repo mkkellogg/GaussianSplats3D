@@ -45,11 +45,14 @@ function sortWorker(self) {
         if (e.data.positions) {
             positions = e.data.positions;
             const floatPositions = new Float32Array(positions);
-            const intPositions = new Int32Array(splatCount * 3);
-            for (let i = 0; i < splatCount * 3; i++) {
-                intPositions[i] = Math.round(floatPositions[i] * 1000.0);
+            const intPositions = new Int32Array(splatCount * 4);
+            for (let i = 0; i < splatCount; i++) {
+                for (let t = 0; t < 3; t++) {
+                    intPositions[i * 4 + t] = Math.round(floatPositions[i * 3 + t] * 1000.0);
+                }
+                intPositions[i * 4 + 3] = 1;
             }
-            new Int32Array(wasmMemory, positionsOffset, splatCount * 3).set(intPositions);
+            new Int32Array(wasmMemory, positionsOffset, splatCount * 4).set(intPositions);
             self.postMessage({
                 'sortSetupComplete': true,
             });
@@ -64,7 +67,7 @@ function sortWorker(self) {
             splatCount = e.data.init.splatCount;
 
             const INDEXES_BYTES_PER_ENTRY = Constants.BytesPerInt;
-            const POSITIONS_BYTES_PER_ENTRY = Constants.BytesPerFloat * 3;
+            const POSITIONS_BYTES_PER_ENTRY = Constants.BytesPerFloat * 4;
 
             const sorterWasmBytes = new Uint8Array(e.data.init.sorterWasmBytes);
             const memoryBytesPerVertex = INDEXES_BYTES_PER_ENTRY + POSITIONS_BYTES_PER_ENTRY;
