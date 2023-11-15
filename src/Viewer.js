@@ -43,6 +43,11 @@ export class Viewer {
         this.selfDrivenMode = params.selfDrivenMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
 
+        this.gpuAcceleratedSort = params.gpuAcceleratedSort;
+        if (this.gpuAcceleratedSort !== true && this.gpuAcceleratedSort !== false) {
+            this.gpuAcceleratedSort = true;
+        }
+
         this.showMeshCursor = false;
         this.showControlPlane = false;
         this.showInfo = false;
@@ -50,13 +55,14 @@ export class Viewer {
         this.sceneHelper = null;
 
         this.sortWorker = null;
+        this.sortRunning = false;
         this.splatRenderCount = 0;
-
-        this.inIndexArray = null;
+        this.sortWorkerIndexesToSort = null;
+        this.sortWorkerSortedIndexes = null;
+        this.sortWorkerPrecomputedDistances = null;
 
         this.splatMesh = null;
 
-        this.sortRunning = false;
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
 
@@ -365,7 +371,8 @@ export class Viewer {
             }
             window.setTimeout(() => {
                 this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
-                                    options.orientation, options.halfPrecisionCovariancesOnGPU, this.devicePixelRatio);
+                                    options.orientation, options.halfPrecisionCovariancesOnGPU,
+                                    this.devicePixelRatio, this.gpuAcceleratedSort);
                 this.setupSortWorker(splatBuffer).then(() => {
                     if (options.showLoadingSpinner) this.loadingSpinner.hide();
                     resolve();
@@ -375,11 +382,12 @@ export class Viewer {
     }
 
     setupSplatMesh(splatBuffer, splatAlphaRemovalThreshold = 1, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
-                   halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
+                   halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, gpuAcceleratedSort = true) {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
-        this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU, devicePixelRatio);
+        this.splatMesh = SplatMesh.buildMesh(splatBuffer, this.renderer, splatAlphaRemovalThreshold,
+                                             halfPrecisionCovariancesOnGPU, devicePixelRatio, gpuAcceleratedSort);
         this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
@@ -395,21 +403,25 @@ export class Viewer {
             this.sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
-                    this.splatMesh.updateIndexes(this.outIndexArray, e.data.splatRenderCount);
+                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
                     this.lastSortTime = e.data.sortTime;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
                     console.log('Sorting web worker WASM setup complete.');
                     this.sortWorker.postMessage({
-                        'positions': this.splatMesh.getCenters().buffer
+                        'centers': this.splatMesh.getIntegerCenters(true).buffer
                     });
-                    this.outIndexArray = new Uint32Array(e.data.outIndexBuffer, e.data.outIndexOffset, splatBuffer.getSplatCount());
-                    this.inIndexArray = new Uint32Array(e.data.inIndexBuffer, e.data.inIndexOffset, splatBuffer.getSplatCount());
-                    for (let i = 0; i < splatCount; i++) this.inIndexArray[i] = i;
+                    this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
+                                                                   e.data.sortedIndexesOffset, splatBuffer.getSplatCount());
+                    this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
+                                                                   e.data.indexesToSortOffset, splatBuffer.getSplatCount());
+                    this.sortWorkerPrecomputedDistances = new Int32Array(e.data.precomputedDistancesBuffer,
+                                                                         e.data.precomputedDistancesOffset, splatBuffer.getSplatCount());
+                    for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
                     console.log('Sorting web worker ready.');
-                    this.splatMesh.updateIndexes(this.outIndexArray, splatBuffer.getSplatCount());
+                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, splatBuffer.getSplatCount());
                     const splatDataTextures = this.splatMesh.getSplatDataTextures();
                     const covariancesTextureSize = splatDataTextures.covariances.size;
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
@@ -468,8 +480,8 @@ export class Viewer {
                 const cameraAngleYZDot = forward.dot(tempVectorYZ);
 
                 const ns = nodeSize(node);
-                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .5);
-                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .5);
+                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
+                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
                 if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
                     continue;
                 }
@@ -493,7 +505,7 @@ export class Viewer {
                 const node = nodeRenderList[i];
                 const windowSizeInts = node.data.indexes.length;
                 const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
-                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
+                let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
                 destView.set(node.data.indexes);
                 currentByteOffset -= windowSizeBytes;
             }
@@ -786,8 +798,10 @@ export class Viewer {
                 let sortCount;
                 this.sortRunning = true;
                 this.gatherSceneNodes(gatherAllNodes);
+                if (this.gpuAcceleratedSort && (queuedTiers.length <= 1 || queuedTiers.length % 2 === 0)) {
+                    this.splatMesh.computeDistancesOnGPU(tempMatrix, this.sortWorkerPrecomputedDistances);
+                }
                 if (queuedTiers.length === 0) {
-                   // console.log(angleDiff)
                     if (angleDiff < 0.55) {
                         queuedTiers.push(Math.floor(this.splatRenderCount / 8));
                         queuedTiers.push(Math.floor(this.splatRenderCount / 3));
@@ -803,11 +817,11 @@ export class Viewer {
                 sortCount = Math.min(queuedTiers.shift(), this.splatRenderCount);
                 this.sortWorker.postMessage({
                     sort: {
-                        'view': tempMatrix.elements,
+                        'viewProj': this.splatMesh.getIntegerMatrixArray(tempMatrix),
                         'cameraPosition': cameraPositionArray,
                         'splatRenderCount': this.splatRenderCount,
                         'splatSortCount': sortCount,
-                        'inIndexBuffer': this.inIndexArray.buffer
+                        'usePrecomputedDistances': this.gpuAcceleratedSort
                     }
                 });
                 if (queuedTiers.length === 0) {

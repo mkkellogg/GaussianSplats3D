@@ -4,34 +4,29 @@ import { Constants } from '../Constants.js';
 function sortWorker(self) {
 
     let wasmInstance;
-    let splatCount;
-    let indexesOffset;
-    let positionsOffset;
-    let viewProjOffset;
-    let indexesOutOffset;
-    let sortBuffersOffset;
     let wasmMemory;
-    let positions;
+    let splatCount;
+    let indexesToSortOffset;
+    let sortedIndexesOffset;
+    let precomputedDistancesOffset;
+    let mappedDistancesOffset;
+    let frequenciesOffset;
+    let centersOffset;
+    let viewProjOffset;
     let countsZero;
 
     let Constants;
 
-    function sort(splatSortCount, splatRenderCount, viewProj, cameraPosition) {
-
-        // console.time('WASM SORT');
+    function sort(splatSortCount, splatRenderCount, viewProj, usePrecomputedDistances) {
         const sortStartTime = performance.now();
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
-        const viewProjArray = new Int32Array(wasmMemory, viewProjOffset, 16);
-        for (let i = 0; i < 16; i++) {
-            viewProjArray[i] = Math.round(viewProj[i] * 1000.0);
-        }
-        const frequencies = new Uint32Array(wasmMemory, sortBuffersOffset + splatCount * 4, Constants.DepthMapRange);
-        frequencies.set(countsZero);
-        wasmInstance.exports.sortIndexes(indexesOffset, positionsOffset, sortBuffersOffset, viewProjOffset,
-                                         indexesOutOffset, cameraPosition[0], cameraPosition[1],
-                                         cameraPosition[2], Constants.DepthMapRange, splatSortCount, splatRenderCount, splatCount);
+        new Int32Array(wasmMemory, viewProjOffset, 16).set(viewProj);
+        new Uint32Array(wasmMemory, frequenciesOffset, Constants.DepthMapRange).set(countsZero);
+        wasmInstance.exports.sortIndexes(indexesToSortOffset, centersOffset, precomputedDistancesOffset,
+                                         mappedDistancesOffset, frequenciesOffset, viewProjOffset,
+                                         sortedIndexesOffset, Constants.DepthMapRange, splatSortCount,
+                                         splatRenderCount, splatCount, usePrecomputedDistances);
         const sortEndTime = performance.now();
-        // console.timeEnd('WASM SORT');
 
         self.postMessage({
             'sortDone': true,
@@ -42,47 +37,50 @@ function sortWorker(self) {
     }
 
     self.onmessage = (e) => {
-        if (e.data.positions) {
-            positions = e.data.positions;
-            const floatPositions = new Float32Array(positions);
-            const intPositions = new Int32Array(splatCount * 4);
-            for (let i = 0; i < splatCount; i++) {
-                for (let t = 0; t < 3; t++) {
-                    intPositions[i * 4 + t] = Math.round(floatPositions[i * 3 + t] * 1000.0);
-                }
-                intPositions[i * 4 + 3] = 1;
-            }
-            new Int32Array(wasmMemory, positionsOffset, splatCount * 4).set(intPositions);
+        if (e.data.centers) {
+            centers = e.data.centers;
+            new Int32Array(wasmMemory, centersOffset, splatCount * 4).set(new Int32Array(centers));
             self.postMessage({
                 'sortSetupComplete': true,
             });
         } else if (e.data.sort) {
             const renderCount = e.data.sort.splatRenderCount || 0;
             const sortCount = e.data.sort.splatSortCount || 0;
-            sort(sortCount, renderCount, e.data.sort.view, e.data.sort.cameraPosition, e.data.sort.inIndexBuffer);
+            sort(sortCount, renderCount, e.data.sort.viewProj, e.data.sort.usePrecomputedDistances);
         } else if (e.data.init) {
             // Yep, this is super hacky and gross :(
             Constants = e.data.init.Constants;
 
             splatCount = e.data.init.splatCount;
 
-            const INDEXES_BYTES_PER_ENTRY = Constants.BytesPerInt;
-            const POSITIONS_BYTES_PER_ENTRY = Constants.BytesPerFloat * 4;
+            const CENTERS_BYTES_PER_ENTRY = Constants.BytesPerInt * 4;
 
             const sorterWasmBytes = new Uint8Array(e.data.init.sorterWasmBytes);
-            const memoryBytesPerVertex = INDEXES_BYTES_PER_ENTRY + POSITIONS_BYTES_PER_ENTRY;
-            const memoryRequiredForVertices = splatCount * memoryBytesPerVertex;
-            const memoryRequiredForSortBuffers = splatCount * Constants.BytesPerInt * 2 +
-                                                 Constants.DepthMapRange * Constants.BytesPerInt * 2;
+
+            const memoryRequiredForIndexesToSort = splatCount * Constants.BytesPerInt;
+            const memoryRequiredForCenters = splatCount * CENTERS_BYTES_PER_ENTRY;
+            const memoryRequiredForViewProjMatrix = 16 * Constants.BytesPerFloat;
+            const memoryRequiredForPrecomputedDistances = splatCount * Constants.BytesPerInt;
+            const memoryRequiredForMappedDistances = splatCount * Constants.BytesPerInt;
+            const memoryRequiredForSortedIndexes = splatCount * Constants.BytesPerInt;
+            const memoryRequiredForIntermediateSortBuffers = Constants.DepthMapRange * Constants.BytesPerInt * 2;
             const extraMemory = Constants.MemoryPageSize * 32;
-            const totalRequiredMemory = memoryRequiredForVertices + memoryRequiredForSortBuffers + extraMemory;
+
+            const totalRequiredMemory = memoryRequiredForIndexesToSort +
+                                        memoryRequiredForCenters +
+                                        memoryRequiredForViewProjMatrix +
+                                        memoryRequiredForPrecomputedDistances +
+                                        memoryRequiredForMappedDistances +
+                                        memoryRequiredForSortedIndexes +
+                                        memoryRequiredForIntermediateSortBuffers +
+                                        extraMemory;
             const totalPagesRequired = Math.floor(totalRequiredMemory / Constants.MemoryPageSize ) + 1;
             const sorterWasmImport = {
                 module: {},
                 env: {
                     memory: new WebAssembly.Memory({
                         initial: totalPagesRequired * 2,
-                        maximum: totalPagesRequired * 3,
+                        maximum: totalPagesRequired * 4,
                         shared: true,
                     }),
                 }
@@ -93,19 +91,22 @@ function sortWorker(self) {
             })
             .then((instance) => {
                 wasmInstance = instance;
-                indexesOffset = 0;
-                positionsOffset = splatCount * INDEXES_BYTES_PER_ENTRY;
-                viewProjOffset = positionsOffset + splatCount * POSITIONS_BYTES_PER_ENTRY;
-                sortBuffersOffset = viewProjOffset + 16 * Constants.BytesPerFloat;
-                indexesOutOffset = sortBuffersOffset + splatCount * Constants.BytesPerInt +
-                                   Constants.DepthMapRange * Constants.BytesPerInt * 2;
+                indexesToSortOffset = 0;
+                centersOffset = indexesToSortOffset + memoryRequiredForIndexesToSort;
+                viewProjOffset = centersOffset + memoryRequiredForCenters;
+                precomputedDistancesOffset = viewProjOffset + memoryRequiredForViewProjMatrix;
+                mappedDistancesOffset = precomputedDistancesOffset + memoryRequiredForPrecomputedDistances;
+                frequenciesOffset = mappedDistancesOffset + memoryRequiredForMappedDistances;
+                sortedIndexesOffset = frequenciesOffset + memoryRequiredForIntermediateSortBuffers;
                 wasmMemory = sorterWasmImport.env.memory.buffer;
                 self.postMessage({
                     'sortSetupPhase1Complete': true,
-                    'inIndexBuffer': wasmMemory,
-                    'inIndexOffset': 0,
-                    'outIndexBuffer': wasmMemory,
-                    'outIndexOffset': indexesOutOffset
+                    'indexesToSortBuffer': wasmMemory,
+                    'indexesToSortOffset': indexesToSortOffset,
+                    'sortedIndexesBuffer': wasmMemory,
+                    'sortedIndexesOffset': sortedIndexesOffset,
+                    'precomputedDistancesBuffer': wasmMemory,
+                    'precomputedDistancesOffset': precomputedDistancesOffset
                 });
             });
         }
