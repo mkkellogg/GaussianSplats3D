@@ -62,7 +62,7 @@ export class Raycaster {
 
     castRayAtSplatTreeNode = function() {
 
-        const tempPosition = new THREE.Vector3();
+        const tempCenter = new THREE.Vector3();
         const tempScale = new THREE.Vector3();
         const tempRotation = new THREE.Quaternion();
         const tempHit = new Hit();
@@ -85,7 +85,7 @@ export class Raycaster {
             if (node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
                     const splatIndex = node.data.indexes[i];
-                    splatTree.splatBuffer.getPosition(splatIndex, tempPosition);
+                    splatTree.splatBuffer.getCenter(splatIndex, tempCenter);
                     splatTree.splatBuffer.getRotation(splatIndex, tempRotation);
                     splatTree.splatBuffer.getScale(splatIndex, tempScale);
 
@@ -95,7 +95,7 @@ export class Raycaster {
 
                     // Simple approximated sphere intersection
                     const radius = (tempScale.x + tempScale.y + tempScale.z) / 3;
-                    if (ray.intersectSphere(tempPosition, radius, tempHit)) {
+                    if (ray.intersectSphere(tempCenter, radius, tempHit)) {
                         outHits.push(tempHit.clone());
                     }
 
@@ -106,11 +106,11 @@ export class Raycaster {
                     tempRotationMatrix.makeRotationFromQuaternion(tempRotation);
                     fromSphereSpace.copy(tempScaleMatrix).premultiply(tempRotationMatrix);
                     toSphereSpace.copy(fromSphereSpace).invert();
-                    tempRay.origin.copy(this.ray.origin).sub(tempPosition).applyMatrix4(toSphereSpace);
+                    tempRay.origin.copy(this.ray.origin).sub(tempCenter).applyMatrix4(toSphereSpace);
                     tempRay.direction.copy(this.ray.direction).transformDirection(toSphereSpace).normalize();
                     if (tempRay.intersectSphere(origin, 1.0, tempHit)) {
                         const hitClone = tempHit.clone();
-                        hitClone.origin.applyMatrix4(fromSphereSpace).add(tempPosition);
+                        hitClone.origin.applyMatrix4(fromSphereSpace).add(tempCenter);
                         outHits.push(hitClone);
                     }
                     */

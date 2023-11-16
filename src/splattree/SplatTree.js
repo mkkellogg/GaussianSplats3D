@@ -3,9 +3,9 @@ import { SplatTreeNode } from './SplatTreeNode.js';
 
 export class SplatTree {
 
-    constructor(maxDepth, maxPositionsPerNode) {
+    constructor(maxDepth, maxCentersPerNode) {
         this.maxDepth = maxDepth;
-        this.maxPositionsPerNode = maxPositionsPerNode;
+        this.maxCentersPerNode = maxCentersPerNode;
         this.splatBuffer = null;
         this.sceneDimensions = new THREE.Vector3();
         this.sceneMin = new THREE.Vector3();
@@ -21,16 +21,16 @@ export class SplatTree {
         this.nodesWithIndexes = [];
         const splatCount = splatBuffer.getSplatCount();
 
-        const position = new THREE.Vector3();
+        const center = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
             if (filterFunc(i)) {
-                splatBuffer.getPosition(i, position);
-                if (i === 0 || position.x < this.sceneMin.x) this.sceneMin.x = position.x;
-                if (i === 0 || position.x > this.sceneMax.x) this.sceneMax.x = position.x;
-                if (i === 0 || position.y < this.sceneMin.y) this.sceneMin.y = position.y;
-                if (i === 0 || position.y > this.sceneMax.y) this.sceneMax.y = position.y;
-                if (i === 0 || position.z < this.sceneMin.z) this.sceneMin.z = position.z;
-                if (i === 0 || position.z > this.sceneMax.z) this.sceneMax.z = position.z;
+                splatBuffer.getCenter(i, center);
+                if (i === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
+                if (i === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
+                if (i === 0 || center.y < this.sceneMin.y) this.sceneMin.y = center.y;
+                if (i === 0 || center.y > this.sceneMax.y) this.sceneMax.y = center.y;
+                if (i === 0 || center.z < this.sceneMin.z) this.sceneMin.z = center.z;
+                if (i === 0 || center.z > this.sceneMax.z) this.sceneMax.z = center.z;
             }
         }
 
@@ -52,7 +52,7 @@ export class SplatTree {
     processNode(node, splatBuffer) {
         const splatCount = node.data.indexes.length;
 
-        if (splatCount < this.maxPositionsPerNode || node.depth > this.maxDepth) {
+        if (splatCount < this.maxCentersPerNode || node.depth > this.maxDepth) {
             const newIndexes = [];
             for (let i = 0; i < node.data.indexes.length; i++) {
                 if (!this.addedIndexes[node.data.indexes[i]]) {
@@ -101,12 +101,12 @@ export class SplatTree {
             baseIndexes[i] = [];
         }
 
-        const position = new THREE.Vector3();
+        const center = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
             const splatIndex = node.data.indexes[i];
-            splatBuffer.getPosition(splatIndex, position);
+            splatBuffer.getCenter(splatIndex, center);
             for (let j = 0; j < childrenBounds.length; j++) {
-                if (childrenBounds[j].containsPoint(position)) {
+                if (childrenBounds[j].containsPoint(center)) {
                     splatCounts[j]++;
                     baseIndexes[j].push(splatIndex);
                 }

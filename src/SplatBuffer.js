@@ -12,21 +12,21 @@ let tbf;
 
 export class SplatBuffer {
 
-    static PositionComponentCount = 3;
+    static CenterComponentCount = 3;
     static ScaleComponentCount = 3;
     static RotationComponentCount = 4;
     static ColorComponentCount = 4;
 
     static CompressionLevels = {
         0: {
-            BytesPerPosition: 12,
+            BytesPerCenter: 12,
             BytesPerScale: 12,
             BytesPerColor: 4,
             BytesPerRotation: 16,
             ScaleRange: 1
         },
         1: {
-            BytesPerPosition: 6,
+            BytesPerCenter: 6,
             BytesPerScale: 6,
             BytesPerColor: 4,
             BytesPerRotation: 8,
@@ -62,12 +62,12 @@ export class SplatBuffer {
         this.splatBufferData = new ArrayBuffer(dataBufferSizeBytes);
         new Uint8Array(this.splatBufferData).set(new Uint8Array(bufferData, SplatBuffer.HeaderSizeBytes, dataBufferSizeBytes));
 
-        this.bytesPerPosition = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerPosition;
+        this.bytesPerCenter = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerCenter;
         this.bytesPerScale = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerScale;
         this.bytesPerColor = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerColor;
         this.bytesPerRotation = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerRotation;
 
-        this.bytesPerSplat = this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor + this.bytesPerRotation;
+        this.bytesPerSplat = this.bytesPerCenter + this.bytesPerScale + this.bytesPerColor + this.bytesPerRotation;
 
         fbf = this.fbf.bind(this);
         tbf = this.tbf.bind(this);
@@ -77,13 +77,13 @@ export class SplatBuffer {
 
     linkBufferArrays() {
         let FloatArray = (this.compressionLevel === 0) ? Float32Array : Uint16Array;
-        this.positionArray = new FloatArray(this.splatBufferData, 0, this.splatCount * SplatBuffer.PositionComponentCount);
-        this.scaleArray = new FloatArray(this.splatBufferData, this.bytesPerPosition * this.splatCount,
+        this.centerArray = new FloatArray(this.splatBufferData, 0, this.splatCount * SplatBuffer.CenterComponentCount);
+        this.scaleArray = new FloatArray(this.splatBufferData, this.bytesPerCenter * this.splatCount,
                                          this.splatCount * SplatBuffer.ScaleComponentCount);
-        this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerPosition + this.bytesPerScale) * this.splatCount,
+        this.colorArray = new Uint8Array(this.splatBufferData, (this.bytesPerCenter + this.bytesPerScale) * this.splatCount,
                                          this.splatCount * SplatBuffer.ColorComponentCount);
         this.rotationArray = new FloatArray(this.splatBufferData,
-                                             (this.bytesPerPosition + this.bytesPerScale + this.bytesPerColor) * this.splatCount,
+                                             (this.bytesPerCenter + this.bytesPerScale + this.bytesPerColor) * this.splatCount,
                                               this.splatCount * SplatBuffer.RotationComponentCount);
         this.bucketsBase = this.splatCount * this.bytesPerSplat;
     }
@@ -112,41 +112,41 @@ export class SplatBuffer {
         return this.splatBufferData;
     }
 
-    getPosition(index, outPosition = new THREE.Vector3()) {
+    getCenter(index, outCenter = new THREE.Vector3()) {
         let bucket = [0, 0, 0];
-        const positionBase = index * SplatBuffer.PositionComponentCount;
+        const centerBase = index * SplatBuffer.CenterComponentCount;
         if (this.compressionLevel > 0) {
             const sf = this.compressionScaleFactor;
             const sr = this.compressionScaleRange;
             const bucketIndex = Math.floor(index / this.bucketSize);
             bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
-            outPosition.x = (this.positionArray[positionBase] - sr) * sf + bucket[0];
-            outPosition.y = (this.positionArray[positionBase + 1] - sr) * sf + bucket[1];
-            outPosition.z = (this.positionArray[positionBase + 2] - sr) * sf + bucket[2];
+            outCenter.x = (this.centerArray[centerBase] - sr) * sf + bucket[0];
+            outCenter.y = (this.centerArray[centerBase + 1] - sr) * sf + bucket[1];
+            outCenter.z = (this.centerArray[centerBase + 2] - sr) * sf + bucket[2];
         } else {
-            outPosition.x = this.positionArray[positionBase];
-            outPosition.y = this.positionArray[positionBase + 1];
-            outPosition.z = this.positionArray[positionBase + 2];
+            outCenter.x = this.centerArray[centerBase];
+            outCenter.y = this.centerArray[centerBase + 1];
+            outCenter.z = this.centerArray[centerBase + 2];
         }
-        return outPosition;
+        return outCenter;
     }
 
-    setPosition(index, position) {
+    setCenter(index, center) {
         let bucket = [0, 0, 0];
-        const positionBase = index * SplatBuffer.PositionComponentCount;
+        const centerBase = index * SplatBuffer.CenterComponentCount;
         if (this.compressionLevel > 0) {
             const sf = 1.0 / this.compressionScaleFactor;
             const sr = this.compressionScaleRange;
             const maxR = sr * 2 + 1;
             const bucketIndex = Math.floor(index / this.bucketSize);
             bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
-            this.positionArray[positionBase] = clamp(Math.round((position.x - bucket[0]) * sf) + sr, 0, maxR);
-            this.positionArray[positionBase + 1] = clamp(Math.round((position.y - bucket[1]) * sf) + sr, 0, maxR);
-            this.positionArray[positionBase + 2] = clamp(Math.round((position.z - bucket[2]) * sf) + sr, 0, maxR);
+            this.centerArray[centerBase] = clamp(Math.round((center.x - bucket[0]) * sf) + sr, 0, maxR);
+            this.centerArray[centerBase + 1] = clamp(Math.round((center.y - bucket[1]) * sf) + sr, 0, maxR);
+            this.centerArray[centerBase + 2] = clamp(Math.round((center.z - bucket[2]) * sf) + sr, 0, maxR);
         } else {
-            this.positionArray[positionBase] = position.x;
-            this.positionArray[positionBase + 1] = position.y;
-            this.positionArray[positionBase + 2] = position.z;
+            this.centerArray[centerBase] = center.x;
+            this.centerArray[centerBase + 1] = center.y;
+            this.centerArray[centerBase + 2] = center.z;
         }
     }
 
@@ -232,23 +232,23 @@ export class SplatBuffer {
         }
     }
 
-    fillPositionArray(outPositionArray) {
+    fillCenterArray(outCenterArray) {
         const splatCount = this.splatCount;
         let bucket = [0, 0, 0];
         for (let i = 0; i < splatCount; i++) {
-            const positionBase = i * SplatBuffer.PositionComponentCount;
+            const centerBase = i * SplatBuffer.CenterComponentCount;
             if (this.compressionLevel > 0) {
                 const bucketIndex = Math.floor(i / this.bucketSize);
                 bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
                 const sf = this.compressionScaleFactor;
                 const sr = this.compressionScaleRange;
-                outPositionArray[positionBase] = (this.positionArray[positionBase] - sr) * sf + bucket[0];
-                outPositionArray[positionBase + 1] = (this.positionArray[positionBase + 1] - sr) * sf + bucket[1];
-                outPositionArray[positionBase + 2] = (this.positionArray[positionBase + 2] - sr) * sf + bucket[2];
+                outCenterArray[centerBase] = (this.centerArray[centerBase] - sr) * sf + bucket[0];
+                outCenterArray[centerBase + 1] = (this.centerArray[centerBase + 1] - sr) * sf + bucket[1];
+                outCenterArray[centerBase + 2] = (this.centerArray[centerBase + 2] - sr) * sf + bucket[2];
             } else {
-                outPositionArray[positionBase] = this.positionArray[positionBase];
-                outPositionArray[positionBase + 1] = this.positionArray[positionBase + 1];
-                outPositionArray[positionBase + 2] = this.positionArray[positionBase + 2];
+                outCenterArray[centerBase] = this.centerArray[centerBase];
+                outCenterArray[centerBase + 1] = this.centerArray[centerBase + 1];
+                outCenterArray[centerBase + 2] = this.centerArray[centerBase + 2];
             }
         }
     }
@@ -289,10 +289,10 @@ export class SplatBuffer {
 
     swapVertices(indexA, indexB) {
 
-        this.getPosition(indexA, tempVector3A);
-        this.getPosition(indexB, tempVector3B);
-        this.setPosition(indexB, tempVector3A);
-        this.setPosition(indexA, tempVector3B);
+        this.getCenter(indexA, tempVector3A);
+        this.getCenter(indexB, tempVector3B);
+        this.setCenter(indexB, tempVector3A);
+        this.setCenter(indexA, tempVector3B);
 
         this.getScale(indexA, tempVector3A);
         this.getScale(indexB, tempVector3B);

@@ -8,7 +8,7 @@ import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
-import { getCurrentTime, clamp } from './Util.js';
+import { getCurrentTime } from './Util.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -488,8 +488,6 @@ export class Viewer {
                 splatRenderCount += node.data.indexes.length;
                 nodeRenderList[nodeRenderCount] = node;
                 node.data.distanceToNode = distanceToNode;
-                node.data.distanceScore = Math.pow(distanceToNode / MaximumDistanceToRender, 2.0);
-                node.data.angleScore = 1 - clamp((cameraAngleXZDot + cameraAngleYZDot) / 2, 0, 1);
                 nodeRenderCount++;
             }
 
@@ -772,6 +770,21 @@ export class Viewer {
         const sortViewOffset = new THREE.Vector3();
         const queuedTiers = [];
 
+        const partialSorts = [
+            {
+                'angleThreshold': 0.55,
+                'sortFractions': [0.125, 0.33333, 0.75]
+            },
+            {
+                'angleThreshold': 0.65,
+                'sortFractions': [0.33333, 0.66667]
+            },
+            {
+                'angleThreshold': 0.8,
+                'sortFractions': [0.5]
+            }
+        ];
+
         return function(force = false, gatherAllNodes = false) {
             let angleDiff = 0;
             let positionDiff = 0;
@@ -802,15 +815,13 @@ export class Viewer {
                     this.splatMesh.computeDistancesOnGPU(tempMatrix, this.sortWorkerPrecomputedDistances);
                 }
                 if (queuedTiers.length === 0) {
-                    if (angleDiff < 0.55) {
-                        queuedTiers.push(Math.floor(this.splatRenderCount / 8));
-                        queuedTiers.push(Math.floor(this.splatRenderCount / 3));
-                        queuedTiers.push(Math.floor(this.splatRenderCount * 3 / 4));
-                    } else if (angleDiff < 0.65) {
-                        queuedTiers.push(Math.floor(this.splatRenderCount / 3));
-                        queuedTiers.push(Math.floor(this.splatRenderCount * 2 / 3));
-                    } else if (angleDiff < .8) {
-                        queuedTiers.push(Math.floor(this.splatRenderCount / 2));
+                    for (let partialSort of partialSorts) {
+                        if (angleDiff < partialSort.angleThreshold) {
+                            for (let sortFraction of partialSort.sortFractions) {
+                                queuedTiers.push(Math.floor(this.splatRenderCount * sortFraction));
+                            }
+                            break;
+                        }
                     }
                     queuedTiers.push(this.splatRenderCount);
                 }

@@ -31,9 +31,9 @@ export class SplatMesh extends THREE.Mesh {
             this.distancesTransformFeedback = {
                 'id': null,
                 'program': null,
-                'positionBuffer': null,
+                'centersBuffer': null,
                 'outDistancesBuffer': null,
-                'positionLoc': -1,
+                'centersLoc': -1,
                 'viewProjLoc': -1,
             };
             this.setupDistancesTransformFeedback();
@@ -292,7 +292,7 @@ export class SplatMesh extends THREE.Mesh {
         this.updateLocalSplatDataFromSplatBuffer();
         this.allocateAndStoreLocalSplatDataInTextures();
         if (this.enableDistancesComputationOnGPU) {
-            this.updatePositionsGPUBufferForDistancesComputation();
+            this.updateCentersGPUBufferForDistancesComputation();
         }
     }
 
@@ -302,7 +302,7 @@ export class SplatMesh extends THREE.Mesh {
         this.colors = new Uint8Array(splatCount * 4);
         this.centers = new Float32Array(splatCount * 3);
         this.splatBuffer.fillCovarianceArray(this.covariances);
-        this.splatBuffer.fillPositionArray(this.centers);
+        this.splatBuffer.fillCenterArray(this.centers);
         this.splatBuffer.fillColorArray(this.colors);
     }
 
@@ -466,11 +466,11 @@ export class SplatMesh extends THREE.Mesh {
 
         const vsSource =
            `#version 300 es
-            in ivec3 position;
+            in ivec3 center;
             uniform ivec3 viewProj;
             flat out int distance;
             void main(void) {
-                distance = position.x * viewProj.x + position.y * viewProj.y + position.z * viewProj.z; 
+                distance = center.x * viewProj.x + center.y * viewProj.y + center.z * viewProj.z; 
             }
         `;
 
@@ -492,7 +492,7 @@ export class SplatMesh extends THREE.Mesh {
         const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
         const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
         if (!vertexShader || !fragmentShader) {
-            throw new Error('Could not compile transform feedback shaders.');
+            throw new Error('Could not compile shaders for distances computation on GPU.');
         }
         gl.attachShader(this.distancesTransformFeedback.program, vertexShader);
         gl.attachShader(this.distancesTransformFeedback.program, fragmentShader);
@@ -506,18 +506,18 @@ export class SplatMesh extends THREE.Mesh {
             gl.deleteProgram(this.distancesTransformFeedback.program);
             gl.deleteShader(fragmentShader);
             gl.deleteShader(vertexShader);
-            throw new Error('Could not link transform feedback program.');
+            throw new Error('Could not link shaders for distances computation on GPU.');
         }
 
         gl.useProgram(this.distancesTransformFeedback.program);
 
-        this.distancesTransformFeedback.positionLoc = gl.getAttribLocation(this.distancesTransformFeedback.program, 'position');
+        this.distancesTransformFeedback.centersLoc = gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
         this.distancesTransformFeedback.viewProjLoc = gl.getUniformLocation(this.distancesTransformFeedback.program, 'viewProj');
 
-        this.distancesTransformFeedback.positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.positionBuffer);
-        gl.enableVertexAttribArray(this.distancesTransformFeedback.positionLoc);
-        gl.vertexAttribIPointer(this.distancesTransformFeedback.positionLoc, 3, gl.INT, 0, 0);
+        this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
+        gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
+        gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
 
         this.distancesTransformFeedback.outDistancesBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
@@ -534,22 +534,16 @@ export class SplatMesh extends THREE.Mesh {
     getIntegerCenters(padFour) {
         const splatCount = this.getSplatCount();
         const floatCenters = new Float32Array(this.centers);
-        let intPositions;
-        let componentCount;
-        if (padFour) {
-            intPositions = new Int32Array(splatCount * 4);
-            componentCount = 4;
-        } else {
-            intPositions = new Int32Array(splatCount * 3);
-            componentCount = 3;
-        }
+        let intCenters;
+        let componentCount = padFour ? 4 : 3;
+        intCenters = new Int32Array(splatCount * componentCount);
         for (let i = 0; i < splatCount; i++) {
             for (let t = 0; t < 3; t++) {
-                intPositions[i * componentCount + t] = Math.round(floatCenters[i * 3 + t] * 1000.0);
+                intCenters[i * componentCount + t] = Math.round(floatCenters[i * 3 + t] * 1000.0);
             }
-            if (padFour) intPositions[i * componentCount + 3] = 1;
+            if (padFour) intCenters[i * componentCount + 3] = 1;
         }
-        return intPositions;
+        return intCenters;
     }
 
     getIntegerMatrixArray(matrix) {
@@ -561,15 +555,15 @@ export class SplatMesh extends THREE.Mesh {
         return intMatrixArray;
     }
 
-    updatePositionsGPUBufferForDistancesComputation() {
+    updateCentersGPUBufferForDistancesComputation() {
         const gl = this.renderer.getContext();
 
         const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
         gl.bindVertexArray(this.distancesTransformFeedback.vao);
 
-        const intPositions = this.getIntegerCenters(false);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, intPositions, gl.STATIC_DRAW);
+        const intCenters = this.getIntegerCenters(false);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, intCenters, gl.STATIC_DRAW);
 
         if (currentVao) gl.bindVertexArray(currentVao);
     }
@@ -592,9 +586,9 @@ export class SplatMesh extends THREE.Mesh {
 
         gl.uniform3i(this.distancesTransformFeedback.viewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.positionBuffer);
-        gl.enableVertexAttribArray(this.distancesTransformFeedback.positionLoc);
-        gl.vertexAttribIPointer(this.distancesTransformFeedback.positionLoc, 3, gl.INT, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
+        gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
+        gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
 
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.distancesTransformFeedback.outDistancesBuffer);

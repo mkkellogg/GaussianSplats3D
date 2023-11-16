@@ -20,10 +20,10 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* centers
 
     if (usePrecomputedDistances) {
         for (unsigned int i = sortStart; i < renderCount; i++) {
-            int depth = precomputedDistances[indexes[i]];
-            mappedDistances[i] = depth;
-            if (depth > maxDistance) maxDistance = depth;
-            if (depth < minDistance) minDistance = depth;
+            int distance = precomputedDistances[indexes[i]];
+            mappedDistances[i] = distance;
+            if (distance > maxDistance) maxDistance = distance;
+            if (distance < minDistance) minDistance = distance;
         }
     } else {
         int tempIn[4];
@@ -34,10 +34,10 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* centers
             v128_t a = wasm_v128_load(&centers[4 * indexes[i]]);
             v128_t prod = wasm_i32x4_mul(a, b);
             wasm_v128_store(&tempOut[0], prod);
-            int depth = tempOut[0] + tempOut[1] + tempOut[2];
-            mappedDistances[i] = depth;
-            if (depth > maxDistance) maxDistance = depth;
-            if (depth < minDistance) minDistance = depth;
+            int distance = tempOut[0] + tempOut[1] + tempOut[2];
+            mappedDistances[i] = distance;
+            if (distance > maxDistance) maxDistance = distance;
+            if (distance < minDistance) minDistance = distance;
         }
     }
 
