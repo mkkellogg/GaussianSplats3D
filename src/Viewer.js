@@ -43,6 +43,11 @@ export class Viewer {
         this.selfDrivenMode = params.selfDrivenMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
 
+        this.gpuAcceleratedSort = params.gpuAcceleratedSort;
+        if (this.gpuAcceleratedSort !== true && this.gpuAcceleratedSort !== false) {
+            this.gpuAcceleratedSort = true;
+        }
+
         this.showMeshCursor = false;
         this.showControlPlane = false;
         this.showInfo = false;
@@ -50,14 +55,14 @@ export class Viewer {
         this.sceneHelper = null;
 
         this.sortWorker = null;
+        this.sortRunning = false;
         this.splatRenderCount = 0;
-        this.splatSortCount = 0;
-
-        this.inIndexArray = null;
+        this.sortWorkerIndexesToSort = null;
+        this.sortWorkerSortedIndexes = null;
+        this.sortWorkerPrecomputedDistances = null;
 
         this.splatMesh = null;
 
-        this.sortRunning = false;
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
 
@@ -366,7 +371,8 @@ export class Viewer {
             }
             window.setTimeout(() => {
                 this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
-                                    options.orientation, options.halfPrecisionCovariancesOnGPU, this.devicePixelRatio);
+                                    options.orientation, options.halfPrecisionCovariancesOnGPU,
+                                    this.devicePixelRatio, this.gpuAcceleratedSort);
                 this.setupSortWorker(splatBuffer).then(() => {
                     if (options.showLoadingSpinner) this.loadingSpinner.hide();
                     resolve();
@@ -376,11 +382,12 @@ export class Viewer {
     }
 
     setupSplatMesh(splatBuffer, splatAlphaRemovalThreshold = 1, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
-                   halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
+                   halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, gpuAcceleratedSort = true) {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
-        this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU, devicePixelRatio);
+        this.splatMesh = SplatMesh.buildMesh(splatBuffer, this.renderer, splatAlphaRemovalThreshold,
+                                             halfPrecisionCovariancesOnGPU, devicePixelRatio, gpuAcceleratedSort);
         this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
@@ -396,21 +403,25 @@ export class Viewer {
             this.sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
-                    this.splatMesh.updateIndexes(this.outIndexArray, e.data.splatRenderCount);
+                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
                     this.lastSortTime = e.data.sortTime;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
                     console.log('Sorting web worker WASM setup complete.');
                     this.sortWorker.postMessage({
-                        'positions': this.splatMesh.getCenters().buffer
+                        'centers': this.splatMesh.getIntegerCenters(true).buffer
                     });
-                    this.outIndexArray = new Uint32Array(e.data.outIndexBuffer, e.data.outIndexOffset, splatBuffer.getSplatCount());
-                    this.inIndexArray = new Uint32Array(e.data.inIndexBuffer, e.data.inIndexOffset, splatBuffer.getSplatCount());
-                    for (let i = 0; i < splatCount; i++) this.inIndexArray[i] = i;
+                    this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
+                                                                   e.data.sortedIndexesOffset, splatBuffer.getSplatCount());
+                    this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
+                                                                   e.data.indexesToSortOffset, splatBuffer.getSplatCount());
+                    this.sortWorkerPrecomputedDistances = new Int32Array(e.data.precomputedDistancesBuffer,
+                                                                         e.data.precomputedDistancesOffset, splatBuffer.getSplatCount());
+                    for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
                     console.log('Sorting web worker ready.');
-                    this.splatMesh.updateIndexes(this.outIndexArray, splatBuffer.getSplatCount());
+                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, splatBuffer.getSplatCount());
                     const splatDataTextures = this.splatMesh.getSplatDataTextures();
                     const covariancesTextureSize = splatDataTextures.covariances.size;
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
@@ -439,7 +450,6 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
-        const MaximumDistanceToSort = 125;
         const MaximumDistanceToRender = 125;
 
         return function(gatherAllNodes) {
@@ -470,8 +480,8 @@ export class Viewer {
                 const cameraAngleYZDot = forward.dot(tempVectorYZ);
 
                 const ns = nodeSize(node);
-                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .5);
-                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .5);
+                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
+                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
                 if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
                     continue;
                 }
@@ -483,22 +493,17 @@ export class Viewer {
 
             nodeRenderList.length = nodeRenderCount;
             nodeRenderList.sort((a, b) => {
-                if (a.data.distanceToNode < b.data.distanceToNode) return 1;
-                else return -1;
+                if (a.data.distanceToNode < b.data.distanceToNode) return -1;
+                else return 1;
             });
 
             this.splatRenderCount = splatRenderCount;
-            this.splatSortCount = 0;
             let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
             for (let i = 0; i < nodeRenderCount; i++) {
                 const node = nodeRenderList[i];
-                const shouldSort = node.data.distanceToNode <= MaximumDistanceToSort;
-                if (shouldSort) {
-                    this.splatSortCount += node.data.indexes.length;
-                }
                 const windowSizeInts = node.data.indexes.length;
                 const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
-                let destView = new Uint32Array(this.inIndexArray.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
+                let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
                 destView.set(node.data.indexes);
                 currentByteOffset -= windowSizeBytes;
             }
@@ -763,14 +768,35 @@ export class Viewer {
         const sortViewDir = new THREE.Vector3(0, 0, -1);
         const lastSortViewPos = new THREE.Vector3();
         const sortViewOffset = new THREE.Vector3();
+        const queuedTiers = [];
+
+        const partialSorts = [
+            {
+                'angleThreshold': 0.55,
+                'sortFractions': [0.125, 0.33333, 0.75]
+            },
+            {
+                'angleThreshold': 0.65,
+                'sortFractions': [0.33333, 0.66667]
+            },
+            {
+                'angleThreshold': 0.8,
+                'sortFractions': [0.5]
+            }
+        ];
 
         return function(force = false, gatherAllNodes = false) {
-            if (!force) {
-                sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
-                let needsRefreshForRotation = false;
-                let needsRefreshForPosition = false;
-                if (sortViewDir.dot(lastSortViewDir) <= 0.95) needsRefreshForRotation = true;
-                if (sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length() >= 1.0) needsRefreshForPosition = true;
+            let angleDiff = 0;
+            let positionDiff = 0;
+            sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+            let needsRefreshForRotation = false;
+            let needsRefreshForPosition = false;
+            angleDiff = sortViewDir.dot(lastSortViewDir);
+            positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
+
+            if (!force && queuedTiers.length === 0) {
+                if (angleDiff <= 0.95) needsRefreshForRotation = true;
+                if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
 
@@ -782,19 +808,37 @@ export class Viewer {
             cameraPositionArray[2] = this.camera.position.z;
 
             if (!this.sortRunning) {
-                this.gatherSceneNodes(gatherAllNodes);
+                let sortCount;
                 this.sortRunning = true;
+                this.gatherSceneNodes(gatherAllNodes);
+                if (this.gpuAcceleratedSort && (queuedTiers.length <= 1 || queuedTiers.length % 2 === 0)) {
+                    this.splatMesh.computeDistancesOnGPU(tempMatrix, this.sortWorkerPrecomputedDistances);
+                }
+                if (queuedTiers.length === 0) {
+                    for (let partialSort of partialSorts) {
+                        if (angleDiff < partialSort.angleThreshold) {
+                            for (let sortFraction of partialSort.sortFractions) {
+                                queuedTiers.push(Math.floor(this.splatRenderCount * sortFraction));
+                            }
+                            break;
+                        }
+                    }
+                    queuedTiers.push(this.splatRenderCount);
+                }
+                sortCount = Math.min(queuedTiers.shift(), this.splatRenderCount);
                 this.sortWorker.postMessage({
                     sort: {
-                        'view': tempMatrix.elements,
+                        'viewProj': this.splatMesh.getIntegerMatrixArray(tempMatrix),
                         'cameraPosition': cameraPositionArray,
                         'splatRenderCount': this.splatRenderCount,
-                        'splatSortCount': this.splatSortCount,
-                        'inIndexBuffer': this.inIndexArray.buffer
+                        'splatSortCount': sortCount,
+                        'usePrecomputedDistances': this.gpuAcceleratedSort
                     }
                 });
-                lastSortViewPos.copy(this.camera.position);
-                lastSortViewDir.copy(sortViewDir);
+                if (queuedTiers.length === 0) {
+                    lastSortViewPos.copy(this.camera.position);
+                    lastSortViewDir.copy(sortViewDir);
+                }
             }
         };
 

@@ -162,12 +162,12 @@ export class PlyParser {
 
         console.log('Total valid splats: ', validVertexes.length, 'out of', splatCount);
 
-        const positionsForBucketCalcs = [];
+        const centersForBucketCalcs = [];
         for (let row = 0; row < validVertexes.length; row++) {
             rawVertex = validVertexes[row];
-            positionsForBucketCalcs.push([rawVertex.x, rawVertex.y, rawVertex.z]);
+            centersForBucketCalcs.push([rawVertex.x, rawVertex.y, rawVertex.z]);
         }
-        const buckets = this.computeBuckets(positionsForBucketCalcs);
+        const buckets = this.computeBuckets(centersForBucketCalcs);
 
         const paddedSplatCount = buckets.length * SplatBufferBucketSize;
         const headerSize = SplatBuffer.HeaderSizeBytes;
@@ -175,11 +175,11 @@ export class PlyParser {
         header[3] = compressionLevel;
         (new Uint32Array(header.buffer, 4, 1))[0] = paddedSplatCount;
 
-        let bytesPerPosition = SplatBuffer.CompressionLevels[compressionLevel].BytesPerPosition;
+        let bytesPerCenter = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCenter;
         let bytesPerScale = SplatBuffer.CompressionLevels[compressionLevel].BytesPerScale;
         let bytesPerColor = SplatBuffer.CompressionLevels[compressionLevel].BytesPerColor;
         let bytesPerRotation = SplatBuffer.CompressionLevels[compressionLevel].BytesPerRotation;
-        const positionBuffer = new ArrayBuffer(bytesPerPosition * paddedSplatCount);
+        const centerBuffer = new ArrayBuffer(bytesPerCenter * paddedSplatCount);
         const scaleBuffer = new ArrayBuffer(bytesPerScale * paddedSplatCount);
         const colorBuffer = new ArrayBuffer(bytesPerColor * paddedSplatCount);
         const rotationBuffer = new ArrayBuffer(bytesPerRotation * paddedSplatCount);
@@ -204,7 +204,7 @@ export class PlyParser {
                 rawVertex = validVertexes[row];
 
                 if (compressionLevel === 0) {
-                    const position = new Float32Array(positionBuffer, outSplatIndex * bytesPerPosition, 3);
+                    const center = new Float32Array(centerBuffer, outSplatIndex * bytesPerCenter, 3);
                     const scales = new Float32Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
                     const rot = new Float32Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
                     if (propertyTypes['scale_0']) {
@@ -216,9 +216,9 @@ export class PlyParser {
                         scales.set([0.01, 0.01, 0.01]);
                         rot.set([1.0, 0.0, 0.0, 0.0]);
                     }
-                    position.set([rawVertex.x, rawVertex.y, rawVertex.z]);
+                    center.set([rawVertex.x, rawVertex.y, rawVertex.z]);
                 } else {
-                    const position = new Uint16Array(positionBuffer, outSplatIndex * bytesPerPosition, 3);
+                    const center = new Uint16Array(centerBuffer, outSplatIndex * bytesPerCenter, 3);
                     const scales = new Uint16Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
                     const rot = new Uint16Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
                     const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
@@ -238,7 +238,7 @@ export class PlyParser {
                     bucketCenterDelta.y = clamp(bucketCenterDelta.y, 0, doubleCompressionScaleRange);
                     bucketCenterDelta.z = Math.round(bucketCenterDelta.z * compressionScaleFactor) + compressionScaleRange;
                     bucketCenterDelta.z = clamp(bucketCenterDelta.z, 0, doubleCompressionScaleRange);
-                    position.set([bucketCenterDelta.x, bucketCenterDelta.y, bucketCenterDelta.z]);
+                    center.set([bucketCenterDelta.x, bucketCenterDelta.y, bucketCenterDelta.z]);
                 }
 
                 const rgba = new Uint8ClampedArray(colorBuffer, outSplatIndex * bytesPerColor, 4);
@@ -269,7 +269,7 @@ export class PlyParser {
 
         const bytesPerBucket = 12;
         const bucketsSize = bytesPerBucket * buckets.length;
-        const splatDataBufferSize = positionBuffer.byteLength + scaleBuffer.byteLength +
+        const splatDataBufferSize = centerBuffer.byteLength + scaleBuffer.byteLength +
                                     colorBuffer.byteLength + rotationBuffer.byteLength;
 
         const headerArrayUint32 = new Uint32Array(header.buffer);
@@ -286,11 +286,11 @@ export class PlyParser {
 
         const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
         new Uint8Array(unifiedBuffer, 0, headerSize).set(header);
-        new Uint8Array(unifiedBuffer, headerSize, positionBuffer.byteLength).set(new Uint8Array(positionBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength, scaleBuffer.byteLength).set(new Uint8Array(scaleBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength + scaleBuffer.byteLength,
+        new Uint8Array(unifiedBuffer, headerSize, centerBuffer.byteLength).set(new Uint8Array(centerBuffer));
+        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength, scaleBuffer.byteLength).set(new Uint8Array(scaleBuffer));
+        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength + scaleBuffer.byteLength,
                        colorBuffer.byteLength).set(new Uint8Array(colorBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + positionBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength,
+        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength,
                        rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
 
         if (compressionLevel > 0) {
@@ -314,23 +314,23 @@ export class PlyParser {
         return splatBuffer;
     }
 
-    computeBuckets(positions) {
+    computeBuckets(centers) {
         const blockSize = SplatBufferBucketBlockSize;
         const halfBlockSize = blockSize / 2.0;
-        const splatCount = positions.length;
+        const splatCount = centers.length;
 
         const min = new THREE.Vector3();
         const max = new THREE.Vector3();
 
         // ignore the first splat since it's the invalid designator
         for (let i = 1; i < splatCount; i++) {
-            const position = positions[i];
-            if (i === 0 || position[0] < min.x) min.x = position[0];
-            if (i === 0 || position[0] > max.x) max.x = position[0];
-            if (i === 0 || position[1] < min.y) min.y = position[1];
-            if (i === 0 || position[1] > max.y) max.y = position[1];
-            if (i === 0 || position[2] < min.z) min.z = position[2];
-            if (i === 0 || position[2] > max.z) max.z = position[2];
+            const center = centers[i];
+            if (i === 0 || center[0] < min.x) min.x = center[0];
+            if (i === 0 || center[0] > max.x) max.x = center[0];
+            if (i === 0 || center[1] < min.y) min.y = center[1];
+            if (i === 0 || center[1] > max.y) max.y = center[1];
+            if (i === 0 || center[2] < min.z) min.z = center[2];
+            if (i === 0 || center[2] > max.z) max.z = center[2];
         }
 
         const dimensions = new THREE.Vector3().copy(max).sub(min);
@@ -343,10 +343,10 @@ export class PlyParser {
 
         // ignore the first splat since it's the invalid designator
         for (let i = 1; i < splatCount; i++) {
-            const position = positions[i];
-            const xBlock = Math.ceil((position[0] - min.x) / blockSize);
-            const yBlock = Math.ceil((position[1] - min.y) / blockSize);
-            const zBlock = Math.ceil((position[2] - min.z) / blockSize);
+            const center = centers[i];
+            const xBlock = Math.ceil((center[0] - min.x) / blockSize);
+            const yBlock = Math.ceil((center[1] - min.y) / blockSize);
+            const zBlock = Math.ceil((center[2] - min.z) / blockSize);
 
             blockCenter.x = (xBlock - 1) * blockSize + min.x + halfBlockSize;
             blockCenter.y = (yBlock - 1) * blockSize + min.y + halfBlockSize;

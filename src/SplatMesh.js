@@ -4,24 +4,41 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
+    static buildMesh(splatBuffer, renderer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false,
+                     devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold, halfPrecisionCovariancesOnGPU, devicePixelRatio);
+        return new SplatMesh(splatBuffer, geometry, material, renderer, splatAlphaRemovalThreshold,
+                             halfPrecisionCovariancesOnGPU, devicePixelRatio, enableDistancesComputationOnGPU);
     }
 
-    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1,
-                halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1) {
+    constructor(splatBuffer, geometry, material, renderer, splatAlphaRemovalThreshold = 1,
+                halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
         super(geometry, material);
         this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
+        this.renderer = renderer;
         this.splatTree = null;
         this.splatDataTextures = null;
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.devicePixelRatio = devicePixelRatio;
+        this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
         this.buildSplatTree();
+
+        if (this.enableDistancesComputationOnGPU) {
+            this.distancesTransformFeedback = {
+                'id': null,
+                'program': null,
+                'centersBuffer': null,
+                'outDistancesBuffer': null,
+                'centersLoc': -1,
+                'viewProjLoc': -1,
+            };
+            this.setupDistancesTransformFeedback();
+        }
+
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
 
@@ -274,6 +291,9 @@ export class SplatMesh extends THREE.Mesh {
     resetLocalSplatDataAndTexturesFromSplatBuffer() {
         this.updateLocalSplatDataFromSplatBuffer();
         this.allocateAndStoreLocalSplatDataInTextures();
+        if (this.enableDistancesComputationOnGPU) {
+            this.updateCentersGPUBufferForDistancesComputation();
+        }
     }
 
     updateLocalSplatDataFromSplatBuffer() {
@@ -282,7 +302,7 @@ export class SplatMesh extends THREE.Mesh {
         this.colors = new Uint8Array(splatCount * 4);
         this.centers = new Float32Array(splatCount * 3);
         this.splatBuffer.fillCovarianceArray(this.covariances);
-        this.splatBuffer.fillPositionArray(this.centers);
+        this.splatBuffer.fillCenterArray(this.centers);
         this.splatBuffer.fillColorArray(this.colors);
     }
 
@@ -414,5 +434,182 @@ export class SplatMesh extends THREE.Mesh {
 
     getCovariances() {
         return this.covariances;
+    }
+
+    setupDistancesTransformFeedback() {
+
+        const splatCount = this.getSplatCount();
+
+        const createShader = (gl, type, source) => {
+            const shader = gl.createShader(type);
+            if (!shader) {
+                console.error('Fatal error: gl could not create a shader object.');
+                return null;
+            }
+
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+
+            const compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+            if (!compiled) {
+                let typeName = 'unknown';
+                if (type === gl.VERTEX_SHADER) typeName = 'vertex shader';
+                else if (type === gl.FRAGMENT_SHADER) typeName = 'fragement shader';
+                const errors = gl.getShaderInfoLog(shader);
+                console.error('Failed to compile ' + typeName + ' with these errors:' + errors);
+                gl.deleteShader(shader);
+                return null;
+            }
+
+            return shader;
+        };
+
+        const vsSource =
+           `#version 300 es
+            in ivec3 center;
+            uniform ivec3 viewProj;
+            flat out int distance;
+            void main(void) {
+                distance = center.x * viewProj.x + center.y * viewProj.y + center.z * viewProj.z; 
+            }
+        `;
+
+        const fsSource =
+           `#version 300 es
+            precision lowp float;
+            out vec4 fragColor;
+            void main(){}
+        `;
+
+        const gl = this.renderer.getContext();
+
+        const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+
+        this.distancesTransformFeedback.vao = gl.createVertexArray();
+        gl.bindVertexArray(this.distancesTransformFeedback.vao);
+
+        this.distancesTransformFeedback.program = gl.createProgram();
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        if (!vertexShader || !fragmentShader) {
+            throw new Error('Could not compile shaders for distances computation on GPU.');
+        }
+        gl.attachShader(this.distancesTransformFeedback.program, vertexShader);
+        gl.attachShader(this.distancesTransformFeedback.program, fragmentShader);
+        gl.transformFeedbackVaryings(this.distancesTransformFeedback.program, ['distance'], gl.SEPARATE_ATTRIBS);
+        gl.linkProgram(this.distancesTransformFeedback.program);
+
+        const linked = gl.getProgramParameter(this.distancesTransformFeedback.program, gl.LINK_STATUS);
+        if (!linked) {
+            const error = gl.getProgramInfoLog(program);
+            console.error('Fatal error: Failed to link program: ' + error);
+            gl.deleteProgram(this.distancesTransformFeedback.program);
+            gl.deleteShader(fragmentShader);
+            gl.deleteShader(vertexShader);
+            throw new Error('Could not link shaders for distances computation on GPU.');
+        }
+
+        gl.useProgram(this.distancesTransformFeedback.program);
+
+        this.distancesTransformFeedback.centersLoc = gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
+        this.distancesTransformFeedback.viewProjLoc = gl.getUniformLocation(this.distancesTransformFeedback.program, 'viewProj');
+
+        this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
+        gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
+        gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
+
+        this.distancesTransformFeedback.outDistancesBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, splatCount * 4, gl.DYNAMIC_DRAW);
+
+        this.distancesTransformFeedback.id = gl.createTransformFeedback();
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.distancesTransformFeedback.outDistancesBuffer);
+
+        if (currentVao) gl.bindVertexArray(currentVao);
+
+    }
+
+    getIntegerCenters(padFour) {
+        const splatCount = this.getSplatCount();
+        const floatCenters = new Float32Array(this.centers);
+        let intCenters;
+        let componentCount = padFour ? 4 : 3;
+        intCenters = new Int32Array(splatCount * componentCount);
+        for (let i = 0; i < splatCount; i++) {
+            for (let t = 0; t < 3; t++) {
+                intCenters[i * componentCount + t] = Math.round(floatCenters[i * 3 + t] * 1000.0);
+            }
+            if (padFour) intCenters[i * componentCount + 3] = 1;
+        }
+        return intCenters;
+    }
+
+    getIntegerMatrixArray(matrix) {
+        const matrixElements = matrix.elements;
+        const intMatrixArray = [];
+        for (let i = 0; i < 16; i++) {
+            intMatrixArray[i] = Math.round(matrixElements[i] * 1000.0);
+        }
+        return intMatrixArray;
+    }
+
+    updateCentersGPUBufferForDistancesComputation() {
+        const gl = this.renderer.getContext();
+
+        const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+        gl.bindVertexArray(this.distancesTransformFeedback.vao);
+
+        const intCenters = this.getIntegerCenters(false);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, intCenters, gl.STATIC_DRAW);
+
+        if (currentVao) gl.bindVertexArray(currentVao);
+    }
+
+    computeDistancesOnGPU(viewProjMatrix, outComputedDistances) {
+
+        const iViewProjMatrix = this.getIntegerMatrixArray(viewProjMatrix);
+        const iViewProj = [iViewProjMatrix[2], iViewProjMatrix[6], iViewProjMatrix[10]];
+
+        // console.time("gpu_compute_distances");
+        const gl = this.renderer.getContext();
+
+        const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+        const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
+
+        gl.bindVertexArray(this.distancesTransformFeedback.vao);
+        gl.useProgram(this.distancesTransformFeedback.program);
+
+        gl.enable(gl.RASTERIZER_DISCARD);
+
+        gl.uniform3i(this.distancesTransformFeedback.viewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
+        gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
+        gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
+
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.distancesTransformFeedback.outDistancesBuffer);
+
+        gl.beginTransformFeedback(gl.POINTS);
+        gl.drawArrays(gl.POINTS, 0, this.getSplatCount());
+        gl.endTransformFeedback();
+
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
+        gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        gl.disable(gl.RASTERIZER_DISCARD);
+
+        // console.timeEnd("gpu_compute_distances");
+
+        if (currentProgram) gl.useProgram(currentProgram);
+        if (currentVao) gl.bindVertexArray(currentVao);
+
     }
 }
