@@ -42,7 +42,7 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* centers
     }
 
     float distancesRange = (float)maxDistance - (float)minDistance;
-    float rangeMap = (float)distanceMapRange / distancesRange;
+    float rangeMap = (float)(distanceMapRange - 1) / distancesRange;
 
     for (unsigned int i = sortStart; i < renderCount; i++) {
         unsigned int frequenciesIndex = (int)((float)(mappedDistances[i] - minDistance) * rangeMap);
