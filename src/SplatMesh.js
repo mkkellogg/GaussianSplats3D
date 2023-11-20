@@ -521,7 +521,7 @@ export class SplatMesh extends THREE.Mesh {
 
         this.distancesTransformFeedback.outDistancesBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, splatCount * 4, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, splatCount * 4, gl.DYNAMIC_COPY);
 
         this.distancesTransformFeedback.id = gl.createTransformFeedback();
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
@@ -600,11 +600,11 @@ export class SplatMesh extends THREE.Mesh {
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 
+        gl.disable(gl.RASTERIZER_DISCARD);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
         gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-        gl.disable(gl.RASTERIZER_DISCARD);
 
         // console.timeEnd("gpu_compute_distances");
 
