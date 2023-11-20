@@ -95,7 +95,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'cameraUp': [0, -1, -0.6],
     'initialCameraPosition': [-1, -4, 6],
     'initialCameraLookAt': [0, 4, 0],
-    'ignoreDevicePixelRatio': false
+    'ignoreDevicePixelRatio': false,
+    'gpuAcceleratedSort': true
 });
 viewer.loadFile('<path to .ply or .splat file>', {
     'splatAlphaRemovalThreshold': 5, // out of 255
@@ -105,13 +106,19 @@ viewer.loadFile('<path to .ply or .splat file>', {
     viewer.start();
 });
 ```
-`ignoreDevicePixelRatio` tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality.
+| Parameter | Purpose
+| --- | ---
+| `cameraUp` | The natural 'up' vector for viewing the scene. Determines the scene's orientation relative to the camera and serves as the axis around which the camera will orbit.
+| `initialCameraPosition` | The camera's initial position.
+| `initialCameraLookAt` | The initial focal point of the camera and center of the camera's orbit.
+| `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
+| `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computing splat distances is done on the GPU. Defaults to `true`.
+| `splatAlphaRemovalThreshold` | Tells `loadFile()` to ignore any splats with an alpha less than the specified value. Defaults to `1`.
+| `halfPrecisionCovariancesOnGPU` |  Tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit. Defaults to `true`.
+
 <br>
-`splatAlphaRemovalThreshold` tells `loadFile()` to ignore any splats with an alpha less than the specified value.
-<br>
-`halfPrecisionCovariancesOnGPU` tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit.
-<br>
-<br>
+
+
 As an alternative to using `cameraUp` to adjust to the scene's natural orientation, you can pass an orientation (and/or position) to the `loadFile()` method to transform the entire scene:
 ```javascript
 const viewer = new GaussianSplats3D.Viewer({
@@ -223,4 +230,38 @@ function update() {
     viewer.update();
     viewer.render();
 }
+```
+<br>
+
+### CORS issues and SharedArrayBuffer
+The `Viewer` class uses shared memory (via a typed array backed by a SharedArrayBufffer) to communicate with the web worker that sorts the splats. This mechanism presents a potential security issue that is outlined here: https://web.dev/articles/cross-origin-isolation-guide.
+
+To resolve this issue, a couple of extra CORS HTTP headers need to be present in the response from the server that is sent when loading the application. Without those headers set, you might see an error like the following in the debug console:
+
+```
+"DOMException: Failed to execute 'postMessage' on 'DedicatedWorkerGlobalScope': SharedArrayBuffer transfer requires self.crossOriginIsolated."
+```
+
+For the local demo I created a simple HTTP server (util/server.js) that sets those headers:
+
+```
+response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+```
+
+If you're using Apache, you can edit the `.htaccess` file to do that by adding the lines:
+
+```
+Header add Cross-Origin-Opener-Policy "same-origin"
+Header add Cross-Origin-Embedder-Policy "require-corp"
+```
+
+For other web servers, these headers most likely can be set in a similar fashion.
+
+Additionally you may need to require a secure connection to your server by redirecting all access via `http://` to `https://`. In Apache this can be done by updating the `.htaccess` file with the following lines:
+
+```
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [R,L]
 ```
