@@ -1,7 +1,8 @@
-import { PlyParser } from './PlyParser.js';
+import { Editor } from './Editor.js';
 import { PlyLoader } from './PlyLoader.js';
-import { SplatLoader } from './SplatLoader.js';
+import { PlyParser } from './PlyParser.js';
 import { SplatBuffer } from './SplatBuffer.js';
+import { SplatLoader } from './SplatLoader.js';
 import { Viewer } from './Viewer.js';
 
 export {
@@ -9,5 +10,6 @@ export {
     PlyLoader,
     SplatLoader,
     SplatBuffer,
-    Viewer
+    Viewer,
+    Editor,
 };
