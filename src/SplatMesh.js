@@ -62,6 +62,7 @@ export class SplatMesh extends THREE.Mesh {
             varying vec2 vUv;
 
             varying vec2 vPosition;
+            varying vec3 vSplatCenter;
 
             const vec4 encodeNorm4 = vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0);
             const uvec4 mask4 = uvec4(uint(0x000000FF), uint(0x0000FF00), uint(0x00FF0000), uint(0xFF000000));
@@ -84,6 +85,8 @@ export class SplatMesh extends THREE.Mesh {
             void main () {
                 uvec4 sampledCenterColor = texture(centersColorsTexture, getDataUV(1, 0, centersColorsTextureSize));
                 vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));
+                vSplatCenter = splatCenter;
+
                 vColor = uintToRGBAVec(sampledCenterColor.r);
 
                 vPosition = position.xy * 2.0;
@@ -165,6 +168,16 @@ export class SplatMesh extends THREE.Mesh {
 
             varying vec2 vPosition;
 
+            // various additional uniforms for vfx testing
+            varying vec3 vSplatCenter;
+            uniform float revealProgress;
+            uniform float discardRadius;
+            uniform float alphaOverride;
+            uniform sampler2D noiseTexture;
+            uniform float darkenFactor;
+            uniform vec3 pointLightPositions[1];
+            uniform float pointLightIntensities[1];
+
             void main () {
                 // compute the negative squared distance from the center of the splat to the
                 // current fragment in the splat's local space.
@@ -172,8 +185,68 @@ export class SplatMesh extends THREE.Mesh {
                 if (A < -4.0) discard;
                 vec3 color = vColor.rgb;
                 A = exp(A) * vColor.a;
-                gl_FragColor = vec4(color.rgb, A);
+
+                // caluclate local distance from center of splat, and if beyond desired radius, discard
+                float localDist = distance(gl_PointCoord, vPosition);
+                if (localDist > discardRadius) discard;
+
+                // use darken factor as required
+                vec3 splatColor = mix(color.rgb, vec3(0.03, 0.04, 0.12), darkenFactor);
+
+                if (darkenFactor > 0.0) {
+                    // calculate lights -- replace 1 with the number of lights
+                    for (int i = 0; i < 1; i++) {
+
+                        // Calculate distance from light to the fragment
+                        float distanceToLight = distance(vSplatCenter, pointLightPositions[i]);
+                        
+                        // Adjust brightness based on the distance (inverse square law)
+                        float brightnessFactor = pointLightIntensities[i] / (distanceToLight * distanceToLight);
+
+                        // Add the light's effect to the final color
+                        splatColor += (brightnessFactor * vec3(1.0, 0.6471, 0.0));
+                    }
+                }
+
+                // whatever point you'd like the reveal to start from; here, 0,0,0
+                vec3 origin = vec3(0.0);
+                float dist = distance(vSplatCenter, origin);
+
+                // Width of the edge where the transition happens
+                float edgeWidth = 0.5;
+
+                // Calculate the noise factor
+                vec2 noiseCoord = vSplatCenter.xy; 
+                float noiseFactor = texture2D(noiseTexture, noiseCoord).r;
+
+                // Apply noise directly to the 'dist' for a noisy transition
+                float noisyDist = dist + (noiseFactor - 0.5) * edgeWidth;
+
+                // scanMix uses the distorted 'noisyDist' for a transition affected by noise
+                float scanMix = smoothstep(revealProgress - edgeWidth, revealProgress, noisyDist);
+
+                // outsideMix is 1 outside the radial move, 0 inside
+                float outsideMix = step(revealProgress, noisyDist);
+
+                // Blend between the splat color and the glow color using scanMix
+                vec3 edgeColor = mix(splatColor, vec3(1.0, 0.96, 0.9), scanMix);
+
+                // Then blend between the edge color and almost black using outsideMix
+                vec3 finalColor = mix(edgeColor, vec3(0.1, 0.1, 0.1), outsideMix);
+
+                if (alphaOverride > 0.0) {
+                    A = alphaOverride;  
+                }
+
+                gl_FragColor = vec4(finalColor.rgb, A);
             }`;
+
+
+        // load a noise texture of your choosing, this is the one I'm using
+        const textureLoader = new THREE.TextureLoader();
+        const noiseTexture = textureLoader.load('https://static.mused.org/noise.jpg');
+        noiseTexture.wrapS = THREE.RepeatWrapping;
+        noiseTexture.wrapT = THREE.RepeatWrapping;
 
         const uniforms = {
             'covariancesTexture': {
@@ -207,7 +280,16 @@ export class SplatMesh extends THREE.Mesh {
             'centersColorsTextureSize': {
                 'type': 'v2',
                 'value': new THREE.Vector2(1024, 1024)
-            }
+            },
+
+            // Sundry uniforms for VFX testing as might be useful for future projects
+            revealProgress: { value: 6.0 },
+            discardRadius: { value: 2.0 },
+            darkenFactor: { value: 0.0 },
+            alphaOverride: { value: 0.0 },
+            noiseTexture: { value: noiseTexture },
+            pointLightPositions: { value: [new THREE.Vector3(4, 1.5, 1.5)] },
+            pointLightIntensities: { value: [1.0] }, 
         };
 
         const material = new THREE.ShaderMaterial({

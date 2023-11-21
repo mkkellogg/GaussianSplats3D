@@ -10,6 +10,9 @@ import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
 
+import { GUI } from './Gui.js';
+
+
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 
@@ -152,7 +155,34 @@ export class Viewer {
         this.loadingSpinner = new LoadingSpinner(null, this.rootElement);
         this.loadingSpinner.hide();
 
+        // add gui for working with various vfx 
+        this.initGUI();
+
         this.initialized = true;
+    }
+
+    initGUI() {
+        const gui = new GUI();
+
+        const effectController = {
+            revealProgress: 6.0,
+            discardRadius: 2.0,
+            darkenFactor: 0.0,
+            alphaOverride: 0.0,
+        };
+
+        gui.add( effectController, 'revealProgress', 0.0, 40.0, 0.1 ).onChange(() => {
+            this.splatMesh.material.uniforms[ 'revealProgress' ].value = effectController.revealProgress;
+        });
+        gui.add( effectController, 'darkenFactor', 0.0, 1.0, 0.025 ).onChange(() => {
+            this.splatMesh.material.uniforms[ 'darkenFactor' ].value = effectController.darkenFactor;
+        });
+        gui.add( effectController, 'discardRadius', 0.0, 2.0, 0.001 ).onChange(() => {
+            this.splatMesh.material.uniforms[ 'discardRadius' ].value = effectController.discardRadius;
+        });
+        gui.add( effectController, 'alphaOverride', 0.0, 1.0, 0.025 ).onChange(() => {
+            this.splatMesh.material.uniforms[ 'alphaOverride' ].value = effectController.alphaOverride;
+        });
     }
 
     onKeyDown = function() {
