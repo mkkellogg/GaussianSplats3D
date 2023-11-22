@@ -16,16 +16,18 @@ const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 export class Viewer {
 
     constructor(params = {}) {
-
         if (!params.cameraUp) params.cameraUp = [0, 1, 0];
         if (!params.initialCameraPosition) params.initialCameraPosition = [0, 10, 15];
         if (!params.initialCameraLookAt) params.initialCameraLookAt = [0, 0, 0];
+
         if (params.selfDrivenMode === undefined) params.selfDrivenMode = true;
         if (params.useBuiltInControls === undefined) params.useBuiltInControls = true;
-
         this.rootElement = params.rootElement;
         this.usingExternalCamera = params.camera ? true : false;
         this.usingExternalRenderer = params.renderer ? true : false;
+
+        this.ignoreDevicePixelRatio = params.ignoreDevicePixelRatio || false;
+        this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
 
         this.cameraUp = new THREE.Vector3().fromArray(params.cameraUp);
         this.initialCameraPosition = new THREE.Vector3().fromArray(params.initialCameraPosition);
@@ -36,9 +38,6 @@ export class Viewer {
         this.camera = params.camera;
         this.useBuiltInControls = params.useBuiltInControls;
         this.controls = null;
-
-        this.ignoreDevicePixelRatio = params.ignoreDevicePixelRatio || false;
-        this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
 
         this.selfDrivenMode = params.selfDrivenMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
@@ -528,6 +527,20 @@ export class Viewer {
         }
     }
 
+    onBeforeRender() {
+        if (this.dropInMode) {
+            this.update();
+        }
+    }
+
+    selfDrivenUpdate() {
+        if (this.selfDrivenMode) {
+            requestAnimationFrame(this.selfDrivenUpdateFunc);
+        }
+        this.update();
+        this.render();
+    }
+
     updateFPS = function() {
 
         let lastCalcTime = getCurrentTime();
@@ -567,14 +580,6 @@ export class Viewer {
         };
 
     }();
-
-    selfDrivenUpdate() {
-        if (this.selfDrivenMode) {
-            requestAnimationFrame(this.selfDrivenUpdateFunc);
-        }
-        this.update();
-        this.render();
-    }
 
     update() {
         if (this.controls) {
