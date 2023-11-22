@@ -1,21 +1,44 @@
 import * as THREE from 'three';
-import { Viewer } from './Viewer,js';
+import { Viewer } from './Viewer.js';
 
-export class RenderableViewer extends THREE.GROUP {
+export class RenderableViewer extends THREE.Group {
 
-    constructor(params = {}) {
+    constructor(options = {}) {
         super();
 
-        params.selfDrivenMode = false;
-        params.useBuiltInControls = false;
-        params.rootElement = null;
-        params.ignoreDevicePixelRatio = false;
+        options.selfDrivenMode = false;
+        options.useBuiltInControls = false;
+        options.rootElement = null;
+        options.ignoreDevicePixelRatio = false;
+        options.initializeFromExternalUpdate = true;
 
-        this.viewer = new Viewer(params);
+        this.viewer = new Viewer(options);
+
+        this.callbackMesh = this.createCallbackMesh();
+        this.add(this.callbackMesh);
+        this.callbackMesh.onBeforeRender = this.onBeforeRender.bind(this);
+
     }
 
-    onBeforeRender() {
-        this.viewer.update();
-   }
+    addSceneFromFile(fileURL, options = {}) {
+        options.showLoadingSpinner = false;
+        return this.viewer.loadFile(fileURL, options).then(() => {
+            this.add(this.viewer.splatMesh);
+        });
+    }
+
+    onBeforeRender(renderer, scene, camera) {
+        this.viewer.update(renderer, scene, camera);
+    }
+
+    createCallbackMesh() {
+        const geometry = new THREE.SphereGeometry(1, 8, 8);
+        const material = new THREE.MeshBasicMaterial();
+        material.colorWrite = false;
+        material.depthWrite = false;
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.frustumCulled = false;
+        return mesh;
+    }
 
 }
