@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>3D Gaussian Splat Demo - Stump</title>
+  <script type="text/javascript" src="js/util.js"></script>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js"
+        }
+    }
+  </script>
+  <style>
+
+    body {
+      background-color: #000000;
+      height: 100vh;
+      margin: 0px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+  <script type="module">
+    import * as GaussianSplats3D from 'gaussian-splats-3d';
+    import * as THREE from 'three';
+
+    function setupRenderer() {
+      const renderWidth = 800;
+      const renderHeight = 600;
+
+      const rootElement = document.createElement('div');
+      rootElement.style.width = renderWidth + 'px';
+      rootElement.style.height = renderHeight + 'px';
+      document.body.appendChild(rootElement);
+
+      const renderer = new THREE.WebGLRenderer({
+          antialias: false
+      });
+      renderer.setSize(renderWidth, renderHeight);
+      rootElement.appendChild(renderer.domElement);
+
+      return {
+        'renderer': renderer,
+        'width': renderWidth,
+        'height': renderHeight
+      }
+    }
+
+    function setupCamera(renderInfo) {
+      const camera = new THREE.PerspectiveCamera(65, renderInfo.width / renderInfo.height, 0.1, 500);
+      camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
+      camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
+      camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
+      return camera;
+    }
+
+    function setupScene() {
+      const scene = new THREE.Scene();
+      const boxColor = 0xBBBBBB;
+      const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color': boxColor}));
+      scene.add(boxMesh);
+      boxMesh.position.set(3, 2, 2);
+      return scene;
+    }
+
+    function setupControls(camera, renderer) {
+      const controls = new GaussianSplats3D.OrbitControls(camera, renderer.domElement);
+      controls.rotateSpeed = 0.5;
+      controls.maxPolarAngle = Math.PI * .75;
+      controls.minPolarAngle = 0.1;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      return controls;
+    }
+
+    const renderInfo = setupRenderer();
+    const camera = setupCamera(renderInfo);
+    const scene = setupScene();
+    const controls = setupControls(camera, renderInfo.renderer);
+
+    const renderableViewer = new GaussianSplats3D.RenderableViewer();
+    renderableViewer.addSceneFromFile('assets/data/stump/stump_high.splat', {'halfPrecisionCovariancesOnGPU': true});
+    scene.add(renderableViewer);
+
+    update();
+    function update() {
+      requestAnimationFrame(update);
+      controls.update();
+      renderInfo.renderer.render(scene, camera);
+    }
+  </script>
+</body>
+
+</html>

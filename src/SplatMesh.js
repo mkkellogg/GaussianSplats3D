@@ -4,29 +4,30 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    static buildMesh(splatBuffer, renderer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false,
+    static buildMesh(splatBuffer, splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false,
                      devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
         const geometry = SplatMesh.buildGeomtery(splatBuffer);
         const material = SplatMesh.buildMaterial();
-        return new SplatMesh(splatBuffer, geometry, material, renderer, splatAlphaRemovalThreshold,
+        return new SplatMesh(splatBuffer, geometry, material, splatAlphaRemovalThreshold,
                              halfPrecisionCovariancesOnGPU, devicePixelRatio, enableDistancesComputationOnGPU);
     }
 
-    constructor(splatBuffer, geometry, material, renderer, splatAlphaRemovalThreshold = 1,
+    constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1,
                 halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
         super(geometry, material);
-        this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
-        this.renderer = renderer;
-        this.splatTree = null;
-        this.splatDataTextures = null;
+        this.renderer = null;
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.devicePixelRatio = devicePixelRatio;
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
-        this.buildSplatTree();
 
+        this.splatBuffer = splatBuffer;
+        this.splatTree = null;
+        this.splatDataTextures = null;
+
+        this.buildSplatTree();
         if (this.enableDistancesComputationOnGPU) {
             this.distancesTransformFeedback = {
                 'id': null,
@@ -38,7 +39,6 @@ export class SplatMesh extends THREE.Mesh {
             };
             this.setupDistancesTransformFeedback();
         }
-
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
 
@@ -255,10 +255,10 @@ export class SplatMesh extends THREE.Mesh {
 
     buildSplatTree() {
 
-        this.splatTree = new SplatTree(10, 500);
+        this.splatTree = new SplatTree(8, 1000);
         console.time('SplatTree build');
         const splatColor = new THREE.Vector4();
-        this.splatTree.processSplatBuffer(this.splatBuffer, (splatIndex) => {
+        this.splatTree.processSplatBuffers([this.splatBuffer], (splatIndex) => {
             this.splatBuffer.getColor(splatIndex, splatColor);
             return splatColor.w > this.splatAlphaRemovalThreshold;
         });
@@ -438,6 +438,12 @@ export class SplatMesh extends THREE.Mesh {
 
     setupDistancesTransformFeedback() {
 
+        this.renderer = new THREE.WebGLRenderer({
+            antialias: false,
+            precision: 'highp'
+        });
+        this.renderer.setSize(1, 1);
+
         const splatCount = this.getSplatCount();
 
         const createShader = (gl, type, source) => {
@@ -483,7 +489,8 @@ export class SplatMesh extends THREE.Mesh {
 
         const gl = this.renderer.getContext();
 
-        const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+        // const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+        // const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
 
         this.distancesTransformFeedback.vao = gl.createVertexArray();
         gl.bindVertexArray(this.distancesTransformFeedback.vao);
@@ -527,7 +534,8 @@ export class SplatMesh extends THREE.Mesh {
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.distancesTransformFeedback.outDistancesBuffer);
 
-        if (currentVao) gl.bindVertexArray(currentVao);
+       // if (currentProgram) gl.useProgram(currentProgram);
+       // if (currentVao) gl.bindVertexArray(currentVao);
 
     }
 
@@ -576,11 +584,11 @@ export class SplatMesh extends THREE.Mesh {
         // console.time("gpu_compute_distances");
         const gl = this.renderer.getContext();
 
-        const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
-        const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
+        // const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+        // const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
 
-        gl.bindVertexArray(this.distancesTransformFeedback.vao);
-        gl.useProgram(this.distancesTransformFeedback.program);
+        // gl.bindVertexArray(this.distancesTransformFeedback.vao);
+        // gl.useProgram(this.distancesTransformFeedback.program);
 
         gl.enable(gl.RASTERIZER_DISCARD);
 
@@ -608,8 +616,8 @@ export class SplatMesh extends THREE.Mesh {
 
         // console.timeEnd("gpu_compute_distances");
 
-        if (currentProgram) gl.useProgram(currentProgram);
-        if (currentVao) gl.bindVertexArray(currentVao);
+        // if (currentProgram) gl.useProgram(currentProgram);
+        // if (currentVao) gl.bindVertexArray(currentVao);
 
     }
 }

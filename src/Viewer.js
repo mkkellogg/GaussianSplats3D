@@ -15,35 +15,33 @@ const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 
 export class Viewer {
 
-    constructor(params = {}) {
+    constructor(options = {}) {
 
-        if (!params.cameraUp) params.cameraUp = [0, 1, 0];
-        if (!params.initialCameraPosition) params.initialCameraPosition = [0, 10, 15];
-        if (!params.initialCameraLookAt) params.initialCameraLookAt = [0, 0, 0];
-        if (params.selfDrivenMode === undefined) params.selfDrivenMode = true;
-        if (params.useBuiltInControls === undefined) params.useBuiltInControls = true;
+        if (!options.cameraUp) options.cameraUp = [0, 1, 0];
+        if (!options.initialCameraPosition) options.initialCameraPosition = [0, 10, 15];
+        if (!options.initialCameraLookAt) options.initialCameraLookAt = [0, 0, 0];
 
-        this.rootElement = params.rootElement;
-        this.usingExternalCamera = params.camera ? true : false;
-        this.usingExternalRenderer = params.renderer ? true : false;
+        if (options.selfDrivenMode === undefined) options.selfDrivenMode = true;
+        if (options.useBuiltInControls === undefined) options.useBuiltInControls = true;
+        this.rootElement = options.rootElement;
 
-        this.cameraUp = new THREE.Vector3().fromArray(params.cameraUp);
-        this.initialCameraPosition = new THREE.Vector3().fromArray(params.initialCameraPosition);
-        this.initialCameraLookAt = new THREE.Vector3().fromArray(params.initialCameraLookAt);
-
-        this.scene = params.scene;
-        this.renderer = params.renderer;
-        this.camera = params.camera;
-        this.useBuiltInControls = params.useBuiltInControls;
-        this.controls = null;
-
-        this.ignoreDevicePixelRatio = params.ignoreDevicePixelRatio || false;
+        this.ignoreDevicePixelRatio = options.ignoreDevicePixelRatio || false;
         this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
 
-        this.selfDrivenMode = params.selfDrivenMode;
+        this.cameraUp = new THREE.Vector3().fromArray(options.cameraUp);
+        this.initialCameraPosition = new THREE.Vector3().fromArray(options.initialCameraPosition);
+        this.initialCameraLookAt = new THREE.Vector3().fromArray(options.initialCameraLookAt);
+
+        this.scene = options.scene;
+        this.renderer = options.renderer;
+        this.camera = options.camera;
+        this.useBuiltInControls = options.useBuiltInControls;
+        this.controls = null;
+
+        this.selfDrivenMode = options.selfDrivenMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
 
-        this.gpuAcceleratedSort = params.gpuAcceleratedSort;
+        this.gpuAcceleratedSort = options.gpuAcceleratedSort;
         if (this.gpuAcceleratedSort !== true && this.gpuAcceleratedSort !== false) {
             this.gpuAcceleratedSort = true;
         }
@@ -81,13 +79,27 @@ export class Viewer {
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
 
+        this.loadingSpinner = new LoadingSpinner(null, this.rootElement);
+        this.loadingSpinner.hide();
+
+        this.usingExternalCamera = undefined;
+        this.usingExternalRenderer = undefined;
+        this.initializeFromExternalUpdate = options.initializeFromExternalUpdate || false;
         this.initialized = false;
-        this.init();
+        if (!this.initializeFromExternalUpdate) this.init();
     }
 
     init() {
 
         if (this.initialized) return;
+
+        if (!this.initializeFromExternalUpdate) {
+            this.usingExternalCamera = this.camera ? true : false;
+            this.usingExternalRenderer = this.renderer ? true : false;
+        } else {
+            this.usingExternalCamera = true;
+            this.usingExternalRenderer = true;
+        }
 
         if (!this.rootElement && !this.usingExternalRenderer) {
             this.rootElement = document.createElement('div');
@@ -148,9 +160,6 @@ export class Viewer {
         }
 
         this.setupInfoPanel();
-
-        this.loadingSpinner = new LoadingSpinner(null, this.rootElement);
-        this.loadingSpinner.hide();
 
         this.initialized = true;
     }
@@ -305,6 +314,7 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
 
         return function() {
+            if (!this.splatMesh) return;
             const splatCount = this.splatMesh.getSplatCount();
             if (splatCount > 0) {
                 this.getRenderDimensions(renderDimensions);
@@ -386,13 +396,11 @@ export class Viewer {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
-        this.splatMesh = SplatMesh.buildMesh(splatBuffer, this.renderer, splatAlphaRemovalThreshold,
+        this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold,
                                              halfPrecisionCovariancesOnGPU, devicePixelRatio, gpuAcceleratedSort);
         this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
-        this.updateSplatMeshUniforms();
-
         this.splatRenderCount = splatCount;
     }
 
@@ -528,6 +536,55 @@ export class Viewer {
         }
     }
 
+    selfDrivenUpdate() {
+        if (this.selfDrivenMode) {
+            requestAnimationFrame(this.selfDrivenUpdateFunc);
+        }
+        this.update();
+        this.render();
+    }
+
+    update(renderer, scene, camera) {
+        if (this.initializeFromExternalUpdate) {
+            this.renderer = renderer;
+            this.camera = camera;
+            this.init();
+        }
+        if (!this.initialized || !this.splatRenderingInitialized) return;
+        if (this.controls) this.controls.update();
+        this.updateView();
+        this.updateForRendererSizeChanges();
+        this.updateSplatMeshUniforms();
+        this.updateMeshCursor();
+        this.updateFPS();
+        this.timingSensitiveUpdates();
+        this.updateInfo();
+        this.updateControlPlane();
+    }
+
+    render = function() {
+
+        return function() {
+            if (!this.initialized || !this.splatRenderingInitialized) return;
+            const hasRenderables = (scene) => {
+                for (let child of scene.children) {
+                    if (child.visible) {
+                    return true;
+                    }
+                }
+                return false;
+            };
+            const savedAuoClear = this.renderer.autoClear;
+            this.renderer.autoClear = false;
+            if (hasRenderables(this.scene)) this.renderer.render(this.scene, this.camera);
+            this.renderer.render(this.splatMesh, this.camera);
+            if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
+            if (this.showControlPlane) this.renderer.render(this.sceneHelper.controlPlane, this.camera);
+            this.renderer.autoClear = savedAuoClear;
+        };
+
+    }();
+
     updateFPS = function() {
 
         let lastCalcTime = getCurrentTime();
@@ -559,35 +616,11 @@ export class Viewer {
                     this.camera.aspect = currentRendererSize.x / currentRendererSize.y;
                     this.camera.updateProjectionMatrix();
                 }
-                if (this.splatRenderingInitialized) {
-                    this.updateSplatMeshUniforms();
-                }
                 lastRendererSize.copy(currentRendererSize);
             }
         };
 
     }();
-
-    selfDrivenUpdate() {
-        if (this.selfDrivenMode) {
-            requestAnimationFrame(this.selfDrivenUpdateFunc);
-        }
-        this.update();
-        this.render();
-    }
-
-    update() {
-        if (this.controls) {
-            this.controls.update();
-        }
-        this.updateView();
-        this.updateForRendererSizeChanges();
-        this.updateMeshCursor();
-        this.updateFPS();
-        this.timingSensitiveUpdates();
-        this.updateInfo();
-        this.updateControlPlane();
-    }
 
     timingSensitiveUpdates = function() {
 
@@ -691,39 +724,38 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
 
         return function() {
-            if (this.showInfo) {
-                const splatCount = this.splatMesh.getSplatCount();
-                this.getRenderDimensions(renderDimensions);
+            if (!this.showInfo) return;
+            const splatCount = this.splatMesh.getSplatCount();
+            this.getRenderDimensions(renderDimensions);
 
-                const cameraPos = this.camera.position;
-                const cameraPosString = `[${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}]`;
-                this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
+            const cameraPos = this.camera.position;
+            const cameraPosString = `[${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}]`;
+            this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
 
-                const cameraLookAt = this.controls.target;
-                const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
-                this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
+            const cameraLookAt = this.controls.target;
+            const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
+            this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
 
-                const cameraUp = this.camera.up;
-                const cameraUpString = `[${cameraUp.x.toFixed(5)}, ${cameraUp.y.toFixed(5)}, ${cameraUp.z.toFixed(5)}]`;
-                this.infoPanelCells.cameraUp.innerHTML = cameraUpString;
+            const cameraUp = this.camera.up;
+            const cameraUpString = `[${cameraUp.x.toFixed(5)}, ${cameraUp.y.toFixed(5)}, ${cameraUp.z.toFixed(5)}]`;
+            this.infoPanelCells.cameraUp.innerHTML = cameraUpString;
 
-                if (this.showMeshCursor) {
-                    const cursorPos = this.sceneHelper.meshCursor.position;
-                    const cursorPosString = `[${cursorPos.x.toFixed(5)}, ${cursorPos.y.toFixed(5)}, ${cursorPos.z.toFixed(5)}]`;
-                    this.infoPanelCells.cursorPosition.innerHTML = cursorPosString;
-                } else {
-                    this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
-                }
-
-                this.infoPanelCells.fps.innerHTML = this.currentFPS;
-                this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
-
-                const renderPct = this.splatRenderCount / splatCount * 100;
-                this.infoPanelCells.renderSplatCount.innerHTML =
-                    `${this.splatRenderCount} splats out of ${splatCount} (${renderPct.toFixed(2)}%)`;
-
-                this.infoPanelCells.sortTime.innerHTML = `${this.lastSortTime.toFixed(3)} ms`;
+            if (this.showMeshCursor) {
+                const cursorPos = this.sceneHelper.meshCursor.position;
+                const cursorPosString = `[${cursorPos.x.toFixed(5)}, ${cursorPos.y.toFixed(5)}, ${cursorPos.z.toFixed(5)}]`;
+                this.infoPanelCells.cursorPosition.innerHTML = cursorPosString;
+            } else {
+                this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
             }
+
+            this.infoPanelCells.fps.innerHTML = this.currentFPS;
+            this.infoPanelCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
+
+            const renderPct = this.splatRenderCount / splatCount * 100;
+            this.infoPanelCells.renderSplatCount.innerHTML =
+                `${this.splatRenderCount} splats out of ${splatCount} (${renderPct.toFixed(2)}%)`;
+
+            this.infoPanelCells.sortTime.innerHTML = `${this.lastSortTime.toFixed(3)} ms`;
         };
 
     }();
@@ -736,29 +768,6 @@ export class Viewer {
             this.sceneHelper.setControlPlaneVisibility(false);
         }
     }
-
-    render = function() {
-
-        return function() {
-            const hasRenderables = (scene) => {
-                for (let child of scene.children) {
-                    if (child.visible) {
-                    return true;
-                    }
-                }
-                return false;
-            };
-
-            const savedAuoClear = this.renderer.autoClear;
-            this.renderer.autoClear = false;
-            if (hasRenderables(this.scene)) this.renderer.render(this.scene, this.camera);
-            this.renderer.render(this.splatMesh, this.camera);
-            if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
-            if (this.showControlPlane) this.renderer.render(this.sceneHelper.controlPlane, this.camera);
-            this.renderer.autoClear = savedAuoClear;
-        };
-
-    }();
 
     updateView = function() {
 
