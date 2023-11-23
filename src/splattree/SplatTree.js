@@ -41,7 +41,7 @@ export class SplatTree {
             const splatCount = splatBuffer.getSplatCount();
             const center = new THREE.Vector3();
             for (let i = 0; i < splatCount; i++) {
-                if (filterFunc(i)) {
+                if (filterFunc(splatBuffer, i)) {
                     splatBuffer.getCenter(i, center);
                     if (i === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
                     if (i === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
@@ -60,7 +60,9 @@ export class SplatTree {
 
         const indexes = [];
         for (let i = 0; i < totalSplatCount; i ++) {
-            if (filterFunc(i)) {
+            const splatLocalIndex = this.globalIndexToLocalIndexMap[i];
+            const splatBuffer = splatBuffers[this.globalIndexToSplatBufferMap[i]];
+            if (filterFunc(splatBuffer, splatLocalIndex)) {
                 indexes.push(i);
             }
         }
