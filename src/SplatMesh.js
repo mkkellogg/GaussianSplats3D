@@ -15,18 +15,19 @@ export class SplatMesh extends THREE.Mesh {
     constructor(splatBuffer, geometry, material, splatAlphaRemovalThreshold = 1,
                 halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
         super(geometry, material);
-        this.splatBuffer = splatBuffer;
         this.geometry = geometry;
         this.material = material;
         this.renderer = null;
-        this.splatTree = null;
-        this.splatDataTextures = null;
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.devicePixelRatio = devicePixelRatio;
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
-        this.buildSplatTree();
 
+        this.splatBuffer = splatBuffer;
+        this.splatTree = null;
+        this.splatDataTextures = null;
+
+        this.buildSplatTree();
         if (this.enableDistancesComputationOnGPU) {
             this.distancesTransformFeedback = {
                 'id': null,
@@ -38,7 +39,6 @@ export class SplatMesh extends THREE.Mesh {
             };
             this.setupDistancesTransformFeedback();
         }
-
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
 
@@ -255,10 +255,10 @@ export class SplatMesh extends THREE.Mesh {
 
     buildSplatTree() {
 
-        this.splatTree = new SplatTree(10, 500);
+        this.splatTree = new SplatTree(8, 1000);
         console.time('SplatTree build');
         const splatColor = new THREE.Vector4();
-        this.splatTree.processSplatBuffer(this.splatBuffer, (splatIndex) => {
+        this.splatTree.processSplatBuffers([this.splatBuffer], (splatIndex) => {
             this.splatBuffer.getColor(splatIndex, splatColor);
             return splatColor.w > this.splatAlphaRemovalThreshold;
         });
