@@ -396,8 +396,8 @@ export class Viewer {
         const splatCount = splatBuffer.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
 
-        this.splatMesh = SplatMesh.buildMesh(splatBuffer, splatAlphaRemovalThreshold,
-                                             halfPrecisionCovariancesOnGPU, devicePixelRatio, gpuAcceleratedSort);
+        this.splatMesh = new SplatMesh([splatBuffer], splatAlphaRemovalThreshold,
+                                        halfPrecisionCovariancesOnGPU, devicePixelRatio, gpuAcceleratedSort);
         this.splatMesh.position.copy(position);
         this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;

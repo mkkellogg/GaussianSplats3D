@@ -197,7 +197,7 @@ export class SplatBuffer {
         return this.splatCount;
     }
 
-    fillCovarianceArray(covarianceArray) {
+    fillCovarianceArray(covarianceArray, destOffset) {
         const splatCount = this.splatCount;
 
         const scale = new THREE.Vector3();
@@ -223,20 +223,21 @@ export class SplatBuffer {
 
             covarianceMatrix.copy(rotationMatrix).multiply(scaleMatrix);
             const M = covarianceMatrix.elements;
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 3] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 4] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
+            const covBase = SplatBuffer.CovarianceSizeFloats * (i + destOffset);
+            covarianceArray[covBase] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
+            covarianceArray[covBase + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
+            covarianceArray[covBase + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
+            covarianceArray[covBase + 3] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
+            covarianceArray[covBase + 4] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
+            covarianceArray[covBase + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
         }
     }
 
-    fillCenterArray(outCenterArray) {
+    fillCenterArray(outCenterArray, destOffset) {
         const splatCount = this.splatCount;
         let bucket = [0, 0, 0];
         for (let i = 0; i < splatCount; i++) {
-            const centerBase = i * SplatBuffer.CenterComponentCount;
+            const centerBase = (i + destOffset) * SplatBuffer.CenterComponentCount;
             if (this.compressionLevel > 0) {
                 const bucketIndex = Math.floor(i / this.bucketSize);
                 bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
@@ -253,22 +254,22 @@ export class SplatBuffer {
         }
     }
 
-    fillScaleArray(outScaleArray) {
+    fillScaleArray(outScaleArray, destOffset) {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
-            const scaleBase = i * SplatBuffer.ScaleComponentCount;
+            const scaleBase = (i + destOffset) * SplatBuffer.ScaleComponentCount;
             outScaleArray[scaleBase] = fbf(this.scaleArray[scaleBase]);
             outScaleArray[scaleBase + 1] = fbf(this.scaleArray[scaleBase + 1]);
             outScaleArray[scaleBase + 2] = fbf(this.scaleArray[scaleBase + 2]);
         }
     }
 
-    fillRotationArray(outRotationArray) {
+    fillRotationArray(outRotationArray, destOffset) {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
-            const rotationBase = i * SplatBuffer.RotationComponentCount;
+            const rotationBase = (i + destOffset) * SplatBuffer.RotationComponentCount;
             outRotationArray[rotationBase] = fbf(this.rotationArray[rotationBase]);
             outRotationArray[rotationBase + 1] = fbf(this.rotationArray[rotationBase + 1]);
             outRotationArray[rotationBase + 2] = fbf(this.rotationArray[rotationBase + 2]);
@@ -276,10 +277,10 @@ export class SplatBuffer {
         }
     }
 
-    fillColorArray(outColorArray) {
+    fillColorArray(outColorArray, destOffset) {
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
-            const colorBase = i * SplatBuffer.ColorComponentCount;
+            const colorBase = (i + destOffset) * SplatBuffer.ColorComponentCount;
             outColorArray[colorBase] = this.colorArray[colorBase];
             outColorArray[colorBase + 1] = this.colorArray[colorBase + 1];
             outColorArray[colorBase + 2] = this.colorArray[colorBase + 2];
