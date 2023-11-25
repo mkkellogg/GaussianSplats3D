@@ -4,20 +4,16 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    constructor(splatBuffers, splatAlphaRemovalThreshold = 1,
-                halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
-        super({'morphAttributes': {}}, null);
+    constructor(splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false,
+                devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
+        super({'morphAttributes': {}, 'fake': true}, null);
         this.renderer = null;
         this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.devicePixelRatio = devicePixelRatio;
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
-
-        this.splatBuffers = splatBuffers;
         this.splatTree = null;
         this.splatDataTextures = null;
-
-        this.build();
     }
 
     static buildMaterial() {
@@ -231,7 +227,32 @@ export class SplatMesh extends THREE.Mesh {
         return geometry;
     }
 
-    build() {
+    dispose() {
+        if (this.geometry && !this.geometry.fake) {
+            this.geometry.dispose();
+            this.geometry = null;
+        }
+        for (let textureKey in this.splatDataTextures) {
+            if (this.splatDataTextures.hasOwnProperty(textureKey)) {
+                const textureContainer = this.splatDataTextures[textureKey];
+                if (textureContainer.texture) {
+                    textureContainer.texture.dispose();
+                    textureContainer.texture = null;
+                }
+            }
+        }
+        this.splatDataTextures = null;
+        if (this.material) {
+            this.material.dispose();
+            this.material = null;
+        }
+        this.splatTree = null;
+    }
+
+    build(splatBuffers, splatBufferOptions) {
+        this.dispose();
+        this.splatBuffers = splatBuffers;
+        this.splatBufferOptions = splatBufferOptions;
         this.geometry = SplatMesh.buildGeomtery(this.splatBuffers);
         this.material = SplatMesh.buildMaterial();
         this.buildSplatTree();

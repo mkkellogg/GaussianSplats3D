@@ -446,7 +446,7 @@
         'initialCameraPosition': cameraPositionArray,
         'initialCameraLookAt': cameraLookAtArray
       };
-      const sceneOptions = {
+      const meshOptions = {
         'halfPrecisionCovariancesOnGPU': true,
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
@@ -462,7 +462,7 @@
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
       const viewer = new GaussianSplats3D.Viewer(viewerOptions);
-      viewer.loadSplatBuffer(splatBuffer, sceneOptions)
+      viewer.loadSplatBuffers([splatBuffer], undefined, meshOptions)
       .then(() => {
           viewer.start();
       });
