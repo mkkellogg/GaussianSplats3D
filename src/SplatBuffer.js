@@ -237,19 +237,20 @@ export class SplatBuffer {
         const splatCount = this.splatCount;
         let bucket = [0, 0, 0];
         for (let i = 0; i < splatCount; i++) {
-            const centerBase = (i + destOffset) * SplatBuffer.CenterComponentCount;
+            const centerSrcBase = i * SplatBuffer.CenterComponentCount;
+            const centerDestBase = (i + destOffset) * SplatBuffer.CenterComponentCount;
             if (this.compressionLevel > 0) {
                 const bucketIndex = Math.floor(i / this.bucketSize);
                 bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
                 const sf = this.compressionScaleFactor;
                 const sr = this.compressionScaleRange;
-                outCenterArray[centerBase] = (this.centerArray[centerBase] - sr) * sf + bucket[0];
-                outCenterArray[centerBase + 1] = (this.centerArray[centerBase + 1] - sr) * sf + bucket[1];
-                outCenterArray[centerBase + 2] = (this.centerArray[centerBase + 2] - sr) * sf + bucket[2];
+                outCenterArray[centerDestBase] = (this.centerArray[centerSrcBase] - sr) * sf + bucket[0];
+                outCenterArray[centerDestBase + 1] = (this.centerArray[centerSrcBase + 1] - sr) * sf + bucket[1];
+                outCenterArray[centerDestBase + 2] = (this.centerArray[centerSrcBase + 2] - sr) * sf + bucket[2];
             } else {
-                outCenterArray[centerBase] = this.centerArray[centerBase];
-                outCenterArray[centerBase + 1] = this.centerArray[centerBase + 1];
-                outCenterArray[centerBase + 2] = this.centerArray[centerBase + 2];
+                outCenterArray[centerDestBase] = this.centerArray[centerSrcBase];
+                outCenterArray[centerDestBase + 1] = this.centerArray[centerSrcBase + 1];
+                outCenterArray[centerDestBase + 2] = this.centerArray[centerSrcBase + 2];
             }
         }
     }
@@ -258,10 +259,11 @@ export class SplatBuffer {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
-            const scaleBase = (i + destOffset) * SplatBuffer.ScaleComponentCount;
-            outScaleArray[scaleBase] = fbf(this.scaleArray[scaleBase]);
-            outScaleArray[scaleBase + 1] = fbf(this.scaleArray[scaleBase + 1]);
-            outScaleArray[scaleBase + 2] = fbf(this.scaleArray[scaleBase + 2]);
+            const scaleSrcBase = i * SplatBuffer.ScaleComponentCount;
+            const scaleDestBase = (i + destOffset) * SplatBuffer.ScaleComponentCount;
+            outScaleArray[scaleDestBase] = fbf(this.scaleArray[scaleSrcBase]);
+            outScaleArray[scaleDestBase + 1] = fbf(this.scaleArray[scaleSrcBase + 1]);
+            outScaleArray[scaleDestBase + 2] = fbf(this.scaleArray[scaleSrcBase + 2]);
         }
     }
 
@@ -269,22 +271,24 @@ export class SplatBuffer {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
-            const rotationBase = (i + destOffset) * SplatBuffer.RotationComponentCount;
-            outRotationArray[rotationBase] = fbf(this.rotationArray[rotationBase]);
-            outRotationArray[rotationBase + 1] = fbf(this.rotationArray[rotationBase + 1]);
-            outRotationArray[rotationBase + 2] = fbf(this.rotationArray[rotationBase + 2]);
-            outRotationArray[rotationBase + 3] = fbf(this.rotationArray[rotationBase + 3]);
+            const rotationSrcBase = i * SplatBuffer.RotationComponentCount;
+            const rotationDestBase = (i + destOffset) * SplatBuffer.RotationComponentCount;
+            outRotationArray[rotationDestBase] = fbf(this.rotationArray[rotationSrcBase]);
+            outRotationArray[rotationDestBase + 1] = fbf(this.rotationArray[rotationSrcBase + 1]);
+            outRotationArray[rotationDestBase + 2] = fbf(this.rotationArray[rotationSrcBase + 2]);
+            outRotationArray[rotationDestBase + 3] = fbf(this.rotationArray[rotationSrcBase + 3]);
         }
     }
 
     fillColorArray(outColorArray, destOffset) {
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
-            const colorBase = (i + destOffset) * SplatBuffer.ColorComponentCount;
-            outColorArray[colorBase] = this.colorArray[colorBase];
-            outColorArray[colorBase + 1] = this.colorArray[colorBase + 1];
-            outColorArray[colorBase + 2] = this.colorArray[colorBase + 2];
-            outColorArray[colorBase + 3] = this.colorArray[colorBase + 3];
+            const colorSrcBase = i * SplatBuffer.ColorComponentCount;
+            const colorDestBase = (i + destOffset) * SplatBuffer.ColorComponentCount;
+            outColorArray[colorDestBase] = this.colorArray[colorSrcBase];
+            outColorArray[colorDestBase + 1] = this.colorArray[colorSrcBase + 1];
+            outColorArray[colorDestBase + 2] = this.colorArray[colorSrcBase + 2];
+            outColorArray[colorDestBase + 3] = this.colorArray[colorSrcBase + 3];
         }
     }
 

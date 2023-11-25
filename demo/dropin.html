@@ -89,6 +89,7 @@
 
     const renderableViewer = new GaussianSplats3D.RenderableViewer();
     renderableViewer.addSceneFromFile('assets/data/stump/stump_high.splat', {'halfPrecisionCovariancesOnGPU': true});
+    renderableViewer.addSceneFromFile('assets/data/bonsai/bonsai_high.splat', {'halfPrecisionCovariancesOnGPU': true});
     scene.add(renderableViewer);
 
     update();

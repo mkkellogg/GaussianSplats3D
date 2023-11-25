@@ -329,84 +329,147 @@ export class Viewer {
     }();
 
     loadFile(fileURL, options = {}) {
-        if (options.position) options.position = new THREE.Vector3().fromArray(options.position);
-        if (options.orientation) options.orientation = new THREE.Quaternion().fromArray(options.orientation);
-        options.splatAlphaRemovalThreshold = options.splatAlphaRemovalThreshold || 1;
-        options.halfPrecisionCovariancesOnGPU = !!options.halfPrecisionCovariancesOnGPU;
         if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
-
-        if (options.showLoadingSpinner) this.loadingSpinner.show();
-        const downloadProgress = (percent, percentLabel) => {
-            if (options.showLoadingSpinner) {
-                if (percent == 100) {
-                    this.loadingSpinner.setMessage(`Download complete!`);
-                } else {
-                    const suffix = percentLabel ? `: ${percentLabel}` : `...`;
-                    this.loadingSpinner.setMessage(`Downloading${suffix}`);
-                }
-            }
-            if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
-        };
-
         return new Promise((resolve, reject) => {
-            let fileLoadPromise;
-            if (fileURL.endsWith('.splat')) {
-                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
-            } else if (fileURL.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress, 0, options.splatAlphaRemovalThreshold);
-            } else {
-                reject(new Error(`Viewer::loadFile -> File format not supported: ${fileURL}`));
-            }
-            fileLoadPromise
+            if (options.showLoadingSpinner) this.loadingSpinner.show();
+            const downloadProgress = (percent, percentLabel) => {
+                if (options.showLoadingSpinner) {
+                    if (percent == 100) {
+                        this.loadingSpinner.setMessage(`Download complete!`);
+                    } else {
+                        const suffix = percentLabel ? `: ${percentLabel}` : `...`;
+                        this.loadingSpinner.setMessage(`Downloading${suffix}`);
+                    }
+                }
+                if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
+            };
+            this.loadFileToSplatBuffer(fileURL, options.splatAlphaRemovalThreshold, downloadProgress)
             .then((splatBuffer) => {
                 if (options.showLoadingSpinner) this.loadingSpinner.hide();
                 if (options.onProgress) options.onProgress(0, '0%', 'processing');
-                this.loadSplatBuffer(splatBuffer, options).then(() => {
+                const splatBufferOptions = {
+                    'orientation': options.orientation,
+                    'position': options.position,
+                    'scale': options.scale
+                };
+                const meshOptions = {
+                    'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
+                    'halfPrecisionCovariancesOnGPU': options.halfPrecisionCovariancesOnGPU
+                };
+                this.loadSplatBuffers([splatBuffer], [splatBufferOptions], meshOptions, options.showLoadingSpinner).then(() => {
                     if (options.onProgress) options.onProgress(100, '100%', 'processing');
                     resolve();
                 });
             })
-            .catch((e) => {
+            .catch(() => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileURL}`));
             });
         });
     }
 
-    loadSplatBuffer(splatBuffer, options) {
-        if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
+    loadFiles(fileURLs, splatBufferOptions = undefined, meshOptions = undefined, onProgress = undefined, showLoadingSpinner = true) {
+        return new Promise((resolve, reject) => {
+            const fileCount = fileURLs.length;
+            const percentComplete = [];
+            if (showLoadingSpinner) this.loadingSpinner.show();
+            const downloadProgress = (fileIndex, percent, percentLabel) => {
+                percentComplete[fileIndex] = percent;
+                let totalPercent = 0;
+                for (let i = 0; i < fileCount; i++) totalPercent += percentComplete[i];
+                totalPercent = totalPercent / fileCount;
+                percentLabel = `${totalPercent.toFixed(2)}%`;
+                if (showLoadingSpinner) {
+                    if (totalPercent == 100) {
+                        this.loadingSpinner.setMessage(`Download complete!`);
+                    } else {
+                        this.loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
+                    }
+                }
+                if (onProgress) onProgress(totalPercent, percentLabel, 'downloading');
+            };
+
+            const downLoadPromises = [];
+            for (let i = 0; i < fileURLs.length; i++) {
+                const meshOptionsForFile = meshOptions[i] || {};
+                const downloadPromise = this.loadFileToSplatBuffer(fileURLs[i], meshOptionsForFile.splatAlphaRemovalThreshold,
+                                                                   downloadProgress.bind(this, i));
+                downLoadPromises.push(downloadPromise);
+            }
+
+            Promise.all(downLoadPromises)
+            .then((splatBuffers) => {
+                if (showLoadingSpinner) this.loadingSpinner.hide();
+                if (onProgress) options.onProgress(0, '0%', 'processing');
+                this.loadSplatBuffers(splatBuffers, splatBufferOptions, meshOptions, showLoadingSpinner).then(() => {
+                    if (onProgress) onProgress(100, '100%', 'processing');
+                    resolve();
+                });
+            })
+            .catch((e) => {
+                reject(new Error(`Viewer::loadFiles -> Could not load one or more files.`));
+            });
+        });
+    }
+
+    loadFileToSplatBuffer(fileURL, plySplatAlphaRemovalThreshold = 1, onProgress = undefined) {
+        const downloadProgress = (percent, percentLabel) => {
+            if (onProgress) onProgress(percent, percentLabel, 'downloading');
+        };
+        return new Promise((resolve, reject) => {
+            let fileLoadPromise;
+            if (fileURL.endsWith('.splat')) {
+                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
+            } else if (fileURL.endsWith('.ply')) {
+                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress, 0, plySplatAlphaRemovalThreshold);
+            } else {
+                reject(new Error(`Viewer::loadFileData -> File format not supported: ${fileURL}`));
+            }
+            fileLoadPromise
+            .then((splatBuffer) => {
+                resolve(splatBuffer);
+            })
+            .catch(() => {
+                reject(new Error(`Viewer::loadFileData -> Could not load file ${fileURL}`));
+            });
+        });
+    }
+
+    loadSplatBuffers(splatBuffers, splatBufferOptions = [], meshOptions = {}, showLoadingSpinner = true) {
         return new Promise((resolve) => {
-            if (options.showLoadingSpinner) {
+            if (showLoadingSpinner) {
                 this.loadingSpinner.show();
                 this.loadingSpinner.setMessage(`Processing splats...`);
             }
             window.setTimeout(() => {
-                this.setupSplatMesh(splatBuffer, options.splatAlphaRemovalThreshold, options.position,
-                                    options.orientation, options.halfPrecisionCovariancesOnGPU,
-                                    this.devicePixelRatio, this.gpuAcceleratedSort);
-                this.setupSortWorker(splatBuffer).then(() => {
-                    if (options.showLoadingSpinner) this.loadingSpinner.hide();
+                this.updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions);
+                this.setupSortWorker(this.splatMesh).then(() => {
+                    if (showLoadingSpinner) this.loadingSpinner.hide();
                     resolve();
                 });
             }, 1);
         });
     }
 
-    setupSplatMesh(splatBuffer, splatAlphaRemovalThreshold = 1, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
-                   halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, gpuAcceleratedSort = true) {
-        const splatCount = splatBuffer.getSplatCount();
+    updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions) {
+        if (!this.splatMesh) {
+            this.splatMesh = new SplatMesh(meshOptions.splatAlphaRemovalThreshold,
+                                           meshOptions.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort);
+        }
+        const allSplatBuffers = this.splatMesh.splatBuffers || [];
+        const allSplatBufferOptions = this.splatMesh.splatBufferOptions || [];
+        allSplatBuffers.push(...splatBuffers);
+        allSplatBufferOptions.push(...splatBufferOptions);
+        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions);
+        const splatCount = this.splatMesh.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
-
-        this.splatMesh = new SplatMesh([splatBuffer], splatAlphaRemovalThreshold,
-                                        halfPrecisionCovariancesOnGPU, devicePixelRatio, gpuAcceleratedSort);
-        this.splatMesh.position.copy(position);
-        this.splatMesh.quaternion.copy(quaternion);
         this.splatMesh.frustumCulled = false;
         this.splatRenderCount = splatCount;
     }
 
-    setupSortWorker(splatBuffer) {
+    setupSortWorker(splatMesh) {
         return new Promise((resolve) => {
-            const splatCount = splatBuffer.getSplatCount();
+            const splatCount = splatMesh.getSplatCount();
+            if (this.sortWorker) this.sortWorker.terminate();
             this.sortWorker = createSortWorker(splatCount);
             this.sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
@@ -421,15 +484,15 @@ export class Viewer {
                         'centers': this.splatMesh.getIntegerCenters(true).buffer
                     });
                     this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
-                                                                   e.data.sortedIndexesOffset, splatBuffer.getSplatCount());
+                                                                   e.data.sortedIndexesOffset, splatCount);
                     this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
-                                                                   e.data.indexesToSortOffset, splatBuffer.getSplatCount());
+                                                                   e.data.indexesToSortOffset, splatCount);
                     this.sortWorkerPrecomputedDistances = new Int32Array(e.data.precomputedDistancesBuffer,
-                                                                         e.data.precomputedDistancesOffset, splatBuffer.getSplatCount());
+                                                                         e.data.precomputedDistancesOffset, splatCount);
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
                     console.log('Sorting web worker ready.');
-                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, splatBuffer.getSplatCount());
+                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, splatCount);
                     const splatDataTextures = this.splatMesh.getSplatDataTextures();
                     const covariancesTextureSize = splatDataTextures.covariances.size;
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
