@@ -367,7 +367,7 @@ export class Viewer {
         });
     }
 
-    loadFiles(fileURLs, splatBufferOptions = undefined, meshOptions = undefined, onProgress = undefined, showLoadingSpinner = true) {
+    loadFiles(fileURLs, splatBufferOptions = undefined, meshOptions = undefined, showLoadingSpinner = true, onProgress = undefined) {
         return new Promise((resolve, reject) => {
             const fileCount = fileURLs.length;
             const percentComplete = [];
