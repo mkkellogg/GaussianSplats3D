@@ -79,7 +79,7 @@ export class Viewer {
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
 
-        this.loadingSpinner = new LoadingSpinner(null, this.rootElement);
+        this.loadingSpinner = new LoadingSpinner(null, this.rootElement || document.body);
         this.loadingSpinner.hide();
 
         this.usingExternalCamera = undefined;
@@ -101,11 +101,16 @@ export class Viewer {
             this.usingExternalRenderer = true;
         }
 
-        if (!this.rootElement && !this.usingExternalRenderer) {
-            this.rootElement = document.createElement('div');
-            this.rootElement.style.width = '100%';
-            this.rootElement.style.height = '100%';
-            document.body.appendChild(this.rootElement);
+        if (!this.rootElement) {
+            if (!this.usingExternalRenderer) {
+                this.rootElement = document.createElement('div');
+                this.rootElement.style.width = '100%';
+                this.rootElement.style.height = '100%';
+                this.rootElement.style.position = 'absolute';
+                document.body.appendChild(this.rootElement);
+            } else {
+                this.rootElement = this.renderer.domElement.parentElement || document.body;
+            }
         }
 
         const renderDimensions = new THREE.Vector2();
@@ -160,6 +165,7 @@ export class Viewer {
         }
 
         this.setupInfoPanel();
+        this.loadingSpinner.setContainer(this.rootElement);
 
         this.initialized = true;
     }
