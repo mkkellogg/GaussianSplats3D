@@ -4,17 +4,24 @@ export class LoadingSpinner {
         this.message = message || 'Loading...';
         this.container = container || document.body;
 
+        this.spinnerDivContainerOuter = document.createElement('div');
+        this.spinnerDivContainerOuter.className = 'outerContainer';
+        this.spinnerDivContainerOuter.style.display = 'none';
+
         this.spinnerDivContainer = document.createElement('div');
+        this.spinnerDivContainer.className = 'container';
+
         this.spinnerDiv = document.createElement('div');
-        this.messageDiv = document.createElement('div');
-        this.spinnerDivContainer.className = 'loaderContainer';
         this.spinnerDiv.className = 'loader';
-        this.spinnerDivContainer.style.display = 'none';
+
+        this.messageDiv = document.createElement('div');
         this.messageDiv.className = 'message';
         this.messageDiv.innerHTML = this.message;
+
         this.spinnerDivContainer.appendChild(this.spinnerDiv);
         this.spinnerDivContainer.appendChild(this.messageDiv);
-        this.container.appendChild(this.spinnerDivContainer);
+        this.spinnerDivContainerOuter.appendChild(this.spinnerDivContainer);
+        this.container.appendChild(this.spinnerDivContainerOuter);
 
         const style = document.createElement('style');
         style.innerHTML = `
@@ -28,7 +35,12 @@ export class LoadingSpinner {
                 width: 180px;
             }
 
-            .loaderContainer {
+            .outerContainer {
+                width: 100%;
+                height: 100%;
+            }
+
+            .container {
                 position: absolute;
                 top: 50%;
                 left: 50%;
@@ -61,15 +73,24 @@ export class LoadingSpinner {
             }
 
         `;
-        this.spinnerDivContainer.appendChild(style);
+        this.spinnerDivContainerOuter.appendChild(style);
     }
 
     show() {
-        this.spinnerDivContainer.style.display = 'block';
+        this.spinnerDivContainerOuter.style.display = 'block';
     }
 
     hide() {
-        this.spinnerDivContainer.style.display = 'none';
+        this.spinnerDivContainerOuter.style.display = 'none';
+    }
+
+    setContainer(container) {
+        if (this.container) {
+            this.container.removeChild(this.spinnerDivContainerOuter);
+        }
+        this.container = container;
+        this.container.appendChild(this.spinnerDivContainerOuter);
+        this.spinnerDivContainerOuter.style.zIndex = this.container.style.zIndex + 1;
     }
 
     setMessage(msg) {

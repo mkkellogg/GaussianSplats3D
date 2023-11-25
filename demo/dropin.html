@@ -39,6 +39,10 @@
       const rootElement = document.createElement('div');
       rootElement.style.width = renderWidth + 'px';
       rootElement.style.height = renderHeight + 'px';
+      rootElement.style.position = 'relative';
+      rootElement.style.left = '50%';
+      rootElement.style.top = '50%';
+      rootElement.style.transform = 'translate(-50%, -50%)';
       document.body.appendChild(rootElement);
 
       const renderer = new THREE.WebGLRenderer({
@@ -91,7 +95,7 @@
     renderableViewer.addScenesFromFiles(['assets/data/stump/stump_high.splat',
                                          'assets/data/bonsai/bonsai_high.splat'], [],
                                         {'halfPrecisionCovariancesOnGPU': true},
-                                        false);
+                                        true);
     scene.add(renderableViewer);
 
     update();
