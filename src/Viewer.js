@@ -164,6 +164,8 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
+        if (this.splatMesh) this.splatMesh.setRenderer(this.renderer);
+
         this.setupInfoPanel();
         this.loadingSpinner.setContainer(this.rootElement);
 
@@ -466,6 +468,7 @@ export class Viewer {
         allSplatBuffers.push(...splatBuffers);
         allSplatBufferOptions.push(...splatBufferOptions);
         this.splatMesh.build(allSplatBuffers, allSplatBufferOptions);
+        if (this.renderer) this.splatMesh.setRenderer(this.renderer);
         const splatCount = this.splatMesh.getSplatCount();
         console.log(`Splat count: ${splatCount}`);
         this.splatMesh.frustumCulled = false;
