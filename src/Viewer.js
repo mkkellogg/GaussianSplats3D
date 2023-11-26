@@ -442,21 +442,37 @@ export class Viewer {
         });
     }
 
-    loadSplatBuffers(splatBuffers, splatBufferOptions = [], meshOptions = {}, showLoadingSpinner = true) {
-        return new Promise((resolve) => {
-            if (showLoadingSpinner) {
-                this.loadingSpinner.show();
-                this.loadingSpinner.setMessage(`Processing splats...`);
-            }
-            window.setTimeout(() => {
-                this.updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions);
-                this.setupSortWorker(this.splatMesh).then(() => {
-                    if (showLoadingSpinner) this.loadingSpinner.hide();
-                    resolve();
+    loadSplatBuffers = function() {
+
+        let loadPromise;
+
+        return function(splatBuffers, splatBufferOptions = [], meshOptions = {}, showLoadingSpinner = true) {
+            const performLoad = () => {
+                return new Promise((resolve) => {
+                    if (showLoadingSpinner) {
+                        this.loadingSpinner.show();
+                        this.loadingSpinner.setMessage(`Processing splats...`);
+                    }
+                    window.setTimeout(() => {
+                        this.updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions);
+                        this.setupSortWorker(this.splatMesh).then(() => {
+                            if (showLoadingSpinner) this.loadingSpinner.hide();
+                            resolve();
+                        });
+                    }, 1);
                 });
-            }, 1);
-        });
-    }
+            };
+            if (!loadPromise) {
+                loadPromise = performLoad();
+            } else {
+                loadPromise = loadPromise.then(() => {
+                    return performLoad();
+                });
+            }
+            return loadPromise;
+        };
+
+    }();
 
     updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions) {
         if (!this.splatMesh) {
