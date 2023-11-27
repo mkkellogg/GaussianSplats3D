@@ -35,7 +35,7 @@ export class RenderableViewer extends THREE.Group {
     }
 
     onBeforeRender(renderer, scene, camera) {
-        this.viewer.update(renderer, scene, camera);
+        this.viewer.update(renderer, camera);
     }
 
     createCallbackMesh() {

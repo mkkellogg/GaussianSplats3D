@@ -638,10 +638,19 @@ export class Viewer {
         this.render();
     }
 
-    update(renderer, scene, camera) {
+    setRenderer(renderer) {
+        this.renderer = renderer;
+    }
+
+    setCamera(camera) {
+        this.camera = camera;
+        if (this.controls) this.controls.object = camera;
+    }
+
+    update(renderer, camera) {
+        if (renderer) this.setRenderer(renderer);
+        if (camera) this.setCamera(camera);
         if (this.initializeFromExternalUpdate) {
-            this.renderer = renderer;
-            this.camera = camera;
             this.init();
         }
         if (!this.initialized || !this.splatRenderingInitialized) return;
