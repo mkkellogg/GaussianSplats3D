@@ -12,6 +12,14 @@ export class SplatMesh extends THREE.Mesh {
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.devicePixelRatio = devicePixelRatio;
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
+        this.distancesTransformFeedback = {
+            'id': null,
+            'program': null,
+            'centersBuffer': null,
+            'outDistancesBuffer': null,
+            'centersLoc': -1,
+            'viewProjLoc': -1,
+        };
         this.splatTree = null;
         this.splatDataTextures = null;
     }
@@ -257,14 +265,6 @@ export class SplatMesh extends THREE.Mesh {
         this.material = SplatMesh.buildMaterial();
         this.buildSplatTree();
         if (this.enableDistancesComputationOnGPU) {
-            this.distancesTransformFeedback = {
-                'id': null,
-                'program': null,
-                'centersBuffer': null,
-                'outDistancesBuffer': null,
-                'centersLoc': -1,
-                'viewProjLoc': -1,
-            };
             this.setupDistancesTransformFeedback();
         }
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
@@ -556,16 +556,18 @@ export class SplatMesh extends THREE.Mesh {
         this.distancesTransformFeedback.centersLoc = gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
         this.distancesTransformFeedback.viewProjLoc = gl.getUniformLocation(this.distancesTransformFeedback.program, 'viewProj');
 
-        if (!this.distancesTransformFeedback.centersBuffer) {
-            this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
-            gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
-            gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
+        if (this.distancesTransformFeedback.centersBuffer) {
+            gl.deleteBuffer(this.distancesTransformFeedback.centersBuffer);
         }
+        this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
+        gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
+        gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
 
-        if (!this.distancesTransformFeedback.outDistancesBuffer) {
-            this.distancesTransformFeedback.outDistancesBuffer = gl.createBuffer();
+        if (this.distancesTransformFeedback.outDistancesBuffer) {
+           gl.deleteBuffer(this.distancesTransformFeedback.outDistancesBuffer);
         }
+        this.distancesTransformFeedback.outDistancesBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, splatCount * 4, gl.DYNAMIC_COPY);
 
