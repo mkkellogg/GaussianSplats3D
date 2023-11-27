@@ -164,8 +164,6 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
-        if (this.splatMesh) this.splatMesh.setRenderer(this.renderer);
-
         this.setupInfoPanel();
         this.loadingSpinner.setContainer(this.rootElement);
 
@@ -641,10 +639,20 @@ export class Viewer {
         this.render();
     }
 
-    update(renderer, scene, camera) {
+    setRenderer(renderer) {
+        this.renderer = renderer;
+        if (this.splatMesh) this.splatMesh.setRenderer(this.renderer);
+    }
+
+    setCamera(camera) {
+        this.camera = camera;
+        if (this.controls) this.controls.object = camera;
+    }
+
+    update(renderer, camera) {
+        if (renderer) this.setRenderer(renderer);
+        if (camera) this.setCamera(camera);
         if (this.initializeFromExternalUpdate) {
-            this.renderer = renderer;
-            this.camera = camera;
             this.init();
         }
         if (!this.initialized || !this.splatRenderingInitialized) return;
