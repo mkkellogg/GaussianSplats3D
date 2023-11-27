@@ -445,8 +445,11 @@ export class Viewer {
     loadSplatBuffers = function() {
 
         let loadPromise;
+        let loadCount = 0;
 
         return function(splatBuffers, splatBufferOptions = [], meshOptions = {}, showLoadingSpinner = true) {
+            this.splatRenderingInitialized = false;
+            loadCount++;
             const performLoad = () => {
                 return new Promise((resolve) => {
                     if (showLoadingSpinner) {
@@ -454,9 +457,17 @@ export class Viewer {
                         this.loadingSpinner.setMessage(`Processing splats...`);
                     }
                     window.setTimeout(() => {
+                        if (this.sortWorker) this.sortWorker.terminate();
+                        this.sortWorker = null;
+                        this.sortRunning = false;
                         this.updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions);
                         this.setupSortWorker(this.splatMesh).then(() => {
-                            if (showLoadingSpinner) this.loadingSpinner.hide();
+                            loadCount--;
+                            if (loadCount === 0) {
+                                if (showLoadingSpinner) this.loadingSpinner.hide();
+                                this.splatRenderingInitialized = true;
+                                this.updateView(true, true);
+                            }
                             resolve();
                         });
                     }, 1);
@@ -494,9 +505,8 @@ export class Viewer {
     setupSortWorker(splatMesh) {
         return new Promise((resolve) => {
             const splatCount = splatMesh.getSplatCount();
-            if (this.sortWorker) this.sortWorker.terminate();
-            this.sortWorker = createSortWorker(splatCount);
-            this.sortWorker.onmessage = (e) => {
+            const sortWorker = createSortWorker(splatCount);
+            sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
                     this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
@@ -505,7 +515,7 @@ export class Viewer {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
                     console.log('Sorting web worker WASM setup complete.');
-                    this.sortWorker.postMessage({
+                    sortWorker.postMessage({
                         'centers': this.splatMesh.getIntegerCenters(true).buffer
                     });
                     this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
@@ -523,8 +533,7 @@ export class Viewer {
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
                     console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
                     console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
-                    this.updateView(true, true);
-                    this.splatRenderingInitialized = true;
+                    this.sortWorker = sortWorker;
                     resolve();
                 }
             };
