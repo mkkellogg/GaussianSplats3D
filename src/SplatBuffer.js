@@ -156,7 +156,6 @@ export class SplatBuffer {
         const tempMatrix = new THREE.Matrix4();
         const tempPosition = new THREE.Vector3();
         const tempQuaternion = new THREE.Quaternion();
-        const tempScale = new THREE.Vector3();
 
         return function(index, outScale = new THREE.Vector3(), transform) {
             const scaleBase = index * SplatBuffer.ScaleComponentCount;
@@ -180,17 +179,13 @@ export class SplatBuffer {
 
     getRotation = function() {
 
-        const tempQuaternion = new THREE.Quaternion();
+        // const tempQuaternion = new THREE.Quaternion();
 
-        return function (index, outRotation = new THREE.Quaternion(), transform) {
+        return function(index, outRotation = new THREE.Quaternion(), transform) {
             const rotationBase = index * SplatBuffer.RotationComponentCount;
             outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
                             fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
-            // TODO: apply this transform!
-            //if (transform) {
-               // tempQuaternion.setFromRotationMatrix(transform);
-               // outScale.applyMatrix4(transform);
-            //}
+            // TODO: apply transform to rotation
             return outRotation;
         };
 
@@ -204,10 +199,11 @@ export class SplatBuffer {
         this.rotationArray[rotationBase + 3] = tbf(rotation.z);
     }
 
-    getColor(index, outColor = new THREE.Vector4()) {
+    getColor(index, outColor = new THREE.Vector4(), transform) {
         const colorBase = index * SplatBuffer.ColorComponentCount;
         outColor.set(this.colorArray[colorBase], this.colorArray[colorBase + 1],
                      this.colorArray[colorBase + 2], this.colorArray[colorBase + 3]);
+        // TODO: apply transform for spherical harmonics
         return outColor;
     }
 
@@ -268,7 +264,7 @@ export class SplatBuffer {
             covarianceArray[covBase + 4] = covarianceMatrixTranspose.elements[7];
             covarianceArray[covBase + 5] = covarianceMatrixTranspose.elements[8];
 
-            /*const M = covarianceMatrix.elements;
+            /* const M = covarianceMatrix.elements;
             covarianceArray[covBase] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
             covarianceArray[covBase + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
             covarianceArray[covBase + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
@@ -307,7 +303,7 @@ export class SplatBuffer {
         }
     }
 
-    fillScaleArray(outScaleArray, destOffset) {
+    fillScaleArray(outScaleArray, destOffset, transform) {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
@@ -317,9 +313,10 @@ export class SplatBuffer {
             outScaleArray[scaleDestBase + 1] = fbf(this.scaleArray[scaleSrcBase + 1]);
             outScaleArray[scaleDestBase + 2] = fbf(this.scaleArray[scaleSrcBase + 2]);
         }
+        // TODO: Apply transform to scale
     }
 
-    fillRotationArray(outRotationArray, destOffset) {
+    fillRotationArray(outRotationArray, destOffset, transform) {
         const fbf = this.fbf.bind(this);
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
@@ -330,9 +327,10 @@ export class SplatBuffer {
             outRotationArray[rotationDestBase + 2] = fbf(this.rotationArray[rotationSrcBase + 2]);
             outRotationArray[rotationDestBase + 3] = fbf(this.rotationArray[rotationSrcBase + 3]);
         }
+         // TODO: Apply transform to rotation
     }
 
-    fillColorArray(outColorArray, destOffset) {
+    fillColorArray(outColorArray, destOffset, transform) {
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
             const colorSrcBase = i * SplatBuffer.ColorComponentCount;
@@ -341,6 +339,7 @@ export class SplatBuffer {
             outColorArray[colorDestBase + 1] = this.colorArray[colorSrcBase + 1];
             outColorArray[colorDestBase + 2] = this.colorArray[colorSrcBase + 2];
             outColorArray[colorDestBase + 3] = this.colorArray[colorSrcBase + 3];
+            // TODO: implement application of transform for spherical harmonics
         }
     }
 

@@ -64,12 +64,12 @@ export class Raycaster {
 
         const tempCenter = new THREE.Vector3();
         const tempScale = new THREE.Vector3();
-        const tempRotation = new THREE.Quaternion();
         const tempHit = new Hit();
         const scaleEpsilon = 0.0000001;
 
         // Used for raycasting against splat ellipsoid
         /*
+        const tempRotation = new THREE.Quaternion();
         const origin = new THREE.Vector3(0, 0, 0);
         const tempRotationMatrix = new THREE.Matrix4();
         const tempScaleMatrix = new THREE.Matrix4();
@@ -89,7 +89,6 @@ export class Raycaster {
                     const splatBuffer = splatTree.getSplatBufferForSplat(splatGlobalIndex);
                     const splatTransform = splatTree.getTransformForSplat(splatGlobalIndex);
                     splatBuffer.getCenter(splatLocalIndex, tempCenter, splatTransform);
-                    //splatBuffer.getRotation(splatLocalIndex, tempRotation, splatTransform);
                     splatBuffer.getScale(splatLocalIndex, tempScale, splatTransform);
 
                     if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
@@ -105,6 +104,8 @@ export class Raycaster {
                     // Raycast against actual splat ellipsoid ... doesn't actually work as well
                     // as the approximated sphere approach
                     /*
+                    // TODO: Properly implement SplatBuffer.getRotation()
+                    splatBuffer.getRotation(splatLocalIndex, tempRotation, splatTransform);
                     tempScaleMatrix.makeScale(tempScale.x, tempScale.y, tempScale.z);
                     tempRotationMatrix.makeRotationFromQuaternion(tempRotation);
                     fromSphereSpace.copy(tempScaleMatrix).premultiply(tempRotationMatrix);

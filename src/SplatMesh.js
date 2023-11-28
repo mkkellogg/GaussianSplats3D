@@ -294,8 +294,8 @@ export class SplatMesh extends THREE.Mesh {
         this.splatTree = new SplatTree(8, 1000);
         console.time('SplatTree build');
         const splatColor = new THREE.Vector4();
-        this.splatTree.processSplatMesh(this, (splatBuffer, splatIndex) => {
-            splatBuffer.getColor(splatIndex, splatColor);
+        this.splatTree.processSplatMesh(this, (splatBuffer, transform, splatIndex) => {
+            splatBuffer.getColor(splatIndex, splatColor, transform);
             return splatColor.w > this.splatAlphaRemovalThreshold;
         });
         console.timeEnd('SplatTree build');
@@ -344,7 +344,7 @@ export class SplatMesh extends THREE.Mesh {
             const transform = this.splatTransforms[i];
             splatBuffer.fillCovarianceArray(this.covariances, offset, transform);
             splatBuffer.fillCenterArray(this.centers, offset, transform);
-            splatBuffer.fillColorArray(this.colors, offset);
+            splatBuffer.fillColorArray(this.colors, offset, transform);
             offset += splatBuffer.getSplatCount();
         }
     }

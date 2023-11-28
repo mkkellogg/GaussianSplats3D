@@ -11,6 +11,8 @@ export class RenderableViewer extends THREE.Group {
         options.rootElement = null;
         options.ignoreDevicePixelRatio = false;
         options.initializeFromExternalUpdate = true;
+        options.camera = undefined;
+        options.renderer = undefined;
 
         this.viewer = new Viewer(options);
 
@@ -27,9 +29,9 @@ export class RenderableViewer extends THREE.Group {
         });
     }
 
-    addScenesFromFiles(fileURLs, splatBufferOptions, meshOptions, showLoadingSpinner) {
+    addScenesFromFiles(files, meshOptions, showLoadingSpinner) {
         if (showLoadingSpinner !== false) showLoadingSpinner = true;
-        return this.viewer.loadFiles(fileURLs, splatBufferOptions, meshOptions, showLoadingSpinner).then(() => {
+        return this.viewer.loadFiles(files, meshOptions, showLoadingSpinner).then(() => {
             this.add(this.viewer.splatMesh);
         });
     }

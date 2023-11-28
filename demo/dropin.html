@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <title>3D Gaussian Splat Demo - Stump</title>
+  <title>3D Gaussian Splats - Drop-in example</title>
   <script type="text/javascript" src="js/util.js"></script>
   <script type="importmap">
     {
@@ -53,13 +53,13 @@
 
       return {
         'renderer': renderer,
-        'width': renderWidth,
-        'height': renderHeight
+        'renderWidth': renderWidth,
+        'renderHeight': renderHeight
       }
     }
 
-    function setupCamera(renderInfo) {
-      const camera = new THREE.PerspectiveCamera(65, renderInfo.width / renderInfo.height, 0.1, 500);
+    function setupCamera(renderWidth, renderHeight) {
+      const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
       camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
       camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
       camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
@@ -86,25 +86,36 @@
       return controls;
     }
 
-    const renderInfo = setupRenderer();
-    const camera = setupCamera(renderInfo);
+    const {renderer, renderWidth, renderHeight} = setupRenderer();
+    const camera = setupCamera(renderWidth, renderHeight);
     const scene = setupScene();
-    const controls = setupControls(camera, renderInfo.renderer);
+    const controls = setupControls(camera, renderer);
 
-    const renderableViewer = new GaussianSplats3D.RenderableViewer();
-   /* renderableViewer.addScenesFromFiles(['assets/data/stump/stump_high.splat',
-                                         'assets/data/bonsai/bonsai_high.splat'], [],
-                                        {'halfPrecisionCovariancesOnGPU': true},
-                                        true);*/
-    renderableViewer.addSceneFromFile('assets/data/stump/stump_high.splat', {'halfPrecisionCovariancesOnGPU': true}, true);
-    renderableViewer.addSceneFromFile('assets/data/bonsai/bonsai_high.splat', {'halfPrecisionCovariancesOnGPU': true}, true);
+    const renderableViewer = new GaussianSplats3D.RenderableViewer({
+      'gpuAcceleratedSort': false
+    });
+    renderableViewer.addScenesFromFiles([
+                                          {
+                                            'path': 'assets/data/garden/garden.splat'
+                                          },
+                                          {
+                                            'path': 'assets/data/bonsai/bonsai.splat',
+                                            'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
+                                            'scale': [1.5, 1.5, 1.5],
+                                            'position': [0, -2, -1.2]
+                                          }
+                                        ],
+                                        {
+                                          'splatAlphaRemovalThreshold': 75,
+                                        },
+                                        true);
     scene.add(renderableViewer);
 
-    update();
+    requestAnimationFrame(update);
     function update() {
       requestAnimationFrame(update);
       controls.update();
-      renderInfo.renderer.render(scene, camera);
+      renderer.render(scene, camera);
     }
   </script>
 </body>

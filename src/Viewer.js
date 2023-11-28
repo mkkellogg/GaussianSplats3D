@@ -367,21 +367,21 @@ export class Viewer {
                     resolve();
                 });
             })
-            .catch(() => {
+            .catch((e) => {
                 reject(new Error(`Viewer::loadFile -> Could not load file ${fileURL}`));
             });
         });
     }
 
-    loadFiles(fileURLs, splatBufferOptions = undefined, meshOptions = undefined, showLoadingSpinner = true, onProgress = undefined) {
+    loadFiles(files, meshOptions, showLoadingSpinner = true, onProgress = undefined) {
         return new Promise((resolve, reject) => {
-            const fileCount = fileURLs.length;
+            const fileCount = files.length;
             const percentComplete = [];
             if (showLoadingSpinner) this.loadingSpinner.show();
             const downloadProgress = (fileIndex, percent, percentLabel) => {
                 percentComplete[fileIndex] = percent;
                 let totalPercent = 0;
-                for (let i = 0; i < fileCount; i++) totalPercent += percentComplete[i];
+                for (let i = 0; i < fileCount; i++) totalPercent += percentComplete[i] || 0;
                 totalPercent = totalPercent / fileCount;
                 percentLabel = `${totalPercent.toFixed(2)}%`;
                 if (showLoadingSpinner) {
@@ -395,9 +395,9 @@ export class Viewer {
             };
 
             const downLoadPromises = [];
-            for (let i = 0; i < fileURLs.length; i++) {
-                const meshOptionsForFile = meshOptions[i] || {};
-                const downloadPromise = this.loadFileToSplatBuffer(fileURLs[i], meshOptionsForFile.splatAlphaRemovalThreshold,
+            for (let i = 0; i < files.length; i++) {
+                const meshOptionsForFile = files[i] || {};
+                const downloadPromise = this.loadFileToSplatBuffer(files[i].path, meshOptionsForFile.splatAlphaRemovalThreshold,
                                                                    downloadProgress.bind(this, i));
                 downLoadPromises.push(downloadPromise);
             }
@@ -406,7 +406,7 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingSpinner) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', 'processing');
-                this.loadSplatBuffers(splatBuffers, splatBufferOptions, meshOptions, showLoadingSpinner).then(() => {
+                this.loadSplatBuffers(splatBuffers, files, meshOptions, showLoadingSpinner).then(() => {
                     if (onProgress) onProgress(100, '100%', 'processing');
                     resolve();
                 });
@@ -428,14 +428,15 @@ export class Viewer {
             } else if (fileURL.endsWith('.ply')) {
                 fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress, 0, plySplatAlphaRemovalThreshold);
             } else {
-                reject(new Error(`Viewer::loadFileData -> File format not supported: ${fileURL}`));
+                reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${fileURL}`));
             }
             fileLoadPromise
             .then((splatBuffer) => {
                 resolve(splatBuffer);
             })
-            .catch(() => {
-                reject(new Error(`Viewer::loadFileData -> Could not load file ${fileURL}`));
+            .catch((e) => {
+                console.error(e)
+                reject(new Error(`Viewer::loadFileToSplatBuffer -> Could not load file ${fileURL}`));
             });
         });
     }
