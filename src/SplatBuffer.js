@@ -112,7 +112,7 @@ export class SplatBuffer {
         return this.splatBufferData;
     }
 
-    getCenter(index, outCenter = new THREE.Vector3()) {
+    getCenter(index, outCenter = new THREE.Vector3(), transform) {
         let bucket = [0, 0, 0];
         const centerBase = index * SplatBuffer.CenterComponentCount;
         if (this.compressionLevel > 0) {
@@ -128,6 +128,7 @@ export class SplatBuffer {
             outCenter.y = this.centerArray[centerBase + 1];
             outCenter.z = this.centerArray[centerBase + 2];
         }
+        if (transform) outCenter.applyMatrix4(transform);
         return outCenter;
     }
 
@@ -150,11 +151,25 @@ export class SplatBuffer {
         }
     }
 
-    getScale(index, outScale = new THREE.Vector3()) {
-        const scaleBase = index * SplatBuffer.ScaleComponentCount;
-        outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
-        return outScale;
-    }
+    getScale = function() {
+
+        const tempMatrix = new THREE.Matrix4();
+        const tempPosition = new THREE.Vector3();
+        const tempQuaternion = new THREE.Quaternion();
+        const tempScale = new THREE.Vector3();
+
+        return function(index, outScale = new THREE.Vector3(), transform) {
+            const scaleBase = index * SplatBuffer.ScaleComponentCount;
+            outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
+            if (transform) {
+                tempMatrix.makeScale(outScale.x, outScale.y, outScale.z);
+                tempMatrix.multiply(transform);
+                tempMatrix.decompose(tempPosition, tempQuaternion, outScale);
+            }
+            return outScale;
+        };
+
+    }();
 
     setScale(index, scale) {
         const scaleBase = index * SplatBuffer.ScaleComponentCount;
@@ -163,12 +178,23 @@ export class SplatBuffer {
         this.scaleArray[scaleBase + 2] = tbf(scale.z);
     }
 
-    getRotation(index, outRotation = new THREE.Quaternion()) {
-        const rotationBase = index * SplatBuffer.RotationComponentCount;
-        outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
-                        fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
-        return outRotation;
-    }
+    getRotation = function() {
+
+        const tempQuaternion = new THREE.Quaternion();
+
+        return function (index, outRotation = new THREE.Quaternion(), transform) {
+            const rotationBase = index * SplatBuffer.RotationComponentCount;
+            outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
+                            fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
+            // TODO: apply this transform!
+            //if (transform) {
+               // tempQuaternion.setFromRotationMatrix(transform);
+               // outScale.applyMatrix4(transform);
+            //}
+            return outRotation;
+        };
+
+    }();
 
     setRotation(index, rotation) {
         const rotationBase = index * SplatBuffer.RotationComponentCount;
@@ -197,7 +223,7 @@ export class SplatBuffer {
         return this.splatCount;
     }
 
-    fillCovarianceArray(covarianceArray, destOffset) {
+    fillCovarianceArray(covarianceArray, destOffset, transform) {
         const splatCount = this.splatCount;
 
         const scale = new THREE.Vector3();
@@ -205,6 +231,9 @@ export class SplatBuffer {
         const rotationMatrix = new THREE.Matrix3();
         const scaleMatrix = new THREE.Matrix3();
         const covarianceMatrix = new THREE.Matrix3();
+        const covarianceMatrixTranspose = new THREE.Matrix3();
+        const transform3x3 = new THREE.Matrix3();
+        const transform3x3Transpose = new THREE.Matrix3();
         const tempMatrix4 = new THREE.Matrix4();
 
         for (let i = 0; i < splatCount; i++) {
@@ -222,20 +251,37 @@ export class SplatBuffer {
             rotationMatrix.setFromMatrix4(tempMatrix4);
 
             covarianceMatrix.copy(rotationMatrix).multiply(scaleMatrix);
-            const M = covarianceMatrix.elements;
+            covarianceMatrixTranspose.copy(covarianceMatrix).transpose().premultiply(covarianceMatrix);
             const covBase = SplatBuffer.CovarianceSizeFloats * (i + destOffset);
+
+            if (transform) {
+                transform3x3.setFromMatrix4(transform);
+                transform3x3Transpose.copy(transform3x3).transpose();
+                covarianceMatrixTranspose.multiply(transform3x3Transpose);
+                covarianceMatrixTranspose.premultiply(transform3x3);
+            }
+
+            covarianceArray[covBase] = covarianceMatrixTranspose.elements[0];
+            covarianceArray[covBase + 1] = covarianceMatrixTranspose.elements[3];
+            covarianceArray[covBase + 2] = covarianceMatrixTranspose.elements[6];
+            covarianceArray[covBase + 3] = covarianceMatrixTranspose.elements[4];
+            covarianceArray[covBase + 4] = covarianceMatrixTranspose.elements[7];
+            covarianceArray[covBase + 5] = covarianceMatrixTranspose.elements[8];
+
+            /*const M = covarianceMatrix.elements;
             covarianceArray[covBase] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
             covarianceArray[covBase + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
             covarianceArray[covBase + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
             covarianceArray[covBase + 3] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
             covarianceArray[covBase + 4] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
-            covarianceArray[covBase + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
+            covarianceArray[covBase + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];*/
         }
     }
 
-    fillCenterArray(outCenterArray, destOffset) {
+    fillCenterArray(outCenterArray, destOffset, transform) {
         const splatCount = this.splatCount;
         let bucket = [0, 0, 0];
+        const center = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
             const centerSrcBase = i * SplatBuffer.CenterComponentCount;
             const centerDestBase = (i + destOffset) * SplatBuffer.CenterComponentCount;
@@ -244,14 +290,20 @@ export class SplatBuffer {
                 bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
                 const sf = this.compressionScaleFactor;
                 const sr = this.compressionScaleRange;
-                outCenterArray[centerDestBase] = (this.centerArray[centerSrcBase] - sr) * sf + bucket[0];
-                outCenterArray[centerDestBase + 1] = (this.centerArray[centerSrcBase + 1] - sr) * sf + bucket[1];
-                outCenterArray[centerDestBase + 2] = (this.centerArray[centerSrcBase + 2] - sr) * sf + bucket[2];
+                center.x = (this.centerArray[centerSrcBase] - sr) * sf + bucket[0];
+                center.y = (this.centerArray[centerSrcBase + 1] - sr) * sf + bucket[1];
+                center.z = (this.centerArray[centerSrcBase + 2] - sr) * sf + bucket[2];
             } else {
-                outCenterArray[centerDestBase] = this.centerArray[centerSrcBase];
-                outCenterArray[centerDestBase + 1] = this.centerArray[centerSrcBase + 1];
-                outCenterArray[centerDestBase + 2] = this.centerArray[centerSrcBase + 2];
+                center.x = this.centerArray[centerSrcBase];
+                center.y = this.centerArray[centerSrcBase + 1];
+                center.z = this.centerArray[centerSrcBase + 2];
             }
+            if (transform) {
+                center.applyMatrix4(transform);
+            }
+            outCenterArray[centerDestBase] = center.x;
+            outCenterArray[centerDestBase + 1] = center.y;
+            outCenterArray[centerDestBase + 2] = center.z;
         }
     }
 

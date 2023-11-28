@@ -262,6 +262,7 @@ export class SplatMesh extends THREE.Mesh {
         this.dispose();
         this.splatBuffers = splatBuffers;
         this.splatBufferOptions = splatBufferOptions;
+        this.buildSplatTransforms();
         this.geometry = SplatMesh.buildGeomtery(this.splatBuffers);
         this.material = SplatMesh.buildMaterial();
         this.buildSplatTree();
@@ -271,12 +272,29 @@ export class SplatMesh extends THREE.Mesh {
         this.resetLocalSplatDataAndTexturesFromSplatBuffer();
     }
 
+    buildSplatTransforms() {
+        this.splatTransforms = [];
+        for (let splatBufferOptions of this.splatBufferOptions) {
+            if (splatBufferOptions) {
+                let positionArray = splatBufferOptions['position'] || [0, 0, 0];
+                let rotationArray = splatBufferOptions['rotation'] || [0, 0, 0, 1];
+                let scaleArray = splatBufferOptions['scale'] || [1, 1, 1];
+                const position = new THREE.Vector3().fromArray(positionArray);
+                const rotation = new THREE.Quaternion().fromArray(rotationArray);
+                const scale = new THREE.Vector3().fromArray(scaleArray);
+                const transform = new THREE.Matrix4();
+                transform.compose(position, rotation, scale);
+                this.splatTransforms.push(transform);
+            }
+        }
+    }
+
     buildSplatTree() {
 
         this.splatTree = new SplatTree(8, 1000);
         console.time('SplatTree build');
         const splatColor = new THREE.Vector4();
-        this.splatTree.processSplatBuffers(this.splatBuffers, (splatBuffer, splatIndex) => {
+        this.splatTree.processSplatMesh(this, (splatBuffer, splatIndex) => {
             splatBuffer.getColor(splatIndex, splatColor);
             return splatColor.w > this.splatAlphaRemovalThreshold;
         });
@@ -321,9 +339,11 @@ export class SplatMesh extends THREE.Mesh {
         this.colors = new Uint8Array(splatCount * 4);
 
         let offset = 0;
-        for (let splatBuffer of this.splatBuffers) {
-            splatBuffer.fillCovarianceArray(this.covariances, offset);
-            splatBuffer.fillCenterArray(this.centers, offset);
+        for (let i = 0; i < this.splatBuffers.length; i++) {
+            const splatBuffer = this.splatBuffers[i];
+            const transform = this.splatTransforms[i];
+            splatBuffer.fillCovarianceArray(this.covariances, offset, transform);
+            splatBuffer.fillCenterArray(this.centers, offset, transform);
             splatBuffer.fillColorArray(this.colors, offset);
             offset += splatBuffer.getSplatCount();
         }

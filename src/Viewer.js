@@ -354,7 +354,7 @@ export class Viewer {
                 if (options.showLoadingSpinner) this.loadingSpinner.hide();
                 if (options.onProgress) options.onProgress(0, '0%', 'processing');
                 const splatBufferOptions = {
-                    'orientation': options.orientation,
+                    'rotation': options.rotation || options.orientation,
                     'position': options.position,
                     'scale': options.scale
                 };

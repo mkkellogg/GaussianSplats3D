@@ -87,9 +87,10 @@ export class Raycaster {
                     const splatGlobalIndex = node.data.indexes[i];
                     const splatLocalIndex = splatTree.getSplatLocalIndex(splatGlobalIndex);
                     const splatBuffer = splatTree.getSplatBufferForSplat(splatGlobalIndex);
-                    splatBuffer.getCenter(splatLocalIndex, tempCenter);
-                    splatBuffer.getRotation(splatLocalIndex, tempRotation);
-                    splatBuffer.getScale(splatLocalIndex, tempScale);
+                    const splatTransform = splatTree.getTransformForSplat(splatGlobalIndex);
+                    splatBuffer.getCenter(splatLocalIndex, tempCenter, splatTransform);
+                    //splatBuffer.getRotation(splatLocalIndex, tempRotation, splatTransform);
+                    splatBuffer.getScale(splatLocalIndex, tempScale, splatTransform);
 
                     if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
                         continue;

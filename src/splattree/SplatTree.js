@@ -6,7 +6,7 @@ export class SplatTree {
     constructor(maxDepth, maxCentersPerNode) {
         this.maxDepth = maxDepth;
         this.maxCentersPerNode = maxCentersPerNode;
-        this.splatBuffers = [];
+        this.splatMesh = [];
         this.sceneDimensions = new THREE.Vector3();
         this.sceneMin = new THREE.Vector3();
         this.sceneMax = new THREE.Vector3();
@@ -18,15 +18,19 @@ export class SplatTree {
     }
 
     getSplatBufferForSplat(globalIndex) {
-        return this.splatBuffers[this.globalIndexToSplatBufferMap[globalIndex]];
+        return this.splatMesh.splatBuffers[this.globalIndexToSplatBufferMap[globalIndex]];
+    }
+
+    getTransformForSplat(globalIndex) {
+        return this.splatMesh.splatTransforms[this.globalIndexToSplatBufferMap[globalIndex]];
     }
 
     getSplatLocalIndex(globalIndex) {
         return this.globalIndexToLocalIndexMap[globalIndex];
     }
 
-    processSplatBuffers(splatBuffers, filterFunc = () => true) {
-        this.splatBuffers = splatBuffers;
+    processSplatMesh(splatMesh, filterFunc = () => true) {
+        this.splatMesh = splatMesh;
 
         this.sceneMin = new THREE.Vector3();
         this.sceneMax = new THREE.Vector3();
@@ -36,13 +40,14 @@ export class SplatTree {
         this.globalIndexToSplatBufferMap = {};
 
         let totalSplatCount = 0;
-        for (let s = 0; s < this.splatBuffers.length; s++) {
-            const splatBuffer = this.splatBuffers[s];
+        for (let s = 0; s < this.splatMesh.splatBuffers.length; s++) {
+            const splatBuffer = this.splatMesh.splatBuffers[s];
             const splatCount = splatBuffer.getSplatCount();
             const center = new THREE.Vector3();
+            const transform = this.splatMesh.splatTransforms[s];
             for (let i = 0; i < splatCount; i++) {
                 if (filterFunc(splatBuffer, i)) {
-                    splatBuffer.getCenter(i, center);
+                    splatBuffer.getCenter(i, center, transform);
                     if (i === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
                     if (i === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
                     if (i === 0 || center.y < this.sceneMin.y) this.sceneMin.y = center.y;
@@ -61,7 +66,7 @@ export class SplatTree {
         const indexes = [];
         for (let i = 0; i < totalSplatCount; i ++) {
             const splatLocalIndex = this.globalIndexToLocalIndexMap[i];
-            const splatBuffer = splatBuffers[this.globalIndexToSplatBufferMap[i]];
+            const splatBuffer = this.splatMesh.splatBuffers[this.globalIndexToSplatBufferMap[i]];
             if (filterFunc(splatBuffer, splatLocalIndex)) {
                 indexes.push(i);
             }
@@ -70,10 +75,10 @@ export class SplatTree {
         this.rootNode.data = {
             'indexes': indexes
         };
-        this.processNode(this.rootNode, splatBuffers);
+        this.processNode(this.rootNode, splatMesh);
     }
 
-    processNode(node, splatBuffers) {
+    processNode(node, splatMesh) {
         const splatCount = node.data.indexes.length;
 
         if (splatCount < this.maxCentersPerNode || node.depth > this.maxDepth) {
@@ -129,8 +134,9 @@ export class SplatTree {
         for (let i = 0; i < splatCount; i++) {
             const splatGlobalIndex = node.data.indexes[i];
             const splatLocalIndex = this.globalIndexToLocalIndexMap[splatGlobalIndex];
-            const splatBuffer = splatBuffers[this.globalIndexToSplatBufferMap[splatGlobalIndex]];
-            splatBuffer.getCenter(splatLocalIndex, center);
+            const splatBuffer = this.getSplatBufferForSplat(splatGlobalIndex);
+            const transform = this.getTransformForSplat(splatGlobalIndex);
+            splatBuffer.getCenter(splatLocalIndex, center, transform);
             for (let j = 0; j < childrenBounds.length; j++) {
                 if (childrenBounds[j].containsPoint(center)) {
                     splatCounts[j]++;
@@ -149,7 +155,7 @@ export class SplatTree {
 
         node.data = {};
         for (let child of node.children) {
-            this.processNode(child, splatBuffers);
+            this.processNode(child, splatMesh);
         }
     }
 
