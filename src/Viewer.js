@@ -495,7 +495,7 @@ export class Viewer {
         this.splatMesh.build(allSplatBuffers, allSplatBufferOptions);
         if (this.renderer) this.splatMesh.setRenderer(this.renderer);
         const splatCount = this.splatMesh.getSplatCount();
-        console.log(`Splat count: ${splatCount}`);
+        console.log(`Total splat count: ${splatCount}`);
         this.splatMesh.frustumCulled = false;
         this.splatRenderCount = splatCount;
     }
