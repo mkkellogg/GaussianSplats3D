@@ -434,8 +434,7 @@ export class Viewer {
             .then((splatBuffer) => {
                 resolve(splatBuffer);
             })
-            .catch((e) => {
-                console.error(e)
+            .catch(() => {
                 reject(new Error(`Viewer::loadFileToSplatBuffer -> Could not load file ${fileURL}`));
             });
         });
