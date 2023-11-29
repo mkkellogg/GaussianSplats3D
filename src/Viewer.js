@@ -362,7 +362,7 @@ export class Viewer {
                     'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
                     'halfPrecisionCovariancesOnGPU': options.halfPrecisionCovariancesOnGPU
                 };
-                this.loadSplatBuffers([splatBuffer], [splatBufferOptions], meshOptions, options.showLoadingSpinner).then(() => {
+                this.loadSplatBuffersIntoMesh([splatBuffer], [splatBufferOptions], meshOptions, options.showLoadingSpinner).then(() => {
                     if (options.onProgress) options.onProgress(100, '100%', 'processing');
                     resolve();
                 });
@@ -406,7 +406,7 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingSpinner) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', 'processing');
-                this.loadSplatBuffers(splatBuffers, files, meshOptions, showLoadingSpinner).then(() => {
+                this.loadSplatBuffersIntoMesh(splatBuffers, files, meshOptions, showLoadingSpinner).then(() => {
                     if (onProgress) onProgress(100, '100%', 'processing');
                     resolve();
                 });
@@ -440,7 +440,7 @@ export class Viewer {
         });
     }
 
-    loadSplatBuffers = function() {
+    loadSplatBuffersIntoMesh = function() {
 
         let loadPromise;
         let loadCount = 0;

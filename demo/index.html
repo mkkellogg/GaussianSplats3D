@@ -462,7 +462,7 @@
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
       const viewer = new GaussianSplats3D.Viewer(viewerOptions);
-      viewer.loadSplatBuffers([splatBuffer], undefined, meshOptions)
+      viewer.loadSplatBuffersIntoMesh([splatBuffer], undefined, meshOptions)
       .then(() => {
           viewer.start();
       });
