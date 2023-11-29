@@ -47,12 +47,12 @@ export class SplatTree {
             for (let i = 0; i < splatCount; i++) {
                 if (filterFunc(splatBuffer, transform, i)) {
                     splatBuffer.getCenter(i, center, transform);
-                    if (i === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
-                    if (i === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
-                    if (i === 0 || center.y < this.sceneMin.y) this.sceneMin.y = center.y;
-                    if (i === 0 || center.y > this.sceneMax.y) this.sceneMax.y = center.y;
-                    if (i === 0 || center.z < this.sceneMin.z) this.sceneMin.z = center.z;
-                    if (i === 0 || center.z > this.sceneMax.z) this.sceneMax.z = center.z;
+                    if (s == 0 && i === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
+                    if (s == 0 && i === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
+                    if (s == 0 && i === 0 || center.y < this.sceneMin.y) this.sceneMin.y = center.y;
+                    if (s == 0 && i === 0 || center.y > this.sceneMax.y) this.sceneMax.y = center.y;
+                    if (s == 0 && i === 0 || center.z < this.sceneMin.z) this.sceneMin.z = center.z;
+                    if (s == 0 && i === 0 || center.z > this.sceneMax.z) this.sceneMax.z = center.z;
                 }
                 this.globalIndexToLocalIndexMap[totalSplatCount] = i;
                 this.globalIndexToSplatBufferMap[totalSplatCount] = s;
