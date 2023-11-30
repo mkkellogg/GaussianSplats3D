@@ -4,11 +4,9 @@ import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 
 export class SplatMesh extends THREE.Mesh {
 
-    constructor(splatAlphaRemovalThreshold = 1, halfPrecisionCovariancesOnGPU = false,
-                devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
+    constructor(halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
         super({'morphAttributes': {}, 'fake': true}, null);
         this.renderer = undefined;
-        this.splatAlphaRemovalThreshold = splatAlphaRemovalThreshold;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.devicePixelRatio = devicePixelRatio;
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
@@ -239,6 +237,13 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     dispose() {
+        this.disposeMeshData();
+        if (this.enableDistancesComputationOnGPU) {
+            this.disposeGPUResources();
+        }
+    }
+
+    disposeMeshData() {
         if (this.geometry && !this.geometry.fake) {
             this.geometry.dispose();
             this.geometry = null;
@@ -261,7 +266,7 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     build(splatBuffers, splatBufferOptions) {
-        this.dispose();
+        this.disposeMeshData();
         this.splatBuffers = splatBuffers;
         this.splatBufferOptions = splatBufferOptions;
         this.buildSplatTransforms();
@@ -296,9 +301,10 @@ export class SplatMesh extends THREE.Mesh {
         this.splatTree = new SplatTree(8, 1000);
         console.time('SplatTree build');
         const splatColor = new THREE.Vector4();
-        this.splatTree.processSplatMesh(this, (splatBuffer, transform, splatIndex) => {
-            splatBuffer.getColor(splatIndex, splatColor, transform);
-            return splatColor.w > this.splatAlphaRemovalThreshold;
+        this.splatTree.processSplatMesh(this, (splatBufferIndex, splatBuffer, splatLocalIndex, transform) => {
+            splatBuffer.getColor(splatLocalIndex, splatColor, transform);
+            const splatBufferOptions = this.splatBufferOptions[splatBufferIndex];
+            return splatColor.w > (splatBufferOptions.splatAlphaRemovalThreshold || 1);
         });
         console.timeEnd('SplatTree build');
 
@@ -475,16 +481,36 @@ export class SplatMesh extends THREE.Mesh {
         return totalSplatCount;
     }
 
-    getCenters() {
-        return this.centers;
-    }
+    disposeGPUResources() {
 
-    getColors() {
-        return this.colors;
-    }
+        if (!this.renderer) return;
 
-    getCovariances() {
-        return this.covariances;
+        const gl = this.renderer.getContext();
+
+        if (this.distancesTransformFeedback.vao) {
+            gl.deleteVertexArray(this.distancesTransformFeedback.vao);
+            this.distancesTransformFeedback.vao = null;
+        }
+        if (this.distancesTransformFeedback.program) {
+            gl.deleteProgram(this.distancesTransformFeedback.program);
+            gl.deleteShader(this.distancesTransformFeedback.vertexShader);
+            gl.deleteShader(this.distancesTransformFeedback.fragmentShader);
+            this.distancesTransformFeedback.program = null;
+            this.distancesTransformFeedback.vertexShader = null;
+            this.distancesTransformFeedback.fragmentShader = null;
+        }
+        if (this.distancesTransformFeedback.centersBuffer) {
+            this.distancesTransformFeedback.centersBuffer = null;
+            gl.deleteBuffer(this.distancesTransformFeedback.centersBuffer);
+        }
+        if (this.distancesTransformFeedback.outDistancesBuffer) {
+            gl.deleteBuffer(this.distancesTransformFeedback.outDistancesBuffer);
+            this.distancesTransformFeedback.outDistancesBuffer = null;
+        }
+        if (this.distancesTransformFeedback.id) {
+            gl.deleteTransformFeedback(this.distancesTransformFeedback.id);
+            this.distancesTransformFeedback.id = null;
+        }
     }
 
     setRenderer(renderer) {
@@ -506,8 +532,14 @@ export class SplatMesh extends THREE.Mesh {
             const splatCount = this.getSplatCount();
 
             if (!this.renderer || (currentRenderer === this.renderer && currentSplatCount === splatCount)) return;
-            const rebuildGPUObjects = (currentRenderer !== this.renderer);
+            const rebuildGPUObjects = true; //(currentRenderer !== this.renderer);
             const rebuildBuffers = currentSplatCount !== splatCount;
+            if (rebuildGPUObjects) {
+                this.disposeGPUResources();
+            } else if (rebuildBuffers) {
+                if (this.distancesTransformFeedback.centersBuffer) gl.deleteBuffer(this.distancesTransformFeedback.centersBuffer);
+                if (this.distancesTransformFeedback.outDistancesBuffer) gl.deleteBuffer(this.distancesTransformFeedback.outDistancesBuffer);
+            }
 
             const gl = this.renderer.getContext();
 
@@ -556,18 +588,12 @@ export class SplatMesh extends THREE.Mesh {
             const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
 
             if (rebuildGPUObjects) {
-                if (this.distancesTransformFeedback.vao) gl.deleteVertexArray(this.distancesTransformFeedback.vao);
                 this.distancesTransformFeedback.vao = gl.createVertexArray();
             }
 
             gl.bindVertexArray(this.distancesTransformFeedback.vao);
 
             if (rebuildGPUObjects) {
-                if (this.distancesTransformFeedback.program) {
-                    gl.deleteProgram(this.distancesTransformFeedback.program);
-                    gl.deleteShader(this.distancesTransformFeedback.fragmentShader);
-                    gl.deleteShader(this.distancesTransformFeedback.vertexShader);
-                }
                 const program = gl.createProgram();
                 const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
                 const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
@@ -600,7 +626,6 @@ export class SplatMesh extends THREE.Mesh {
             this.distancesTransformFeedback.viewProjLoc = gl.getUniformLocation(this.distancesTransformFeedback.program, 'viewProj');
 
             if (rebuildGPUObjects || rebuildBuffers) {
-                if (this.distancesTransformFeedback.centersBuffer) gl.deleteBuffer(this.distancesTransformFeedback.centersBuffer);
                 this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
                 gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
@@ -608,14 +633,12 @@ export class SplatMesh extends THREE.Mesh {
             }
 
             if (rebuildGPUObjects || rebuildBuffers) {
-                if (this.distancesTransformFeedback.outDistancesBuffer) gl.deleteBuffer(this.distancesTransformFeedback.outDistancesBuffer);
                 this.distancesTransformFeedback.outDistancesBuffer = gl.createBuffer();
             }
             gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, splatCount * 4, gl.DYNAMIC_COPY);
 
             if (rebuildGPUObjects) {
-                if (this.distancesTransformFeedback.id) gl.deleteTransformFeedback(this.distancesTransformFeedback.id);
                 this.distancesTransformFeedback.id = gl.createTransformFeedback();
             }
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
