@@ -13,20 +13,20 @@ export class SplatTree {
         this.rootNode = null;
         this.addedIndexes = {};
         this.nodesWithIndexes = [];
-        this.globalIndexToLocalIndexMap = {};
-        this.globalIndexToSplatBufferMap = {};
+        this.globalSplatIndexToLocalSplatIndexMap = {};
+        this.globalSplatIndexToSplatBufferIndexMap = {};
     }
 
     getSplatBufferForSplat(globalIndex) {
-        return this.splatMesh.splatBuffers[this.globalIndexToSplatBufferMap[globalIndex]];
+        return this.splatMesh.splatBuffers[this.globalSplatIndexToSplatBufferIndexMap[globalIndex]];
     }
 
     getTransformForSplat(globalIndex) {
-        return this.splatMesh.splatTransforms[this.globalIndexToSplatBufferMap[globalIndex]];
+        return this.splatMesh.splatTransforms[this.globalSplatIndexToSplatBufferIndexMap[globalIndex]];
     }
 
     getSplatLocalIndex(globalIndex) {
-        return this.globalIndexToLocalIndexMap[globalIndex];
+        return this.globalSplatIndexToLocalSplatIndexMap[globalIndex];
     }
 
     processSplatMesh(splatMesh, filterFunc = () => true) {
@@ -36,26 +36,28 @@ export class SplatTree {
         this.sceneMax = new THREE.Vector3();
         this.addedIndexes = {};
         this.nodesWithIndexes = [];
-        this.globalIndexToLocalIndexMap = {};
-        this.globalIndexToSplatBufferMap = {};
+        this.globalSplatIndexToLocalSplatIndexMap = {};
+        this.globalSplatIndexToSplatBufferIndexMap = {};
 
         let totalSplatCount = 0;
+        let validSplatCount = 0;
         for (let s = 0; s < this.splatMesh.splatBuffers.length; s++) {
             const splatBuffer = this.splatMesh.splatBuffers[s];
             const splatCount = splatBuffer.getSplatCount();
             const transform = this.splatMesh.splatTransforms[s];
             for (let i = 0; i < splatCount; i++) {
-                if (filterFunc(splatBuffer, transform, i)) {
+                if (filterFunc(s, splatBuffer, i, transform)) {
                     splatBuffer.getCenter(i, center, transform);
-                    if (s == 0 && i === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
-                    if (s == 0 && i === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
-                    if (s == 0 && i === 0 || center.y < this.sceneMin.y) this.sceneMin.y = center.y;
-                    if (s == 0 && i === 0 || center.y > this.sceneMax.y) this.sceneMax.y = center.y;
-                    if (s == 0 && i === 0 || center.z < this.sceneMin.z) this.sceneMin.z = center.z;
-                    if (s == 0 && i === 0 || center.z > this.sceneMax.z) this.sceneMax.z = center.z;
+                    if (validSplatCount === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
+                    if (validSplatCount === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
+                    if (validSplatCount === 0 || center.y < this.sceneMin.y) this.sceneMin.y = center.y;
+                    if (validSplatCount === 0 || center.y > this.sceneMax.y) this.sceneMax.y = center.y;
+                    if (validSplatCount === 0 || center.z < this.sceneMin.z) this.sceneMin.z = center.z;
+                    if (validSplatCount === 0 || center.z > this.sceneMax.z) this.sceneMax.z = center.z;
+                    validSplatCount++;
                 }
-                this.globalIndexToLocalIndexMap[totalSplatCount] = i;
-                this.globalIndexToSplatBufferMap[totalSplatCount] = s;
+                this.globalSplatIndexToLocalSplatIndexMap[totalSplatCount] = i;
+                this.globalSplatIndexToSplatBufferIndexMap[totalSplatCount] = s;
                 totalSplatCount++;
             }
         }
@@ -65,10 +67,10 @@ export class SplatTree {
         const indexes = [];
         for (let i = 0; i < totalSplatCount; i ++) {
             const splatLocalIndex = this.getSplatLocalIndex(i);
-            const splatBufferIndex = this.globalIndexToSplatBufferMap[i];
-            const splatBuffer = this.getSplatBufferForSplat(splatBufferIndex);
-            const transform = this.getTransformForSplat(splatBufferIndex);
-            if (filterFunc(splatBuffer, transform, splatLocalIndex)) {
+            const splatBufferIndex = this.globalSplatIndexToSplatBufferIndexMap[i];
+            const splatBuffer = this.getSplatBufferForSplat(i);
+            const transform = this.getTransformForSplat(i);
+            if (filterFunc(splatBufferIndex, splatBuffer, splatLocalIndex, transform)) {
                 indexes.push(i);
             }
         }
@@ -134,7 +136,7 @@ export class SplatTree {
         const center = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
             const splatGlobalIndex = node.data.indexes[i];
-            const splatLocalIndex = this.globalIndexToLocalIndexMap[splatGlobalIndex];
+            const splatLocalIndex = this.getSplatLocalIndex(splatGlobalIndex);
             const splatBuffer = this.getSplatBufferForSplat(splatGlobalIndex);
             const transform = this.getTransformForSplat(splatGlobalIndex);
             splatBuffer.getCenter(splatLocalIndex, center, transform);
