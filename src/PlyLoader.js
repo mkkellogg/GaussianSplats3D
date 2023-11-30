@@ -7,9 +7,9 @@ export class PlyLoader {
         this.splatBuffer = null;
     }
 
-    fetchFile(fileName, onProgress) {
+    fetchFile(fileName, onProgress, signal) {
         return new Promise((resolve, reject) => {
-            fetchWithProgress(fileName, onProgress)
+            fetchWithProgress(fileName, onProgress, signal)
             .then((data) => {
                 resolve(data);
             })
@@ -19,9 +19,9 @@ export class PlyLoader {
         });
     }
 
-    loadFromURL(fileName, onProgress, compressionLevel = 0, minimumAlpha = 1) {
+    loadFromURL(fileName, onProgress, compressionLevel = 0, minimumAlpha = 1, signal) {
         return new Promise((resolve, reject) => {
-            const loadPromise = this.fetchFile(fileName, onProgress);
+            const loadPromise = this.fetchFile(fileName, onProgress, signal);
             loadPromise
             .then((plyFileData) => {
                 const plyParser = new PlyParser(plyFileData);

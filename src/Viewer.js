@@ -341,9 +341,11 @@ export class Viewer {
         return new Promise((resolve, reject) => {
             let fileLoadPromise;
             if (fileURL.endsWith('.splat')) {
-                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
+                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress, options.signal);
             } else if (fileURL.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress, 0, options.splatAlphaRemovalThreshold);
+                fileLoadPromise = new PlyLoader().loadFromURL(
+                    fileURL, downloadProgress, 0, options.splatAlphaRemovalThreshold, options.signal
+                );
             } else {
                 reject(new Error(`Viewer::loadFile -> File format not supported: ${fileURL}`));
             }

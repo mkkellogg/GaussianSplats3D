@@ -48,10 +48,10 @@ export const rgbaToInteger = function(r, g, b, a) {
     return r + (g << 8) + (b << 16) + (a << 24);
 };
 
-export const fetchWithProgress = function(path, onProgress) {
+export const fetchWithProgress = function(path, onProgress, signal) {
 
     return new Promise((resolve, reject) => {
-        fetch(path)
+        fetch(path, { signal })
         .then(async (data) => {
             const reader = data.body.getReader();
             let bytesDownloaded = 0;

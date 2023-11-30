@@ -1,3 +1,6 @@
 dist
 build
+demo/assets/data
 node_modules
+# Ignore Mac DS_Store files
+.DS_Store
