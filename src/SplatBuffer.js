@@ -151,53 +151,28 @@ export class SplatBuffer {
         }
     }
 
-    getScale = function() {
+    getScaleAndRotation = function() {
 
+        const scaleMatrix = new THREE.Matrix4();
+        const rotationMatrix = new THREE.Matrix4();
         const tempMatrix = new THREE.Matrix4();
         const tempPosition = new THREE.Vector3();
-        const tempQuaternion = new THREE.Quaternion();
 
-        return function(index, outScale = new THREE.Vector3(), transform) {
+        return function(index, outScale = new THREE.Vector3(), outRotation = new THREE.Quaternion(), transform) {
             const scaleBase = index * SplatBuffer.ScaleComponentCount;
             outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
-            if (transform) {
-                tempMatrix.makeScale(outScale.x, outScale.y, outScale.z);
-                tempMatrix.multiply(transform);
-                tempMatrix.decompose(tempPosition, tempQuaternion, outScale);
-            }
-            return outScale;
-        };
-
-    }();
-
-    setScale(index, scale) {
-        const scaleBase = index * SplatBuffer.ScaleComponentCount;
-        this.scaleArray[scaleBase] = tbf(scale.x);
-        this.scaleArray[scaleBase + 1] = tbf(scale.y);
-        this.scaleArray[scaleBase + 2] = tbf(scale.z);
-    }
-
-    getRotation = function() {
-
-        // const tempQuaternion = new THREE.Quaternion();
-
-        return function(index, outRotation = new THREE.Quaternion(), transform) {
             const rotationBase = index * SplatBuffer.RotationComponentCount;
             outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
                             fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
-            // TODO: apply transform to rotation
-            return outRotation;
+            if (transform) {
+                scaleMatrix.makeScale(outScale.x, outScale.y, outScale.z);
+                rotationMatrix.makeRotationFromQuaternion(outRotation);
+                tempMatrix.copy(scaleMatrix).multiply(rotationMatrix).multiply(transform);
+                tempMatrix.decompose(tempPosition, outRotation, outScale);
+            }
         };
 
     }();
-
-    setRotation(index, rotation) {
-        const rotationBase = index * SplatBuffer.RotationComponentCount;
-        this.rotationArray[rotationBase] = tbf(rotation.w);
-        this.rotationArray[rotationBase + 1] = tbf(rotation.x);
-        this.rotationArray[rotationBase + 2] = tbf(rotation.y);
-        this.rotationArray[rotationBase + 3] = tbf(rotation.z);
-    }
 
     getColor(index, outColor = new THREE.Vector4(), transform) {
         const colorBase = index * SplatBuffer.ColorComponentCount;
@@ -227,7 +202,7 @@ export class SplatBuffer {
         const rotationMatrix = new THREE.Matrix3();
         const scaleMatrix = new THREE.Matrix3();
         const covarianceMatrix = new THREE.Matrix3();
-        const covarianceMatrixTranspose = new THREE.Matrix3();
+        const transformedCovariance = new THREE.Matrix3();
         const transform3x3 = new THREE.Matrix3();
         const transform3x3Transpose = new THREE.Matrix3();
         const tempMatrix4 = new THREE.Matrix4();
@@ -247,30 +222,22 @@ export class SplatBuffer {
             rotationMatrix.setFromMatrix4(tempMatrix4);
 
             covarianceMatrix.copy(rotationMatrix).multiply(scaleMatrix);
-            covarianceMatrixTranspose.copy(covarianceMatrix).transpose().premultiply(covarianceMatrix);
+            transformedCovariance.copy(covarianceMatrix).transpose().premultiply(covarianceMatrix);
             const covBase = SplatBuffer.CovarianceSizeFloats * (i + destOffset);
 
             if (transform) {
                 transform3x3.setFromMatrix4(transform);
                 transform3x3Transpose.copy(transform3x3).transpose();
-                covarianceMatrixTranspose.multiply(transform3x3Transpose);
-                covarianceMatrixTranspose.premultiply(transform3x3);
+                transformedCovariance.multiply(transform3x3Transpose);
+                transformedCovariance.premultiply(transform3x3);
             }
 
-            covarianceArray[covBase] = covarianceMatrixTranspose.elements[0];
-            covarianceArray[covBase + 1] = covarianceMatrixTranspose.elements[3];
-            covarianceArray[covBase + 2] = covarianceMatrixTranspose.elements[6];
-            covarianceArray[covBase + 3] = covarianceMatrixTranspose.elements[4];
-            covarianceArray[covBase + 4] = covarianceMatrixTranspose.elements[7];
-            covarianceArray[covBase + 5] = covarianceMatrixTranspose.elements[8];
-
-            /* const M = covarianceMatrix.elements;
-            covarianceArray[covBase] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
-            covarianceArray[covBase + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
-            covarianceArray[covBase + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
-            covarianceArray[covBase + 3] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
-            covarianceArray[covBase + 4] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
-            covarianceArray[covBase + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];*/
+            covarianceArray[covBase] = transformedCovariance.elements[0];
+            covarianceArray[covBase + 1] = transformedCovariance.elements[3];
+            covarianceArray[covBase + 2] = transformedCovariance.elements[6];
+            covarianceArray[covBase + 3] = transformedCovariance.elements[4];
+            covarianceArray[covBase + 4] = transformedCovariance.elements[7];
+            covarianceArray[covBase + 5] = transformedCovariance.elements[8];
         }
     }
 
@@ -303,33 +270,6 @@ export class SplatBuffer {
         }
     }
 
-    fillScaleArray(outScaleArray, destOffset, transform) {
-        const fbf = this.fbf.bind(this);
-        const splatCount = this.splatCount;
-        for (let i = 0; i < splatCount; i++) {
-            const scaleSrcBase = i * SplatBuffer.ScaleComponentCount;
-            const scaleDestBase = (i + destOffset) * SplatBuffer.ScaleComponentCount;
-            outScaleArray[scaleDestBase] = fbf(this.scaleArray[scaleSrcBase]);
-            outScaleArray[scaleDestBase + 1] = fbf(this.scaleArray[scaleSrcBase + 1]);
-            outScaleArray[scaleDestBase + 2] = fbf(this.scaleArray[scaleSrcBase + 2]);
-        }
-        // TODO: Apply transform to scale
-    }
-
-    fillRotationArray(outRotationArray, destOffset, transform) {
-        const fbf = this.fbf.bind(this);
-        const splatCount = this.splatCount;
-        for (let i = 0; i < splatCount; i++) {
-            const rotationSrcBase = i * SplatBuffer.RotationComponentCount;
-            const rotationDestBase = (i + destOffset) * SplatBuffer.RotationComponentCount;
-            outRotationArray[rotationDestBase] = fbf(this.rotationArray[rotationSrcBase]);
-            outRotationArray[rotationDestBase + 1] = fbf(this.rotationArray[rotationSrcBase + 1]);
-            outRotationArray[rotationDestBase + 2] = fbf(this.rotationArray[rotationSrcBase + 2]);
-            outRotationArray[rotationDestBase + 3] = fbf(this.rotationArray[rotationSrcBase + 3]);
-        }
-         // TODO: Apply transform to rotation
-    }
-
     fillColorArray(outColorArray, destOffset, transform) {
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
@@ -345,25 +285,53 @@ export class SplatBuffer {
 
     swapVertices(indexA, indexB) {
 
-        this.getCenter(indexA, tempVector3A);
-        this.getCenter(indexB, tempVector3B);
-        this.setCenter(indexB, tempVector3A);
-        this.setCenter(indexA, tempVector3B);
+        const getScale = (index, outScale = new THREE.Vector3()) => {
+            const scaleBase = index * SplatBuffer.ScaleComponentCount;
+            outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
+            return outScale;
+        };
 
-        this.getScale(indexA, tempVector3A);
-        this.getScale(indexB, tempVector3B);
-        this.setScale(indexB, tempVector3A);
-        this.setScale(indexA, tempVector3B);
+        const setScale = (index, scale) => {
+            const scaleBase = index * SplatBuffer.ScaleComponentCount;
+            this.scaleArray[scaleBase] = tbf(scale.x);
+            this.scaleArray[scaleBase + 1] = tbf(scale.y);
+            this.scaleArray[scaleBase + 2] = tbf(scale.z);
+        };
 
-        this.getRotation(indexA, tempQuaternion4A);
-        this.getRotation(indexB, tempQuaternion4B);
-        this.setRotation(indexB, tempQuaternion4A);
-        this.setRotation(indexA, tempQuaternion4B);
+        const getRotation = (index, outRotation = new THREE.Quaternion()) => {
+            const rotationBase = index * SplatBuffer.RotationComponentCount;
+            outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
+                            fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
+            return outRotation;
+        };
 
-        this.getColor(indexA, tempVector4A);
-        this.getColor(indexB, tempVector4B);
-        this.setColor(indexB, tempVector4A);
-        this.setColor(indexA, tempVector4B);
+        const setRotation = (index, rotation) => {
+            const rotationBase = index * SplatBuffer.RotationComponentCount;
+            this.rotationArray[rotationBase] = tbf(rotation.w);
+            this.rotationArray[rotationBase + 1] = tbf(rotation.x);
+            this.rotationArray[rotationBase + 2] = tbf(rotation.y);
+            this.rotationArray[rotationBase + 3] = tbf(rotation.z);
+        };
+
+        getCenter(indexA, tempVector3A);
+        getCenter(indexB, tempVector3B);
+        setCenter(indexB, tempVector3A);
+        setCenter(indexA, tempVector3B);
+
+        getScale(indexA, tempVector3A);
+        getScale(indexB, tempVector3B);
+        setScale(indexB, tempVector3A);
+        setScale(indexA, tempVector3B);
+
+        getRotation(indexA, tempQuaternion4A);
+        getRotation(indexB, tempQuaternion4B);
+        setRotation(indexB, tempQuaternion4A);
+        setRotation(indexA, tempQuaternion4B);
+
+        getColor(indexA, tempVector4A);
+        getColor(indexB, tempVector4B);
+        setColor(indexB, tempVector4A);
+        setColor(indexA, tempVector4B);
 
     }
 
