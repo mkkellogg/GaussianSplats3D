@@ -29,9 +29,9 @@ export class RenderableViewer extends THREE.Group {
         });
     }
 
-    addScenesFromFiles(files, meshOptions, showLoadingSpinner) {
+    addScenesFromFiles(files, showLoadingSpinner) {
         if (showLoadingSpinner !== false) showLoadingSpinner = true;
-        return this.viewer.loadFiles(files, meshOptions, showLoadingSpinner).then(() => {
+        return this.viewer.loadFiles(files, showLoadingSpinner).then(() => {
             this.add(this.viewer.splatMesh);
         });
     }

@@ -15,7 +15,7 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
 - Allows user to import `.ply` files for conversion to custom compressed `.splat` file format
 - Allows a Three.js scene or object group to be rendered along with the splats
 - Focus on optimization:
-    - Splats culled prior to sorting & rendering using a custom octree 
+    - Splats culled prior to sorting & rendering using a custom octree
     - WASM splat sort: Implemented in C++ using WASM SIMD instructions
     - Partially GPU accelerated splat sort: Uses transform feedback to pre-calculate splat distances
 
@@ -100,10 +100,10 @@ const viewer = new GaussianSplats3D.Viewer({
     'cameraUp': [0, -1, -0.6],
     'initialCameraPosition': [-1, -4, 6],
     'initialCameraLookAt': [0, 4, 0],
+    'halfPrecisionCovariancesOnGPU': true,
 });
 viewer.loadFile('<path to .ply or .splat file>', {
     'splatAlphaRemovalThreshold': 5,
-    'halfPrecisionCovariancesOnGPU': true,
     'showLoadingSpinner': true,
     'position': [0, 1, 0],
     'rotation': [0, 0, 0, 1],
@@ -122,6 +122,7 @@ Viewer parameters
 | `cameraUp` | The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and when the viewer uses its own camera). Serves as the axis around which the camera will orbit, and is used to determine the scene's orientation relative to the camera.
 | `initialCameraPosition` | The camera's initial position (only used when the viewer uses its own camera).
 | `initialCameraLookAt` | The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
+| `halfPrecisionCovariancesOnGPU` |  Tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit. Defaults to `true`.
 <br>
 
 Parameters for `loadFile()`
@@ -130,7 +131,6 @@ Parameters for `loadFile()`
 | Parameter | Purpose
 | --- | ---
 | `splatAlphaRemovalThreshold` | Tells `loadFile()` to ignore any splats with an alpha less than the specified value (valid range: 0 - 255). Defaults to `1`.
-| `halfPrecisionCovariancesOnGPU` |  Tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit. Defaults to `true`.
 | `showLoadingSpinner` | Displays a loading spinner while the scene is loading.  Defaults to `true`.
 | `position` | Position of the scene, acts as an offset from its default position. Defaults to `[0, 0, 0]`.
 | `rotation` | Rotation of the scene represented as a quaternion, defaults to `[0, 0, 0, 1]` (identity quaternion).
@@ -173,18 +173,16 @@ const renderableViewer = new GaussianSplats3D.RenderableViewer({
 renderableViewer.addScenesFromFiles([
                                         {
                                             'path': '<path to .ply or .splat file>',
+                                            'splatAlphaRemovalThreshold': 5,
                                         },
                                         {
                                             'path': '<path to .ply or .splat file>',
                                             'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
                                             'scale': [1.5, 1.5, 1.5],
                                             'position': [0, -2, -1.2],
+                                            'splatAlphaRemovalThreshold': 5,
                                         }
                                     ],
-                                    {
-                                        'splatAlphaRemovalThreshold': 5,
-                                        'halfPrecisionCovariancesOnGPU': true
-                                    },
                                     true);
 scene.add(renderableViewer);
 

@@ -28,6 +28,9 @@ export class Viewer {
         this.ignoreDevicePixelRatio = options.ignoreDevicePixelRatio || false;
         this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
 
+        if (options.halfPrecisionCovariancesOnGPU === undefined) options.halfPrecisionCovariancesOnGPU = true;
+        this.halfPrecisionCovariancesOnGPU = options.halfPrecisionCovariancesOnGPU;
+
         this.cameraUp = new THREE.Vector3().fromArray(options.cameraUp);
         this.initialCameraPosition = new THREE.Vector3().fromArray(options.initialCameraPosition);
         this.initialCameraLookAt = new THREE.Vector3().fromArray(options.initialCameraLookAt);
@@ -356,13 +359,10 @@ export class Viewer {
                 const splatBufferOptions = {
                     'rotation': options.rotation || options.orientation,
                     'position': options.position,
-                    'scale': options.scale
-                };
-                const meshOptions = {
+                    'scale': options.scale,
                     'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
-                    'halfPrecisionCovariancesOnGPU': options.halfPrecisionCovariancesOnGPU
                 };
-                this.loadSplatBuffersIntoMesh([splatBuffer], [splatBufferOptions], meshOptions, options.showLoadingSpinner).then(() => {
+                this.loadSplatBuffersIntoMesh([splatBuffer], [splatBufferOptions], options.showLoadingSpinner).then(() => {
                     if (options.onProgress) options.onProgress(100, '100%', 'processing');
                     resolve();
                 });
@@ -373,7 +373,7 @@ export class Viewer {
         });
     }
 
-    loadFiles(files, meshOptions, showLoadingSpinner = true, onProgress = undefined) {
+    loadFiles(files, showLoadingSpinner = true, onProgress = undefined) {
         return new Promise((resolve, reject) => {
             const fileCount = files.length;
             const percentComplete = [];
@@ -406,7 +406,7 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingSpinner) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', 'processing');
-                this.loadSplatBuffersIntoMesh(splatBuffers, files, meshOptions, showLoadingSpinner).then(() => {
+                this.loadSplatBuffersIntoMesh(splatBuffers, files, showLoadingSpinner).then(() => {
                     if (onProgress) onProgress(100, '100%', 'processing');
                     resolve();
                 });
@@ -445,7 +445,7 @@ export class Viewer {
         let loadPromise;
         let loadCount = 0;
 
-        return function(splatBuffers, splatBufferOptions = [], meshOptions = {}, showLoadingSpinner = true) {
+        return function(splatBuffers, splatBufferOptions = [], showLoadingSpinner = true) {
             this.splatRenderingInitialized = false;
             loadCount++;
             const performLoad = () => {
@@ -458,7 +458,7 @@ export class Viewer {
                         if (this.sortWorker) this.sortWorker.terminate();
                         this.sortWorker = null;
                         this.sortRunning = false;
-                        this.updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions);
+                        this.updateSplatMesh(splatBuffers, splatBufferOptions);
                         this.setupSortWorker(this.splatMesh).then(() => {
                             loadCount--;
                             if (loadCount === 0) {
@@ -483,10 +483,9 @@ export class Viewer {
 
     }();
 
-    updateSplatMesh(splatBuffers, splatBufferOptions, meshOptions) {
+    updateSplatMesh(splatBuffers, splatBufferOptions) {
         if (!this.splatMesh) {
-            this.splatMesh = new SplatMesh(meshOptions.splatAlphaRemovalThreshold,
-                                           meshOptions.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort);
+            this.splatMesh = new SplatMesh(this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort);
         }
         const allSplatBuffers = this.splatMesh.splatBuffers || [];
         const allSplatBufferOptions = this.splatMesh.splatBufferOptions || [];
