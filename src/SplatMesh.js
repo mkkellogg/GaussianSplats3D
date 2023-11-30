@@ -499,6 +499,19 @@ export class SplatMesh extends THREE.Mesh {
             this.distancesTransformFeedback.vertexShader = null;
             this.distancesTransformFeedback.fragmentShader = null;
         }
+        this.disposeGPUBufferResources();
+        if (this.distancesTransformFeedback.id) {
+            gl.deleteTransformFeedback(this.distancesTransformFeedback.id);
+            this.distancesTransformFeedback.id = null;
+        }
+    }
+
+    disposeGPUBufferResources() {
+
+        if (!this.renderer) return;
+
+        const gl = this.renderer.getContext();
+
         if (this.distancesTransformFeedback.centersBuffer) {
             this.distancesTransformFeedback.centersBuffer = null;
             gl.deleteBuffer(this.distancesTransformFeedback.centersBuffer);
@@ -506,10 +519,6 @@ export class SplatMesh extends THREE.Mesh {
         if (this.distancesTransformFeedback.outDistancesBuffer) {
             gl.deleteBuffer(this.distancesTransformFeedback.outDistancesBuffer);
             this.distancesTransformFeedback.outDistancesBuffer = null;
-        }
-        if (this.distancesTransformFeedback.id) {
-            gl.deleteTransformFeedback(this.distancesTransformFeedback.id);
-            this.distancesTransformFeedback.id = null;
         }
     }
 
@@ -532,13 +541,12 @@ export class SplatMesh extends THREE.Mesh {
             const splatCount = this.getSplatCount();
 
             if (!this.renderer || (currentRenderer === this.renderer && currentSplatCount === splatCount)) return;
-            const rebuildGPUObjects = true; //(currentRenderer !== this.renderer);
+            const rebuildGPUObjects = (currentRenderer !== this.renderer);
             const rebuildBuffers = currentSplatCount !== splatCount;
             if (rebuildGPUObjects) {
                 this.disposeGPUResources();
             } else if (rebuildBuffers) {
-                if (this.distancesTransformFeedback.centersBuffer) gl.deleteBuffer(this.distancesTransformFeedback.centersBuffer);
-                if (this.distancesTransformFeedback.outDistancesBuffer) gl.deleteBuffer(this.distancesTransformFeedback.outDistancesBuffer);
+                this.disposeGPUBufferResources();
             }
 
             const gl = this.renderer.getContext();
