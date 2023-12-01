@@ -138,7 +138,26 @@ Parameters for `loadFile()`
 
 <br>
 
-The `loadFile()` method will accept the original `.ply` files as well as my custom `.splat` files.
+`Viewer` can also load multiple scenes simultaneously with the `loadFiles()` function:
+```javascript
+viewer.loadFiles([{
+            'path': '<path to first .ply or .splat file>',
+            'splatAlphaRemovalThreshold': 20,
+        },
+        {
+            'path': '<path to second .ply or .splat file>',
+            'rotation': [-0.14724434, -0.0761755, 0.1410657, 0.976020],
+            'scale': [1.5, 1.5, 1.5],
+            'position': [-3, -2, -3.2],
+            'splatAlphaRemovalThreshold': 20,
+        }
+    ])
+    .then(() => {
+        viewer.start();
+    });
+```
+
+The `loadFile()` and `loadFiles()` methods will accept the original `.ply` files as well as my custom `.splat` files.
 
 <br>
 
@@ -170,20 +189,18 @@ const scene = new THREE.Scene();
 const renderableViewer = new GaussianSplats3D.RenderableViewer({
     'gpuAcceleratedSort': true
 });
-renderableViewer.addScenesFromFiles([
-                                        {
-                                            'path': '<path to .ply or .splat file>',
-                                            'splatAlphaRemovalThreshold': 5,
-                                        },
-                                        {
-                                            'path': '<path to .ply or .splat file>',
-                                            'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
-                                            'scale': [1.5, 1.5, 1.5],
-                                            'position': [0, -2, -1.2],
-                                            'splatAlphaRemovalThreshold': 5,
-                                        }
-                                    ],
-                                    true);
+renderableViewer.addScenesFromFiles([{
+            'path': '<path to .ply or .splat file>',
+            'splatAlphaRemovalThreshold': 5,
+        },
+        {
+            'path': '<path to .ply or .splat file>',
+            'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
+            'scale': [1.5, 1.5, 1.5],
+            'position': [0, -2, -1.2],
+            'splatAlphaRemovalThreshold': 5,
+        }
+    ]);
 scene.add(renderableViewer);
 
 ```
