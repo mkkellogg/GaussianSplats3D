@@ -91,9 +91,7 @@
     const scene = setupScene();
     const controls = setupControls(camera, renderer);
 
-    const renderableViewer = new GaussianSplats3D.RenderableViewer({
-      'gpuAcceleratedSort': true
-    });
+    const renderableViewer = new GaussianSplats3D.RenderableViewer();
     renderableViewer.addScenesFromFiles([
                                           {
                                             'path': 'assets/data/garden/garden.splat',

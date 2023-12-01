@@ -46,7 +46,8 @@ export class Viewer {
 
         this.gpuAcceleratedSort = options.gpuAcceleratedSort;
         if (this.gpuAcceleratedSort !== true && this.gpuAcceleratedSort !== false) {
-            this.gpuAcceleratedSort = true;
+            if (this.isMobile()) this.gpuAcceleratedSort = false;
+            else this.gpuAcceleratedSort = true;
         }
 
         this.showMeshCursor = false;
@@ -959,5 +960,9 @@ export class Viewer {
 
     getSplatMesh() {
         return this.splatMesh;
+    }
+
+    isMobile() {
+        return navigator.userAgent.includes('Mobi');
     }
 }
