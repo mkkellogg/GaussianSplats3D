@@ -37,9 +37,7 @@
     });
     let path = 'assets/data/stump/stump';
     path += isMobile() ? '.splat' : '_high.splat';
-    viewer.loadFile(path, {
-        'halfPrecisionCovariancesOnGPU': true
-    })
+    viewer.loadFile(path)
     .then(() => {
         viewer.start();
     });

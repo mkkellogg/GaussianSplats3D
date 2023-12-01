@@ -84,10 +84,12 @@ export class Raycaster {
             }
             if (node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
-                    const splatIndex = node.data.indexes[i];
-                    splatTree.splatBuffer.getCenter(splatIndex, tempCenter);
-                    splatTree.splatBuffer.getRotation(splatIndex, tempRotation);
-                    splatTree.splatBuffer.getScale(splatIndex, tempScale);
+                    const splatGlobalIndex = node.data.indexes[i];
+                    const splatLocalIndex = splatTree.getSplatLocalIndex(splatGlobalIndex);
+                    const splatBuffer = splatTree.getSplatBufferForSplat(splatGlobalIndex);
+                    const splatTransform = splatTree.getTransformForSplat(splatGlobalIndex);
+                    splatBuffer.getCenter(splatLocalIndex, tempCenter, splatTransform);
+                    splatBuffer.getScaleAndRotation(splatLocalIndex, tempScale, tempRotation, splatTransform);
 
                     if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
                         continue;
@@ -102,6 +104,7 @@ export class Raycaster {
                     // Raycast against actual splat ellipsoid ... doesn't actually work as well
                     // as the approximated sphere approach
                     /*
+                    splatBuffer.getRotation(splatLocalIndex, tempRotation, splatTransform);
                     tempScaleMatrix.makeScale(tempScale.x, tempScale.y, tempScale.z);
                     tempRotationMatrix.makeRotationFromQuaternion(tempRotation);
                     fromSphereSpace.copy(tempScaleMatrix).premultiply(tempRotationMatrix);

@@ -112,7 +112,7 @@ export class SplatBuffer {
         return this.splatBufferData;
     }
 
-    getCenter(index, outCenter = new THREE.Vector3()) {
+    getCenter(index, outCenter = new THREE.Vector3(), transform) {
         let bucket = [0, 0, 0];
         const centerBase = index * SplatBuffer.CenterComponentCount;
         if (this.compressionLevel > 0) {
@@ -128,6 +128,7 @@ export class SplatBuffer {
             outCenter.y = this.centerArray[centerBase + 1];
             outCenter.z = this.centerArray[centerBase + 2];
         }
+        if (transform) outCenter.applyMatrix4(transform);
         return outCenter;
     }
 
@@ -150,38 +151,34 @@ export class SplatBuffer {
         }
     }
 
-    getScale(index, outScale = new THREE.Vector3()) {
-        const scaleBase = index * SplatBuffer.ScaleComponentCount;
-        outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
-        return outScale;
-    }
+    getScaleAndRotation = function() {
 
-    setScale(index, scale) {
-        const scaleBase = index * SplatBuffer.ScaleComponentCount;
-        this.scaleArray[scaleBase] = tbf(scale.x);
-        this.scaleArray[scaleBase + 1] = tbf(scale.y);
-        this.scaleArray[scaleBase + 2] = tbf(scale.z);
-    }
+        const scaleMatrix = new THREE.Matrix4();
+        const rotationMatrix = new THREE.Matrix4();
+        const tempMatrix = new THREE.Matrix4();
+        const tempPosition = new THREE.Vector3();
 
-    getRotation(index, outRotation = new THREE.Quaternion()) {
-        const rotationBase = index * SplatBuffer.RotationComponentCount;
-        outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
-                        fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
-        return outRotation;
-    }
+        return function(index, outScale = new THREE.Vector3(), outRotation = new THREE.Quaternion(), transform) {
+            const scaleBase = index * SplatBuffer.ScaleComponentCount;
+            outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
+            const rotationBase = index * SplatBuffer.RotationComponentCount;
+            outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
+                            fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
+            if (transform) {
+                scaleMatrix.makeScale(outScale.x, outScale.y, outScale.z);
+                rotationMatrix.makeRotationFromQuaternion(outRotation);
+                tempMatrix.copy(scaleMatrix).multiply(rotationMatrix).multiply(transform);
+                tempMatrix.decompose(tempPosition, outRotation, outScale);
+            }
+        };
 
-    setRotation(index, rotation) {
-        const rotationBase = index * SplatBuffer.RotationComponentCount;
-        this.rotationArray[rotationBase] = tbf(rotation.w);
-        this.rotationArray[rotationBase + 1] = tbf(rotation.x);
-        this.rotationArray[rotationBase + 2] = tbf(rotation.y);
-        this.rotationArray[rotationBase + 3] = tbf(rotation.z);
-    }
+    }();
 
-    getColor(index, outColor = new THREE.Vector4()) {
+    getColor(index, outColor = new THREE.Vector4(), transform) {
         const colorBase = index * SplatBuffer.ColorComponentCount;
         outColor.set(this.colorArray[colorBase], this.colorArray[colorBase + 1],
                      this.colorArray[colorBase + 2], this.colorArray[colorBase + 3]);
+        // TODO: apply transform for spherical harmonics
         return outColor;
     }
 
@@ -197,7 +194,7 @@ export class SplatBuffer {
         return this.splatCount;
     }
 
-    fillCovarianceArray(covarianceArray) {
+    fillCovarianceArray(covarianceArray, destOffset, transform) {
         const splatCount = this.splatCount;
 
         const scale = new THREE.Vector3();
@@ -205,6 +202,9 @@ export class SplatBuffer {
         const rotationMatrix = new THREE.Matrix3();
         const scaleMatrix = new THREE.Matrix3();
         const covarianceMatrix = new THREE.Matrix3();
+        const transformedCovariance = new THREE.Matrix3();
+        const transform3x3 = new THREE.Matrix3();
+        const transform3x3Transpose = new THREE.Matrix3();
         const tempMatrix4 = new THREE.Matrix4();
 
         for (let i = 0; i < splatCount; i++) {
@@ -222,92 +222,116 @@ export class SplatBuffer {
             rotationMatrix.setFromMatrix4(tempMatrix4);
 
             covarianceMatrix.copy(rotationMatrix).multiply(scaleMatrix);
-            const M = covarianceMatrix.elements;
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i] = M[0] * M[0] + M[3] * M[3] + M[6] * M[6];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 1] = M[0] * M[1] + M[3] * M[4] + M[6] * M[7];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 2] = M[0] * M[2] + M[3] * M[5] + M[6] * M[8];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 3] = M[1] * M[1] + M[4] * M[4] + M[7] * M[7];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 4] = M[1] * M[2] + M[4] * M[5] + M[7] * M[8];
-            covarianceArray[SplatBuffer.CovarianceSizeFloats * i + 5] = M[2] * M[2] + M[5] * M[5] + M[8] * M[8];
+            transformedCovariance.copy(covarianceMatrix).transpose().premultiply(covarianceMatrix);
+            const covBase = SplatBuffer.CovarianceSizeFloats * (i + destOffset);
+
+            if (transform) {
+                transform3x3.setFromMatrix4(transform);
+                transform3x3Transpose.copy(transform3x3).transpose();
+                transformedCovariance.multiply(transform3x3Transpose);
+                transformedCovariance.premultiply(transform3x3);
+            }
+
+            covarianceArray[covBase] = transformedCovariance.elements[0];
+            covarianceArray[covBase + 1] = transformedCovariance.elements[3];
+            covarianceArray[covBase + 2] = transformedCovariance.elements[6];
+            covarianceArray[covBase + 3] = transformedCovariance.elements[4];
+            covarianceArray[covBase + 4] = transformedCovariance.elements[7];
+            covarianceArray[covBase + 5] = transformedCovariance.elements[8];
         }
     }
 
-    fillCenterArray(outCenterArray) {
+    fillCenterArray(outCenterArray, destOffset, transform) {
         const splatCount = this.splatCount;
         let bucket = [0, 0, 0];
+        const center = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
-            const centerBase = i * SplatBuffer.CenterComponentCount;
+            const centerSrcBase = i * SplatBuffer.CenterComponentCount;
+            const centerDestBase = (i + destOffset) * SplatBuffer.CenterComponentCount;
             if (this.compressionLevel > 0) {
                 const bucketIndex = Math.floor(i / this.bucketSize);
                 bucket = new Float32Array(this.splatBufferData, this.bucketsBase + bucketIndex * this.bytesPerBucket, 3);
                 const sf = this.compressionScaleFactor;
                 const sr = this.compressionScaleRange;
-                outCenterArray[centerBase] = (this.centerArray[centerBase] - sr) * sf + bucket[0];
-                outCenterArray[centerBase + 1] = (this.centerArray[centerBase + 1] - sr) * sf + bucket[1];
-                outCenterArray[centerBase + 2] = (this.centerArray[centerBase + 2] - sr) * sf + bucket[2];
+                center.x = (this.centerArray[centerSrcBase] - sr) * sf + bucket[0];
+                center.y = (this.centerArray[centerSrcBase + 1] - sr) * sf + bucket[1];
+                center.z = (this.centerArray[centerSrcBase + 2] - sr) * sf + bucket[2];
             } else {
-                outCenterArray[centerBase] = this.centerArray[centerBase];
-                outCenterArray[centerBase + 1] = this.centerArray[centerBase + 1];
-                outCenterArray[centerBase + 2] = this.centerArray[centerBase + 2];
+                center.x = this.centerArray[centerSrcBase];
+                center.y = this.centerArray[centerSrcBase + 1];
+                center.z = this.centerArray[centerSrcBase + 2];
             }
+            if (transform) {
+                center.applyMatrix4(transform);
+            }
+            outCenterArray[centerDestBase] = center.x;
+            outCenterArray[centerDestBase + 1] = center.y;
+            outCenterArray[centerDestBase + 2] = center.z;
         }
     }
 
-    fillScaleArray(outScaleArray) {
-        const fbf = this.fbf.bind(this);
+    fillColorArray(outColorArray, destOffset, transform) {
         const splatCount = this.splatCount;
         for (let i = 0; i < splatCount; i++) {
-            const scaleBase = i * SplatBuffer.ScaleComponentCount;
-            outScaleArray[scaleBase] = fbf(this.scaleArray[scaleBase]);
-            outScaleArray[scaleBase + 1] = fbf(this.scaleArray[scaleBase + 1]);
-            outScaleArray[scaleBase + 2] = fbf(this.scaleArray[scaleBase + 2]);
-        }
-    }
-
-    fillRotationArray(outRotationArray) {
-        const fbf = this.fbf.bind(this);
-        const splatCount = this.splatCount;
-        for (let i = 0; i < splatCount; i++) {
-            const rotationBase = i * SplatBuffer.RotationComponentCount;
-            outRotationArray[rotationBase] = fbf(this.rotationArray[rotationBase]);
-            outRotationArray[rotationBase + 1] = fbf(this.rotationArray[rotationBase + 1]);
-            outRotationArray[rotationBase + 2] = fbf(this.rotationArray[rotationBase + 2]);
-            outRotationArray[rotationBase + 3] = fbf(this.rotationArray[rotationBase + 3]);
-        }
-    }
-
-    fillColorArray(outColorArray) {
-        const splatCount = this.splatCount;
-        for (let i = 0; i < splatCount; i++) {
-            const colorBase = i * SplatBuffer.ColorComponentCount;
-            outColorArray[colorBase] = this.colorArray[colorBase];
-            outColorArray[colorBase + 1] = this.colorArray[colorBase + 1];
-            outColorArray[colorBase + 2] = this.colorArray[colorBase + 2];
-            outColorArray[colorBase + 3] = this.colorArray[colorBase + 3];
+            const colorSrcBase = i * SplatBuffer.ColorComponentCount;
+            const colorDestBase = (i + destOffset) * SplatBuffer.ColorComponentCount;
+            outColorArray[colorDestBase] = this.colorArray[colorSrcBase];
+            outColorArray[colorDestBase + 1] = this.colorArray[colorSrcBase + 1];
+            outColorArray[colorDestBase + 2] = this.colorArray[colorSrcBase + 2];
+            outColorArray[colorDestBase + 3] = this.colorArray[colorSrcBase + 3];
+            // TODO: implement application of transform for spherical harmonics
         }
     }
 
     swapVertices(indexA, indexB) {
 
-        this.getCenter(indexA, tempVector3A);
-        this.getCenter(indexB, tempVector3B);
-        this.setCenter(indexB, tempVector3A);
-        this.setCenter(indexA, tempVector3B);
+        const getScale = (index, outScale = new THREE.Vector3()) => {
+            const scaleBase = index * SplatBuffer.ScaleComponentCount;
+            outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
+            return outScale;
+        };
 
-        this.getScale(indexA, tempVector3A);
-        this.getScale(indexB, tempVector3B);
-        this.setScale(indexB, tempVector3A);
-        this.setScale(indexA, tempVector3B);
+        const setScale = (index, scale) => {
+            const scaleBase = index * SplatBuffer.ScaleComponentCount;
+            this.scaleArray[scaleBase] = tbf(scale.x);
+            this.scaleArray[scaleBase + 1] = tbf(scale.y);
+            this.scaleArray[scaleBase + 2] = tbf(scale.z);
+        };
 
-        this.getRotation(indexA, tempQuaternion4A);
-        this.getRotation(indexB, tempQuaternion4B);
-        this.setRotation(indexB, tempQuaternion4A);
-        this.setRotation(indexA, tempQuaternion4B);
+        const getRotation = (index, outRotation = new THREE.Quaternion()) => {
+            const rotationBase = index * SplatBuffer.RotationComponentCount;
+            outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
+                            fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
+            return outRotation;
+        };
 
-        this.getColor(indexA, tempVector4A);
-        this.getColor(indexB, tempVector4B);
-        this.setColor(indexB, tempVector4A);
-        this.setColor(indexA, tempVector4B);
+        const setRotation = (index, rotation) => {
+            const rotationBase = index * SplatBuffer.RotationComponentCount;
+            this.rotationArray[rotationBase] = tbf(rotation.w);
+            this.rotationArray[rotationBase + 1] = tbf(rotation.x);
+            this.rotationArray[rotationBase + 2] = tbf(rotation.y);
+            this.rotationArray[rotationBase + 3] = tbf(rotation.z);
+        };
+
+        getCenter(indexA, tempVector3A);
+        getCenter(indexB, tempVector3B);
+        setCenter(indexB, tempVector3A);
+        setCenter(indexA, tempVector3B);
+
+        getScale(indexA, tempVector3A);
+        getScale(indexB, tempVector3B);
+        setScale(indexB, tempVector3A);
+        setScale(indexA, tempVector3B);
+
+        getRotation(indexA, tempQuaternion4A);
+        getRotation(indexB, tempQuaternion4B);
+        setRotation(indexB, tempQuaternion4A);
+        setRotation(indexA, tempQuaternion4B);
+
+        getColor(indexA, tempVector4A);
+        getColor(indexB, tempVector4B);
+        setColor(indexB, tempVector4A);
+        setColor(indexA, tempVector4B);
 
     }
 

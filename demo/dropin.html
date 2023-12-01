@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>3D Gaussian Splats - Drop-in example</title>
+  <script type="text/javascript" src="js/util.js"></script>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js"
+        }
+    }
+  </script>
+  <style>
+
+    body {
+      background-color: #000000;
+      height: 100vh;
+      margin: 0px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+  <script type="module">
+    import * as GaussianSplats3D from 'gaussian-splats-3d';
+    import * as THREE from 'three';
+
+    function setupRenderer() {
+      const renderWidth = 800;
+      const renderHeight = 600;
+
+      const rootElement = document.createElement('div');
+      rootElement.style.width = renderWidth + 'px';
+      rootElement.style.height = renderHeight + 'px';
+      rootElement.style.position = 'relative';
+      rootElement.style.left = '50%';
+      rootElement.style.top = '50%';
+      rootElement.style.transform = 'translate(-50%, -50%)';
+      document.body.appendChild(rootElement);
+
+      const renderer = new THREE.WebGLRenderer({
+          antialias: false
+      });
+      renderer.setSize(renderWidth, renderHeight);
+      rootElement.appendChild(renderer.domElement);
+
+      return {
+        'renderer': renderer,
+        'renderWidth': renderWidth,
+        'renderHeight': renderHeight
+      }
+    }
+
+    function setupCamera(renderWidth, renderHeight) {
+      const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
+      camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
+      camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
+      camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
+      return camera;
+    }
+
+    function setupScene() {
+      const scene = new THREE.Scene();
+      const boxColor = 0xBBBBBB;
+      const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color': boxColor}));
+      scene.add(boxMesh);
+      boxMesh.position.set(3, 2, 2);
+      return scene;
+    }
+
+    function setupControls(camera, renderer) {
+      const controls = new GaussianSplats3D.OrbitControls(camera, renderer.domElement);
+      controls.rotateSpeed = 0.5;
+      controls.maxPolarAngle = Math.PI * .75;
+      controls.minPolarAngle = 0.1;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      return controls;
+    }
+
+    const {renderer, renderWidth, renderHeight} = setupRenderer();
+    const camera = setupCamera(renderWidth, renderHeight);
+    const scene = setupScene();
+    const controls = setupControls(camera, renderer);
+
+    const renderableViewer = new GaussianSplats3D.RenderableViewer();
+    renderableViewer.addScenesFromFiles([
+                                          {
+                                            'path': 'assets/data/garden/garden.splat',
+                                            'splatAlphaRemovalThreshold': 20,
+                                          },
+                                          {
+                                            'path': 'assets/data/bonsai/bonsai_trimmed.splat',
+                                            'rotation': [-0.14724434, -0.0761755, 0.1410657, 0.976020],
+                                            'scale': [1.5, 1.5, 1.5],
+                                            'position': [-3, -2, -3.2],
+                                            'splatAlphaRemovalThreshold': 20,
+                                          }
+                                        ],
+                                        true);
+    scene.add(renderableViewer);
+
+    requestAnimationFrame(update);
+    function update() {
+      requestAnimationFrame(update);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+
+</html>

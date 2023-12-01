@@ -14,6 +14,10 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
 - Built-in viewer is self-contained so very little code is necessary to load and view a scene
 - Allows user to import `.ply` files for conversion to custom compressed `.splat` file format
 - Allows a Three.js scene or object group to be rendered along with the splats
+- Focus on optimization:
+    - Splats culled prior to sorting & rendering using a custom octree
+    - WASM splat sort: Implemented in C++ using WASM SIMD instructions
+    - Partially GPU accelerated splat sort: Uses transform feedback to pre-calculate splat distances
 
 ## Known issues
 
@@ -86,6 +90,7 @@ The demo scene data is available here: [https://projects.markkellogg.org/downloa
 <br>
 <br>
 
+
 ## Basic Usage
 
 To run the built-in viewer:
@@ -95,52 +100,151 @@ const viewer = new GaussianSplats3D.Viewer({
     'cameraUp': [0, -1, -0.6],
     'initialCameraPosition': [-1, -4, 6],
     'initialCameraLookAt': [0, 4, 0],
+    'halfPrecisionCovariancesOnGPU': true,
+});
+viewer.loadFile('<path to .ply or .splat file>', {
+    'splatAlphaRemovalThreshold': 5,
+    'showLoadingSpinner': true,
+    'position': [0, 1, 0],
+    'rotation': [0, 0, 0, 1],
+    'scale': [1.5, 1.5, 1.5]
+})
+.then(() => {
+    viewer.start();
+});
+
+```
+Viewer parameters
+<br>
+
+| Parameter | Purpose
+| --- | ---
+| `cameraUp` | The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and when the viewer uses its own camera). Serves as the axis around which the camera will orbit, and is used to determine the scene's orientation relative to the camera.
+| `initialCameraPosition` | The camera's initial position (only used when the viewer uses its own camera).
+| `initialCameraLookAt` | The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
+| `halfPrecisionCovariancesOnGPU` |  Tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit. Defaults to `true`.
+<br>
+
+Parameters for `loadFile()`
+<br>
+
+| Parameter | Purpose
+| --- | ---
+| `splatAlphaRemovalThreshold` | Tells `loadFile()` to ignore any splats with an alpha less than the specified value (valid range: 0 - 255). Defaults to `1`.
+| `showLoadingSpinner` | Displays a loading spinner while the scene is loading.  Defaults to `true`.
+| `position` | Position of the scene, acts as an offset from its default position. Defaults to `[0, 0, 0]`.
+| `rotation` | Rotation of the scene represented as a quaternion, defaults to `[0, 0, 0, 1]` (identity quaternion).
+| `scale` | Scene's scale, defaults to `[1, 1, 1]`.
+
+<br>
+
+The `loadFile()` method will accept the original `.ply` files as well as my custom `.splat` files.
+
+<br>
+
+### Integrating THREE.js scenes
+You can integrate your own Three.js scene into the viewer if you want rendering to be handled for you. Just pass a Three.js scene object as the `scene` parameter to the constructor:
+```javascript
+const scene = new THREE.Scene();
+const boxColor = 0xBBBBBB;
+const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
+const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color': boxColor}));
+boxMesh.position.set(3, 2, 2);
+scene.add(boxMesh);
+
+const viewer = new GaussianSplats3D.Viewer({
+    'scene': scene,
+});
+viewer.loadFile('<path to .ply or .splat file>')
+.then(() => {
+    viewer.start();
+});
+```
+
+Currently this will only work for objects that write to the depth buffer (e.g. standard opaque objects). Supporting transparent objects will be more challenging :)
+<br>
+
+A "drop-in" mode for the viewer is also supported. The `RenderableViewer` class encapsulates `Viewer` and can be added to a Three.js scene like any other renderable:
+```javascript
+const scene = new THREE.Scene();
+const renderableViewer = new GaussianSplats3D.RenderableViewer({
+    'gpuAcceleratedSort': true
+});
+renderableViewer.addScenesFromFiles([
+                                        {
+                                            'path': '<path to .ply or .splat file>',
+                                            'splatAlphaRemovalThreshold': 5,
+                                        },
+                                        {
+                                            'path': '<path to .ply or .splat file>',
+                                            'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
+                                            'scale': [1.5, 1.5, 1.5],
+                                            'position': [0, -2, -1.2],
+                                            'splatAlphaRemovalThreshold': 5,
+                                        }
+                                    ],
+                                    true);
+scene.add(renderableViewer);
+
+```
+<br>
+
+### Advanced options
+The viewer allows for various levels of customization via constructor parameters. You can control when its `update()` and `render()` methods are called by passing `false` for the `selfDrivenMode` parameter and then calling those methods whenever/wherever you decide is appropriate. You can also use your own camera controls, as well as an your own instance of a Three.js `Renderer` or `Camera` The sample below shows all of these options:
+
+```javascript
+const renderWidth = 800;
+const renderHeight = 600;
+
+const rootElement = document.createElement('div');
+rootElement.style.width = renderWidth + 'px';
+rootElement.style.height = renderHeight + 'px';
+document.body.appendChild(rootElement);
+
+const renderer = new THREE.WebGLRenderer({
+    antialias: false
+});
+renderer.setSize(renderWidth, renderHeight);
+rootElement.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
+camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
+camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
+camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
+
+const viewer = new GaussianSplats3D.Viewer({
+    'selfDrivenMode': false,
+    'renderer': renderer,
+    'camera': camera,
+    'useBuiltInControls': false,
     'ignoreDevicePixelRatio': false,
     'gpuAcceleratedSort': true
 });
-viewer.loadFile('<path to .ply or .splat file>', {
-    'splatAlphaRemovalThreshold': 5, // out of 255
-    'halfPrecisionCovariancesOnGPU': true
-})
+viewer.loadFile('<path to .ply or .splat file>')
 .then(() => {
-    viewer.start();
+    requestAnimationFrame(update);
 });
 ```
+Since `selfDrivenMode` is false, it is up to the developer to call the `update()` and `render()` methods on the `Viewer` class:
+```javascript
+function update() {
+    requestAnimationFrame(update);
+    viewer.update();
+    viewer.render();
+}
+```
+Advanced `Viewer` parameters
+<br>
 | Parameter | Purpose
 | --- | ---
-| `cameraUp` | The natural 'up' vector for viewing the scene. Determines the scene's orientation relative to the camera and serves as the axis around which the camera will orbit.
-| `initialCameraPosition` | The camera's initial position.
-| `initialCameraLookAt` | The initial focal point of the camera and center of the camera's orbit.
+| `selfDrivenMode` | If `false`, tells the viewer that you will manually call its `update()` and `render()` methods. Defaults to `true`.
+| `useBuiltInControls` | Tells the viewer to use its own camera controls. Defaults to `true`.
+| `renderer` | Pass an instance of a Three.js `Renderer` to the viewer, otherwise it will create its own. Defaults to `undefined`.
+| `camera` | Pass an instance of a Three.js `Camera` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
 | `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computing splat distances is done on the GPU. Defaults to `true`.
-| `splatAlphaRemovalThreshold` | Tells `loadFile()` to ignore any splats with an alpha less than the specified value. Defaults to `1`.
-| `halfPrecisionCovariancesOnGPU` |  Tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit. Defaults to `true`.
-
 <br>
 
-
-As an alternative to using `cameraUp` to adjust to the scene's natural orientation, you can pass an orientation (and/or position) to the `loadFile()` method to transform the entire scene:
-```javascript
-const viewer = new GaussianSplats3D.Viewer({
-    'initialCameraPosition': [-1, -4, 6],
-    'initialCameraLookAt': [0, 4, 0]
-});
-const orientation = new THREE.Quaternion();
-orientation.setFromUnitVectors(new THREE.Vector3(0, -1, -0.6).normalize(), new THREE.Vector3(0, 1, 0));
-viewer.loadFile('<path to .ply or .splat file>', {
-    'splatAlphaRemovalThreshold': 5, // out of 255
-    'halfPrecisionCovariancesOnGPU': true,
-    'position': [0, 0, 0],
-    'orientation': orientation.toArray(),
-})
-.then(() => {
-    viewer.start();
-});
-```
-
-The `loadFile()` method will accept the original `.ply` files as well as my custom `.splat` files.
-<br>
-<br>
 ### Creating SPLAT files
 To convert a `.ply` file into the stripped-down `.splat` format (currently only compatible with this viewer), there are several options. The easiest method is to use the UI in the main demo page at [http://127.0.0.1:8080/index.html](http://127.0.0.1:8080/index.html). If you want to run the conversion programatically, run the following in a browser:
 
@@ -162,75 +266,7 @@ node util/create-splat.js [path to .PLY] [output file] [compression level = 0] [
 ```
 
 Currently supported values for `compressionLevel` are `0` or `1`. `0` means no compression, `1` means compression of scale, rotation, and position values from 32-bit to 16-bit.
-<br>
-<br>
-### Integrating THREE.js scenes
-You can integrate your own Three.js scene into the viewer if you want rendering to be handled for you. Just pass a Three.js scene object as the 'scene' parameter to the constructor:
-```javascript
-const scene = new THREE.Scene();
 
-const boxColor = 0xBBBBBB;
-const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
-const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color': boxColor}));
-scene.add(boxMesh);
-boxMesh.position.set(3, 2, 2);
-
-const viewer = new GaussianSplats3D.Viewer({
-    'scene': scene,
-    'cameraUp': [0, -1, -0.6],
-    'initialCameraPosition': [-1, -4, 6],
-    'initialCameraLookAt': [0, 4, -0]
-});
-viewer.loadFile('<path to .ply or .splat file>')
-.then(() => {
-    viewer.start();
-});
-```
-Currently this will only work for objects that write to the depth buffer (e.g. standard opaque objects). Supporting transparent objects will be more challenging :)
-<br>
-<br>
-### Custom options
-The viewer allows for various levels of customization via constructor parameters. You can control when its `update()` and `render()` methods are called by passing `false` for the `selfDrivenMode` parameter and then calling those methods whenever/wherever you decide is appropriate. You can tell the viewer to not use its built-in camera controls by passing `false` for the `useBuiltInControls` parameter. You can also use your own Three.js renderer and camera by passing those values to the viewer's constructor. The sample below shows all of these options:
-
-```javascript
-const renderWidth = 800;
-const renderHeight = 600;
-
-const rootElement = document.createElement('div');
-rootElement.style.width = renderWidth + 'px';
-rootElement.style.height = renderHeight + 'px';
-document.body.appendChild(rootElement);
-
-const renderer = new THREE.WebGLRenderer({
-    antialias: false
-});
-renderer.setSize(renderWidth, renderHeight);
-rootElement.appendChild(renderer.domElement);
-
-const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
-camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
-camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
-camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
-
-const viewer = new GaussianSplats3D.Viewer({
-    'selfDrivenMode': false,
-    'renderer': renderer,
-    'camera': camera,
-    'useBuiltInControls': false
-});
-viewer.loadFile('<path to .ply or .splat file>')
-.then(() => {
-    requestAnimationFrame(update);
-});
-```
-Since `selfDrivenMode` is false, it is up to the developer to call the `update()` and `render()` methods on the `Viewer` class:
-```javascript
-function update() {
-    requestAnimationFrame(update);
-    viewer.update();
-    viewer.render();
-}
-```
 <br>
 
 ### CORS issues and SharedArrayBuffer
