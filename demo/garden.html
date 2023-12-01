@@ -38,7 +38,7 @@
       'halfPrecisionCovariancesOnGPU': true
     });
     let path = 'assets/data/garden/garden';
-    path += isMobile() ? '.splat' : '_high.splat';
+    path += isMobile() ? '.ksplat' : '_high.ksplat';
     viewer.loadFile(path)
     .then(() => {
         viewer.start();

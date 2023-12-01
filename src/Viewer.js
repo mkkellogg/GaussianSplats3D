@@ -424,7 +424,7 @@ export class Viewer {
         };
         return new Promise((resolve, reject) => {
             let fileLoadPromise;
-            if (fileURL.endsWith('.splat')) {
+            if (SplatLoader.isFileSplatFormat(fileURL)) {
                 fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
             } else if (fileURL.endsWith('.ply')) {
                 fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress, 0, plySplatAlphaRemovalThreshold);
