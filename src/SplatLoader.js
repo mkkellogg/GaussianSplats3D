@@ -52,23 +52,7 @@ export class SplatLoader {
         const InBufferRowSizeBytes = 32;
         const splatCount = inBuffer.byteLength / InBufferRowSizeBytes;
 
-        const splatArray = {
-            'splatCount': splatCount,
-            'scale_0': [],
-            'scale_1': [],
-            'scale_2': [],
-            'rot_0': [],
-            'rot_1': [],
-            'rot_2': [],
-            'rot_3': [],
-            'x': [],
-            'y': [],
-            'z': [],
-            'f_dc_0': [],
-            'f_dc_1': [],
-            'f_dc_2': [],
-            'opacity': []
-        };
+        const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
 
         for (let i = 0; i < splatCount; i++) {
             const inCenterSizeBytes = 3 * 4;
@@ -84,23 +68,8 @@ export class SplatLoader {
                                               (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
             quat.normalize();
 
-            splatArray['scale_0'][i] = inScale[0];
-            splatArray['scale_1'][i] = inScale[1];
-            splatArray['scale_2'][i] = inScale[2];
-
-            splatArray['rot_0'][i] = quat.w;
-            splatArray['rot_1'][i] = quat.x;
-            splatArray['rot_2'][i] = quat.y;
-            splatArray['rot_3'][i] = quat.z;
-
-            splatArray['x'][i] = inCenter[0];
-            splatArray['y'][i] = inCenter[1];
-            splatArray['z'][i] = inCenter[2];
-
-            splatArray['f_dc_0'][i] = inColor[0];
-            splatArray['f_dc_1'][i] = inColor[1];
-            splatArray['f_dc_2'][i] = inColor[2];
-            splatArray['opacity'][i] = inColor[3];
+            splatArray.addSplat(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
+                                quat.w, quat.x, quat.y, quat.z, inColor[0], inColor[1], inColor[2], inColor[3]);
         }
 
         return splatArray;

@@ -135,23 +135,7 @@ export class PlyParser {
         const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
                                   'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
-        const splatArray = {
-            'splatCount': splatCount,
-            'scale_0': [],
-            'scale_1': [],
-            'scale_2': [],
-            'rot_0': [],
-            'rot_1': [],
-            'rot_2': [],
-            'rot_3': [],
-            'x': [],
-            'y': [],
-            'z': [],
-            'f_dc_0': [],
-            'f_dc_1': [],
-            'f_dc_2': [],
-            'opacity': []
-        };
+        const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
 
         for (let row = 0; row < splatCount; row++) {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
@@ -187,6 +171,7 @@ export class PlyParser {
             splatArray['x'][row] = rawVertex['x'];
             splatArray['y'][row] = rawVertex['y'];
             splatArray['z'][row] = rawVertex['z'];
+            splatArray.splatCount++;
         }
 
         const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha);

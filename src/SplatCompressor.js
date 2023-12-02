@@ -14,24 +14,47 @@ export class SplatCompressor {
         this.blockSize = blockSize;
     }
 
-    uncompressedSplatArrayToSplatBuffer(splatArray) {
-        const validSplats = {
-            'splatCount': 1,
-            'scale_0': [0],
-            'scale_1': [0],
-            'scale_2': [0],
-            'rot_0': [1],
-            'rot_1': [0],
-            'rot_2': [0],
-            'rot_3': [0],
-            'x': [0],
-            'y': [0],
-            'z': [0],
-            'f_dc_0': [0],
-            'f_dc_1': [0],
-            'f_dc_2': [0],
-            'opacity': [0]
+    static createEmptyUncompressedSplatArray() {
+        return {
+            'splatCount': 0,
+            'scale_0': [],
+            'scale_1': [],
+            'scale_2': [],
+            'rot_0': [],
+            'rot_1': [],
+            'rot_2': [],
+            'rot_3': [],
+            'x': [],
+            'y': [],
+            'z': [],
+            'f_dc_0': [],
+            'f_dc_1': [],
+            'f_dc_2': [],
+            'opacity': [],
+            'addSplat': function(x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity) {
+                this.x.push(x);
+                this.y.push(y);
+                this.z.push(z);
+                this.scale_0.push(scale0);
+                this.scale_1.push(scale1);
+                this.scale_2.push(scale2);
+                this.rot_0.push(rot0);
+                this.rot_1.push(rot1);
+                this.rot_2.push(rot2);
+                this.rot_3.push(rot3);
+                this.f_dc_0.push(r);
+                this.f_dc_1.push(g);
+                this.f_dc_2.push(b);
+                this.opacity.push(opacity);
+                this.splatCount++;
+            }
         };
+    }
+
+    uncompressedSplatArrayToSplatBuffer(splatArray) {
+
+        const validSplats = SplatCompressor.createEmptyUncompressedSplatArray();
+        validSplats.addSplat(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0);
 
         for (let i = 0; i < splatArray.splatCount; i++) {
             let alpha;
@@ -41,21 +64,10 @@ export class SplatCompressor {
                 alpha = 255;
             }
             if (alpha >= this.minimumAlpha) {
-                validSplats['x'].push(splatArray['x'][i]);
-                validSplats['y'].push(splatArray['y'][i]);
-                validSplats['z'].push(splatArray['z'][i]);
-                validSplats['scale_0'].push(splatArray['scale_0'][i]);
-                validSplats['scale_1'].push(splatArray['scale_1'][i]);
-                validSplats['scale_2'].push(splatArray['scale_2'][i]);
-                validSplats['rot_0'].push(splatArray['rot_0'][i]);
-                validSplats['rot_1'].push(splatArray['rot_1'][i]);
-                validSplats['rot_2'].push(splatArray['rot_2'][i]);
-                validSplats['rot_3'].push(splatArray['rot_3'][i]);
-                validSplats['f_dc_0'].push(splatArray['f_dc_0'][i]);
-                validSplats['f_dc_1'].push(splatArray['f_dc_1'][i]);
-                validSplats['f_dc_2'].push(splatArray['f_dc_2'][i]);
-                validSplats['opacity'].push(splatArray['opacity'][i]);
-                validSplats.splatCount++;
+                validSplats.addSplat(splatArray['x'][i], splatArray['y'][i], splatArray['z'][i],
+                                     splatArray['scale_0'][i], splatArray['scale_1'][i], splatArray['scale_2'][i],
+                                     splatArray['rot_0'][i], splatArray['rot_1'][i], splatArray['rot_2'][i], splatArray['rot_3'][i],
+                                     splatArray['f_dc_0'][i], splatArray['f_dc_1'][i], splatArray['f_dc_2'][i], splatArray['opacity'][i]);
             }
         }
 
