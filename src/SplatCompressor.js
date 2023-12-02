@@ -5,7 +5,7 @@ import { clamp } from './Util.js';
 const SplatBufferBucketSize = 256;
 const SplatBufferBucketBlockSize = 5.0;
 
-export class SplatsCompressor {
+export class SplatCompressor {
 
     constructor(compressionLevel = 0, minimumAlpha = 1, bucketSize = SplatBufferBucketSize, blockSize = SplatBufferBucketBlockSize) {
         this.compressionLevel = compressionLevel;
@@ -29,7 +29,7 @@ export class SplatsCompressor {
             let splat = splatArray[i];
             let alpha;
             if (splat['opacity']) {
-                alpha = (1 / (1 + Math.exp(-splat.opacity))) * 255;
+                alpha = splat['opacity'];
             } else {
                 alpha = 255;
             }
@@ -82,7 +82,7 @@ export class SplatsCompressor {
                         const quat = new THREE.Quaternion(splat.rot_1, splat.rot_2, splat.rot_3, splat.rot_0);
                         quat.normalize();
                         rot.set([quat.w, quat.x, quat.y, quat.z]);
-                        scales.set([Math.exp(splat.scale_0), Math.exp(splat.scale_1), Math.exp(splat.scale_2)]);
+                        scales.set([splat.scale_0, splat.scale_1, splat.scale_2]);
                     } else {
                         scales.set([0.01, 0.01, 0.01]);
                         rot.set([1.0, 0.0, 0.0, 0.0]);
@@ -97,7 +97,7 @@ export class SplatsCompressor {
                         const quat = new THREE.Quaternion(splat.rot_1, splat.rot_2, splat.rot_3, splat.rot_0);
                         quat.normalize();
                         rot.set([thf(quat.w), thf(quat.x), thf(quat.y), thf(quat.z)]);
-                        scales.set([thf(Math.exp(splat.scale_0)), thf(Math.exp(splat.scale_1)), thf(Math.exp(splat.scale_2))]);
+                        scales.set([thf(splat.scale_0), thf(splat.scale_1), thf(splat.scale_2)]);
                     } else {
                         scales.set([thf(0.01), thf(0.01), thf(0.01)]);
                         rot.set([thf(1.), 0, 0, 0]);
@@ -120,15 +120,12 @@ export class SplatsCompressor {
                     rgba[3] = 0;
                 } else {
                     if (splat['f_dc_0'] !== undefined) {
-                        const SH_C0 = 0.28209479177387814;
-                        rgba.set([(0.5 + SH_C0 * splat.f_dc_0) * 255,
-                                (0.5 + SH_C0 * splat.f_dc_1) * 255,
-                                (0.5 + SH_C0 * splat.f_dc_2) * 255]);
+                        rgba.set([splat['f_dc_0'], splat['f_dc_1'], splat['f_dc_2']]);
                     } else {
                         rgba.set([255, 0, 0]);
                     }
                     if (splat['opacity'] !== undefined) {
-                        rgba[3] = (1 / (1 + Math.exp(-splat.opacity))) * 255;
+                        rgba[3] = splat['opacity'];
                     } else {
                         rgba[3] = 255;
                     }

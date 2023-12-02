@@ -13,7 +13,7 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
 - Code is organized into modern ES modules
 - Built-in viewer is self-contained so very little code is necessary to load and view a scene
 - Viewer can import `.ply` files, `.splat` files, or my custom compressed `.ksplat` files
-- Users can convert `.ply` files to the `.ksplat` file format
+- Users can convert `.ply` or `.splat` files to the `.ksplat` file format
 - Allows a Three.js scene or object group to be rendered along with the splats
 - Focus on optimization:
     - Splats culled prior to sorting & rendering using a custom octree
@@ -264,7 +264,7 @@ Advanced `Viewer` parameters
 <br>
 
 ### Creating KSPLAT files
-To convert a `.ply` file into the stripped-down and compressed `.ksplat` format, there are several options. The easiest method is to use the UI in the main demo page at [http://127.0.0.1:8080/index.html](http://127.0.0.1:8080/index.html). If you want to run the conversion programatically, run the following in a browser:
+To convert a `.ply` or `.splat` file into the stripped-down and compressed `.ksplat` format, there are several options. The easiest method is to use the UI in the main demo page at [http://127.0.0.1:8080/index.html](http://127.0.0.1:8080/index.html). If you want to run the conversion programatically, run the following in a browser:
 
 ```javascript
 const compressionLevel = 1;
@@ -280,7 +280,7 @@ Both of the above methods will prompt your browser to automatically start downlo
 The third option is to use the included nodejs script:
 
 ```
-node util/create-splat.js [path to .PLY] [output file] [compression level = 0] [alpha removal threshold = 1]
+node util/create-ksplat.js [path to .PLY or .SPLAT] [output file] [compression level = 0] [alpha removal threshold = 1]
 ```
 
 Currently supported values for `compressionLevel` are `0` or `1`. `0` means no compression, `1` means compression of scale, rotation, and position values from 32-bit to 16-bit.

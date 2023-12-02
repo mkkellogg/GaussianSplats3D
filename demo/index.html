@@ -246,8 +246,28 @@
       return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold);
     }
 
-    function convertStandardSplatToSplatBuffer(bufferData){
-      return GaussianSplats3D.SplatLoader.parseStandardSplatToSplatBuffer(bufferData);
+    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold){
+      const splatArray = GaussianSplats3D.SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
+      const splatCompressor = new GaussianSplats3D.SplatCompressor(compressionLevel, alphaRemovalThreshold);
+      return splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+    }
+
+    function isPlyFile(fileName) {
+      return fileName.toLowerCase().trim().endsWith('.ply');
+    }
+
+    function fileBufferToSplatBuffer(fileBufferData, isPly, isStandardSplat, compressionLevel, alphaRemovalThreshold) {
+      let splatBuffer;
+      if (isPly) {
+        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold);
+      } else {
+        if (isStandardSplat) {
+          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold);
+        } else {
+          splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);
+        }
+      }
+      return splatBuffer;
     }
 
     window.onFileChange = function(arg, fileNameLabelID) {
@@ -297,12 +317,15 @@
         const fileReader = new FileReader();
         fileReader.onload = function(){
           convertButton.disabled = true;
-          setConversionStatus("Parsing .PLY...");
+          setConversionStatus("Parsing file...");
           setConversionLoadingIconVisibility(true);
           setConversionCheckIconVisibility(false);
+          const conversionFileName = conversionFile.files[0].name;
+          const isPly = isPlyFile(conversionFileName);
+          const isStandardSplat = GaussianSplats3D.SplatLoader.isStandardSplatFormat(conversionFileName);
           window.setTimeout(() => {
             try {
-              const splatBuffer = convertPLYToSplatBuffer(fileReader.result, compressionLevel, alphaRemovalThreshold);
+              const splatBuffer = fileBufferToSplatBuffer(fileReader.result, isPly, isStandardSplat, compressionLevel, alphaRemovalThreshold);
               new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.ksplat');
               conversionDone();
             } catch (e) {
@@ -397,11 +420,8 @@
       }
 
       const viewFileName = viewFile.files[0].name;
-      const isPly = viewFileName.toLowerCase().trim().endsWith('.ply');
-      let isStandardSplat = false;
-      if (!isPly) {
-        isStandardSplat = GaussianSplats3D.SplatLoader.isStandardSplatFormat(viewFileName);
-      }
+      const isPly = isPlyFile(viewFileName);
+      const isStandardSplat = GaussianSplats3D.SplatLoader.isStandardSplatFormat(viewFileName);
 
       currentAlphaRemovalThreshold = alphaRemovalThreshold;
       currentCameraUpArray = cameraUpArray;
@@ -459,17 +479,7 @@
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
 
-      let splatBuffer;
-      if (isPly) {
-        splatBuffer = convertPLYToSplatBuffer(splatBufferData, 0, alphaRemovalThreshold);
-      } else {
-        if (isStandardSplat) {
-          splatBuffer = convertStandardSplatToSplatBuffer(splatBufferData);
-        } else {
-          splatBuffer = new GaussianSplats3D.SplatBuffer(splatBufferData);
-        }
-      }
-
+      const splatBuffer = fileBufferToSplatBuffer(splatBufferData, isPly, isStandardSplat, 0, alphaRemovalThreshold);
       document.getElementById("demo-content").style.display = 'none';
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
@@ -601,7 +611,7 @@
       
             <div id ="conversion-panel" class="splat-panel" style="height:300px;">
                 <br>
-                <span class="small-title">Convert a <span class="file-ext">.ply</span> file to <span class="file-ext">.ksplat</span> format</span>
+                <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
                 <br>
                 <table style="text-align: left;">

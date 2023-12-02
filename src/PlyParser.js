@@ -1,4 +1,4 @@
-import { SplatsCompressor } from './SplatsCompressor.js';
+import { SplatCompressor } from './SplatCompressor.js';
 
 export class PlyParser {
 
@@ -140,13 +140,27 @@ export class PlyParser {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             const newVertex = {};
             for (let propertyToRead of propertiesToRead) newVertex[propertyToRead] = rawVertex[propertyToRead];
+            if (newVertex['scale_0'] !== undefined) {
+                newVertex['scale_0'] = Math.exp(newVertex['scale_0']);
+                newVertex['scale_1'] = Math.exp(newVertex['scale_1']);
+                newVertex['scale_2'] = Math.exp(newVertex['scale_2']);
+            }
+            if (newVertex['f_dc_0'] !== undefined) {
+                const SH_C0 = 0.28209479177387814;
+                newVertex['f_dc_0'] = (0.5 + SH_C0 * newVertex['f_dc_0']) * 255;
+                newVertex['f_dc_1'] = (0.5 + SH_C0 * newVertex['f_dc_1']) * 255;
+                newVertex['f_dc_2'] = (0.5 + SH_C0 * newVertex['f_dc_2']) * 255;
+            }
+            if (newVertex['opacity'] !== undefined) {
+                newVertex['opacity'] = (1 / (1 + Math.exp(-newVertex['opacity']))) * 255;
+            }
             validVertexes.push(newVertex);
         }
 
         console.log('Total valid splats: ', validVertexes.length, 'out of', splatCount);
 
-        const splatsCompressor = new SplatsCompressor(compressionLevel, minimumAlpha);
-        const splatBuffer = splatsCompressor.uncompressedSplatArrayToSplatBuffer(validVertexes);
+        const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha);
+        const splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(validVertexes);
 
         const endTime = performance.now();
 
