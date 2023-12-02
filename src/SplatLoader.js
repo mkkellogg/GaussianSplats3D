@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SplatBuffer } from './SplatBuffer.js';
+import { SplatCompressor } from './SplatCompressor.js';
 import { fetchWithProgress } from './Util.js';
 
 export class SplatLoader {
@@ -29,7 +30,9 @@ export class SplatLoader {
                 if (SplatLoader.isCustomSplatFormat(fileName)) {
                     splatBuffer = new SplatBuffer(bufferData);
                 } else {
-                    splatBuffer = SplatLoader.parseStandardSplatToSplatBuffer(bufferData);
+                    const splatCompressor = new SplatCompressor(0, 1);
+                    const splatArray = SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
+                    splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
                 }
                 resolve(splatBuffer);
             })
@@ -39,7 +42,7 @@ export class SplatLoader {
         });
     }
 
-    static parseStandardSplatToSplatBuffer(inBuffer) {
+    static parseStandardSplatToUncompressedSplatArray(inBuffer) {
         // Standard .splat row layout:
         // XYZ - Position (Float32)
         // XYZ - Scale (Float32)
@@ -49,25 +52,7 @@ export class SplatLoader {
         const InBufferRowSizeBytes = 32;
         const splatCount = inBuffer.byteLength / InBufferRowSizeBytes;
 
-        const headerSize = SplatBuffer.HeaderSizeBytes;
-        const headerUint8 = new Uint8Array(new ArrayBuffer(headerSize));
-        const headerUint32 = new Uint32Array(headerUint8.buffer);
-
-        headerUint8[0] = 0; // version major
-        headerUint8[1] = 0; // version minor
-        headerUint8[2] = 0; // header extra K
-        headerUint8[3] = 0; // compression level
-        headerUint32[1] = splatCount;
-        headerUint32[6] = 0; // compression scale rnage
-
-        let bytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
-        let bytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
-        let bytesPerColor = SplatBuffer.CompressionLevels[0].BytesPerColor;
-        let bytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
-        const centerBuffer = new ArrayBuffer(bytesPerCenter * splatCount);
-        const scaleBuffer = new ArrayBuffer(bytesPerScale * splatCount);
-        const colorBuffer = new ArrayBuffer(bytesPerColor * splatCount);
-        const rotationBuffer = new ArrayBuffer(bytesPerRotation * splatCount);
+        const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
 
         for (let i = 0; i < splatCount; i++) {
             const inCenterSizeBytes = 3 * 4;
@@ -79,35 +64,15 @@ export class SplatLoader {
             const inColor = new Uint8Array(inBuffer, inBase + inCenterSizeBytes + inScaleSizeBytes, 4);
             const inRotation = new Uint8Array(inBuffer, inBase + inCenterSizeBytes + inScaleSizeBytes + inColorSizeBytes, 4);
 
-            const outCenter = new Float32Array(centerBuffer, i * bytesPerCenter, 3);
-            const outScale = new Float32Array(scaleBuffer, i * bytesPerScale, 3);
-            const outRotation = new Float32Array(rotationBuffer, i * bytesPerRotation, 4);
-
             const quat = new THREE.Quaternion((inRotation[1] - 128) / 128, (inRotation[2] - 128) / 128,
                                               (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
             quat.normalize();
-            outRotation.set([quat.w, quat.x, quat.y, quat.z]);
-            outScale.set(inScale);
-            outCenter.set(inCenter);
 
-            const outColor = new Uint8ClampedArray(colorBuffer, i * bytesPerColor, 4);
-            outColor.set(inColor);
+            splatArray.addSplat(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
+                                quat.w, quat.x, quat.y, quat.z, inColor[0], inColor[1], inColor[2], inColor[3]);
         }
 
-        const splatDataBufferSize = centerBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength + rotationBuffer.byteLength;
-        let unifiedBufferSize = headerSize + splatDataBufferSize;
-
-        const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
-        new Uint8Array(unifiedBuffer, 0, headerSize).set(headerUint8);
-        new Uint8Array(unifiedBuffer, headerSize, centerBuffer.byteLength).set(new Uint8Array(centerBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength, scaleBuffer.byteLength).set(new Uint8Array(scaleBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength + scaleBuffer.byteLength,
-                       colorBuffer.byteLength).set(new Uint8Array(colorBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength,
-                       rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
-
-        const splatBuffer = new SplatBuffer(unifiedBuffer);
-        return splatBuffer;
+        return splatArray;
     }
 
     setFromBuffer(splatBuffer) {

@@ -1,9 +1,4 @@
-import { SplatBuffer } from './SplatBuffer.js';
-import { clamp } from './Util.js';
-import * as THREE from 'three';
-
-const SplatBufferBucketSize = 256;
-const SplatBufferBucketBlockSize = 5.0;
+import { SplatCompressor } from './SplatCompressor.js';
 
 export class PlyParser {
 
@@ -140,171 +135,49 @@ export class PlyParser {
         const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
                                   'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
-        const validVertexes = [];
-        // dummy vertex used for invalid vertexes
-        const vertexZero = {};
-        for (let propertyToRead of propertiesToRead) vertexZero[propertyToRead] = 0;
-        validVertexes.push(vertexZero);
+        const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
+
         for (let row = 0; row < splatCount; row++) {
             this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
-            let alpha;
-            if (propertyTypes['opacity']) {
-                alpha = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
+            if (rawVertex['scale_0'] !== undefined) {
+                splatArray['scale_0'][row] = Math.exp(rawVertex['scale_0']);
+                splatArray['scale_1'][row] = Math.exp(rawVertex['scale_1']);
+                splatArray['scale_2'][row] = Math.exp(rawVertex['scale_2']);
             } else {
-                alpha = 255;
+                splatArray['scale_0'][row] = 0.01;
+                splatArray['scale_1'][row] = 0.01;
+                splatArray['scale_2'][row] = 0.01;
             }
-            if (alpha > minimumAlpha) {
-                const newVertex = {};
-                for (let propertyToRead of propertiesToRead) newVertex[propertyToRead] = rawVertex[propertyToRead];
-                validVertexes.push(newVertex);
+
+            if (rawVertex['f_dc_0'] !== undefined) {
+                const SH_C0 = 0.28209479177387814;
+                splatArray['f_dc_0'][row] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
+                splatArray['f_dc_1'][row] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
+                splatArray['f_dc_2'][row] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
+            } else {
+                splatArray['f_dc_0'][row] = 0;
+                splatArray['f_dc_1'][row] = 0;
+                splatArray['f_dc_2'][row] = 0;
             }
-        }
-
-        console.log('Total valid splats: ', validVertexes.length, 'out of', splatCount);
-
-        const centersForBucketCalcs = [];
-        for (let row = 0; row < validVertexes.length; row++) {
-            rawVertex = validVertexes[row];
-            centersForBucketCalcs.push([rawVertex.x, rawVertex.y, rawVertex.z]);
-        }
-        const buckets = this.computeBuckets(centersForBucketCalcs);
-
-        const paddedSplatCount = buckets.length * SplatBufferBucketSize;
-        const headerSize = SplatBuffer.HeaderSizeBytes;
-        const header = new Uint8Array(new ArrayBuffer(headerSize));
-        header[3] = compressionLevel;
-        (new Uint32Array(header.buffer, 4, 1))[0] = paddedSplatCount;
-
-        let bytesPerCenter = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCenter;
-        let bytesPerScale = SplatBuffer.CompressionLevels[compressionLevel].BytesPerScale;
-        let bytesPerColor = SplatBuffer.CompressionLevels[compressionLevel].BytesPerColor;
-        let bytesPerRotation = SplatBuffer.CompressionLevels[compressionLevel].BytesPerRotation;
-        const centerBuffer = new ArrayBuffer(bytesPerCenter * paddedSplatCount);
-        const scaleBuffer = new ArrayBuffer(bytesPerScale * paddedSplatCount);
-        const colorBuffer = new ArrayBuffer(bytesPerColor * paddedSplatCount);
-        const rotationBuffer = new ArrayBuffer(bytesPerRotation * paddedSplatCount);
-
-        const blockHalfSize = SplatBufferBucketBlockSize / 2.0;
-        const compressionScaleRange = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
-        const compressionScaleFactor = compressionScaleRange / blockHalfSize;
-        const doubleCompressionScaleRange = compressionScaleRange * 2 + 1;
-
-        const bucketCenter = new THREE.Vector3();
-        const bucketCenterDelta = new THREE.Vector3();
-        let outSplatIndex = 0;
-        for (let b = 0; b < buckets.length; b++) {
-            const bucket = buckets[b];
-            bucketCenter.fromArray(bucket.center);
-            for (let i = 0; i < bucket.splats.length; i++) {
-                let row = bucket.splats[i];
-                let invalidSplat = false;
-                if (row === 0) {
-                    invalidSplat = true;
-                }
-                rawVertex = validVertexes[row];
-
-                if (compressionLevel === 0) {
-                    const center = new Float32Array(centerBuffer, outSplatIndex * bytesPerCenter, 3);
-                    const scales = new Float32Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
-                    const rot = new Float32Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
-                    if (propertyTypes['scale_0']) {
-                        const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
-                        quat.normalize();
-                        rot.set([quat.w, quat.x, quat.y, quat.z]);
-                        scales.set([Math.exp(rawVertex.scale_0), Math.exp(rawVertex.scale_1), Math.exp(rawVertex.scale_2)]);
-                    } else {
-                        scales.set([0.01, 0.01, 0.01]);
-                        rot.set([1.0, 0.0, 0.0, 0.0]);
-                    }
-                    center.set([rawVertex.x, rawVertex.y, rawVertex.z]);
-                } else {
-                    const center = new Uint16Array(centerBuffer, outSplatIndex * bytesPerCenter, 3);
-                    const scales = new Uint16Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
-                    const rot = new Uint16Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
-                    const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
-                    if (propertyTypes['scale_0']) {
-                        const quat = new THREE.Quaternion(rawVertex.rot_1, rawVertex.rot_2, rawVertex.rot_3, rawVertex.rot_0);
-                        quat.normalize();
-                        rot.set([thf(quat.w), thf(quat.x), thf(quat.y), thf(quat.z)]);
-                        scales.set([thf(Math.exp(rawVertex.scale_0)), thf(Math.exp(rawVertex.scale_1)), thf(Math.exp(rawVertex.scale_2))]);
-                    } else {
-                        scales.set([thf(0.01), thf(0.01), thf(0.01)]);
-                        rot.set([thf(1.), 0, 0, 0]);
-                    }
-                    bucketCenterDelta.set(rawVertex.x, rawVertex.y, rawVertex.z).sub(bucketCenter);
-                    bucketCenterDelta.x = Math.round(bucketCenterDelta.x * compressionScaleFactor) + compressionScaleRange;
-                    bucketCenterDelta.x = clamp(bucketCenterDelta.x, 0, doubleCompressionScaleRange);
-                    bucketCenterDelta.y = Math.round(bucketCenterDelta.y * compressionScaleFactor) + compressionScaleRange;
-                    bucketCenterDelta.y = clamp(bucketCenterDelta.y, 0, doubleCompressionScaleRange);
-                    bucketCenterDelta.z = Math.round(bucketCenterDelta.z * compressionScaleFactor) + compressionScaleRange;
-                    bucketCenterDelta.z = clamp(bucketCenterDelta.z, 0, doubleCompressionScaleRange);
-                    center.set([bucketCenterDelta.x, bucketCenterDelta.y, bucketCenterDelta.z]);
-                }
-
-                const rgba = new Uint8ClampedArray(colorBuffer, outSplatIndex * bytesPerColor, 4);
-                if (invalidSplat) {
-                    rgba[0] = 255;
-                    rgba[1] = 0;
-                    rgba[2] = 0;
-                    rgba[3] = 0;
-                } else {
-                    if (propertyTypes['f_dc_0']) {
-                        const SH_C0 = 0.28209479177387814;
-                        rgba.set([(0.5 + SH_C0 * rawVertex.f_dc_0) * 255,
-                                  (0.5 + SH_C0 * rawVertex.f_dc_1) * 255,
-                                  (0.5 + SH_C0 * rawVertex.f_dc_2) * 255]);
-                    } else {
-                        rgba.set([255, 0, 0]);
-                    }
-                    if (propertyTypes['opacity']) {
-                        rgba[3] = (1 / (1 + Math.exp(-rawVertex.opacity))) * 255;
-                    } else {
-                        rgba[3] = 255;
-                    }
-                }
-
-                outSplatIndex++;
+            if (rawVertex['opacity'] !== undefined) {
+                splatArray['opacity'][row] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
             }
+
+            splatArray['rot_0'][row] = rawVertex['rot_0'];
+            splatArray['rot_1'][row] = rawVertex['rot_1'];
+            splatArray['rot_2'][row] = rawVertex['rot_2'];
+            splatArray['rot_3'][row] = rawVertex['rot_3'];
+
+            splatArray['x'][row] = rawVertex['x'];
+            splatArray['y'][row] = rawVertex['y'];
+            splatArray['z'][row] = rawVertex['z'];
+            splatArray.splatCount++;
         }
 
-        const bytesPerBucket = 12;
-        const bucketsSize = bytesPerBucket * buckets.length;
-        const splatDataBufferSize = centerBuffer.byteLength + scaleBuffer.byteLength +
-                                    colorBuffer.byteLength + rotationBuffer.byteLength;
+        const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha);
+        const splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
 
-        const headerArrayUint32 = new Uint32Array(header.buffer);
-        const headerArrayFloat32 = new Float32Array(header.buffer);
-        let unifiedBufferSize = headerSize + splatDataBufferSize;
-        if (compressionLevel > 0) {
-            unifiedBufferSize += bucketsSize;
-            headerArrayUint32[2] = SplatBufferBucketSize;
-            headerArrayUint32[3] = buckets.length;
-            headerArrayFloat32[4] = SplatBufferBucketBlockSize;
-            headerArrayUint32[5] = bytesPerBucket;
-            headerArrayUint32[6] = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
-        }
-
-        const unifiedBuffer = new ArrayBuffer(unifiedBufferSize);
-        new Uint8Array(unifiedBuffer, 0, headerSize).set(header);
-        new Uint8Array(unifiedBuffer, headerSize, centerBuffer.byteLength).set(new Uint8Array(centerBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength, scaleBuffer.byteLength).set(new Uint8Array(scaleBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength + scaleBuffer.byteLength,
-                       colorBuffer.byteLength).set(new Uint8Array(colorBuffer));
-        new Uint8Array(unifiedBuffer, headerSize + centerBuffer.byteLength + scaleBuffer.byteLength + colorBuffer.byteLength,
-                       rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
-
-        if (compressionLevel > 0) {
-            const bucketArray = new Float32Array(unifiedBuffer, headerSize + splatDataBufferSize, buckets.length * 3);
-            for (let i = 0; i < buckets.length; i++) {
-                const bucket = buckets[i];
-                const base = i * 3;
-                bucketArray[base] = bucket.center[0];
-                bucketArray[base + 1] = bucket.center[1];
-                bucketArray[base + 2] = bucket.center[2];
-            }
-        }
-
-        const splatBuffer = new SplatBuffer(unifiedBuffer);
+        console.log('Total valid splats: ', splatBuffer.getSplatCount(), 'out of', splatCount);
 
         const endTime = performance.now();
 
@@ -314,74 +187,4 @@ export class PlyParser {
         return splatBuffer;
     }
 
-    computeBuckets(centers) {
-        const blockSize = SplatBufferBucketBlockSize;
-        const halfBlockSize = blockSize / 2.0;
-        const splatCount = centers.length;
-
-        const min = new THREE.Vector3();
-        const max = new THREE.Vector3();
-
-        // ignore the first splat since it's the invalid designator
-        for (let i = 1; i < splatCount; i++) {
-            const center = centers[i];
-            if (i === 0 || center[0] < min.x) min.x = center[0];
-            if (i === 0 || center[0] > max.x) max.x = center[0];
-            if (i === 0 || center[1] < min.y) min.y = center[1];
-            if (i === 0 || center[1] > max.y) max.y = center[1];
-            if (i === 0 || center[2] < min.z) min.z = center[2];
-            if (i === 0 || center[2] > max.z) max.z = center[2];
-        }
-
-        const dimensions = new THREE.Vector3().copy(max).sub(min);
-        const yBlocks = Math.ceil(dimensions.y / blockSize);
-        const zBlocks = Math.ceil(dimensions.z / blockSize);
-
-        const blockCenter = new THREE.Vector3();
-        const fullBuckets = [];
-        const partiallyFullBuckets = {};
-
-        // ignore the first splat since it's the invalid designator
-        for (let i = 1; i < splatCount; i++) {
-            const center = centers[i];
-            const xBlock = Math.ceil((center[0] - min.x) / blockSize);
-            const yBlock = Math.ceil((center[1] - min.y) / blockSize);
-            const zBlock = Math.ceil((center[2] - min.z) / blockSize);
-
-            blockCenter.x = (xBlock - 1) * blockSize + min.x + halfBlockSize;
-            blockCenter.y = (yBlock - 1) * blockSize + min.y + halfBlockSize;
-            blockCenter.z = (zBlock - 1) * blockSize + min.z + halfBlockSize;
-
-            const bucketId = xBlock * (yBlocks * zBlocks) + yBlock * zBlocks + zBlock;
-            let bucket = partiallyFullBuckets[bucketId];
-            if (!bucket) {
-                partiallyFullBuckets[bucketId] = bucket = {
-                    'splats': [],
-                    'center': blockCenter.toArray()
-                };
-            }
-
-            bucket.splats.push(i);
-            if (bucket.splats.length >= SplatBufferBucketSize) {
-                fullBuckets.push(bucket);
-                partiallyFullBuckets[bucketId] = null;
-            }
-        }
-
-        // fill partially full buckets with invalid splats (splat 0)
-        // to get them up to SplatBufferBucketSize
-        for (let bucketId in partiallyFullBuckets) {
-            if (partiallyFullBuckets.hasOwnProperty(bucketId)) {
-                const bucket = partiallyFullBuckets[bucketId];
-                if (bucket) {
-                    while (bucket.splats.length < SplatBufferBucketSize) {
-                        bucket.splats.push(0);
-                    }
-                    fullBuckets.push(bucket);
-                }
-            }
-        }
-
-        return fullBuckets;
-    }
 }

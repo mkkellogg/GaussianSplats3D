@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { clamp } from './Util.js';
 
 const tempVector3A = new THREE.Vector3();
 const tempVector3B = new THREE.Vector3();
