@@ -77,7 +77,7 @@ export class PlyParser {
         }
     }
 
-    parseToSplatBuffer(compressionLevel = 0, minimumAlpha = 1) {
+    parseToSplatBuffer(compressionLevel, minimumAlpha, blockSize, bucketSize) {
 
         const startTime = performance.now();
 
@@ -174,7 +174,7 @@ export class PlyParser {
             splatArray.splatCount++;
         }
 
-        const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha);
+        const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
         const splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
 
         console.log('Total valid splats: ', splatBuffer.getSplatCount(), 'out of', splatCount);

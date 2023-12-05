@@ -19,13 +19,13 @@ export class PlyLoader {
         });
     }
 
-    loadFromURL(fileName, onProgress, compressionLevel = 0, minimumAlpha = 1) {
+    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
         return new Promise((resolve, reject) => {
             const loadPromise = this.fetchFile(fileName, onProgress);
             loadPromise
             .then((plyFileData) => {
                 const plyParser = new PlyParser(plyFileData);
-                const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, minimumAlpha);
+                const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, minimumAlpha, blockSize, bucketSize);
                 this.splatBuffer = splatBuffer;
                 resolve(splatBuffer);
             })

@@ -7,7 +7,7 @@ const SplatBufferBucketBlockSize = 5.0;
 
 export class SplatCompressor {
 
-    constructor(compressionLevel = 0, minimumAlpha = 1, bucketSize = SplatBufferBucketSize, blockSize = SplatBufferBucketBlockSize) {
+    constructor(compressionLevel = 0, minimumAlpha = 1, blockSize = SplatBufferBucketBlockSize, bucketSize = SplatBufferBucketSize) {
         this.compressionLevel = compressionLevel;
         this.minimumAlpha = minimumAlpha;
         this.bucketSize = bucketSize;
@@ -108,22 +108,22 @@ export class SplatCompressor {
 
                 if (this.compressionLevel === 0) {
                     const center = new Float32Array(centerBuffer, outSplatIndex * bytesPerCenter, 3);
-                    const scales = new Float32Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
+                    const scale = new Float32Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
                     const rot = new Float32Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
                     if (validSplats['scale_0'][row] !== undefined) {
                         const quat = new THREE.Quaternion(validSplats['rot_1'][row], validSplats['rot_2'][row],
                                                           validSplats['rot_3'][row], validSplats['rot_0'][row]);
                         quat.normalize();
                         rot.set([quat.w, quat.x, quat.y, quat.z]);
-                        scales.set([validSplats['scale_0'][row], validSplats['scale_1'][row], validSplats['scale_2'][row]]);
+                        scale.set([validSplats['scale_0'][row], validSplats['scale_1'][row], validSplats['scale_2'][row]]);
                     } else {
-                        scales.set([0.01, 0.01, 0.01]);
+                        scale.set([0.01, 0.01, 0.01]);
                         rot.set([1.0, 0.0, 0.0, 0.0]);
                     }
                     center.set([validSplats['x'][row], validSplats['y'][row], validSplats['z'][row]]);
                 } else {
                     const center = new Uint16Array(centerBuffer, outSplatIndex * bytesPerCenter, 3);
-                    const scales = new Uint16Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
+                    const scale = new Uint16Array(scaleBuffer, outSplatIndex * bytesPerScale, 3);
                     const rot = new Uint16Array(rotationBuffer, outSplatIndex * bytesPerRotation, 4);
                     const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
                     if (validSplats['scale_0'][row] !== undefined) {
@@ -131,9 +131,9 @@ export class SplatCompressor {
                                                           validSplats['rot_3'][row], validSplats['rot_0'][row]);
                         quat.normalize();
                         rot.set([thf(quat.w), thf(quat.x), thf(quat.y), thf(quat.z)]);
-                        scales.set([thf(validSplats['scale_0'][row]), thf(validSplats['scale_1'][row]), thf(validSplats['scale_2'][row])]);
+                        scale.set([thf(validSplats['scale_0'][row]), thf(validSplats['scale_1'][row]), thf(validSplats['scale_2'][row])]);
                     } else {
-                        scales.set([thf(0.01), thf(0.01), thf(0.01)]);
+                        scale.set([thf(0.01), thf(0.01), thf(0.01)]);
                         rot.set([thf(1.), 0, 0, 0]);
                     }
                     bucketCenterDelta.set(validSplats['x'][row], validSplats['y'][row], validSplats['z'][row]).sub(bucketCenter);

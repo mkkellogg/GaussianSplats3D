@@ -22,7 +22,7 @@ export class SplatLoader {
         return fileName.endsWith('.splat');
     }
 
-    loadFromURL(fileName, onProgress) {
+    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
         return new Promise((resolve, reject) => {
             fetchWithProgress(fileName, onProgress)
             .then((bufferData) => {
@@ -30,7 +30,7 @@ export class SplatLoader {
                 if (SplatLoader.isCustomSplatFormat(fileName)) {
                     splatBuffer = new SplatBuffer(bufferData);
                 } else {
-                    const splatCompressor = new SplatCompressor(0, 1);
+                    const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
                     const splatArray = SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
                     splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
                 }
