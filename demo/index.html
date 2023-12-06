@@ -241,14 +241,14 @@
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
 
-    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold) {
+    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
-      return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold);
+      return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
     }
 
-    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold){
+    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize){
       const splatArray = GaussianSplats3D.SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
-      const splatCompressor = new GaussianSplats3D.SplatCompressor(compressionLevel, alphaRemovalThreshold);
+      const splatCompressor = new GaussianSplats3D.SplatCompressor(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
       return splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
     }
 
@@ -256,18 +256,34 @@
       return fileName.toLowerCase().trim().endsWith('.ply');
     }
 
-    function fileBufferToSplatBuffer(fileBufferData, isPly, isStandardSplat, compressionLevel, alphaRemovalThreshold) {
+    function fileBufferToSplatBuffer(fileBufferData, isPly, isStandardSplat, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
       let splatBuffer;
       if (isPly) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold);
+        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
       } else {
         if (isStandardSplat) {
-          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold);
+          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
         } else {
           splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);
         }
       }
       return splatBuffer;
+    }
+
+    window.onCompressionLevelChange = function(arg) {
+      const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
+      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
+        return;
+      }
+
+      for (let i = 1; i <= 3; i++) {
+        const element = document.getElementById('advancedCompressionRow' + i);
+        if (compressionLevel === 0) {
+          element.style.display = 'none';
+        } else {
+          element.style.display = '';
+        }
+      }
     }
 
     window.onFileChange = function(arg, fileNameLabelID) {
@@ -285,12 +301,20 @@
       const conversionFile = document.getElementById("conversionFile");
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
+      const blockSize = parseFloat(document.getElementById("blockSize").value);
+      const bucketSize = parseInt(document.getElementById("bucketSize").value);
 
       if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
         setConversionError("Invalid compression level.");
         return;
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
         setConversionError("Invalid alpha remval threshold.");
+        return;
+      } else if (isNaN(blockSize) || blockSize < 0.1) {
+        setConversionError("Invalid block size.");
+        return;
+      } else if (isNaN(bucketSize) || bucketSize < 2 || bucketSize > 65536) {
+        setConversionError("Invalid bucket size.");
         return;
       } else if (!conversionFile.files[0]) {
         setConversionError("Please choose a file to convert.");
@@ -325,7 +349,8 @@
           const isStandardSplat = GaussianSplats3D.SplatLoader.isStandardSplatFormat(conversionFileName);
           window.setTimeout(() => {
             try {
-              const splatBuffer = fileBufferToSplatBuffer(fileReader.result, isPly, isStandardSplat, compressionLevel, alphaRemovalThreshold);
+              const splatBuffer = fileBufferToSplatBuffer(fileReader.result, isPly, isStandardSplat, compressionLevel,
+                                                          alphaRemovalThreshold, blockSize, bucketSize);
               new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.ksplat');
               conversionDone();
             } catch (e) {
@@ -609,7 +634,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:300px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:360px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -628,22 +653,45 @@
                     <td colspan="2" style="height: 10px;"></td>
                     </tr>
                     <tr>
+                      <td>
+                          Minimum alpha:&nbsp;
+                      </td>
+                      <td>
+                          <input id="alphaRemovalThreshold" type="text" class="text-input" style="width: 50px" value="1"></input>
+                          <span style="color:#888888">(1 - 255)</span>
+                      </td>
+                      </tr>
+                    <tr>
                     <td>
                         Compression level:
                     </td>
                     <td>
-                        <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1"></input>
+                        <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1" onChange="window.onCompressionLevelChange(this);"></input>
                         <span style="color:#888888">(0 or 1)</span>
                     </td>
                     </tr>
-                    <tr>
-                    <td>
-                        Minimum alpha:&nbsp;
-                    </td>
-                    <td>
-                        <input id="alphaRemovalThreshold" type="text" class="text-input" style="width: 50px" value="1"></input>
-                        <span style="color:#888888">(1 - 255)</span>
-                    </td>
+                    <tr id="advancedCompressionRow1">
+                      <td colspan="2" style="font-weight:bold; padding-top:15px; padding-bottom: 5px;">
+                        Advanced compression options
+                      </td>
+                    </tr>
+                    <tr id="advancedCompressionRow2">
+                      <td>
+                        Block size:&nbsp;
+                      </td>
+                      <td>
+                        <input id="blockSize" type="text" class="text-input" style="width: 50px" value="5.0"></input>
+                        <span style="color:#888888">( >= 0.1 )</span>
+                      </td>
+                    </tr>
+                    <tr id="advancedCompressionRow3">
+                      <td>
+                        Bucket size&nbsp;
+                      </td>
+                      <td>
+                          <input id="bucketSize" type="text" class="text-input" style="width: 50px" value="256"></input>
+                          <span style="color:#888888">(2 - 65536)</span>
+                      </td>
                     </tr>
                 </table>
                 <br>

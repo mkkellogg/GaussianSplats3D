@@ -12,18 +12,18 @@ function sortWorker(self) {
     let mappedDistancesOffset;
     let frequenciesOffset;
     let centersOffset;
-    let viewProjOffset;
+    let modelViewProjOffset;
     let countsZero;
 
     let Constants;
 
-    function sort(splatSortCount, splatRenderCount, viewProj, usePrecomputedDistances) {
+    function sort(splatSortCount, splatRenderCount, modelViewProj, usePrecomputedDistances) {
         const sortStartTime = performance.now();
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
-        new Int32Array(wasmMemory, viewProjOffset, 16).set(viewProj);
+        new Int32Array(wasmMemory, modelViewProjOffset, 16).set(modelViewProj);
         new Uint32Array(wasmMemory, frequenciesOffset, Constants.DepthMapRange).set(countsZero);
         wasmInstance.exports.sortIndexes(indexesToSortOffset, centersOffset, precomputedDistancesOffset,
-                                         mappedDistancesOffset, frequenciesOffset, viewProjOffset,
+                                         mappedDistancesOffset, frequenciesOffset, modelViewProjOffset,
                                          sortedIndexesOffset, Constants.DepthMapRange, splatSortCount,
                                          splatRenderCount, splatCount, usePrecomputedDistances);
         const sortEndTime = performance.now();
@@ -46,7 +46,7 @@ function sortWorker(self) {
         } else if (e.data.sort) {
             const renderCount = e.data.sort.splatRenderCount || 0;
             const sortCount = e.data.sort.splatSortCount || 0;
-            sort(sortCount, renderCount, e.data.sort.viewProj, e.data.sort.usePrecomputedDistances);
+            sort(sortCount, renderCount, e.data.sort.modelViewProj, e.data.sort.usePrecomputedDistances);
         } else if (e.data.init) {
             // Yep, this is super hacky and gross :(
             Constants = e.data.init.Constants;
@@ -93,8 +93,8 @@ function sortWorker(self) {
                 wasmInstance = instance;
                 indexesToSortOffset = 0;
                 centersOffset = indexesToSortOffset + memoryRequiredForIndexesToSort;
-                viewProjOffset = centersOffset + memoryRequiredForCenters;
-                precomputedDistancesOffset = viewProjOffset + memoryRequiredForViewProjMatrix;
+                modelViewProjOffset = centersOffset + memoryRequiredForCenters;
+                precomputedDistancesOffset = modelViewProjOffset + memoryRequiredForViewProjMatrix;
                 mappedDistancesOffset = precomputedDistancesOffset + memoryRequiredForPrecomputedDistances;
                 frequenciesOffset = mappedDistancesOffset + memoryRequiredForMappedDistances;
                 sortedIndexesOffset = frequenciesOffset + memoryRequiredForIntermediateSortBuffers;

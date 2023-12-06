@@ -21,7 +21,7 @@ export class SplatMesh extends THREE.Mesh {
             'centersBuffer': null,
             'outDistancesBuffer': null,
             'centersLoc': -1,
-            'viewProjLoc': -1,
+            'modelViewProjLoc': -1,
         };
     }
 
@@ -276,7 +276,7 @@ export class SplatMesh extends THREE.Mesh {
         if (this.enableDistancesComputationOnGPU) {
             this.setupDistancesTransformFeedback();
         }
-        this.resetLocalSplatDataAndTexturesFromSplatBuffer();
+        this.resetDataFromSplatBuffer();
     }
 
     buildSplatTransforms() {
@@ -332,35 +332,36 @@ export class SplatMesh extends THREE.Mesh {
         return this.splatTree;
     }
 
-    resetLocalSplatDataAndTexturesFromSplatBuffer() {
-        this.updateLocalSplatDataFromSplatBuffer();
-        this.allocateAndStoreLocalSplatDataInTextures();
+    resetDataFromSplatBuffer() {
+        this.uploadSplatDataToTextures();
         if (this.enableDistancesComputationOnGPU) {
             this.updateCentersGPUBufferForDistancesComputation();
         }
     }
 
-    updateLocalSplatDataFromSplatBuffer() {
-        const splatCount = this.getSplatCount();
-        this.covariances = new Float32Array(splatCount * 6);
-        this.centers = new Float32Array(splatCount * 3);
-        this.colors = new Uint8Array(splatCount * 4);
-
+    fillSplatDataArrays(covariances, centers, colors) {
         let offset = 0;
         for (let i = 0; i < this.splatBuffers.length; i++) {
             const splatBuffer = this.splatBuffers[i];
             const transform = this.splatTransforms[i];
-            splatBuffer.fillCovarianceArray(this.covariances, offset, transform);
-            splatBuffer.fillCenterArray(this.centers, offset, transform);
-            splatBuffer.fillColorArray(this.colors, offset, transform);
+            if (covariances) splatBuffer.fillCovarianceArray(covariances, offset, transform);
+            if (centers) splatBuffer.fillCenterArray(centers, offset, transform);
+            if (colors) splatBuffer.fillColorArray(colors, offset, transform);
             offset += splatBuffer.getSplatCount();
         }
     }
 
-    allocateAndStoreLocalSplatDataInTextures() {
+    uploadSplatDataToTextures() {
+
+        const splatCount = this.getSplatCount();
+
+        const covariances = new Float32Array(splatCount * 6);
+        const centers = new Float32Array(splatCount * 3);
+        const colors = new Uint8Array(splatCount * 4);
+        this.fillSplatDataArrays(covariances, centers, colors);
+
         const COVARIANCES_ELEMENTS_PER_TEXEL = 2;
         const CENTER_COLORS_ELEMENTS_PER_TEXEL = 4;
-        const splatCount = this.getSplatCount();
 
         const covariancesTextureSize = new THREE.Vector2(4096, 1024);
         while (covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL < splatCount * 6) {
@@ -376,14 +377,14 @@ export class SplatMesh extends THREE.Mesh {
         let paddedCovariances;
         if (this.halfPrecisionCovariancesOnGPU) {
             paddedCovariances = new Uint16Array(covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
-            for (let i = 0; i < this.covariances.length; i++) {
-                paddedCovariances[i] = THREE.DataUtils.toHalfFloat(this.covariances[i]);
+            for (let i = 0; i < covariances.length; i++) {
+                paddedCovariances[i] = THREE.DataUtils.toHalfFloat(covariances[i]);
             }
             covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
                                                        covariancesTextureSize.y, THREE.RGFormat, THREE.HalfFloatType);
         } else {
             paddedCovariances = new Float32Array(covariancesTextureSize.x * covariancesTextureSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
-            paddedCovariances.set(this.covariances);
+            paddedCovariances.set(covariances);
             covariancesTexture = new THREE.DataTexture(paddedCovariances, covariancesTextureSize.x,
                                                        covariancesTextureSize.y, THREE.RGFormat, THREE.FloatType);
         }
@@ -397,11 +398,11 @@ export class SplatMesh extends THREE.Mesh {
             const colorsBase = c * 4;
             const centersBase = c * 3;
             const centerColorsBase = c * 4;
-            paddedCenterColors[centerColorsBase] = rgbaToInteger(this.colors[colorsBase], this.colors[colorsBase + 1],
-                                                                 this.colors[colorsBase + 2], this.colors[colorsBase + 3]);
-            paddedCenterColors[centerColorsBase + 1] = uintEncodedFloat(this.centers[centersBase]);
-            paddedCenterColors[centerColorsBase + 2] = uintEncodedFloat(this.centers[centersBase + 1]);
-            paddedCenterColors[centerColorsBase + 3] = uintEncodedFloat(this.centers[centersBase + 2]);
+            paddedCenterColors[centerColorsBase] = rgbaToInteger(colors[colorsBase], colors[colorsBase + 1],
+                                                                 colors[colorsBase + 2], colors[colorsBase + 3]);
+            paddedCenterColors[centerColorsBase + 1] = uintEncodedFloat(centers[centersBase]);
+            paddedCenterColors[centerColorsBase + 2] = uintEncodedFloat(centers[centersBase + 1]);
+            paddedCenterColors[centerColorsBase + 3] = uintEncodedFloat(centers[centersBase + 2]);
         }
         const centersColorsTexture = new THREE.DataTexture(paddedCenterColors, centersColorsTextureSize.x,
                                                            centersColorsTextureSize.y, THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
@@ -423,21 +424,6 @@ export class SplatMesh extends THREE.Mesh {
                 'size': centersColorsTextureSize
             }
         };
-    }
-
-    updateSplatDataToDataTextures() {
-        this.updateLocalCovarianceDataToDataTexture();
-        this.updateLocalCenterColorDataToDataTexture();
-    }
-
-    updateLocalCovarianceDataToDataTexture() {
-        this.splatDataTextures.covariances.data.set(this.covariances);
-        this.splatDataTextures.covariances.texture.needsUpdate = true;
-    }
-
-    updateLocalCenterColorDataToDataTexture() {
-        this.splatDataTextures.centerColors.data.set(this.centerColors);
-        this.splatDataTextures.centerColors.texture.needsUpdate = true;
     }
 
     updateIndexes(indexes, renderSplatCount) {
@@ -578,10 +564,10 @@ export class SplatMesh extends THREE.Mesh {
             const vsSource =
             `#version 300 es
                 in ivec3 center;
-                uniform ivec3 viewProj;
+                uniform ivec3 modelViewProj;
                 flat out int distance;
                 void main(void) {
-                    distance = center.x * viewProj.x + center.y * viewProj.y + center.z * viewProj.z;
+                    distance = center.x * modelViewProj.x + center.y * modelViewProj.y + center.z * modelViewProj.z;
                 }
             `;
 
@@ -630,8 +616,10 @@ export class SplatMesh extends THREE.Mesh {
 
             gl.useProgram(this.distancesTransformFeedback.program);
 
-            this.distancesTransformFeedback.centersLoc = gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
-            this.distancesTransformFeedback.viewProjLoc = gl.getUniformLocation(this.distancesTransformFeedback.program, 'viewProj');
+            this.distancesTransformFeedback.centersLoc =
+                gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
+            this.distancesTransformFeedback.modelViewProjLoc =
+                gl.getUniformLocation(this.distancesTransformFeedback.program, 'modelViewProj');
 
             if (rebuildGPUObjects || rebuildBuffers) {
                 this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
@@ -663,7 +651,8 @@ export class SplatMesh extends THREE.Mesh {
 
     getIntegerCenters(padFour) {
         const splatCount = this.getSplatCount();
-        const floatCenters = new Float32Array(this.centers);
+        const floatCenters = new Float32Array(splatCount * 3);
+        this.fillSplatDataArrays(null, floatCenters, null);
         let intCenters;
         let componentCount = padFour ? 4 : 3;
         intCenters = new Int32Array(splatCount * componentCount);
@@ -701,11 +690,11 @@ export class SplatMesh extends THREE.Mesh {
         if (currentVao) gl.bindVertexArray(currentVao);
     }
 
-    computeDistancesOnGPU(viewProjMatrix, outComputedDistances) {
+    computeDistancesOnGPU(modelViewProjMatrix, outComputedDistances) {
 
         if (!this.renderer) return;
 
-        const iViewProjMatrix = this.getIntegerMatrixArray(viewProjMatrix);
+        const iViewProjMatrix = this.getIntegerMatrixArray(modelViewProjMatrix);
         const iViewProj = [iViewProjMatrix[2], iViewProjMatrix[6], iViewProjMatrix[10]];
 
         // console.time("gpu_compute_distances");
@@ -719,7 +708,7 @@ export class SplatMesh extends THREE.Mesh {
 
         gl.enable(gl.RASTERIZER_DISCARD);
 
-        gl.uniform3i(this.distancesTransformFeedback.viewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
+        gl.uniform3i(this.distancesTransformFeedback.modelViewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
         gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
