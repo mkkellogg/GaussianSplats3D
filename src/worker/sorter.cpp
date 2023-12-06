@@ -9,7 +9,7 @@
 #endif
 
 EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* centers, int* precomputedDistances, 
-                                             int* mappedDistances, unsigned int * frequencies, int* viewProj,
+                                             int* mappedDistances, unsigned int * frequencies, int* modelViewProj,
                                              unsigned int* indexesOut, unsigned int distanceMapRange, unsigned int sortCount,
                                              unsigned int renderCount, unsigned int splatCount, bool usePrecomputedDistances) {
 
@@ -28,7 +28,7 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* centers
     } else {
         int tempIn[4];
         int tempOut[4];
-        int tempViewProj[] = {viewProj[2], viewProj[6], viewProj[10], 1};
+        int tempViewProj[] = {modelViewProj[2], modelViewProj[6], modelViewProj[10], 1};
         v128_t b = wasm_v128_load(&tempViewProj[0]);
         for (unsigned int i = sortStart; i < renderCount; i++) {
             v128_t a = wasm_v128_load(&centers[4 * indexes[i]]);

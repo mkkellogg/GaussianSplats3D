@@ -21,7 +21,7 @@ export class SplatMesh extends THREE.Mesh {
             'centersBuffer': null,
             'outDistancesBuffer': null,
             'centersLoc': -1,
-            'viewProjLoc': -1,
+            'modelViewProjLoc': -1,
         };
     }
 
@@ -564,10 +564,10 @@ export class SplatMesh extends THREE.Mesh {
             const vsSource =
             `#version 300 es
                 in ivec3 center;
-                uniform ivec3 viewProj;
+                uniform ivec3 modelViewProj;
                 flat out int distance;
                 void main(void) {
-                    distance = center.x * viewProj.x + center.y * viewProj.y + center.z * viewProj.z;
+                    distance = center.x * modelViewProj.x + center.y * modelViewProj.y + center.z * modelViewProj.z;
                 }
             `;
 
@@ -616,8 +616,10 @@ export class SplatMesh extends THREE.Mesh {
 
             gl.useProgram(this.distancesTransformFeedback.program);
 
-            this.distancesTransformFeedback.centersLoc = gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
-            this.distancesTransformFeedback.viewProjLoc = gl.getUniformLocation(this.distancesTransformFeedback.program, 'viewProj');
+            this.distancesTransformFeedback.centersLoc =
+                gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
+            this.distancesTransformFeedback.modelViewProjLoc =
+                gl.getUniformLocation(this.distancesTransformFeedback.program, 'modelViewProj');
 
             if (rebuildGPUObjects || rebuildBuffers) {
                 this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
@@ -688,11 +690,11 @@ export class SplatMesh extends THREE.Mesh {
         if (currentVao) gl.bindVertexArray(currentVao);
     }
 
-    computeDistancesOnGPU(viewProjMatrix, outComputedDistances) {
+    computeDistancesOnGPU(modelViewProjMatrix, outComputedDistances) {
 
         if (!this.renderer) return;
 
-        const iViewProjMatrix = this.getIntegerMatrixArray(viewProjMatrix);
+        const iViewProjMatrix = this.getIntegerMatrixArray(modelViewProjMatrix);
         const iViewProj = [iViewProjMatrix[2], iViewProjMatrix[6], iViewProjMatrix[10]];
 
         // console.time("gpu_compute_distances");
@@ -706,7 +708,7 @@ export class SplatMesh extends THREE.Mesh {
 
         gl.enable(gl.RASTERIZER_DISCARD);
 
-        gl.uniform3i(this.distancesTransformFeedback.viewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
+        gl.uniform3i(this.distancesTransformFeedback.modelViewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
         gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);

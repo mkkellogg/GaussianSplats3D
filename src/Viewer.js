@@ -465,7 +465,7 @@ export class Viewer {
                             if (loadCount === 0) {
                                 if (showLoadingSpinner) this.loadingSpinner.hide();
                                 this.splatRenderingInitialized = true;
-                                this.updateView(true, true);
+                                this.updateSplatSort(true, true);
                             }
                             resolve();
                         });
@@ -657,7 +657,7 @@ export class Viewer {
         }
         if (!this.initialized || !this.splatRenderingInitialized) return;
         if (this.controls) this.controls.update();
-        this.updateView();
+        this.updateSplatSort();
         this.updateForRendererSizeChanges();
         this.updateSplatMeshUniforms();
         this.updateMeshCursor();
@@ -874,15 +874,15 @@ export class Viewer {
         }
     }
 
-    updateView = function() {
+    updateSplatSort = function() {
 
-        const tempMatrix = new THREE.Matrix4();
+        const mvpMatrix = new THREE.Matrix4();
         const cameraPositionArray = [];
         const lastSortViewDir = new THREE.Vector3(0, 0, -1);
         const sortViewDir = new THREE.Vector3(0, 0, -1);
         const lastSortViewPos = new THREE.Vector3();
         const sortViewOffset = new THREE.Vector3();
-        const queuedTiers = [];
+        const queuedSorts = [];
 
         const partialSorts = [
             {
@@ -900,59 +900,61 @@ export class Viewer {
         ];
 
         return function(force = false, gatherAllNodes = false) {
+            if (this.sortRunning) return;
+
             let angleDiff = 0;
             let positionDiff = 0;
-            sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
             let needsRefreshForRotation = false;
             let needsRefreshForPosition = false;
+
+            sortViewDir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
             angleDiff = sortViewDir.dot(lastSortViewDir);
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
-            if (!force && queuedTiers.length === 0) {
+            if (!force && queuedSorts.length === 0) {
                 if (angleDiff <= 0.95) needsRefreshForRotation = true;
                 if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
 
-            tempMatrix.copy(this.camera.matrixWorld).invert();
-            tempMatrix.premultiply(this.camera.projectionMatrix);
-            tempMatrix.multiply(this.splatMesh.matrixWorld);
+            this.sortRunning = true;
+            this.gatherSceneNodes(gatherAllNodes);
+
+            mvpMatrix.copy(this.camera.matrixWorld).invert();
+            mvpMatrix.premultiply(this.camera.projectionMatrix);
+            mvpMatrix.multiply(this.splatMesh.matrixWorld);
+
+            if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
+                this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
+            }
+            if (queuedSorts.length === 0) {
+                for (let partialSort of partialSorts) {
+                    if (angleDiff < partialSort.angleThreshold) {
+                        for (let sortFraction of partialSort.sortFractions) {
+                            queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
+                        }
+                        break;
+                    }
+                }
+                queuedSorts.push(this.splatRenderCount);
+            }
+            const sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
+
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
-
-            if (!this.sortRunning) {
-                let sortCount;
-                this.sortRunning = true;
-                this.gatherSceneNodes(gatherAllNodes);
-                if (this.gpuAcceleratedSort && (queuedTiers.length <= 1 || queuedTiers.length % 2 === 0)) {
-                    this.splatMesh.computeDistancesOnGPU(tempMatrix, this.sortWorkerPrecomputedDistances);
+            this.sortWorker.postMessage({
+                sort: {
+                    'modelViewProj': this.splatMesh.getIntegerMatrixArray(mvpMatrix),
+                    'cameraPosition': cameraPositionArray,
+                    'splatRenderCount': this.splatRenderCount,
+                    'splatSortCount': sortCount,
+                    'usePrecomputedDistances': this.gpuAcceleratedSort
                 }
-                if (queuedTiers.length === 0) {
-                    for (let partialSort of partialSorts) {
-                        if (angleDiff < partialSort.angleThreshold) {
-                            for (let sortFraction of partialSort.sortFractions) {
-                                queuedTiers.push(Math.floor(this.splatRenderCount * sortFraction));
-                            }
-                            break;
-                        }
-                    }
-                    queuedTiers.push(this.splatRenderCount);
-                }
-                sortCount = Math.min(queuedTiers.shift(), this.splatRenderCount);
-                this.sortWorker.postMessage({
-                    sort: {
-                        'viewProj': this.splatMesh.getIntegerMatrixArray(tempMatrix),
-                        'cameraPosition': cameraPositionArray,
-                        'splatRenderCount': this.splatRenderCount,
-                        'splatSortCount': sortCount,
-                        'usePrecomputedDistances': this.gpuAcceleratedSort
-                    }
-                });
-                if (queuedTiers.length === 0) {
-                    lastSortViewPos.copy(this.camera.position);
-                    lastSortViewDir.copy(sortViewDir);
-                }
+            });
+            if (queuedSorts.length === 0) {
+                lastSortViewPos.copy(this.camera.position);
+                lastSortViewDir.copy(sortViewDir);
             }
         };
 
