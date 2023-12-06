@@ -159,7 +159,7 @@ export class SplatBuffer {
         const tempMatrix = new THREE.Matrix4();
         const tempPosition = new THREE.Vector3();
 
-        return function(index, outScale = new THREE.Vector3(), outRotation = new THREE.Quaternion(), transform) {
+        return function(index, outScale, outRotation, transform) {
             const scaleBase = index * SplatBuffer.ScaleComponentCount;
             outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
             const rotationBase = index * SplatBuffer.RotationComponentCount;
