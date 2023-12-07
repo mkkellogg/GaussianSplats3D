@@ -184,10 +184,10 @@ viewer.loadFile('<path to .ply, .ksplat, or .splat file>')
 Currently this will only work for objects that write to the depth buffer (e.g. standard opaque objects). Supporting transparent objects will be more challenging :)
 <br>
 
-A "drop-in" mode for the viewer is also supported. The `RenderableViewer` class encapsulates `Viewer` and can be added to a Three.js scene like any other renderable:
+A "drop-in" mode for the viewer is also supported. The `DropInViewer` class encapsulates `Viewer` and can be added to a Three.js scene like any other renderable:
 ```javascript
 const scene = new THREE.Scene();
-const renderableViewer = new GaussianSplats3D.RenderableViewer({
+const renderableViewer = new GaussianSplats3D.DropInViewer({
     'gpuAcceleratedSort': true
 });
 renderableViewer.addScenesFromFiles([{

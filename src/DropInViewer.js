@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Viewer } from './Viewer.js';
 
-export class RenderableViewer extends THREE.Group {
+export class DropInViewer extends THREE.Group {
 
     constructor(options = {}) {
         super();
