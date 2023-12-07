@@ -134,7 +134,7 @@ export class Viewer {
             });
             this.renderer.setPixelRatio(this.devicePixelRatio);
             this.renderer.autoClear = true;
-            this.renderer.setClearColor(0.0, 0.0, 0.0, 0.0);
+            this.renderer.setClearColor(new THREE.Color( 0x000000 ), 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
         }
 
@@ -465,7 +465,6 @@ export class Viewer {
                             if (loadCount === 0) {
                                 if (showLoadingSpinner) this.loadingSpinner.hide();
                                 this.splatRenderingInitialized = true;
-                                this.updateSplatSort(true, true);
                             }
                             resolve();
                         });
@@ -492,7 +491,7 @@ export class Viewer {
         const allSplatBufferOptions = this.splatMesh.splatBufferOptions || [];
         allSplatBuffers.push(...splatBuffers);
         allSplatBufferOptions.push(...splatBufferOptions);
-        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions);
+        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true);
         if (this.renderer) this.splatMesh.setRenderer(this.renderer);
         const splatCount = this.splatMesh.getSplatCount();
         console.log(`Total splat count: ${splatCount}`);
@@ -883,6 +882,7 @@ export class Viewer {
         const lastSortViewPos = new THREE.Vector3();
         const sortViewOffset = new THREE.Vector3();
         const queuedSorts = [];
+        let runCount = 0;
 
         const partialSorts = [
             {
@@ -901,6 +901,7 @@ export class Viewer {
 
         return function(force = false, gatherAllNodes = false) {
             if (this.sortRunning) return;
+            if (!this.initialized || !this.splatRenderingInitialized) return;
 
             let angleDiff = 0;
             let positionDiff = 0;
@@ -911,7 +912,7 @@ export class Viewer {
             angleDiff = sortViewDir.dot(lastSortViewDir);
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
-            if (!force && queuedSorts.length === 0) {
+            if (!force && queuedSorts.length === 0 && runCount > 0) {
                 if (angleDiff <= 0.95) needsRefreshForRotation = true;
                 if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
@@ -956,6 +957,7 @@ export class Viewer {
                 lastSortViewPos.copy(this.camera.position);
                 lastSortViewDir.copy(sortViewDir);
             }
+            runCount++;
         };
 
     }();

@@ -143,14 +143,14 @@ Parameters for `loadFile()`
 ```javascript
 viewer.loadFiles([{
             'path': '<path to first .ply, .ksplat, or .splat file>',
-            'splatAlphaRemovalThreshold': 20,
+            'splatAlphaRemovalThreshold': 20
         },
         {
             'path': '<path to second .ply, .ksplat, or .splat file>',
             'rotation': [-0.14724434, -0.0761755, 0.1410657, 0.976020],
             'scale': [1.5, 1.5, 1.5],
             'position': [-3, -2, -3.2],
-            'splatAlphaRemovalThreshold': 20,
+            'splatAlphaRemovalThreshold': 20
         }
     ])
     .then(() => {
@@ -192,14 +192,14 @@ const renderableViewer = new GaussianSplats3D.RenderableViewer({
 });
 renderableViewer.addScenesFromFiles([{
             'path': '<path to .ply, .ksplat, or .splat file>'
-            'splatAlphaRemovalThreshold': 5,
+            'splatAlphaRemovalThreshold': 5
         },
         {
             'path': '<path to .ply, .ksplat, or .splat file>',
             'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
             'scale': [1.5, 1.5, 1.5],
             'position': [0, -2, -1.2],
-            'splatAlphaRemovalThreshold': 5,
+            'splatAlphaRemovalThreshold': 5
         }
     ]);
 scene.add(renderableViewer);
