@@ -13,37 +13,62 @@ import { getCurrentTime } from './Util.js';
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 
+/**
+ * Viewer: Manages the rendering of splat scenes. Manages an instance of SplatMesh as well as a web worker
+ * that performs the sort for its splats.
+ */
 export class Viewer {
 
     constructor(options = {}) {
 
+        // The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and
+        // when the viewer uses its own camera).
         if (!options.cameraUp) options.cameraUp = [0, 1, 0];
-        if (!options.initialCameraPosition) options.initialCameraPosition = [0, 10, 15];
-        if (!options.initialCameraLookAt) options.initialCameraLookAt = [0, 0, 0];
+        this.cameraUp = new THREE.Vector3().fromArray(options.cameraUp);
 
+        // The camera's initial position (only used when the viewer uses its own camera).
+        if (!options.initialCameraPosition) options.initialCameraPosition = [0, 10, 15];
+        this.initialCameraPosition = new THREE.Vector3().fromArray(options.initialCameraPosition);
+
+        // The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
+        if (!options.initialCameraLookAt) options.initialCameraLookAt = [0, 0, 0];
+        this.initialCameraLookAt = new THREE.Vector3().fromArray(options.initialCameraLookAt);
+
+        // 'dropInMode' is a flag that is used internally to support the usage of the viewer as a Three.js scene object
+        this.dropInMode = options.dropInMode || false;
+
+        // If 'selfDrivenMode' is true, the viewer manages its own update/animation loop via requestAnimationFrame()
         if (options.selfDrivenMode === undefined) options.selfDrivenMode = true;
+        this.selfDrivenMode = options.selfDrivenMode && !this.dropInMode;
+        this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
+
+        // If 'useBuiltInControls' is true, the viewer will create its own instance of OrbitControls and attach to the camera
         if (options.useBuiltInControls === undefined) options.useBuiltInControls = true;
+        this.useBuiltInControls = options.useBuiltInControls;
+
+        // parent element of the Three.js renderer canvas
         this.rootElement = options.rootElement;
 
+        // Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger,
+        // at a small cost to visual quality
         this.ignoreDevicePixelRatio = options.ignoreDevicePixelRatio || false;
         this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
 
+        // Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures,
+        // instead of 32-bit.
         if (options.halfPrecisionCovariancesOnGPU === undefined) options.halfPrecisionCovariancesOnGPU = true;
         this.halfPrecisionCovariancesOnGPU = options.halfPrecisionCovariancesOnGPU;
 
-        this.cameraUp = new THREE.Vector3().fromArray(options.cameraUp);
-        this.initialCameraPosition = new THREE.Vector3().fromArray(options.initialCameraPosition);
-        this.initialCameraLookAt = new THREE.Vector3().fromArray(options.initialCameraLookAt);
-
+        // If 'scene' is valid, it will be rendered by the viewer along with the splat scene
         this.scene = options.scene;
+        // Allows for usage of an external Three.js renderer
         this.renderer = options.renderer;
+        // Allows for usage of an external Three.js camera
         this.camera = options.camera;
-        this.useBuiltInControls = options.useBuiltInControls;
         this.controls = null;
 
-        this.selfDrivenMode = options.selfDrivenMode;
-        this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
-
+        // If 'gpuAcceleratedSort' is true, a partially GPU-accelerated approach to sorting splats will be used.
+        // Currently this means pre-computing splat distances from the camera on the GPU
         this.gpuAcceleratedSort = options.gpuAcceleratedSort;
         if (this.gpuAcceleratedSort !== true && this.gpuAcceleratedSort !== false) {
             if (this.isMobile()) this.gpuAcceleratedSort = false;
@@ -86,24 +111,16 @@ export class Viewer {
         this.loadingSpinner = new LoadingSpinner(null, this.rootElement || document.body);
         this.loadingSpinner.hide();
 
-        this.usingExternalCamera = undefined;
-        this.usingExternalRenderer = undefined;
-        this.initializeFromExternalUpdate = options.initializeFromExternalUpdate || false;
+        this.usingExternalCamera = (this.dropInMode || this.camera) ? true : false;
+        this.usingExternalRenderer = (this.dropInMode || this.renderer) ? true : false;
+
         this.initialized = false;
-        if (!this.initializeFromExternalUpdate) this.init();
+        if (!this.dropInMode) this.init();
     }
 
     init() {
 
         if (this.initialized) return;
-
-        if (!this.initializeFromExternalUpdate) {
-            this.usingExternalCamera = this.camera ? true : false;
-            this.usingExternalRenderer = this.renderer ? true : false;
-        } else {
-            this.usingExternalCamera = true;
-            this.usingExternalRenderer = true;
-        }
 
         if (!this.rootElement) {
             if (!this.usingExternalRenderer) {
@@ -136,6 +153,13 @@ export class Viewer {
             this.renderer.autoClear = true;
             this.renderer.setClearColor(new THREE.Color( 0x000000 ), 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+
+            const resizeObserver = new ResizeObserver(() => {
+                this.getRenderDimensions(renderDimensions);
+                this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+            });
+            resizeObserver.observe(this.rootElement);
+            this.rootElement.appendChild(this.renderer.domElement);
         }
 
         this.scene = this.scene || new THREE.Scene();
@@ -157,15 +181,6 @@ export class Viewer {
             this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
             this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
             window.addEventListener('keydown', this.onKeyDown.bind(this), false);
-        }
-
-        if (!this.usingExternalRenderer) {
-            const resizeObserver = new ResizeObserver(() => {
-                this.getRenderDimensions(renderDimensions);
-                this.renderer.setSize(renderDimensions.x, renderDimensions.y);
-            });
-            resizeObserver.observe(this.rootElement);
-            this.rootElement.appendChild(this.renderer.domElement);
         }
 
         this.setupInfoPanel();
@@ -222,20 +237,35 @@ export class Viewer {
 
     onMouseUp = function() {
 
-        const renderDimensions = new THREE.Vector2();
         const clickOffset = new THREE.Vector2();
-        const toNewFocalPoint = new THREE.Vector3();
-        const outHits = [];
 
         return function(mouse) {
             clickOffset.copy(this.mousePosition).sub(this.mouseDownPosition);
             const mouseUpTime = getCurrentTime();
             const wasClick = mouseUpTime - this.mouseDownTime < 0.5 && clickOffset.length() < 2;
-            if (!this.transitioningCameraTarget && wasClick) {
+            if (wasClick) {
+                this.onMouseClick(mouse);
+            }
+        };
+
+    }();
+
+    onMouseClick(mouse) {
+        this.mousePosition.set(mouse.offsetX, mouse.offsetY);
+        this.checkForFocalPointChange();
+    }
+
+    checkForFocalPointChange = function() {
+
+        const renderDimensions = new THREE.Vector2();
+        const toNewFocalPoint = new THREE.Vector3();
+        const outHits = [];
+
+        return function() {
+            if (!this.transitioningCameraTarget) {
                 this.getRenderDimensions(renderDimensions);
                 outHits.length = 0;
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
-                this.mousePosition.set(mouse.offsetX, mouse.offsetY);
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
                     const intersectionPoint = outHits[0].origin;
@@ -338,7 +368,30 @@ export class Viewer {
 
     }();
 
-    loadFile(fileURL, options = {}) {
+    /**
+     * Load a splat scene into the viewer.
+     * @param {string} path Path to splat scene to be loaded
+     * @param {object} options {
+     *
+     *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
+     *                                     value (valid range: 0 - 255). Defaults to 1.
+     *
+     *         showLoadingSpinner:         Display a loading spinner while the scene is loading, defaults to true
+     *
+     *         position (Array<number>):   Position of the scene, acts as an offset from its default position.
+     *                                     Defaults to [0, 0, 0]
+     *
+     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion.
+     *                                     Defaults to [0, 0, 0, 1]
+     *
+     *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
+     *
+     *         onProgress:                 Function to be called as file data are received
+     *
+     * }
+     * @return {Promise}
+     */
+    loadFile(path, options = {}) {
         if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
         return new Promise((resolve, reject) => {
             if (options.showLoadingSpinner) this.loadingSpinner.show();
@@ -353,7 +406,7 @@ export class Viewer {
                 }
                 if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
             };
-            this.loadFileToSplatBuffer(fileURL, options.splatAlphaRemovalThreshold, downloadProgress)
+            this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold, downloadProgress)
             .then((splatBuffer) => {
                 if (options.showLoadingSpinner) this.loadingSpinner.hide();
                 if (options.onProgress) options.onProgress(0, '0%', 'processing');
@@ -369,11 +422,32 @@ export class Viewer {
                 });
             })
             .catch((e) => {
-                reject(new Error(`Viewer::loadFile -> Could not load file ${fileURL}`));
+                reject(new Error(`Viewer::loadFile -> Could not load file ${path}`));
             });
         });
     }
 
+    /**
+     * Load multiple splat scenes into the viewer.
+     * @param {Array<object>} files Array of per-file options: {
+     *
+     *         path: Path to splat scene to be loaded
+     *
+     *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
+     *                                     value (valid range: 0 - 255). Defaults to 1.
+     *
+     *         position (Array<number>):   Position of the scene, acts as an offset from its default position.
+     *                                     Defaults to [0, 0, 0]
+     *
+     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion.
+     *                                     Defaults to [0, 0, 0, 1]
+     *
+     *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
+     * }
+     * @param {boolean} showLoadingSpinner Display a loading spinner while the scene is loading, defaults to true
+     * @param {function} onProgress Function to be called as file data are received
+     * @return {Promise}
+     */
     loadFiles(files, showLoadingSpinner = true, onProgress = undefined) {
         return new Promise((resolve, reject) => {
             const fileCount = files.length;
@@ -418,29 +492,42 @@ export class Viewer {
         });
     }
 
-    loadFileToSplatBuffer(fileURL, plySplatAlphaRemovalThreshold = 1, onProgress = undefined) {
+    /**
+     *
+     * @param {string} path Path to splat scene to be loaded
+     * @param {number} splatAlphaRemovalThreshold Ignore any splats with an alpha less than the specified
+     *                                            value (valid range: 0 - 255). Defaults to 1.
+     *
+     * @param {function} onProgress Function to be called as file data are received
+     * @return {Promise}
+     */
+    loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined) {
         const downloadProgress = (percent, percentLabel) => {
             if (onProgress) onProgress(percent, percentLabel, 'downloading');
         };
         return new Promise((resolve, reject) => {
             let fileLoadPromise;
-            if (SplatLoader.isFileSplatFormat(fileURL)) {
-                fileLoadPromise = new SplatLoader().loadFromURL(fileURL, downloadProgress);
-            } else if (fileURL.endsWith('.ply')) {
-                fileLoadPromise = new PlyLoader().loadFromURL(fileURL, downloadProgress, 0, plySplatAlphaRemovalThreshold);
+            if (SplatLoader.isFileSplatFormat(path)) {
+                fileLoadPromise = new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            } else if (path.endsWith('.ply')) {
+                fileLoadPromise = new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
             } else {
-                reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${fileURL}`));
+                reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
             }
             fileLoadPromise
             .then((splatBuffer) => {
                 resolve(splatBuffer);
             })
             .catch(() => {
-                reject(new Error(`Viewer::loadFileToSplatBuffer -> Could not load file ${fileURL}`));
+                reject(new Error(`Viewer::loadFileToSplatBuffer -> Could not load file ${path}`));
             });
         });
     }
 
+    /**
+     * Load one or instances of SplatBuffer into the SplatMesh managed by the viewer and set up the sorting web worker.
+     * This function will terminate the existing sort worker (if there is one).
+     */
     loadSplatBuffersIntoMesh = function() {
 
         let loadPromise;
@@ -483,6 +570,23 @@ export class Viewer {
 
     }();
 
+    /**
+     * Load one or instances of SplatBuffer into the SplatMesh managed by the viewer.
+     * @param {Array<SplatBuffer>} splatBuffers SplatBuffer instances
+     * @param {Array<object>} splatBufferOptions Array of options objects: {
+     *
+     *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
+     *                                     value (valid range: 0 - 255). Defaults to 1.
+     *
+     *         position (Array<number>):   Position of the scene, acts as an offset from its default position.
+     *                                     Defaults to [0, 0, 0]
+     *
+     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion.
+     *                                     Defaults to [0, 0, 0, 1]
+     *
+     *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
+     * }
+     */
     updateSplatMesh(splatBuffers, splatBufferOptions) {
         if (!this.splatMesh) {
             this.splatMesh = new SplatMesh(this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort);
@@ -496,9 +600,13 @@ export class Viewer {
         const splatCount = this.splatMesh.getSplatCount();
         console.log(`Total splat count: ${splatCount}`);
         this.splatMesh.frustumCulled = false;
-        this.splatRenderCount = splatCount;
     }
 
+    /**
+     * Set up the splat sorting web worker.
+     * @param {SplatMesh} splatMesh SplatMesh instance that contains the splats to be sorted
+     * @return {Promise}
+     */
     setupSortWorker(splatMesh) {
         return new Promise((resolve) => {
             const splatCount = splatMesh.getSplatCount();
@@ -506,7 +614,7 @@ export class Viewer {
             sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
-                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
+                    this.splatMesh.updateRenderIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
                     this.lastSortTime = e.data.sortTime;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
@@ -524,7 +632,7 @@ export class Viewer {
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
                     console.log('Sorting web worker ready.');
-                    this.splatMesh.updateIndexes(this.sortWorkerSortedIndexes, splatCount);
+                    this.splatMesh.updateRenderIndexes(this.sortWorkerSortedIndexes, splatCount);
                     const splatDataTextures = this.splatMesh.getSplatDataTextures();
                     const covariancesTextureSize = splatDataTextures.covariances.size;
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
@@ -537,83 +645,9 @@ export class Viewer {
         });
     }
 
-    gatherSceneNodes = function() {
-
-        const nodeRenderList = [];
-        const tempVectorYZ = new THREE.Vector3();
-        const tempVectorXZ = new THREE.Vector3();
-        const tempVector = new THREE.Vector3();
-        const tempMatrix4 = new THREE.Matrix4();
-        const renderDimensions = new THREE.Vector3();
-        const forward = new THREE.Vector3(0, 0, -1);
-
-        const tempMax = new THREE.Vector3();
-        const nodeSize = (node) => {
-            return tempMax.copy(node.max).sub(node.min).length();
-        };
-
-        const MaximumDistanceToRender = 125;
-
-        return function(gatherAllNodes) {
-
-            this.getRenderDimensions(renderDimensions);
-            const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
-            const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / cameraFocalLength);
-            const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / cameraFocalLength);
-            const cosFovXOver2 = Math.cos(fovXOver2);
-            const cosFovYOver2 = Math.cos(fovYOver2);
-            tempMatrix4.copy(this.camera.matrixWorld).invert();
-            tempMatrix4.multiply(this.splatMesh.matrixWorld);
-
-            const splatTree = this.splatMesh.getSplatTree();
-            let nodeRenderCount = 0;
-            let splatRenderCount = 0;
-            const nodeCount = splatTree.nodesWithIndexes.length;
-            for (let i = 0; i < nodeCount; i++) {
-                const node = splatTree.nodesWithIndexes[i];
-                tempVector.copy(node.center).applyMatrix4(tempMatrix4);
-                const distanceToNode = tempVector.length();
-                tempVector.normalize();
-
-                tempVectorYZ.copy(tempVector).setX(0).normalize();
-                tempVectorXZ.copy(tempVector).setY(0).normalize();
-
-                const cameraAngleXZDot = forward.dot(tempVectorXZ);
-                const cameraAngleYZDot = forward.dot(tempVectorYZ);
-
-                const ns = nodeSize(node);
-                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
-                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
-                if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
-                    continue;
-                }
-                splatRenderCount += node.data.indexes.length;
-                nodeRenderList[nodeRenderCount] = node;
-                node.data.distanceToNode = distanceToNode;
-                nodeRenderCount++;
-            }
-
-            nodeRenderList.length = nodeRenderCount;
-            nodeRenderList.sort((a, b) => {
-                if (a.data.distanceToNode < b.data.distanceToNode) return -1;
-                else return 1;
-            });
-
-            this.splatRenderCount = splatRenderCount;
-            let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
-            for (let i = 0; i < nodeRenderCount; i++) {
-                const node = nodeRenderList[i];
-                const windowSizeInts = node.data.indexes.length;
-                const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
-                let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
-                destView.set(node.data.indexes);
-                currentByteOffset -= windowSizeBytes;
-            }
-
-        };
-
-    }();
-
+    /**
+     * Start self-driven mode
+     */
     start() {
         if (this.selfDrivenMode) {
             requestAnimationFrame(this.selfDrivenUpdateFunc);
@@ -623,6 +657,9 @@ export class Viewer {
         }
     }
 
+    /**
+     * Stop self-driven mode
+     */
     stop() {
         if (this.selfDrivenMode && this.selfDrivenModeRunning) {
             cancelAnimationFrame();
@@ -638,43 +675,13 @@ export class Viewer {
         this.render();
     }
 
-    setRenderer(renderer) {
-        this.renderer = renderer;
-        if (this.splatMesh) this.splatMesh.setRenderer(this.renderer);
-    }
-
-    setCamera(camera) {
-        this.camera = camera;
-        if (this.controls) this.controls.object = camera;
-    }
-
-    update(renderer, camera) {
-        if (renderer) this.setRenderer(renderer);
-        if (camera) this.setCamera(camera);
-        if (this.initializeFromExternalUpdate) {
-            this.init();
-        }
-        if (!this.initialized || !this.splatRenderingInitialized) return;
-        if (this.controls) this.controls.update();
-        this.updateSplatSort();
-        this.updateForRendererSizeChanges();
-        this.updateSplatMeshUniforms();
-        this.updateMeshCursor();
-        this.updateFPS();
-        this.timingSensitiveUpdates();
-        this.updateInfo();
-        this.updateControlPlane();
-    }
-
     render = function() {
 
         return function() {
             if (!this.initialized || !this.splatRenderingInitialized) return;
             const hasRenderables = (scene) => {
                 for (let child of scene.children) {
-                    if (child.visible) {
-                    return true;
-                    }
+                    if (child.visible) return true;
                 }
                 return false;
             };
@@ -688,6 +695,28 @@ export class Viewer {
         };
 
     }();
+
+    update(renderer, camera) {
+        if (this.dropInMode) this.updateForDropInMode(renderer, camera);
+        if (!this.initialized || !this.splatRenderingInitialized) return;
+        if (this.controls) this.controls.update();
+        this.updateSplatSort();
+        this.updateForRendererSizeChanges();
+        this.updateSplatMeshUniforms();
+        this.updateMeshCursor();
+        this.updateFPS();
+        this.timingSensitiveUpdates();
+        this.updateInfoPanel();
+        this.updateControlPlane();
+    }
+
+    updateForDropInMode(renderer, camera) {
+        this.renderer = renderer;
+        if (this.splatMesh) this.splatMesh.setRenderer(this.renderer);
+        this.camera = camera;
+        if (this.controls) this.controls.object = camera;
+        this.init();
+    }
 
     updateFPS = function() {
 
@@ -823,7 +852,7 @@ export class Viewer {
 
     }();
 
-    updateInfo = function() {
+    updateInfoPanel = function() {
 
         const renderDimensions = new THREE.Vector2();
 
@@ -919,7 +948,7 @@ export class Viewer {
             }
 
             this.sortRunning = true;
-            this.gatherSceneNodes(gatherAllNodes);
+            this.splatRenderCount = this.gatherSceneNodesForSort(gatherAllNodes);
 
             mvpMatrix.copy(this.camera.matrixWorld).invert();
             mvpMatrix.premultiply(this.camera.projectionMatrix);
@@ -946,7 +975,7 @@ export class Viewer {
             cameraPositionArray[2] = this.camera.position.z;
             this.sortWorker.postMessage({
                 sort: {
-                    'modelViewProj': this.splatMesh.getIntegerMatrixArray(mvpMatrix),
+                    'modelViewProj': SplatMesh.getIntegerMatrixArray(mvpMatrix),
                     'cameraPosition': cameraPositionArray,
                     'splatRenderCount': this.splatRenderCount,
                     'splatSortCount': sortCount,
@@ -958,6 +987,86 @@ export class Viewer {
                 lastSortViewDir.copy(sortViewDir);
             }
             runCount++;
+        };
+
+    }();
+
+    /**
+     * Determine which splats to render by checking which are inside or close to the view frustum
+     */
+    gatherSceneNodesForSort = function() {
+
+        const nodeRenderList = [];
+        const tempVectorYZ = new THREE.Vector3();
+        const tempVectorXZ = new THREE.Vector3();
+        const tempVector = new THREE.Vector3();
+        const tempMatrix4 = new THREE.Matrix4();
+        const renderDimensions = new THREE.Vector3();
+        const forward = new THREE.Vector3(0, 0, -1);
+
+        const tempMax = new THREE.Vector3();
+        const nodeSize = (node) => {
+            return tempMax.copy(node.max).sub(node.min).length();
+        };
+
+        const MaximumDistanceToRender = 125;
+
+        return function(gatherAllNodes) {
+
+            this.getRenderDimensions(renderDimensions);
+            const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
+            const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / cameraFocalLength);
+            const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / cameraFocalLength);
+            const cosFovXOver2 = Math.cos(fovXOver2);
+            const cosFovYOver2 = Math.cos(fovYOver2);
+            tempMatrix4.copy(this.camera.matrixWorld).invert();
+            tempMatrix4.multiply(this.splatMesh.matrixWorld);
+
+            const splatTree = this.splatMesh.getSplatTree();
+            let nodeRenderCount = 0;
+            let splatRenderCount = 0;
+            const nodeCount = splatTree.nodesWithIndexes.length;
+            for (let i = 0; i < nodeCount; i++) {
+                const node = splatTree.nodesWithIndexes[i];
+                tempVector.copy(node.center).applyMatrix4(tempMatrix4);
+                const distanceToNode = tempVector.length();
+                tempVector.normalize();
+
+                tempVectorYZ.copy(tempVector).setX(0).normalize();
+                tempVectorXZ.copy(tempVector).setY(0).normalize();
+
+                const cameraAngleXZDot = forward.dot(tempVectorXZ);
+                const cameraAngleYZDot = forward.dot(tempVectorYZ);
+
+                const ns = nodeSize(node);
+                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
+                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
+                if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
+                    continue;
+                }
+                splatRenderCount += node.data.indexes.length;
+                nodeRenderList[nodeRenderCount] = node;
+                node.data.distanceToNode = distanceToNode;
+                nodeRenderCount++;
+            }
+
+            nodeRenderList.length = nodeRenderCount;
+            nodeRenderList.sort((a, b) => {
+                if (a.data.distanceToNode < b.data.distanceToNode) return -1;
+                else return 1;
+            });
+
+            let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
+            for (let i = 0; i < nodeRenderCount; i++) {
+                const node = nodeRenderList[i];
+                const windowSizeInts = node.data.indexes.length;
+                const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
+                let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
+                destView.set(node.data.indexes);
+                currentByteOffset -= windowSizeBytes;
+            }
+
+            return splatRenderCount;
         };
 
     }();
