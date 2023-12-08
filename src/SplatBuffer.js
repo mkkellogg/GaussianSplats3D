@@ -2,6 +2,9 @@ import * as THREE from 'three';
 
 let fbf;
 
+/**
+ * SplatBuffer: Container for splat data from a single scene/file and capable of (mediocre) compression.
+ */
 export class SplatBuffer {
 
     static CenterComponentCount = 3;

@@ -5,6 +5,45 @@ import { clamp } from './Util.js';
 const SplatBufferBucketSize = 256;
 const SplatBufferBucketBlockSize = 5.0;
 
+class UncompressedSplatArray {
+
+    constructor() {
+        this.splatCount = 0;
+        this.scale_0 = [];
+        this.scale_1 = [];
+        this.scale_2 = [];
+        this.rot_0 = [];
+        this.rot_1 = [];
+        this.rot_2 = [];
+        this.rot_3 = [];
+        this.x = [];
+        this.y = [];
+        this.z = [];
+        this.f_dc_0 = [];
+        this.f_dc_1 = [];
+        this.f_dc_2 = [];
+        this.opacity = [];
+    }
+
+    addSplat(x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity) {
+        this.x.push(x);
+        this.y.push(y);
+        this.z.push(z);
+        this.scale_0.push(scale0);
+        this.scale_1.push(scale1);
+        this.scale_2.push(scale2);
+        this.rot_0.push(rot0);
+        this.rot_1.push(rot1);
+        this.rot_2.push(rot2);
+        this.rot_3.push(rot3);
+        this.f_dc_0.push(r);
+        this.f_dc_1.push(g);
+        this.f_dc_2.push(b);
+        this.opacity.push(opacity);
+        this.splatCount++;
+    }
+}
+
 export class SplatCompressor {
 
     constructor(compressionLevel = 0, minimumAlpha = 1, blockSize = SplatBufferBucketBlockSize, bucketSize = SplatBufferBucketSize) {
@@ -15,40 +54,7 @@ export class SplatCompressor {
     }
 
     static createEmptyUncompressedSplatArray() {
-        return {
-            'splatCount': 0,
-            'scale_0': [],
-            'scale_1': [],
-            'scale_2': [],
-            'rot_0': [],
-            'rot_1': [],
-            'rot_2': [],
-            'rot_3': [],
-            'x': [],
-            'y': [],
-            'z': [],
-            'f_dc_0': [],
-            'f_dc_1': [],
-            'f_dc_2': [],
-            'opacity': [],
-            'addSplat': function(x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity) {
-                this.x.push(x);
-                this.y.push(y);
-                this.z.push(z);
-                this.scale_0.push(scale0);
-                this.scale_1.push(scale1);
-                this.scale_2.push(scale2);
-                this.rot_0.push(rot0);
-                this.rot_1.push(rot1);
-                this.rot_2.push(rot2);
-                this.rot_3.push(rot3);
-                this.f_dc_0.push(r);
-                this.f_dc_1.push(g);
-                this.f_dc_2.push(b);
-                this.opacity.push(opacity);
-                this.splatCount++;
-            }
-        };
+        return new UncompressedSplatArray();
     }
 
     uncompressedSplatArrayToSplatBuffer(splatArray) {

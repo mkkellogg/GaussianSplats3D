@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { SplatTreeNode } from './SplatTreeNode.js';
 
+/**
+ * SplatTree: Octree tailored to splat data from a SplatMesh instance
+ */
 export class SplatTree {
 
     constructor(maxDepth, maxCentersPerNode) {

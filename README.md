@@ -123,7 +123,6 @@ Viewer parameters
 | `cameraUp` | The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and when the viewer uses its own camera). Serves as the axis around which the camera will orbit, and is used to determine the scene's orientation relative to the camera.
 | `initialCameraPosition` | The camera's initial position (only used when the viewer uses its own camera).
 | `initialCameraLookAt` | The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
-| `halfPrecisionCovariancesOnGPU` |  Tells the viewer to use 16-bit floating point values for each element of a splat's 3D covariance matrix, instead of 32-bit. Defaults to `true`.
 <br>
 
 Parameters for `loadFile()`
@@ -142,20 +141,19 @@ Parameters for `loadFile()`
 `Viewer` can also load multiple scenes simultaneously with the `loadFiles()` function:
 ```javascript
 viewer.loadFiles([{
-            'path': '<path to first .ply, .ksplat, or .splat file>',
-            'splatAlphaRemovalThreshold': 20
-        },
-        {
-            'path': '<path to second .ply, .ksplat, or .splat file>',
-            'rotation': [-0.14724434, -0.0761755, 0.1410657, 0.976020],
-            'scale': [1.5, 1.5, 1.5],
-            'position': [-3, -2, -3.2],
-            'splatAlphaRemovalThreshold': 20
-        }
-    ])
-    .then(() => {
-        viewer.start();
-    });
+        'path': '<path to first .ply, .ksplat, or .splat file>',
+        'splatAlphaRemovalThreshold': 20
+    },
+    {
+        'path': '<path to second .ply, .ksplat, or .splat file>',
+        'rotation': [-0.14724434, -0.0761755, 0.1410657, 0.976020],
+        'scale': [1.5, 1.5, 1.5],
+        'position': [-3, -2, -3.2]
+    }
+])
+.then(() => {
+    viewer.start();
+});
 ```
 
 The `loadFile()` and `loadFiles()` methods will accept the original `.ply` files, standard `.splat` files, and my custom `.ksplat` files.
@@ -184,25 +182,24 @@ viewer.loadFile('<path to .ply, .ksplat, or .splat file>')
 Currently this will only work for objects that write to the depth buffer (e.g. standard opaque objects). Supporting transparent objects will be more challenging :)
 <br>
 
-A "drop-in" mode for the viewer is also supported. The `RenderableViewer` class encapsulates `Viewer` and can be added to a Three.js scene like any other renderable:
+A "drop-in" mode for the viewer is also supported. The `DropInViewer` class encapsulates `Viewer` and can be added to a Three.js scene like any other renderable:
 ```javascript
 const scene = new THREE.Scene();
-const renderableViewer = new GaussianSplats3D.RenderableViewer({
+const viewer = new GaussianSplats3D.DropInViewer({
     'gpuAcceleratedSort': true
 });
-renderableViewer.addScenesFromFiles([{
-            'path': '<path to .ply, .ksplat, or .splat file>'
-            'splatAlphaRemovalThreshold': 5
-        },
-        {
-            'path': '<path to .ply, .ksplat, or .splat file>',
-            'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
-            'scale': [1.5, 1.5, 1.5],
-            'position': [0, -2, -1.2],
-            'splatAlphaRemovalThreshold': 5
-        }
-    ]);
-scene.add(renderableViewer);
+viewer.addScenesFromFiles([{
+        'path': '<path to .ply, .ksplat, or .splat file>'
+        'splatAlphaRemovalThreshold': 5
+    },
+    {
+        'path': '<path to .ply, .ksplat, or .splat file>',
+        'rotation': [0, -0.857, -0.514495, 6.123233995736766e-17],
+        'scale': [1.5, 1.5, 1.5],
+        'position': [0, -2, -1.2]
+    }
+]);
+scene.add(viewer);
 
 ```
 <br>
@@ -260,7 +257,8 @@ Advanced `Viewer` parameters
 | `renderer` | Pass an instance of a Three.js `Renderer` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `camera` | Pass an instance of a Three.js `Camera` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
-| `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computing splat distances is done on the GPU. Defaults to `true`.
+| `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. Defaults to `true`.
+| `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `true`.
 <br>
 
 ### Creating KSPLAT files
