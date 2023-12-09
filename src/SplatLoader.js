@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SplatBuffer } from './SplatBuffer.js';
 import { SplatCompressor } from './SplatCompressor.js';
 import { fetchWithProgress } from './Util.js';
+import { AbortablePromise } from './AbortablePromise.js';
 
 export class SplatLoader {
 
@@ -23,9 +24,9 @@ export class SplatLoader {
     }
 
     loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
-        return new Promise((resolve, reject) => {
-            fetchWithProgress(fileName, onProgress)
-            .then((bufferData) => {
+        const fetchPromise = fetchWithProgress(fileName, onProgress);
+        return new AbortablePromise((resolve, reject) => {
+            fetchPromise.then((bufferData) => {
                 let splatBuffer;
                 if (SplatLoader.isCustomSplatFormat(fileName)) {
                     splatBuffer = new SplatBuffer(bufferData);
@@ -39,7 +40,7 @@ export class SplatLoader {
             .catch((err) => {
                 reject(err);
             });
-        });
+        }, fetchPromise.abortHandler);
     }
 
     static parseStandardSplatToUncompressedSplatArray(inBuffer) {

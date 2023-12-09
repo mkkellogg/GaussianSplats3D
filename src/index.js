@@ -6,6 +6,7 @@ import { SplatCompressor } from './SplatCompressor.js';
 import { Viewer } from './Viewer.js';
 import { DropInViewer } from './DropInViewer.js';
 import { OrbitControls } from './OrbitControls.js';
+import { AbortablePromise } from './AbortablePromise.js';
 
 export {
     PlyParser,
@@ -15,5 +16,6 @@ export {
     SplatCompressor,
     Viewer,
     DropInViewer,
-    OrbitControls
+    OrbitControls,
+    AbortablePromise
 };
