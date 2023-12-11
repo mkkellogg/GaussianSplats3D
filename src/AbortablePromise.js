@@ -1,8 +1,11 @@
 /**
  * AbortablePromise: A quick & dirty wrapper for JavaScript's Promise class that allows the underlying
- * asynchronous operation to be cancelled. It is only meant for simple situations where no promise
+ * asynchronous operation to be cancelled. It is only meant for simple situations where no complex promise
  * chaining or merging occurs. It needs a significant amount of work to truly replicate the full
  * functionality of JavaScript's Promise class. Look at Util.fetchWithProgress() for example usage.
+ *
+ * This class was primarily to added to allow splat scene downloads to be cancelled. It has not been tested
+ * very thoroughly and the implementation is kinda gross. If you can at all help it, please avoid using it :)
  */
 export class AbortablePromise {
 
@@ -31,24 +34,27 @@ export class AbortablePromise {
         return new AbortablePromise((resolve, reject) => {
             this.promise = this.promise
             .then((...args) => {
-                const promiseLike = onResolve(...args);
-                if (promiseLike instanceof Promise || promiseLike instanceof AbortablePromise) {
-                    this.promise = promiseLike.then((...args) => {
-                        resolve(...args);
-                    })
+                const onResolveResult = onResolve(...args);
+                if (onResolveResult instanceof Promise || onResolveResult instanceof AbortablePromise) {
+                    onResolveResult.then((...args2) => {
+                        resolve(...args2);
+                    });
                 } else {
-                    resolve(...args);
-                }  
+                    resolve(onResolveResult);
+                }
+            })
+            .catch((error) => {
+                reject(error);
             });
         }, this.abortHandler);
     }
 
     catch(onFail) {
-        return new AbortablePromise((resolve, reject) => {
-            this.promise = this.promise
-            .catch((error) => {
-                reject(error);
-            });
+        return new AbortablePromise((resolve) => {
+            this.promise = this.promise.then((...args) => {
+                resolve(...args);
+            })
+            .catch(onFail);
         }, this.abortHandler);
     }
 

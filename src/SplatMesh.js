@@ -336,7 +336,7 @@ export class SplatMesh extends THREE.Mesh {
             splatMesh.getSplatColor(splatIndex, splatColor);
             const splatBufferIndex = splatMesh.getSplatBufferIndexForSplat(splatIndex);
             const splatBufferOptions = splatMesh.splatBufferOptions[splatBufferIndex];
-            return splatColor.w > (splatBufferOptions.splatAlphaRemovalThreshold || 1);
+            return splatColor.w >= (splatBufferOptions.splatAlphaRemovalThreshold || 1);
         });
         console.timeEnd('SplatTree build');
 

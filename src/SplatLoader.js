@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { SplatBuffer } from './SplatBuffer.js';
 import { SplatCompressor } from './SplatCompressor.js';
 import { fetchWithProgress } from './Util.js';
-import { AbortablePromise } from './AbortablePromise.js';
 
 export class SplatLoader {
 
@@ -24,23 +23,17 @@ export class SplatLoader {
     }
 
     loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
-        const fetchPromise = fetchWithProgress(fileName, onProgress);
-        return new AbortablePromise((resolve, reject) => {
-            fetchPromise.then((bufferData) => {
-                let splatBuffer;
-                if (SplatLoader.isCustomSplatFormat(fileName)) {
-                    splatBuffer = new SplatBuffer(bufferData);
-                } else {
-                    const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
-                    const splatArray = SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
-                    splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
-                }
-                resolve(splatBuffer);
-            })
-            .catch((err) => {
-                reject(err);
-            });
-        }, fetchPromise.abortHandler);
+        return fetchWithProgress(fileName, onProgress).then((bufferData) => {
+            let splatBuffer;
+            if (SplatLoader.isCustomSplatFormat(fileName)) {
+                splatBuffer = new SplatBuffer(bufferData);
+            } else {
+                const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
+                const splatArray = SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
+                splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+            }
+            return splatBuffer;
+        });
     }
 
     static parseStandardSplatToUncompressedSplatArray(inBuffer) {
