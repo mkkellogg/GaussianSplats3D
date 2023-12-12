@@ -234,6 +234,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'ignoreDevicePixelRatio': false,
     'gpuAcceleratedSort': true,
     'halfPrecisionCovariancesOnGPU': true,
+    'sharedMemoryForWorkers': true
 });
 viewer.loadFile('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -257,8 +258,9 @@ Advanced `Viewer` parameters
 | `renderer` | Pass an instance of a Three.js `Renderer` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `camera` | Pass an instance of a Three.js `Camera` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
-| `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. Defaults to `false` on mobile devices, `true` otherwise.
+| `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. It is recommended that this only be set to `true` when `sharedMemoryForWorkers` is also `true`. Defaults to `false` on mobile devices, `true` otherwise.
 | `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `true`.
+| `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
 <br>
 
 ### Creating KSPLAT files
@@ -286,9 +288,7 @@ Currently supported values for `compressionLevel` are `0` or `1`. `0` means no c
 <br>
 
 ### CORS issues and SharedArrayBuffer
-The `Viewer` class uses shared memory (via a typed array backed by a SharedArrayBufffer) to communicate with the web worker that sorts the splats. This mechanism presents a potential security issue that is outlined here: https://web.dev/articles/cross-origin-isolation-guide.
-
-To resolve this issue, a couple of extra CORS HTTP headers need to be present in the response from the server that is sent when loading the application. Without those headers set, you might see an error like the following in the debug console:
+By default, the `Viewer` class uses shared memory (via a typed array backed by a `SharedArrayBufffer`) to communicate with the web worker that sorts the splats. This mechanism presents a potential security issue that is outlined here: https://web.dev/articles/cross-origin-isolation-guide. Shared memory can be disabled by passing `false` for the `sharedMemoryForWorkers` parameter to the constructor for `Viewer`, but if you want to leave it enabled, a couple of extra CORS HTTP headers need to be present in the response from the server that is sent when loading the application. Without those headers set, you might see an error like the following in the debug console:
 
 ```
 "DOMException: Failed to execute 'postMessage' on 'DedicatedWorkerGlobalScope': SharedArrayBuffer transfer requires self.crossOriginIsolated."
