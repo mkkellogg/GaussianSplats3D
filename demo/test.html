@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>3D Gaussian Splat Demo - Garden</title>
+  <script type="text/javascript" src="js/util.js"></script>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js"
+        }
+    }
+  </script>
+  <style>
+
+    body {
+      background-color: #000000;
+      height: 100vh;
+      margin: 0px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+  <script type="module">
+    import * as GaussianSplats3D from 'gaussian-splats-3d';
+    import * as THREE from 'three';
+    const viewer = new GaussianSplats3D.Viewer({
+      'cameraUp': [0, -1, -0.54],
+      'initialCameraPosition': [-3.15634, -0.16946, -0.51552],
+      'initialCameraLookAt': [1.52976, 2.27776, 1.65898],
+      'halfPrecisionCovariancesOnGPU': true
+    });
+    const abortablePromise = viewer.loadFiles([{
+          'path': 'assets/data/garden/garden_high.ksplat',
+          'splatAlphaRemovalThreshold': 20,
+        },
+        {
+          'path': 'assets/data/bonsai/bonsai_trimmed.ksplat',
+          'rotation': [-0.14724434, -0.0761755, 0.1410657, 0.976020],
+          'scale': [1.5, 1.5, 1.5],
+          'position': [-3, -2, -3.2],
+          'splatAlphaRemovalThreshold': 20,
+        }
+    ])
+    .then(() => {
+        console.log("Done");
+    })
+    .catch((error) => {
+        console.log(error)
+    });
+
+    window.setTimeout(() => {
+        abortablePromise.abort();
+    }, 2000);
+  </script>
+</body>
+
+</html>

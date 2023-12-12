@@ -100,8 +100,7 @@ To run the built-in viewer:
 const viewer = new GaussianSplats3D.Viewer({
     'cameraUp': [0, -1, -0.6],
     'initialCameraPosition': [-1, -4, 6],
-    'initialCameraLookAt': [0, 4, 0],
-    'halfPrecisionCovariancesOnGPU': true,
+    'initialCameraLookAt': [0, 4, 0]
 });
 viewer.loadFile('<path to .ply, .ksplat, or .splat file>', {
     'splatAlphaRemovalThreshold': 5,
@@ -233,7 +232,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'camera': camera,
     'useBuiltInControls': false,
     'ignoreDevicePixelRatio': false,
-    'gpuAcceleratedSort': true
+    'gpuAcceleratedSort': true,
+    'halfPrecisionCovariancesOnGPU': true,
 });
 viewer.loadFile('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -257,7 +257,7 @@ Advanced `Viewer` parameters
 | `renderer` | Pass an instance of a Three.js `Renderer` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `camera` | Pass an instance of a Three.js `Camera` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
-| `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. Defaults to `true`.
+| `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. Defaults to `false` on mobile devices, `true` otherwise.
 | `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `true`.
 <br>
 

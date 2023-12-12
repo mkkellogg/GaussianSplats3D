@@ -23,22 +23,16 @@ export class SplatLoader {
     }
 
     loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
-        return new Promise((resolve, reject) => {
-            fetchWithProgress(fileName, onProgress)
-            .then((bufferData) => {
-                let splatBuffer;
-                if (SplatLoader.isCustomSplatFormat(fileName)) {
-                    splatBuffer = new SplatBuffer(bufferData);
-                } else {
-                    const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
-                    const splatArray = SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
-                    splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
-                }
-                resolve(splatBuffer);
-            })
-            .catch((err) => {
-                reject(err);
-            });
+        return fetchWithProgress(fileName, onProgress).then((bufferData) => {
+            let splatBuffer;
+            if (SplatLoader.isCustomSplatFormat(fileName)) {
+                splatBuffer = new SplatBuffer(bufferData);
+            } else {
+                const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
+                const splatArray = SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
+                splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+            }
+            return splatBuffer;
         });
     }
 

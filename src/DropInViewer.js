@@ -27,60 +27,60 @@ export class DropInViewer extends THREE.Group {
     }
 
     /**
-     * Load a splat scene into the viewer.
+     * Add a single splat scene to the viewer.
      * @param {string} path Path to splat scene to be loaded
      * @param {object} options {
      *
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
-     *                                     value (valid range: 0 - 255). Defaults to 1.
+     *                                     value (valid range: 0 - 255), defaults to 1
      *
      *         showLoadingSpinner:         Display a loading spinner while the scene is loading, defaults to true
      *
-     *         position (Array<number>):   Position of the scene, acts as an offset from its default position.
-     *                                     Defaults to [0, 0, 0]
+     *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
      *
-     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion.
-     *                                     Defaults to [0, 0, 0, 1]
+     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion, defaults to [0, 0, 0, 1]
      *
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      *
      *         onProgress:                 Function to be called as file data are received
      *
      * }
-     * @return {Promise}
+     * @return {AbortablePromise}
      */
     addSceneFromFile(path, options = {}) {
         if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
-        return this.viewer.loadFile(path, options).then(() => {
+        const loadPromise = this.viewer.loadFile(path, options);
+        loadPromise.then(() => {
             this.add(this.viewer.splatMesh);
         });
+        return loadPromise;
     }
 
     /**
-     * Load multiple splat scenes into the viewer.
-     * @param {Array<object>} files Array of per-file options: {
+     * Add multiple splat scenes to the viewer.
+     * @param {Array<object>} files Array of per-scene options: {
      *
      *         path: Path to splat scene to be loaded
      *
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
-     *                                     value (valid range: 0 - 255). Defaults to 1.
+     *                                     value (valid range: 0 - 255), defaults to 1
      *
-     *         position (Array<number>):   Position of the scene, acts as an offset from its default position.
-     *                                     Defaults to [0, 0, 0]
+     *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
      *
-     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion.
-     *                                     Defaults to [0, 0, 0, 1]
+     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion, defaults to [0, 0, 0, 1]
      *
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
      * @param {boolean} showLoadingSpinner Display a loading spinner while the scene is loading, defaults to true
-     * @return {Promise}
+     * @return {AbortablePromise}
      */
     addScenesFromFiles(files, showLoadingSpinner) {
         if (showLoadingSpinner !== false) showLoadingSpinner = true;
-        return this.viewer.loadFiles(files, showLoadingSpinner).then(() => {
+        const loadPromise = this.viewer.loadFiles(files, showLoadingSpinner);
+        loadPromise.then(() => {
             this.add(this.viewer.splatMesh);
         });
+        return loadPromise;
     }
 
     static onBeforeRender(viewer, renderer, scene, camera) {

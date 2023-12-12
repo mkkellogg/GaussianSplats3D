@@ -1,3 +1,5 @@
+import { AbortablePromise } from './AbortablePromise.js';
+
 export const floatToHalf = function() {
 
     const floatView = new Float32Array(1);
@@ -50,8 +52,19 @@ export const rgbaToInteger = function(r, g, b, a) {
 
 export const fetchWithProgress = function(path, onProgress) {
 
-    return new Promise((resolve, reject) => {
-        fetch(path)
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    let aborted = false;
+    let rejectFunc = null;
+    const abortHandler = () => {
+        abortController.abort();
+        rejectFunc('Fetch aborted');
+        aborted = true;
+    };
+
+    return new AbortablePromise((resolve, reject) => {
+        rejectFunc = reject;
+        fetch(path, { signal })
         .then(async (data) => {
             const reader = data.body.getReader();
             let bytesDownloaded = 0;
@@ -60,7 +73,7 @@ export const fetchWithProgress = function(path, onProgress) {
 
             const chunks = [];
 
-            while (true) {
+            while (!aborted) {
                 try {
                     const { value: chunk, done } = await reader.read();
                     if (done) {
@@ -88,7 +101,7 @@ export const fetchWithProgress = function(path, onProgress) {
                 }
             }
         });
-    });
+    }, abortHandler);
 
 };
 
