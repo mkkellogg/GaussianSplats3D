@@ -5,6 +5,7 @@ function sortWorker(self) {
 
     let wasmInstance;
     let wasmMemory;
+    let useSharedMemory;
     let splatCount;
     let indexesToSortOffset;
     let sortedIndexesOffset;
@@ -17,8 +18,20 @@ function sortWorker(self) {
 
     let Constants;
 
-    function sort(splatSortCount, splatRenderCount, modelViewProj, usePrecomputedDistances) {
+    function sort(splatSortCount, splatRenderCount, modelViewProj,
+                  usePrecomputedDistances, copyIndexesToSort, copyPrecomputedDistances) {
         const sortStartTime = performance.now();
+
+        if (!useSharedMemory) {
+            const indexesToSort = new Uint32Array(wasmMemory, indexesToSortOffset, copyIndexesToSort.byteLength / 4);
+            indexesToSort.set(copyIndexesToSort);
+            if (usePrecomputedDistances) {
+                const precomputedDistances = new Uint32Array(wasmMemory, precomputedDistancesOffset,
+                                                             copyPrecomputedDistances.byteLength / 4);
+                precomputedDistances.set(copyPrecomputedDistances);
+            }
+        }
+
         if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
         new Int32Array(wasmMemory, modelViewProjOffset, 16).set(modelViewProj);
         new Uint32Array(wasmMemory, frequenciesOffset, Constants.DepthMapRange).set(countsZero);
@@ -26,14 +39,26 @@ function sortWorker(self) {
                                          mappedDistancesOffset, frequenciesOffset, modelViewProjOffset,
                                          sortedIndexesOffset, Constants.DepthMapRange, splatSortCount,
                                          splatRenderCount, splatCount, usePrecomputedDistances);
-        const sortEndTime = performance.now();
 
-        self.postMessage({
+        const sortMessage = {
             'sortDone': true,
             'splatSortCount': splatSortCount,
             'splatRenderCount': splatRenderCount,
-            'sortTime': sortEndTime - sortStartTime
-        });
+            'sortTime': 0
+        };
+        const transferBuffers = [];
+        if (!useSharedMemory) {
+            const sortedIndexes = new Uint32Array(wasmMemory, sortedIndexesOffset, splatRenderCount);
+            const sortedIndexesOut = new Uint32Array(splatRenderCount);
+            sortedIndexesOut.set(sortedIndexes);
+            sortMessage.sortedIndexes = sortedIndexesOut.buffer;
+            transferBuffers.push(sortedIndexesOut.buffer);
+        }
+        const sortEndTime = performance.now();
+
+        sortMessage.sortTime = sortEndTime - sortStartTime;
+
+        self.postMessage(sortMessage, transferBuffers);
     }
 
     self.onmessage = (e) => {
@@ -46,12 +71,22 @@ function sortWorker(self) {
         } else if (e.data.sort) {
             const renderCount = e.data.sort.splatRenderCount || 0;
             const sortCount = e.data.sort.splatSortCount || 0;
-            sort(sortCount, renderCount, e.data.sort.modelViewProj, e.data.sort.usePrecomputedDistances);
+            const usePrecomputedDistances = e.data.sort.usePrecomputedDistances;
+
+            let copyIndexesToSort;
+            let copyPrecomputedDistances;
+            if (!useSharedMemory) {
+                copyIndexesToSort = e.data.sort.indexesToSort;
+                if (usePrecomputedDistances) copyPrecomputedDistances = e.data.sort.precomputedDistances;
+            }
+            sort(sortCount, renderCount, e.data.sort.modelViewProj, usePrecomputedDistances,
+                copyIndexesToSort, copyPrecomputedDistances);
         } else if (e.data.init) {
             // Yep, this is super hacky and gross :(
             Constants = e.data.init.Constants;
 
             splatCount = e.data.init.splatCount;
+            useSharedMemory = e.data.init.useSharedMemory;
 
             const CENTERS_BYTES_PER_ENTRY = Constants.BytesPerInt * 4;
 
@@ -99,21 +134,27 @@ function sortWorker(self) {
                 frequenciesOffset = mappedDistancesOffset + memoryRequiredForMappedDistances;
                 sortedIndexesOffset = frequenciesOffset + memoryRequiredForIntermediateSortBuffers;
                 wasmMemory = sorterWasmImport.env.memory.buffer;
-                self.postMessage({
-                    'sortSetupPhase1Complete': true,
-                    'indexesToSortBuffer': wasmMemory,
-                    'indexesToSortOffset': indexesToSortOffset,
-                    'sortedIndexesBuffer': wasmMemory,
-                    'sortedIndexesOffset': sortedIndexesOffset,
-                    'precomputedDistancesBuffer': wasmMemory,
-                    'precomputedDistancesOffset': precomputedDistancesOffset
-                });
+                if (useSharedMemory) {
+                    self.postMessage({
+                        'sortSetupPhase1Complete': true,
+                        'indexesToSortBuffer': wasmMemory,
+                        'indexesToSortOffset': indexesToSortOffset,
+                        'sortedIndexesBuffer': wasmMemory,
+                        'sortedIndexesOffset': sortedIndexesOffset,
+                        'precomputedDistancesBuffer': wasmMemory,
+                        'precomputedDistancesOffset': precomputedDistancesOffset
+                    });
+                } else {
+                    self.postMessage({
+                        'sortSetupPhase1Complete': true
+                    });
+                }
             });
         }
     };
 }
 
-export function createSortWorker(splatCount) {
+export function createSortWorker(splatCount, useSharedMemory) {
     const worker = new Worker(
         URL.createObjectURL(
             new Blob(['(', sortWorker.toString(), ')(self)'], {
@@ -132,6 +173,7 @@ export function createSortWorker(splatCount) {
         'init': {
             'sorterWasmBytes': sorterWasmBytes.buffer,
             'splatCount': splatCount,
+            'useSharedMemory': useSharedMemory,
             // Super hacky
             'Constants': {
                 'BytesPerFloat': Constants.BytesPerFloat,

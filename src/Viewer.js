@@ -39,7 +39,7 @@ export class Viewer {
         this.dropInMode = options.dropInMode || false;
 
         // If 'selfDrivenMode' is true, the viewer manages its own update/animation loop via requestAnimationFrame()
-        if (options.selfDrivenMode === undefined) options.selfDrivenMode = true;
+        if (options.selfDrivenMode === undefined || options.selfDrivenMode === null) options.selfDrivenMode = true;
         this.selfDrivenMode = options.selfDrivenMode && !this.dropInMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
 
@@ -56,7 +56,9 @@ export class Viewer {
         this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
 
         // Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit
-        if (options.halfPrecisionCovariancesOnGPU === undefined) options.halfPrecisionCovariancesOnGPU = true;
+        if (options.halfPrecisionCovariancesOnGPU === undefined || options.halfPrecisionCovariancesOnGPU === null) {
+            options.halfPrecisionCovariancesOnGPU = true;
+        }
         this.halfPrecisionCovariancesOnGPU = options.halfPrecisionCovariancesOnGPU;
 
         // If 'scene' is valid, it will be rendered by the viewer along with the splat mesh
@@ -65,7 +67,6 @@ export class Viewer {
         this.renderer = options.renderer;
         // Allows for usage of an external Three.js camera
         this.camera = options.camera;
-        this.controls = null;
 
         // If 'gpuAcceleratedSort' is true, a partially GPU-accelerated approach to sorting splats will be used.
         // Currently this means pre-computing splat distances from the camera on the GPU
@@ -74,6 +75,16 @@ export class Viewer {
             if (this.isMobile()) this.gpuAcceleratedSort = false;
             else this.gpuAcceleratedSort = true;
         }
+
+        // If 'sharedMemoryForWorkers' is true, a SharedArrayBuffer will be used to communicate with web workers. This method
+        // is faster than copying memory to or from web workers, but comes with security implications as outlined here:
+        // https://web.dev/articles/cross-origin-isolation-guide
+        // If enabled, it requires specific CORS headers to be present in the response from the server that is sent when
+        // loading the application. More information is available in the README.
+        if (options.sharedMemoryForWorkers === undefined || options.sharedMemoryForWorkers === null) options.sharedMemoryForWorkers = true;
+        this.sharedMemoryForWorkers = options.sharedMemoryForWorkers;
+
+        this.controls = null;
 
         this.splatMesh = new SplatMesh(this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort);
 
@@ -597,11 +608,16 @@ export class Viewer {
     setupSortWorker(splatMesh) {
         return new Promise((resolve) => {
             const splatCount = splatMesh.getSplatCount();
-            const sortWorker = createSortWorker(splatCount);
+            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers);
             sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
-                    this.splatMesh.updateRenderIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
+                    if (this.sharedMemoryForWorkers) {
+                        this.splatMesh.updateRenderIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
+                    } else {
+                        const sortedIndexes = new Uint32Array(e.data.sortedIndexes, 0, e.data.splatRenderCount);
+                        this.splatMesh.updateRenderIndexes(sortedIndexes, e.data.splatRenderCount);
+                    }
                     this.lastSortTime = e.data.sortTime;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
@@ -610,16 +626,20 @@ export class Viewer {
                     sortWorker.postMessage({
                         'centers': this.splatMesh.getIntegerCenters(true).buffer
                     });
-                    this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
-                                                                   e.data.sortedIndexesOffset, splatCount);
-                    this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
-                                                                   e.data.indexesToSortOffset, splatCount);
-                    this.sortWorkerPrecomputedDistances = new Int32Array(e.data.precomputedDistancesBuffer,
-                                                                         e.data.precomputedDistancesOffset, splatCount);
+                    if (this.sharedMemoryForWorkers) {
+                        this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
+                                                                       e.data.sortedIndexesOffset, splatCount);
+                        this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
+                                                                       e.data.indexesToSortOffset, splatCount);
+                        this.sortWorkerPrecomputedDistances = new Int32Array(e.data.precomputedDistancesBuffer,
+                                                                             e.data.precomputedDistancesOffset, splatCount);
+                    } else {
+                        this.sortWorkerIndexesToSort = new Uint32Array(splatCount);
+                        this.sortWorkerPrecomputedDistances = new Int32Array(splatCount);
+                    }
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
                     console.log('Sorting web worker ready.');
-                    this.splatMesh.updateRenderIndexes(this.sortWorkerSortedIndexes, splatCount);
                     const splatDataTextures = this.splatMesh.getSplatDataTextures();
                     const covariancesTextureSize = splatDataTextures.covariances.size;
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
@@ -960,15 +980,23 @@ export class Viewer {
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
-            this.sortWorker.postMessage({
-                sort: {
-                    'modelViewProj': SplatMesh.getIntegerMatrixArray(mvpMatrix),
-                    'cameraPosition': cameraPositionArray,
-                    'splatRenderCount': this.splatRenderCount,
-                    'splatSortCount': sortCount,
-                    'usePrecomputedDistances': this.gpuAcceleratedSort
+            const sortMessage = {
+                'modelViewProj': SplatMesh.getIntegerMatrixArray(mvpMatrix),
+                'cameraPosition': cameraPositionArray,
+                'splatRenderCount': this.splatRenderCount,
+                'splatSortCount': sortCount,
+                'usePrecomputedDistances': this.gpuAcceleratedSort
+            };
+            if (!this.sharedMemoryForWorkers) {
+                sortMessage.indexesToSort = this.sortWorkerIndexesToSort;
+                if (this.gpuAcceleratedSort) {
+                    sortMessage.precomputedDistances = this.sortWorkerPrecomputedDistances;
                 }
+            }
+            this.sortWorker.postMessage({
+                'sort': sortMessage
             });
+
             if (queuedSorts.length === 0) {
                 lastSortViewPos.copy(this.camera.position);
                 lastSortViewDir.copy(sortViewDir);
