@@ -11,12 +11,14 @@ const dummyMaterial = new THREE.MeshBasicMaterial();
  */
 export class SplatMesh extends THREE.Mesh {
 
-    constructor(halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true) {
+    constructor(halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
+                enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false) {
         super(dummyGeometry, dummyMaterial);
         this.renderer = undefined;
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
         this.devicePixelRatio = devicePixelRatio;
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
+        this.integerBasedDistancesComputation = integerBasedDistancesComputation;
         this.splatBuffers = [];
         this.splatBufferOptions = [];
         this.splatBufferTransforms = [];
@@ -667,15 +669,28 @@ export class SplatMesh extends THREE.Mesh {
                 return shader;
             };
 
-            const vsSource =
-            `#version 300 es
-                in ivec3 center;
-                uniform ivec3 modelViewProj;
-                flat out int distance;
-                void main(void) {
-                    distance = center.x * modelViewProj.x + center.y * modelViewProj.y + center.z * modelViewProj.z;
-                }
-            `;
+            let vsSource;
+            if (this.integerBasedDistancesComputation) {
+                vsSource =
+                `#version 300 es
+                    in ivec3 center;
+                    uniform ivec3 modelViewProj;
+                    flat out int distance;
+                    void main(void) {
+                        distance = center.x * modelViewProj.x + center.y * modelViewProj.y + center.z * modelViewProj.z;
+                    }
+                `;
+            } else {
+                vsSource =
+                `#version 300 es
+                    in vec3 center;
+                    uniform vec3 modelViewProj;
+                    flat out float distance;
+                    void main(void) {
+                        distance = center.x * modelViewProj.x + center.y * modelViewProj.y + center.z * modelViewProj.z;
+                    }
+                `;
+            }
 
             const fsSource =
             `#version 300 es
@@ -731,7 +746,11 @@ export class SplatMesh extends THREE.Mesh {
                 this.distancesTransformFeedback.centersBuffer = gl.createBuffer();
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
                 gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
-                gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
+                if (this.integerBasedDistancesComputation) {
+                    gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
+                } else {
+                    gl.vertexAttribPointer(this.distancesTransformFeedback.centersLoc, 3, gl.FLOAT, false, 0, 0);
+                }
             }
 
             if (rebuildGPUObjects || rebuildBuffers) {
@@ -767,9 +786,14 @@ export class SplatMesh extends THREE.Mesh {
         const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
         gl.bindVertexArray(this.distancesTransformFeedback.vao);
 
-        const intCenters = this.getIntegerCenters(false);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, intCenters, gl.STATIC_DRAW);
+        if (this.integerBasedDistancesComputation) {
+            const intCenters = this.getIntegerCenters(false);
+            gl.bufferData(gl.ARRAY_BUFFER, intCenters, gl.STATIC_DRAW);
+        } else {
+            const floatCenters = this.getFloatCenters(false);
+            gl.bufferData(gl.ARRAY_BUFFER, floatCenters, gl.STATIC_DRAW);
+        }
 
         if (currentVao) gl.bindVertexArray(currentVao);
     }
@@ -777,9 +801,6 @@ export class SplatMesh extends THREE.Mesh {
     computeDistancesOnGPU(modelViewProjMatrix, outComputedDistances) {
 
         if (!this.renderer) return;
-
-        const iViewProjMatrix = SplatMesh.getIntegerMatrixArray(modelViewProjMatrix);
-        const iViewProj = [iViewProjMatrix[2], iViewProjMatrix[6], iViewProjMatrix[10]];
 
         // console.time("gpu_compute_distances");
         const gl = this.renderer.getContext();
@@ -792,11 +813,22 @@ export class SplatMesh extends THREE.Mesh {
 
         gl.enable(gl.RASTERIZER_DISCARD);
 
-        gl.uniform3i(this.distancesTransformFeedback.modelViewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
+        if (this.integerBasedDistancesComputation) {
+            const iViewProjMatrix = SplatMesh.getIntegerMatrixArray(modelViewProjMatrix);
+            const iViewProj = [iViewProjMatrix[2], iViewProjMatrix[6], iViewProjMatrix[10]];
+            gl.uniform3i(this.distancesTransformFeedback.modelViewProjLoc, iViewProj[0], iViewProj[1], iViewProj[2]);
+        } else {
+            const viewProj = [modelViewProjMatrix.elements[2], modelViewProjMatrix.elements[6], modelViewProjMatrix.elements[10]];
+            gl.uniform3f(this.distancesTransformFeedback.modelViewProjLoc, viewProj[0], viewProj[1], viewProj[2]);
+        }
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.centersBuffer);
         gl.enableVertexAttribArray(this.distancesTransformFeedback.centersLoc);
-        gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
+        if (this.integerBasedDistancesComputation) {
+            gl.vertexAttribIPointer(this.distancesTransformFeedback.centersLoc, 3, gl.INT, 0, 0);
+        } else {
+            gl.vertexAttribPointer(this.distancesTransformFeedback.centersLoc, 3, gl.FLOAT, false, 0, 0);
+        }
 
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.distancesTransformFeedback.outDistancesBuffer);
@@ -871,6 +903,27 @@ export class SplatMesh extends THREE.Mesh {
             if (padFour) intCenters[i * componentCount + 3] = 1;
         }
         return intCenters;
+    }
+
+
+    /**
+     * Returns an array of splat centers, optionally padded.
+     * @param {number} padFour Enforce alignement of 4 by inserting a 1 after every 3 values.
+     * @return {Float32Array}
+     */
+    getFloatCenters(padFour) {
+        const splatCount = this.getSplatCount();
+        const floatCenters = new Float32Array(splatCount * 3);
+        this.fillSplatDataArrays(null, floatCenters, null);
+        if (!padFour) return floatCenters;
+        let paddedFloatCenters = new Float32Array(splatCount * 4);
+        for (let i = 0; i < splatCount; i++) {
+            for (let t = 0; t < 3; t++) {
+                paddedFloatCenters[i * 4 + t] = floatCenters[i * 3 + t];
+            }
+            paddedFloatCenters[i * 4 + 3] = 1;
+        }
+        return paddedFloatCenters;
     }
 
     /**

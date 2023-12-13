@@ -4,8 +4,8 @@
  * chaining or merging occurs. It needs a significant amount of work to truly replicate the full
  * functionality of JavaScript's Promise class. Look at Util.fetchWithProgress() for example usage.
  *
- * This class was primarily to added to allow splat scene downloads to be cancelled. It has not been tested
- * very thoroughly and the implementation is kinda gross. If you can at all help it, please avoid using it :)
+ * This class was primarily added to allow splat scene downloads to be cancelled. It has not been tested
+ * very thoroughly and the implementation is kinda janky. If you can at all help it, please avoid using it :)
  */
 export class AbortablePromise {
 

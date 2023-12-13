@@ -8,36 +8,78 @@
 #define EXTERN
 #endif
 
-EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, int* centers, int* precomputedDistances, 
-                                             int* mappedDistances, unsigned int * frequencies, int* modelViewProj,
+EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* centers, void* precomputedDistances, 
+                                             int* mappedDistances, unsigned int * frequencies, void* modelViewProj,
                                              unsigned int* indexesOut, unsigned int distanceMapRange, unsigned int sortCount,
-                                             unsigned int renderCount, unsigned int splatCount, bool usePrecomputedDistances) {
+                                             unsigned int renderCount, unsigned int splatCount, bool usePrecomputedDistances, bool useIntegerSort) {
 
     int maxDistance = -2147483640;
     int minDistance = 2147483640;
 
     unsigned int sortStart = renderCount - sortCount;
-
-    if (usePrecomputedDistances) {
-        for (unsigned int i = sortStart; i < renderCount; i++) {
-            int distance = precomputedDistances[indexes[i]];
-            mappedDistances[i] = distance;
-            if (distance > maxDistance) maxDistance = distance;
-            if (distance < minDistance) minDistance = distance;
+    if (useIntegerSort) {
+        int* intCenters = (int*)centers;
+        int* intPrecomputedDistances = (int*)precomputedDistances;
+        int* intModelViewProj = (int*)modelViewProj;
+        if (usePrecomputedDistances) {
+            for (unsigned int i = sortStart; i < renderCount; i++) {
+                int distance = intPrecomputedDistances[indexes[i]];
+                mappedDistances[i] = distance;
+                if (distance > maxDistance) maxDistance = distance;
+                if (distance < minDistance) minDistance = distance;
+            }
+        } else {
+            int tempOut[4];
+            int tempViewProj[] = {intModelViewProj[2], intModelViewProj[6], intModelViewProj[10], 1};
+            v128_t b = wasm_v128_load(&tempViewProj[0]);
+            for (unsigned int i = sortStart; i < renderCount; i++) {
+                v128_t a = wasm_v128_load(&intCenters[4 * indexes[i]]);
+                v128_t prod = wasm_i32x4_mul(a, b);
+                wasm_v128_store(&tempOut[0], prod);
+                int distance = tempOut[0] + tempOut[1] + tempOut[2];
+                mappedDistances[i] = distance;
+                if (distance > maxDistance) maxDistance = distance;
+                if (distance < minDistance) minDistance = distance;
+            }
         }
     } else {
-        int tempIn[4];
-        int tempOut[4];
-        int tempViewProj[] = {modelViewProj[2], modelViewProj[6], modelViewProj[10], 1};
-        v128_t b = wasm_v128_load(&tempViewProj[0]);
-        for (unsigned int i = sortStart; i < renderCount; i++) {
-            v128_t a = wasm_v128_load(&centers[4 * indexes[i]]);
-            v128_t prod = wasm_i32x4_mul(a, b);
-            wasm_v128_store(&tempOut[0], prod);
-            int distance = tempOut[0] + tempOut[1] + tempOut[2];
-            mappedDistances[i] = distance;
-            if (distance > maxDistance) maxDistance = distance;
-            if (distance < minDistance) minDistance = distance;
+        float* floatCenters = (float*)centers;
+        float* floatPrecomputedDistances = (float*)precomputedDistances;
+        float* floatModelViewProj = (float*)modelViewProj;
+        if (usePrecomputedDistances) {
+            for (unsigned int i = sortStart; i < renderCount; i++) {
+                int distance = (int)(floatPrecomputedDistances[indexes[i]] * 4096.0);
+                mappedDistances[i] = distance;
+                if (distance > maxDistance) maxDistance = distance;
+                if (distance < minDistance) minDistance = distance;
+            }
+        } else {
+            // TODO: For some reason, the SIMD approach with floats seems slower, need to investigate further...
+            /* 
+            float tempOut[4];
+            float tempViewProj[] = {floatModelViewProj[2], floatModelViewProj[6], floatModelViewProj[10], 1.0};
+            v128_t b = wasm_v128_load(&tempViewProj[0]);
+            for (unsigned int i = sortStart; i < renderCount; i++) {
+                v128_t a = wasm_v128_load(&floatCenters[4 * indexes[i]]);
+                v128_t prod = wasm_f32x4_mul(a, b);
+                wasm_v128_store(&tempOut[0], prod);
+                int distance = (int)((tempOut[0] + tempOut[1] + tempOut[2]) * 4096.0);
+                mappedDistances[i] = distance;
+                if (distance > maxDistance) maxDistance = distance;
+                if (distance < minDistance) minDistance = distance;
+            }
+            */
+
+            for (unsigned int i = sortStart; i < renderCount; i++) {
+                unsigned int indexOffset = 4 * (unsigned int)indexes[i];
+                int distance =
+                    (int)((floatModelViewProj[2] * floatCenters[indexOffset] +
+                           floatModelViewProj[6] * floatCenters[indexOffset + 1] +
+                           floatModelViewProj[10] * floatCenters[indexOffset + 2]) * 4096.0);
+                mappedDistances[i] = distance;
+                if (distance > maxDistance) maxDistance = distance;
+                if (distance < minDistance) minDistance = distance;
+            }
         }
     }
 

@@ -26,6 +26,7 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
 - Artifacts are visible when you move or rotate too fast (due to CPU-based splat sort)
 - Sub-optimal performance on mobile devices
 - Custom `.ksplat` file format still needs work, especially around compression
+- The default, integer based splat sort does not work well for larger scenes. In that case a value of `false` for the `integerBasedSort` viewer parameter can force a slower, floating-point based sort
 
 ## Future work
 This is still very much a work in progress! There are several things that still need to be done:
@@ -234,7 +235,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'ignoreDevicePixelRatio': false,
     'gpuAcceleratedSort': true,
     'halfPrecisionCovariancesOnGPU': true,
-    'sharedMemoryForWorkers': true
+    'sharedMemoryForWorkers': true,
+    'integerBasedSort': true
 });
 viewer.loadFile('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -261,6 +263,7 @@ Advanced `Viewer` parameters
 | `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. It is recommended that this only be set to `true` when `sharedMemoryForWorkers` is also `true`. Defaults to `false` on mobile devices, `true` otherwise.
 | `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `true`.
 | `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
+| `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
 <br>
 
 ### Creating KSPLAT files

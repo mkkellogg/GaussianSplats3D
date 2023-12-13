@@ -76,6 +76,14 @@ export class Viewer {
             else this.gpuAcceleratedSort = true;
         }
 
+        // if 'integerBasedSort' is true, the integer version of splat centers as well as other values used to calculate
+        // splat distances are used instead of the float version. This speeds up computation, but introduces the possibility of
+        // overflow in larger scenes.
+        if (options.integerBasedSort === undefined || options.integerBasedSort === null) {
+            options.integerBasedSort = true;
+        }
+        this.integerBasedSort = options.integerBasedSort;
+
         // If 'sharedMemoryForWorkers' is true, a SharedArrayBuffer will be used to communicate with web workers. This method
         // is faster than copying memory to or from web workers, but comes with security implications as outlined here:
         // https://web.dev/articles/cross-origin-isolation-guide
@@ -86,7 +94,8 @@ export class Viewer {
 
         this.controls = null;
 
-        this.splatMesh = new SplatMesh(this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort);
+        this.splatMesh = new SplatMesh(this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
+                                       this.gpuAcceleratedSort, this.integerBasedSort);
 
         this.showMeshCursor = false;
         this.showControlPlane = false;
@@ -607,8 +616,9 @@ export class Viewer {
      */
     setupSortWorker(splatMesh) {
         return new Promise((resolve) => {
+            const PrecomputedDistancesArrayType = this.integerBasedSort ? Int32Array : Float32Array;
             const splatCount = splatMesh.getSplatCount();
-            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers);
+            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers, this.integerBasedSort);
             sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
@@ -623,19 +633,21 @@ export class Viewer {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
                     console.log('Sorting web worker WASM setup complete.');
+                    const centers = this.integerBasedSort ? this.splatMesh.getIntegerCenters(true) : this.splatMesh.getFloatCenters(true);
                     sortWorker.postMessage({
-                        'centers': this.splatMesh.getIntegerCenters(true).buffer
+                        'centers': centers.buffer
                     });
                     if (this.sharedMemoryForWorkers) {
                         this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
                                                                        e.data.sortedIndexesOffset, splatCount);
                         this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
                                                                        e.data.indexesToSortOffset, splatCount);
-                        this.sortWorkerPrecomputedDistances = new Int32Array(e.data.precomputedDistancesBuffer,
-                                                                             e.data.precomputedDistancesOffset, splatCount);
+                        this.sortWorkerPrecomputedDistances = new PrecomputedDistancesArrayType(e.data.precomputedDistancesBuffer,
+                                                                                                e.data.precomputedDistancesOffset,
+                                                                                                splatCount);
                     } else {
                         this.sortWorkerIndexesToSort = new Uint32Array(splatCount);
-                        this.sortWorkerPrecomputedDistances = new Int32Array(splatCount);
+                        this.sortWorkerPrecomputedDistances = new PrecomputedDistancesArrayType(splatCount);
                     }
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
@@ -980,8 +992,9 @@ export class Viewer {
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
+            const sortMVPMatrix = this.integerBasedSort ? SplatMesh.getIntegerMatrixArray(mvpMatrix) : mvpMatrix.elements;
             const sortMessage = {
-                'modelViewProj': SplatMesh.getIntegerMatrixArray(mvpMatrix),
+                'modelViewProj': sortMVPMatrix,
                 'cameraPosition': cameraPositionArray,
                 'splatRenderCount': this.splatRenderCount,
                 'splatSortCount': sortCount,
