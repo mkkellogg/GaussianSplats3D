@@ -1,12 +1,13 @@
 {
-    "name": "gaussian-splats-3d",
+    "name": "@mkkellogg/gaussian-splats-3d",
     "repository": {
         "type": "git",
         "url": "https://github.com/mkkellogg/GaussianSplat3D"
     },
-    "version": "0.1.10",
+    "version": "0.1.11",
     "description": "Three.js-based 3D Gaussian splat viewer",
-    "main": "src/index.js",
+    "module": "build/gaussian-splats-3d.module.js",
+    "main": "build/gaussian-splats-3d.umd.cjs",
     "author": "Mark Kellogg",
     "license": "MIT",
     "type": "module",
@@ -67,5 +68,11 @@
         "npm-watch": "0.11.0",
         "rollup": "3.28.1",
         "three": "0.155.0"
-    }
+    },
+    "files": [
+        "build/gaussian-splats-3d.umd.cjs",
+        "build/gaussian-splats-3d.umd.cjs.map",
+        "build/gaussian-splats-3d.module.js",
+        "build/gaussian-splats-3d.module.js.map"
+    ]
 }
