@@ -530,7 +530,7 @@ export class Viewer {
         };
         if (SplatLoader.isFileSplatFormat(path)) {
             return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
-        } else if (path.endsWith('.ply')) {
+        } else if (path.includes('.ply')) {
             return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
         } else {
             return AbortablePromise.reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
