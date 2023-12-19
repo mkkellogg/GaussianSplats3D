@@ -8,7 +8,7 @@ export default [
         external: p => /^three/.test( p ),
         output: [
             {
-                name: 'Gaussian Splat 3D',
+                name: 'Gaussian Splats 3D',
                 extend: true,
                 format: 'umd',
                 file: './build/gaussian-splats-3d.umd.cjs',
@@ -16,7 +16,7 @@ export default [
                 globals: p => /^three/.test( p ) ? 'THREE' : null,
             },
             {
-                name: 'Gaussian Splat 3D',
+                name: 'Gaussian Splats 3D',
                 extend: true,
                 format: 'umd',
                 file: './build/gaussian-splats-3d.umd.min.cjs',
@@ -35,14 +35,14 @@ export default [
         external: p => /^three/.test( p ),
         output: [
             {
-                name: 'Gaussian Splat 3D',
+                name: 'Gaussian Splats 3D',
                 format: 'esm',
                 file: './build/gaussian-splats-3d.module.js',
                 sourcemap: true,
                 globals: p => /^three/.test( p ) ? 'THREE' : null,
             },
             {
-                name: 'Gaussian Splat 3D',
+                name: 'Gaussian Splats 3D',
                 format: 'esm',
                 file: './build/gaussian-splats-3d.module.min.js',
                 sourcemap: true,
