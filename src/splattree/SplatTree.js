@@ -33,7 +33,7 @@ export class SplatTree {
         const splatCount = this.splatMesh.getSplatCount();
         for (let i = 0; i < splatCount; i++) {
             if (filterFunc(i)) {
-                this.splatMesh.getSplatCenter(i, center);
+                this.splatMesh.getSplatCenter(i, center, true);
                 if (validSplatCount === 0 || center.x < this.sceneMin.x) this.sceneMin.x = center.x;
                 if (validSplatCount === 0 || center.x > this.sceneMax.x) this.sceneMax.x = center.x;
                 if (validSplatCount === 0 || center.y < this.sceneMin.y) this.sceneMin.y = center.y;
@@ -109,7 +109,7 @@ export class SplatTree {
         const center = new THREE.Vector3();
         for (let i = 0; i < splatCount; i++) {
             const splatGlobalIndex = node.data.indexes[i];
-            this.splatMesh.getSplatCenter(splatGlobalIndex, center);
+            this.splatMesh.getSplatCenter(splatGlobalIndex, center, true);
             for (let j = 0; j < childrenBounds.length; j++) {
                 if (childrenBounds[j].containsPoint(center)) {
                     splatCounts[j]++;

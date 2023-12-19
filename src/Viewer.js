@@ -92,9 +92,13 @@ export class Viewer {
         if (options.sharedMemoryForWorkers === undefined || options.sharedMemoryForWorkers === null) options.sharedMemoryForWorkers = true;
         this.sharedMemoryForWorkers = options.sharedMemoryForWorkers;
 
+        // if 'dynamicMode' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in the
+        // scene may change. This prevents optimizations that depend on a static scene from being made.
+        this.dynamicMode = !!options.dynamicMode;
+
         this.controls = null;
 
-        this.splatMesh = new SplatMesh(this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
+        this.splatMesh = new SplatMesh(this.dynamicMode, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
                                        this.gpuAcceleratedSort, this.integerBasedSort);
 
         this.showMeshCursor = false;
@@ -109,6 +113,7 @@ export class Viewer {
         this.sortWorkerIndexesToSort = null;
         this.sortWorkerSortedIndexes = null;
         this.sortWorkerPrecomputedDistances = null;
+        this.sortWorkerTransforms = null;
 
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
@@ -616,9 +621,9 @@ export class Viewer {
      */
     setupSortWorker(splatMesh) {
         return new Promise((resolve) => {
-            const PrecomputedDistancesArrayType = this.integerBasedSort ? Int32Array : Float32Array;
+            const DistancesArrayType = this.integerBasedSort ? Int32Array : Float32Array;
             const splatCount = splatMesh.getSplatCount();
-            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers, this.integerBasedSort);
+            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers, this.integerBasedSort, this.dynamicMode);
             sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
@@ -634,20 +639,24 @@ export class Viewer {
                 } else if (e.data.sortSetupPhase1Complete) {
                     console.log('Sorting web worker WASM setup complete.');
                     const centers = this.integerBasedSort ? this.splatMesh.getIntegerCenters(true) : this.splatMesh.getFloatCenters(true);
+                    const transformIndexes = this.splatMesh.getTransformIndexes();
                     sortWorker.postMessage({
-                        'centers': centers.buffer
+                        'centers': centers.buffer,
+                        'transformIndexes': transformIndexes.buffer
                     });
                     if (this.sharedMemoryForWorkers) {
                         this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
                                                                        e.data.sortedIndexesOffset, splatCount);
                         this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
                                                                        e.data.indexesToSortOffset, splatCount);
-                        this.sortWorkerPrecomputedDistances = new PrecomputedDistancesArrayType(e.data.precomputedDistancesBuffer,
-                                                                                                e.data.precomputedDistancesOffset,
-                                                                                                splatCount);
+                        this.sortWorkerPrecomputedDistances = new DistancesArrayType(e.data.precomputedDistancesBuffer,
+                                                                                     e.data.precomputedDistancesOffset,
+                                                                                     splatCount);
+                         this.sortWorkerTransforms = new Float32Array(e.data.transformsBuffer, e.data.transformsOffset, Constants.MaxSubScenes * 16);
                     } else {
                         this.sortWorkerIndexesToSort = new Uint32Array(splatCount);
-                        this.sortWorkerPrecomputedDistances = new PrecomputedDistancesArrayType(splatCount);
+                        this.sortWorkerPrecomputedDistances = new DistancesArrayType(splatCount);
+                        this.sortWorkerTransforms = new Float32Array(Constants.MaxSubScenes * 16);
                     }
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
@@ -960,7 +969,7 @@ export class Viewer {
             angleDiff = sortViewDir.dot(lastSortViewDir);
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
-            if (!force && queuedSorts.length === 0 && runCount > 0) {
+            if (!force && !this.dynamicMode && queuedSorts.length === 0 && runCount > 0) {
                 if (angleDiff <= 0.95) needsRefreshForRotation = true;
                 if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
@@ -976,32 +985,40 @@ export class Viewer {
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
-            if (queuedSorts.length === 0) {
-                for (let partialSort of partialSorts) {
-                    if (angleDiff < partialSort.angleThreshold) {
-                        for (let sortFraction of partialSort.sortFractions) {
-                            queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
-                        }
-                        break;
-                    }
-                }
+            if (this.dynamicMode) {
                 queuedSorts.push(this.splatRenderCount);
+            } else {
+                if (queuedSorts.length === 0) {
+                    for (let partialSort of partialSorts) {
+                        if (angleDiff < partialSort.angleThreshold) {
+                            for (let sortFraction of partialSort.sortFractions) {
+                                queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
+                            }
+                            break;
+                        }
+                    }
+                    queuedSorts.push(this.splatRenderCount);
+                }
             }
             const sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
 
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
-            const sortMVPMatrix = this.integerBasedSort ? SplatMesh.getIntegerMatrixArray(mvpMatrix) : mvpMatrix.elements;
+
             const sortMessage = {
-                'modelViewProj': sortMVPMatrix,
+                'modelViewProj': mvpMatrix.elements,
                 'cameraPosition': cameraPositionArray,
                 'splatRenderCount': this.splatRenderCount,
                 'splatSortCount': sortCount,
                 'usePrecomputedDistances': this.gpuAcceleratedSort
             };
+            if (this.dynamicMode) {
+                this.splatMesh.fillTransformsArray(this.sortWorkerTransforms);
+            }
             if (!this.sharedMemoryForWorkers) {
                 sortMessage.indexesToSort = this.sortWorkerIndexesToSort;
+                sortMessage.transforms = this.sortWorkerTransforms;
                 if (this.gpuAcceleratedSort) {
                     sortMessage.precomputedDistances = this.sortWorkerPrecomputedDistances;
                 }
@@ -1040,6 +1057,10 @@ export class Viewer {
         const MaximumDistanceToRender = 125;
 
         return function(gatherAllNodes) {
+
+            if (this.dynamicMode) {
+                return this.splatMesh.getSplatCount();
+            }
 
             this.getRenderDimensions(renderDimensions);
             const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
