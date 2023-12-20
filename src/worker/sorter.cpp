@@ -8,6 +8,12 @@
 #define EXTERN
 #endif
 
+#define computeMatMul4x4ThirdRow(a, b, out) \
+    out[0] = a[2] * b[0] +  a[6] * b[1] + a[10] * b[2] + a[14] * b[3]; \
+    out[1] = a[2] * b[4] +  a[6] * b[5] + a[10] * b[6] + a[14] * b[7]; \
+    out[2] = a[2] * b[8] +  a[6] * b[9] + a[10] * b[10] + a[14] * b[11]; \
+    out[3] = a[2] * b[12] +  a[6] * b[13] + a[10] * b[14] + a[14] * b[15];
+
 EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* centers, void* precomputedDistances, 
                                              int* mappedDistances, unsigned int * frequencies, float* modelViewProj,
                                              unsigned int* indexesOut,  unsigned int* transformIndexes, float* transforms,
@@ -18,12 +24,12 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
     int maxDistance = -2147483640;
     int minDistance = 2147483640;
 
+    float fMVPTRow3[4]; 
     unsigned int sortStart = renderCount - sortCount;
     if (useIntegerSort) {
         int* intCenters = (int*)centers;
-        int* intPrecomputedDistances = (int*)precomputedDistances;
-        int* intModelViewProj = (int*)modelViewProj;
         if (usePrecomputedDistances) {
+            int* intPrecomputedDistances = (int*)precomputedDistances;
             for (unsigned int i = sortStart; i < renderCount; i++) {
                 int distance = intPrecomputedDistances[indexes[i]];
                 mappedDistances[i] = distance;
@@ -31,40 +37,21 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
                 if (distance < minDistance) minDistance = distance;
             }
         } else {
+            int tempOut[4];
             if (dynamicMode) {
                 int lastTransformIndex = -1;
-                int tempOut[4];
-                int tempCenter[4];
                 v128_t b;
                 for (unsigned int i = sortStart; i < renderCount; i++) {
                     unsigned int realIndex = indexes[i];
                     unsigned int transformIndex = transformIndexes[realIndex];
                     if ((int)transformIndex != lastTransformIndex) {
-                        float t1  = modelViewProj[2] * transforms[transformIndex * 16] +
-                                    modelViewProj[6] * transforms[transformIndex * 16 + 1] +
-                                    modelViewProj[10] * transforms[transformIndex * 16 + 2] +
-                                    modelViewProj[14] * transforms[transformIndex * 16 + 3];
-                            
-                        float t2 = modelViewProj[2] * transforms[transformIndex * 16 + 4] +
-                                   modelViewProj[6] * transforms[transformIndex * 16 + 5] +
-                                   modelViewProj[10] * transforms[transformIndex * 16 + 6] +
-                                   modelViewProj[14] * transforms[transformIndex * 16 + 7];
-                        
-                        float t3 = modelViewProj[2] * transforms[transformIndex * 16 + 8] +
-                                   modelViewProj[6] * transforms[transformIndex * 16 + 9] +
-                                   modelViewProj[10] * transforms[transformIndex * 16 + 10] +
-                                   modelViewProj[14] * transforms[transformIndex * 16 + 11];
-
-                        float t4 = modelViewProj[2] * transforms[transformIndex * 16 + 12] +
-                                   modelViewProj[6] * transforms[transformIndex * 16 + 13] +
-                                   modelViewProj[10] * transforms[transformIndex * 16 + 14] +
-                                   modelViewProj[14] * transforms[transformIndex * 16 + 15];
-
-                        int modelViewProjElements[] = {(int)(t1 * 1000.0), (int)(t2 * 1000.0), (int)(t3 * 1000.0), (int)(t4 * 1000.0)};
-                        b = wasm_v128_load(&modelViewProjElements[0]);
+                        float* transform = &transforms[transformIndex * 16];
+                        computeMatMul4x4ThirdRow(modelViewProj, transform, fMVPTRow3);
+                        int iMVPTRow3[] = {(int)(fMVPTRow3[0] * 1000.0), (int)(fMVPTRow3[1] * 1000.0),
+                                           (int)(fMVPTRow3[2] * 1000.0), (int)(fMVPTRow3[3] * 1000.0)};
+                        b = wasm_v128_load(&iMVPTRow3[0]);
                         lastTransformIndex = (int)transformIndex;
                     }
-
                     v128_t a = wasm_v128_load(&intCenters[4 * realIndex]);
                     v128_t prod = wasm_i32x4_mul(a, b);
                     wasm_v128_store(&tempOut[0], prod);
@@ -74,9 +61,8 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
                     if (distance < minDistance) minDistance = distance;
                 }
             } else {
-                int tempOut[4];
-                int tempViewProj[] = {intModelViewProj[2], intModelViewProj[6], intModelViewProj[10], 1};
-                v128_t b = wasm_v128_load(&tempViewProj[0]);
+                int iMVPRow3[] = {(int)(modelViewProj[2] * 1000.0), (int)(modelViewProj[6] * 1000.0), (int)(modelViewProj[10] * 1000.0), 1};
+                v128_t b = wasm_v128_load(&iMVPRow3[0]);
                 for (unsigned int i = sortStart; i < renderCount; i++) {
                     v128_t a = wasm_v128_load(&intCenters[4 * indexes[i]]);
                     v128_t prod = wasm_i32x4_mul(a, b);
@@ -90,10 +76,8 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
         }
     } else {
         float* floatCenters = (float*)centers;
-        float* floatPrecomputedDistances = (float*)precomputedDistances;
-        float* floatModelViewProj = (float*)modelViewProj;
-        float* floatTransforms = (float *)transforms;
         if (usePrecomputedDistances) {
+            float* floatPrecomputedDistances = (float*)precomputedDistances;
             for (unsigned int i = sortStart; i < renderCount; i++) {
                 int distance = (int)(floatPrecomputedDistances[indexes[i]] * 4096.0);
                 mappedDistances[i] = distance;
@@ -101,10 +85,13 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
                 if (distance < minDistance) minDistance = distance;
             }
         } else {
+            float* fMVP = (float*)modelViewProj;
+            float* floatTransforms = (float *)transforms;
+
             // TODO: For some reason, the SIMD approach with floats seems slower, need to investigate further...
             /* 
             float tempOut[4];
-            float tempViewProj[] = {floatModelViewProj[2], floatModelViewProj[6], floatModelViewProj[10], 1.0};
+            float tempViewProj[] = {fMVP[2], fMVP[6], fMVP[10], 1.0};
             v128_t b = wasm_v128_load(&tempViewProj[0]);
             for (unsigned int i = sortStart; i < renderCount; i++) {
                 v128_t a = wasm_v128_load(&floatCenters[4 * indexes[i]]);
@@ -117,15 +104,37 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
             }
             */
 
-            for (unsigned int i = sortStart; i < renderCount; i++) {
-                unsigned int indexOffset = 4 * (unsigned int)indexes[i];
-                int distance =
-                    (int)((floatModelViewProj[2] * floatCenters[indexOffset] +
-                           floatModelViewProj[6] * floatCenters[indexOffset + 1] +
-                           floatModelViewProj[10] * floatCenters[indexOffset + 2]) * 4096.0);
-                mappedDistances[i] = distance;
-                if (distance > maxDistance) maxDistance = distance;
-                if (distance < minDistance) minDistance = distance;
+            if (dynamicMode) {
+                int lastTransformIndex = -1;
+                for (unsigned int i = sortStart; i < renderCount; i++) {
+                    unsigned int realIndex = indexes[i];
+                    unsigned int indexOffset = 4 * realIndex;
+                    unsigned int transformIndex = transformIndexes[realIndex];
+                    if ((int)transformIndex != lastTransformIndex) {
+                        float* transform = &transforms[transformIndex * 16];
+                        computeMatMul4x4ThirdRow(modelViewProj, transform, fMVPTRow3);
+                        lastTransformIndex = (int)transformIndex;
+                    }
+                    int distance =
+                        (int)((fMVPTRow3[0] * floatCenters[indexOffset] +
+                               fMVPTRow3[1] * floatCenters[indexOffset + 1] +
+                               fMVPTRow3[2] * floatCenters[indexOffset + 2] +
+                               fMVPTRow3[3] * floatCenters[indexOffset + 3]) * 4096.0);
+                    mappedDistances[i] = distance;
+                    if (distance > maxDistance) maxDistance = distance;
+                    if (distance < minDistance) minDistance = distance;
+                }
+            } else {
+                for (unsigned int i = sortStart; i < renderCount; i++) {
+                    unsigned int indexOffset = 4 * (unsigned int)indexes[i];
+                    int distance =
+                        (int)((fMVP[2] * floatCenters[indexOffset] +
+                               fMVP[6] * floatCenters[indexOffset + 1] +
+                               fMVP[10] * floatCenters[indexOffset + 2]) * 4096.0);
+                    mappedDistances[i] = distance;
+                    if (distance > maxDistance) maxDistance = distance;
+                    if (distance < minDistance) minDistance = distance;
+                }
             }
         }
     }

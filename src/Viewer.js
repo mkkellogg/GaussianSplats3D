@@ -652,7 +652,8 @@ export class Viewer {
                         this.sortWorkerPrecomputedDistances = new DistancesArrayType(e.data.precomputedDistancesBuffer,
                                                                                      e.data.precomputedDistancesOffset,
                                                                                      splatCount);
-                         this.sortWorkerTransforms = new Float32Array(e.data.transformsBuffer, e.data.transformsOffset, Constants.MaxSubScenes * 16);
+                         this.sortWorkerTransforms = new Float32Array(e.data.transformsBuffer,
+                                                                      e.data.transformsOffset, Constants.MaxSubScenes * 16);
                     } else {
                         this.sortWorkerIndexesToSort = new Uint32Array(splatCount);
                         this.sortWorkerPrecomputedDistances = new DistancesArrayType(splatCount);
@@ -956,7 +957,7 @@ export class Viewer {
             }
         ];
 
-        return function(force = false, gatherAllNodes = false) {
+        return async function(force = false, gatherAllNodes = false) {
             if (this.sortRunning) return;
             if (!this.initialized || !this.splatRenderingInitialized) return;
 
@@ -983,7 +984,7 @@ export class Viewer {
             mvpMatrix.multiply(this.splatMesh.matrixWorld);
 
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
-                this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
+                await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
             if (this.dynamicMode) {
                 queuedSorts.push(this.splatRenderCount);

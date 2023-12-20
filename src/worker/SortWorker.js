@@ -137,7 +137,7 @@ function sortWorker(self) {
                                         memoryRequiredForMappedDistances +
                                         memoryRequiredForIntermediateSortBuffers +
                                         memoryRequiredForSortedIndexes +
-                                        memoryRequiredforTransformIndexes + 
+                                        memoryRequiredforTransformIndexes +
                                         memoryRequiredforTransforms +
                                         extraMemory;
             const totalPagesRequired = Math.floor(totalRequiredMemory / Constants.MemoryPageSize ) + 1;

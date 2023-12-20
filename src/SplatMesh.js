@@ -447,8 +447,8 @@ export class SplatMesh extends THREE.Mesh {
     build(splatBuffers, splatBufferOptions, keepExistingSplatBufferTransforms = true) {
         this.disposeMeshData();
         const totalSplatCount = SplatMesh.getTotalSplatCountForSplatBuffers(splatBuffers);
-        this.splatBufferTransforms = SplatMesh.buildSplatBufferTransforms(splatBuffers, splatBufferOptions, keepExistingSplatBufferTransforms ?
-                                                                          this.splatBufferTransforms : null);
+        const transformsToPreserve = keepExistingSplatBufferTransforms ? this.splatBufferTransforms : null;
+        this.splatBufferTransforms = SplatMesh.buildSplatBufferTransforms(splatBuffers, splatBufferOptions, transformsToPreserve);
         this.geometry = SplatMesh.buildGeomtery(totalSplatCount);
         this.material = SplatMesh.buildMaterial(this.dynamicMode);
         const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
@@ -896,7 +896,7 @@ export class SplatMesh extends THREE.Mesh {
                 this.distancesTransformFeedback.outDistancesBuffer = gl.createBuffer();
             }
             gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, splatCount * 4, gl.DYNAMIC_COPY);
+            gl.bufferData(gl.ARRAY_BUFFER, splatCount * 4, gl.STATIC_READ);
 
             if (rebuildGPUObjects) {
                 this.distancesTransformFeedback.id = gl.createTransformFeedback();
@@ -963,7 +963,7 @@ export class SplatMesh extends THREE.Mesh {
         return transformIndexes;
     }
 
-    fillTransformsArray = function(){
+    fillTransformsArray = function() {
 
         const tempArray = [];
 
@@ -1004,7 +1004,7 @@ export class SplatMesh extends THREE.Mesh {
                     const splatBufferTransform = this.splatBufferTransforms[i];
                     tempMatrix.copy(splatBufferTransform);
                     tempMatrix.premultiply(modelViewProjMatrix);
-                        
+
                     if (this.integerBasedDistancesComputation) {
                         const iTempMatrix = SplatMesh.getIntegerMatrixArray(tempMatrix);
                         const iTransform = [iTempMatrix[2], iTempMatrix[6], iTempMatrix[10], iTempMatrix[14]];
@@ -1051,14 +1051,41 @@ export class SplatMesh extends THREE.Mesh {
 
             gl.disable(gl.RASTERIZER_DISCARD);
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
-            gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
-            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+            gl.flush();
 
-            // console.timeEnd("gpu_compute_distances");
+            const promise = new Promise((resolve) => {
+                const checkSync = () => {
+                    const timeout = 0;
+                    const bitflags = 0;
+                    const status = gl.clientWaitSync(sync, bitflags, timeout);
+                    switch (status) {
+                        case gl.TIMEOUT_EXPIRED:
+                            return setTimeout(checkSync);
+                        case gl.WAIT_FAILED:
+                            throw new Error('should never get here');
+                        default:
+                            gl.deleteSync(sync);
+                            const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+                            gl.bindVertexArray(this.distancesTransformFeedback.vao);
+                            gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
+                            gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
+                            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+                            if (currentVao) gl.bindVertexArray(currentVao);
+
+                            // console.timeEnd("gpu_compute_distances");
+
+                            resolve();
+                    }
+                };
+                setTimeout(checkSync);
+            });
 
             if (currentProgram) gl.useProgram(currentProgram);
             if (currentVao) gl.bindVertexArray(currentVao);
+
+            return promise;
         };
 
     }();
@@ -1074,8 +1101,8 @@ export class SplatMesh extends THREE.Mesh {
     getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication = false) {
         paramsObj.splatBuffer = this.getSplatBufferForSplat(globalIndex);
         paramsObj.localIndex = this.getSplatLocalIndex(globalIndex);
-        paramsObj.splatBufferTransform =  (this.dynamicMode && !forceTransformApplication) ?
-                                           null : this.getSplatBufferTransformForSplat(globalIndex);
+        paramsObj.splatBufferTransform = (this.dynamicMode && !forceTransformApplication) ?
+                                          null : this.getSplatBufferTransformForSplat(globalIndex);
     }
 
     /**
