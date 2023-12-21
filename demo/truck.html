@@ -37,7 +37,7 @@
     });
     let path = 'assets/data/truck/truck';
     path += isMobile() ? '.ksplat' : '_high.ksplat';
-    viewer.loadFile(path)
+    viewer.addSplatScene(path)
     .then(() => {
         viewer.start();
     });

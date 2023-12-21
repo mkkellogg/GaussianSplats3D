@@ -6,8 +6,31 @@ import { Constants } from './Constants.js';
 const dummyGeometry = new THREE.BufferGeometry();
 const dummyMaterial = new THREE.MeshBasicMaterial();
 
+export class SplatScene {
+
+    constructor(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3(1, 1, 1)) {
+        this.splatBuffer = splatBuffer;
+        this.position = position.clone();
+        this.quaternion = quaternion.clone();
+        this.scale = scale.clone();
+        this.transform = new THREE.Matrix4();
+        this.updateTransform();
+    }
+
+    copyTransformData(otherScene) {
+        this.position.copy(otherScene.position);
+        this.quaternion.copy(otherScene.quaternion);
+        this.scale.copy(otherScene.scale);
+        this.transform.copy(otherScene.transform);
+    }
+
+    updateTransform() {
+        this.transform.compose(this.position, this.quaternion, this.scale);
+    }
+}
+
 /**
- * SplatMesh: Container for one or more SplatBuffer instances, abstracting them into a single unified container for
+ * SplatMesh: Container for one or more splat scenes, abstracting them into a single unified container for
  * splat data. Additionally contains data structures and code to make the splat data renderable as a Three.js mesh.
  */
 export class SplatMesh extends THREE.Mesh {
@@ -21,9 +44,7 @@ export class SplatMesh extends THREE.Mesh {
         this.devicePixelRatio = devicePixelRatio;
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
         this.integerBasedDistancesComputation = integerBasedDistancesComputation;
-        this.splatBuffers = [];
-        this.splatBufferOptions = [];
-        this.splatBufferTransforms = [];
+        this.scenes = [];
         this.splatTree = null;
         this.splatDataTextures = null;
         this.distancesTransformFeedback = {
@@ -40,7 +61,7 @@ export class SplatMesh extends THREE.Mesh {
             'transformsLocs': []
         };
         this.globalSplatIndexToLocalSplatIndexMap = [];
-        this.globalSplatIndexToSplatBufferIndexMap = [];
+        this.globalSplatIndexToSceneIndexMap = [];
     }
 
     /**
@@ -65,7 +86,7 @@ export class SplatMesh extends THREE.Mesh {
         if (dynamicMode) {
             vertexShaderSource += `
                 uniform highp usampler2D transformIndexesTexture;
-                uniform highp mat4 transforms[${Constants.MaxSubScenes}];
+                uniform highp mat4 transforms[${Constants.MaxScenes}];
                 uniform vec2 transformIndexesTextureSize;
             `;
         }
@@ -256,7 +277,7 @@ export class SplatMesh extends THREE.Mesh {
                 'value': null
             };
             const transformMatrices = [];
-            for (let i = 0; i < Constants.MaxSubScenes; i++) {
+            for (let i = 0; i < Constants.MaxScenes; i++) {
                 transformMatrices.push(new THREE.Matrix4());
             }
             uniforms['transforms'] = {
@@ -319,11 +340,10 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     /**
-     * Build a Three.js transformation matrix for each splat buffer based on options (position, scale, rotation)
-     * passed to the splat mesh during the build process. These are all optional and allow for the customization of
-     * a given splat buffer's position, scale, and orientation relative to the others.
-     * @param {Array<THREE.Matrix4>} splatBuffers SplatBuffer instances
-     * @param {Array<object>} splatBufferOptions Array of options objects: {
+     * Build a container for each scene managed by this splat mesh based on an instance of SplatBuffer, along with optional
+     * transform data (position, scale, rotation) passed to the splat mesh during the build process.
+     * @param {Array<THREE.Matrix4>} splatBuffers SplatBuffer instances containing splats for each scene
+     * @param {Array<object>} sceneOptions Array of options objects: {
      *
      *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
      *
@@ -331,64 +351,61 @@ export class SplatMesh extends THREE.Mesh {
      *
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
-     * @param {Array<THREE.Matrix4>} splatBufferTransforms Existing transforms, if there are any
      * @return {Array<THREE.Matrix4>}
      */
-    static buildSplatBufferTransforms(splatBuffers, splatBufferOptions, splatBufferTransforms = null) {
-        splatBufferTransforms = splatBufferTransforms || [];
-        splatBufferTransforms.length = splatBufferOptions.length;
+    static buildScenes(splatBuffers, sceneOptions) {
+        const scenes = [];
+        scenes.length = splatBuffers.length;
         for (let i = 0; i < splatBuffers.length; i++) {
-            if (!splatBufferTransforms[i]) {
-                const options = splatBufferOptions[i];
-                if (options) {
-                    let positionArray = options['position'] || [0, 0, 0];
-                    let rotationArray = options['rotation'] || [0, 0, 0, 1];
-                    let scaleArray = options['scale'] || [1, 1, 1];
-                    const position = new THREE.Vector3().fromArray(positionArray);
-                    const rotation = new THREE.Quaternion().fromArray(rotationArray);
-                    const scale = new THREE.Vector3().fromArray(scaleArray);
-                    const splatBufferTransform = new THREE.Matrix4();
-                    splatBufferTransform.compose(position, rotation, scale);
-                    splatBufferTransforms[i] = splatBufferTransform;
-                } else {
-                    splatBufferTransforms[1] = new THREE.Matrix4();
-                }
-            }
+            const splatBuffer = splatBuffers[i];
+            const options = sceneOptions[i] || {};
+            let positionArray = options['position'] || [0, 0, 0];
+            let rotationArray = options['rotation'] || [0, 0, 0, 1];
+            let scaleArray = options['scale'] || [1, 1, 1];
+            const position = new THREE.Vector3().fromArray(positionArray);
+            const rotation = new THREE.Quaternion().fromArray(rotationArray);
+            const scale = new THREE.Vector3().fromArray(scaleArray);
+            scenes[i] = SplatMesh.createScene(splatBuffer, position, rotation, scale);
         }
-        return splatBufferTransforms;
+        return scenes;
+    }
+
+    static createScene(splatBuffer, position, rotation, scale) {
+        return new SplatScene(splatBuffer, position, rotation, scale);
     }
 
     /**
      * Build data structures that map global splat indexes (based on a unified index across all splat buffers) to
-     * local data within a single splat buffer.
+     * local data within a single scene.
      * @param {Array<SplatBuffer>} splatBuffers Instances of SplatBuffer off which to build the maps
      * @return {object}
      */
     static buildSplatIndexMaps(splatBuffers) {
         const localSplatIndexMap = [];
-        const splatBufferIndexMap = [];
+        const sceneIndexMap = [];
         let totalSplatCount = 0;
         for (let s = 0; s < splatBuffers.length; s++) {
             const splatBuffer = splatBuffers[s];
             const splatCount = splatBuffer.getSplatCount();
             for (let i = 0; i < splatCount; i++) {
                 localSplatIndexMap[totalSplatCount] = i;
-                splatBufferIndexMap[totalSplatCount] = s;
+                sceneIndexMap[totalSplatCount] = s;
                 totalSplatCount++;
             }
         }
         return {
             localSplatIndexMap,
-            splatBufferIndexMap
+            sceneIndexMap
         };
     }
 
     /**
      * Build an instance of SplatTree (a specialized octree) for the given splat mesh.
      * @param {SplatMesh} splatMesh SplatMesh instance for which the splat tree will be built
+     * @param {Array<number>} minAlphas Array of minimum splat slphas for each scene
      * @return {SplatTree}
      */
-    static buildSplatTree(splatMesh) {
+    static buildSplatTree(splatMesh, minAlphas = []) {
         // TODO: expose SplatTree constructor parameters (maximumDepth and maxCentersPerNode) so that they can
         // be configured on a per-scene basis
         const splatTree = new SplatTree(8, 1000);
@@ -396,9 +413,9 @@ export class SplatMesh extends THREE.Mesh {
         const splatColor = new THREE.Vector4();
         splatTree.processSplatMesh(splatMesh, (splatIndex) => {
             splatMesh.getSplatColor(splatIndex, splatColor);
-            const splatBufferIndex = splatMesh.getSplatBufferIndexForSplat(splatIndex);
-            const splatBufferOptions = splatMesh.splatBufferOptions[splatBufferIndex];
-            return splatColor.w >= (splatBufferOptions.splatAlphaRemovalThreshold || 1);
+            const sceneIndex = splatMesh.getSceneIndexForSplat(splatIndex);
+            const minAlpha = minAlphas[sceneIndex] || 1;
+            return splatColor.w >= minAlpha;
         });
         console.timeEnd('SplatTree build');
 
@@ -427,7 +444,7 @@ export class SplatMesh extends THREE.Mesh {
     /**
      * Construct this instance of SplatMesh.
      * @param {Array<SplatBuffer>} splatBuffers The base splat data, instances of SplatBuffer
-     * @param {Array<object>} splatBufferOptions Dynamic options for each splat buffer {
+     * @param {Array<object>} sceneOptions Dynamic options for each scene {
      *
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
      *                                     value (valid range: 0 - 255), defaults to 1
@@ -439,32 +456,36 @@ export class SplatMesh extends THREE.Mesh {
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      *
      * }
-     * @param {Boolean} keepExistingSplatBufferTransforms If the transform for a splat buffer has been changed since a
-     *                                                    previous call to build(), this flag says to preserve it. The assumption
-     *                                                    is that the current call to build() will be using the same splat buffers
-     *                                                    as the previous call.
+     * @param {Boolean} keepSceneTransforms For a scene that already exists and is being overwritten, this flag
+     *                                      says to keep the transform from the existing scene.
      */
-    build(splatBuffers, splatBufferOptions, keepExistingSplatBufferTransforms = true) {
+    build(splatBuffers, sceneOptions, keepSceneTransforms = true) {
         this.disposeMeshData();
         const totalSplatCount = SplatMesh.getTotalSplatCountForSplatBuffers(splatBuffers);
-        const transformsToPreserve = keepExistingSplatBufferTransforms ? this.splatBufferTransforms : null;
-        this.splatBufferTransforms = SplatMesh.buildSplatBufferTransforms(splatBuffers, splatBufferOptions, transformsToPreserve);
+
+        const newScenes = SplatMesh.buildScenes(splatBuffers, sceneOptions);
+        if (keepSceneTransforms) {
+            for (let i = 0; i < this.scenes.length; i++) {
+                const newScene = newScenes[i];
+                const existingScene = this.getScene(i);
+                newScene.copyTransformData(existingScene);
+            }
+        }
+        this.scenes = newScenes;
+
         this.geometry = SplatMesh.buildGeomtery(totalSplatCount);
         this.material = SplatMesh.buildMaterial(this.dynamicMode);
         const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
         this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
-        this.globalSplatIndexToSplatBufferIndexMap = indexMaps.splatBufferIndexMap;
+        this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
         if (!this.dynamicMode) {
-            this.splatTree = SplatMesh.buildSplatTree(this);
+            this.splatTree = SplatMesh.buildSplatTree(this, sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1));
         } else {
             this.splatTree = null;
         }
 
-        this.splatBuffers = splatBuffers;
-        this.splatBufferOptions = splatBufferOptions;
-
         if (this.enableDistancesComputationOnGPU) this.setupDistancesComputationTransformFeedback();
-        this.resetDataFromSplatBuffer();
+        this.resetDataFromSplatBuffers();
     }
 
     /**
@@ -509,7 +530,7 @@ export class SplatMesh extends THREE.Mesh {
     /**
      * Refresh data textures and GPU buffers for splat distance pre-computation with data from the splat buffers for this mesh.
      */
-    resetDataFromSplatBuffer() {
+    resetDataFromSplatBuffers() {
         this.uploadSplatDataToTextures();
         if (this.enableDistancesComputationOnGPU) {
             this.updateGPUCentersBufferForDistancesComputation();
@@ -604,7 +625,7 @@ export class SplatMesh extends THREE.Mesh {
             const paddedTransformIndexes = new Uint32Array(transformIndexesTextureSize.x *
                                                            transformIndexesTextureSize.y * TRANSFORM_INDEXES_ELEMENTS_PER_TEXEL);
             for (let c = 0; c < splatCount; c++) {
-                paddedTransformIndexes[c] = this.globalSplatIndexToSplatBufferIndexMap[c];
+                paddedTransformIndexes[c] = this.globalSplatIndexToSceneIndexMap[c];
             }
             const transformIndexesTexture = new THREE.DataTexture(paddedTransformIndexes, transformIndexesTextureSize.x,
                                                                   transformIndexesTextureSize.y, THREE.RedIntegerFormat,
@@ -635,6 +656,13 @@ export class SplatMesh extends THREE.Mesh {
         geometry.instanceCount = renderSplatCount;
     }
 
+    updateTransforms() {
+        for (let i = 0; i < this.scenes.length; i++) {
+            const scene = this.getScene(i);
+            scene.updateTransform();
+        }
+    }
+
     updateUniforms = function() {
 
         const viewport = new THREE.Vector2();
@@ -648,9 +676,8 @@ export class SplatMesh extends THREE.Mesh {
                 this.material.uniforms.basisViewport.value.set(2.0 / viewport.x, 2.0 / viewport.y);
                 this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
                 if (this.dynamicMode) {
-                    for (let i = 0; i < this.splatBuffers.length; i++) {
-                        const splatBufferTransform = this.splatBufferTransforms[i];
-                        this.material.uniforms.transforms.value[i].copy(splatBufferTransform);
+                    for (let i = 0; i < this.scenes.length; i++) {
+                        this.material.uniforms.transforms.value[i].copy(this.getScene(i).transform);
                     }
                 }
                 this.material.uniformsNeedUpdate = true;
@@ -664,7 +691,15 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     getSplatCount() {
-        return SplatMesh.getTotalSplatCountForSplatBuffers(this.splatBuffers);
+        return SplatMesh.getTotalSplatCountForScenes(this.scenes);
+    }
+
+    static getTotalSplatCountForScenes(scenes) {
+        let totalSplatCount = 0;
+        for (let scene of scenes) {
+            if (scene && scene.splatBuffer) totalSplatCount += scene.splatBuffer.getSplatCount();
+        }
+        return totalSplatCount;
     }
 
     static getTotalSplatCountForSplatBuffers(splatBuffers) {
@@ -777,7 +812,7 @@ export class SplatMesh extends THREE.Mesh {
                 if (this.dynamicMode) {
                     vsSource += `
                         in uint transformIndex;
-                        uniform ivec4 transforms[${Constants.MaxSubScenes}];
+                        uniform ivec4 transforms[${Constants.MaxScenes}];
                         void main(void) {
                             ivec4 transform = transforms[transformIndex];
                             distance = center.x * transform.x + center.y * transform.y + center.z * transform.z + transform.w * center.w;
@@ -799,7 +834,7 @@ export class SplatMesh extends THREE.Mesh {
                 if (this.dynamicMode) {
                     vsSource += `
                         in uint transformIndex;
-                        uniform mat4 transforms[${Constants.MaxSubScenes}];
+                        uniform mat4 transforms[${Constants.MaxScenes}];
                         void main(void) {
                             vec4 transformedCenter = transforms[transformIndex] * vec4(center, 1.0);
                             distance = transformedCenter.z;
@@ -865,7 +900,7 @@ export class SplatMesh extends THREE.Mesh {
             if (this.dynamicMode) {
                 this.distancesTransformFeedback.transformIndexesLoc =
                     gl.getAttribLocation(this.distancesTransformFeedback.program, 'transformIndex');
-                for (let i = 0; i < this.splatBufferTransforms.length; i++) {
+                for (let i = 0; i < this.scenes.length; i++) {
                     this.distancesTransformFeedback.transformsLocs[i] =
                         gl.getUniformLocation(this.distancesTransformFeedback.program, `transforms[${i}]`);
                 }
@@ -958,8 +993,8 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     getTransformIndexes() {
-        const transformIndexes = new Uint32Array(this.globalSplatIndexToSplatBufferIndexMap.length);
-        transformIndexes.set(this.globalSplatIndexToSplatBufferIndexMap);
+        const transformIndexes = new Uint32Array(this.globalSplatIndexToSceneIndexMap.length);
+        transformIndexes.set(this.globalSplatIndexToSceneIndexMap);
         return transformIndexes;
     }
 
@@ -969,11 +1004,11 @@ export class SplatMesh extends THREE.Mesh {
 
         return function(array) {
             if (tempArray.length !== array.length) tempArray.length = array.length;
-            for (let i = 0; i < this.splatBufferTransforms.length; i++) {
-                const splatBufferTransform = this.splatBufferTransforms[i];
-                const splatBufferTransformElements = splatBufferTransform.elements;
+            for (let i = 0; i < this.scenes.length; i++) {
+                const sceneTransform = this.getScene(i).transform;
+                const sceneTransformElements = sceneTransform.elements;
                 for (let j = 0; j < 16; j++) {
-                    tempArray[i * 16 + j] = splatBufferTransformElements[j];
+                    tempArray[i * 16 + j] = sceneTransformElements[j];
                 }
             }
             array.set(tempArray);
@@ -1000,9 +1035,8 @@ export class SplatMesh extends THREE.Mesh {
             gl.enable(gl.RASTERIZER_DISCARD);
 
             if (this.dynamicMode) {
-                for (let i = 0; i < this.splatBuffers.length; i++) {
-                    const splatBufferTransform = this.splatBufferTransforms[i];
-                    tempMatrix.copy(splatBufferTransform);
+                for (let i = 0; i < this.scenes.length; i++) {
+                    tempMatrix.copy(this.getScene(i).transform);
                     tempMatrix.premultiply(modelViewProjMatrix);
 
                     if (this.integerBasedDistancesComputation) {
@@ -1095,14 +1129,14 @@ export class SplatMesh extends THREE.Mesh {
      * buffer, and the corresponding transform)
      * @param {number} globalIndex Global splat index
      * @param {object} paramsObj Object in which to store local data
-     * @param {boolean} forceTransformApplication Force the splat buffer transform for a splat to be applied. By default
+     * @param {boolean} forceTransformApplication Force the scene transform for a splat to be applied. By default
      *                                            the transform only gets applied if 'dynamicMode' is false.
      */
     getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication = false) {
         paramsObj.splatBuffer = this.getSplatBufferForSplat(globalIndex);
         paramsObj.localIndex = this.getSplatLocalIndex(globalIndex);
-        paramsObj.splatBufferTransform = (this.dynamicMode && !forceTransformApplication) ?
-                                          null : this.getSplatBufferTransformForSplat(globalIndex);
+        paramsObj.sceneTransform = (this.dynamicMode && !forceTransformApplication) ?
+                                    null : this.getSceneTransformForSplat(globalIndex);
     }
 
     /**
@@ -1115,12 +1149,13 @@ export class SplatMesh extends THREE.Mesh {
      */
     fillSplatDataArrays(covariances, centers, colors, forceTransformApplication = false) {
         let offset = 0;
-        for (let i = 0; i < this.splatBuffers.length; i++) {
-            const splatBuffer = this.splatBuffers[i];
-            const splatBufferTransform = (this.dynamicMode && !forceTransformApplication) ? null : this.splatBufferTransforms[i];
-            if (covariances) splatBuffer.fillSplatCovarianceArray(covariances, offset, splatBufferTransform);
-            if (centers) splatBuffer.fillSplatCenterArray(centers, offset, splatBufferTransform);
-            if (colors) splatBuffer.fillSplatColorArray(colors, offset, splatBufferTransform);
+        for (let i = 0; i < this.scenes.length; i++) {
+            const scene = this.getScene(i);
+            const splatBuffer = scene.splatBuffer;
+            const sceneTransform = (this.dynamicMode && !forceTransformApplication) ? null : scene.transform;
+            if (covariances) splatBuffer.fillSplatCovarianceArray(covariances, offset, sceneTransform);
+            if (centers) splatBuffer.fillSplatCenterArray(centers, offset, sceneTransform);
+            if (colors) splatBuffer.fillSplatColorArray(colors, offset, sceneTransform);
             offset += splatBuffer.getSplatCount();
         }
     }
@@ -1185,7 +1220,7 @@ export class SplatMesh extends THREE.Mesh {
 
         return function(globalIndex, outCenter, forceTransformApplication = false) {
             this.getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication);
-            paramsObj.splatBuffer.getSplatCenter(paramsObj.localIndex, outCenter, paramsObj.splatBufferTransform);
+            paramsObj.splatBuffer.getSplatCenter(paramsObj.localIndex, outCenter, paramsObj.sceneTransform);
         };
 
     }();
@@ -1204,7 +1239,7 @@ export class SplatMesh extends THREE.Mesh {
 
         return function(globalIndex, outScale, outRotation, forceTransformApplication = false) {
             this.getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication);
-            paramsObj.splatBuffer.getSplatScaleAndRotation(paramsObj.localIndex, outScale, outRotation, paramsObj.splatBufferTransform);
+            paramsObj.splatBuffer.getSplatScaleAndRotation(paramsObj.localIndex, outScale, outRotation, paramsObj.sceneTransform);
         };
 
     }();
@@ -1222,33 +1257,33 @@ export class SplatMesh extends THREE.Mesh {
 
         return function(globalIndex, outColor, forceTransformApplication = false) {
             this.getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication);
-            paramsObj.splatBuffer.getSplatColor(paramsObj.localIndex, outColor, paramsObj.splatBufferTransform);
+            paramsObj.splatBuffer.getSplatColor(paramsObj.localIndex, outColor, paramsObj.sceneTransform);
         };
 
     }();
 
     getSplatBufferForSplat(globalIndex) {
-        return this.splatBuffers[this.globalSplatIndexToSplatBufferIndexMap[globalIndex]];
+        return this.getScene(this.globalSplatIndexToSceneIndexMap[globalIndex]).splatBuffer;
     }
 
-    getSplatBufferIndexForSplat(globalIndex) {
-        return this.globalSplatIndexToSplatBufferIndexMap[globalIndex];
+    getSceneIndexForSplat(globalIndex) {
+        return this.globalSplatIndexToSceneIndexMap[globalIndex];
     }
 
-    getSplatBufferTransformForSplat(globalIndex) {
-        return this.splatBufferTransforms[this.globalSplatIndexToSplatBufferIndexMap[globalIndex]];
-    }
-
-    setSplatBufferTransform(splatBufferIndex, transform) {
-        let splatBufferTransform = this.splatBufferTransforms[splatBufferIndex];
-        if (!splatBufferTransform) {
-            this.splatBufferTransforms[splatBufferIndex] = splatBufferTransform = new THREE.Matrix4();
-        }
-        splatBufferTransform.copy(transform);
+    getSceneTransformForSplat(globalIndex) {
+        return this.getScene(this.globalSplatIndexToSceneIndexMap[globalIndex]).transform;
     }
 
     getSplatLocalIndex(globalIndex) {
         return this.globalSplatIndexToLocalSplatIndexMap[globalIndex];
+    }
+
+    getScene(sceneIndex) {
+        let scene = this.scenes[sceneIndex];
+        if (!scene) {
+            this.scenes[sceneIndex] = scene = SplatMesh.createScene();
+        }
+        return scene;
     }
 
     static getIntegerMatrixArray(matrix) {

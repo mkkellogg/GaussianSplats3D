@@ -37,7 +37,7 @@
       'initialCameraLookAt': [1.52976, 2.27776, 1.65898],
       'halfPrecisionCovariancesOnGPU': true
     });
-    const abortablePromise = viewer.loadFiles([{
+    const abortablePromise = viewer.addSplatScenes([{
           'path': 'assets/data/garden/garden_high.ksplat',
           'splatAlphaRemovalThreshold': 20,
         },

@@ -127,7 +127,7 @@ function sortWorker(self) {
             const memoryRequiredForSortedIndexes = splatCount * Constants.BytesPerInt;
             const memoryRequiredForIntermediateSortBuffers = Constants.DepthMapRange * Constants.BytesPerInt * 2;
             const memoryRequiredforTransformIndexes = dynamicMode ? (splatCount * Constants.BytesPerInt) : 0;
-            const memoryRequiredforTransforms = dynamicMode ? (Constants.MaxSubScenes * matrixSize) : 0;
+            const memoryRequiredforTransforms = dynamicMode ? (Constants.MaxScenes * matrixSize) : 0;
             const extraMemory = Constants.MemoryPageSize * 32;
 
             const totalRequiredMemory = memoryRequiredForIndexesToSort +
@@ -217,7 +217,7 @@ export function createSortWorker(splatCount, useSharedMemory, integerBasedSort, 
                 'BytesPerInt': Constants.BytesPerInt,
                 'DepthMapRange': Constants.DepthMapRange,
                 'MemoryPageSize': Constants.MemoryPageSize,
-                'MaxSubScenes': Constants.MaxSubScenes
+                'MaxScenes': Constants.MaxScenes
             }
         }
     });

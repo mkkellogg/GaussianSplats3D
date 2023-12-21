@@ -3,8 +3,8 @@ import { ArrowHelper } from './ArrowHelper.js';
 
 export class SceneHelper {
 
-    constructor(scene) {
-        this.scene = scene;
+    constructor(threeScene) {
+        this.threeScene = threeScene;
         this.splatRenderTarget = null;
         this.renderTargetCopyMaterial = null;
         this.renderTargetCopyQuad = null;
@@ -96,7 +96,7 @@ export class SceneHelper {
             this.meshCursor.add(leftArrow);
             this.meshCursor.add(rightArrow);
             this.meshCursor.scale.set(0.1, 0.1, 0.1);
-            this.scene.add(this.meshCursor);
+            this.threeScene.add(this.meshCursor);
             this.meshCursor.visible = false;
         }
     }
@@ -107,7 +107,7 @@ export class SceneHelper {
                 child.geometry.dispose();
                 child.material.dispose();
             });
-            this.scene.remove(this.meshCursor);
+            this.threeScene.remove(this.meshCursor);
             this.meshCursor = null;
         }
     }
@@ -213,8 +213,8 @@ export class SceneHelper {
     addDebugMeshes() {
         this.debugRoot = this.createDebugMeshes();
         this.secondaryDebugRoot = this.createSecondaryDebugMeshes();
-        this.scene.add(this.debugRoot);
-        this.scene.add(this.secondaryDebugRoot);
+        this.threeScene.add(this.debugRoot);
+        this.threeScene.add(this.secondaryDebugRoot);
     }
 
     createDebugMeshes(renderOrder) {

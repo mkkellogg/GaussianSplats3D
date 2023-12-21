@@ -66,14 +66,14 @@
       return camera;
     }
 
-    function setupScene() {
-      const scene = new THREE.Scene();
+    function setupThreeScene() {
+      const threeScene = new THREE.Scene();
       const boxColor = 0xBBBBBB;
       const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
       const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color': boxColor}));
-      scene.add(boxMesh);
+      threeScene.add(boxMesh);
       boxMesh.position.set(3, 2, 2);
-      return scene;
+      return threeScene;
     }
 
     function setupControls(camera, renderer) {
@@ -88,11 +88,11 @@
 
     const {renderer, renderWidth, renderHeight} = setupRenderer();
     const camera = setupCamera(renderWidth, renderHeight);
-    const scene = setupScene();
+    const threeScene = setupThreeScene();
     const controls = setupControls(camera, renderer);
 
     const viewer = new GaussianSplats3D.DropInViewer();
-    viewer.addScenesFromFiles([
+    viewer.addSplatScenes([
         {
           'path': 'assets/data/garden/garden.ksplat',
           'splatAlphaRemovalThreshold': 20,
@@ -105,13 +105,13 @@
           'splatAlphaRemovalThreshold': 20,
         }
       ], true);
-    scene.add(viewer);
+      threeScene.add(viewer);
 
     requestAnimationFrame(update);
     function update() {
       requestAnimationFrame(update);
       controls.update();
-      renderer.render(scene, camera);
+      renderer.render(threeScene, camera);
     }
   </script>
 </body>

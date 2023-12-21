@@ -47,9 +47,9 @@ export class DropInViewer extends THREE.Group {
      * }
      * @return {AbortablePromise}
      */
-    addSceneFromFile(path, options = {}) {
+    addSplatScene(path, options = {}) {
         if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
-        const loadPromise = this.viewer.loadFile(path, options);
+        const loadPromise = this.viewer.addSplatScene(path, options);
         loadPromise.then(() => {
             this.add(this.viewer.splatMesh);
         });
@@ -58,7 +58,7 @@ export class DropInViewer extends THREE.Group {
 
     /**
      * Add multiple splat scenes to the viewer.
-     * @param {Array<object>} files Array of per-scene options: {
+     * @param {Array<object>} sceneOptions Array of per-scene options: {
      *
      *         path: Path to splat scene to be loaded
      *
@@ -74,16 +74,20 @@ export class DropInViewer extends THREE.Group {
      * @param {boolean} showLoadingSpinner Display a loading spinner while the scene is loading, defaults to true
      * @return {AbortablePromise}
      */
-    addScenesFromFiles(files, showLoadingSpinner) {
+    addSplatScenes(sceneOptions, showLoadingSpinner) {
         if (showLoadingSpinner !== false) showLoadingSpinner = true;
-        const loadPromise = this.viewer.loadFiles(files, showLoadingSpinner);
+        const loadPromise = this.viewer.addSplatScenes(sceneOptions, showLoadingSpinner);
         loadPromise.then(() => {
             this.add(this.viewer.splatMesh);
         });
         return loadPromise;
     }
 
-    static onBeforeRender(viewer, renderer, scene, camera) {
+    getSplatScene(sceneIndex) {
+        return this.viewer.getSplatScene(sceneIndex);
+    }
+
+    static onBeforeRender(viewer, renderer, threeScene, camera) {
         viewer.update(renderer, camera);
     }
 
