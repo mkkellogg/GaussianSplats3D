@@ -92,9 +92,9 @@ export class Viewer {
         if (options.sharedMemoryForWorkers === undefined || options.sharedMemoryForWorkers === null) options.sharedMemoryForWorkers = true;
         this.sharedMemoryForWorkers = options.sharedMemoryForWorkers;
 
-        // if 'dynamicMode' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in the
+        // if 'dynamicScene' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in the
         // scene may change. This prevents optimizations that depend on a static scene from being made.
-        this.dynamicMode = !!options.dynamicMode;
+        this.dynamicMode = !!options.dynamicScene;
 
         this.controls = null;
 
