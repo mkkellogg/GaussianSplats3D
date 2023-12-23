@@ -83,6 +83,11 @@ export class DropInViewer extends THREE.Group {
         return loadPromise;
     }
 
+    /**
+     * Get a reference to a splat scene.
+     * @param {number} sceneIndex The index of the scene to which the reference will be returned
+     * @return {SplatScene}
+     */
     getSplatScene(sceneIndex) {
         return this.viewer.getSplatScene(sceneIndex);
     }

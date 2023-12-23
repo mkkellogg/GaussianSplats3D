@@ -284,7 +284,7 @@ Advanced `Viewer` parameters
 | `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `true`.
 | `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
 | `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
-| `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static
+| `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static. Additionally all splat data retrieved from the viewer's splat mesh will not have their respective scene transform applied to them by default.
 <br>
 
 ### Creating KSPLAT files

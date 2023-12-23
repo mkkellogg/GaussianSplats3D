@@ -1,33 +1,11 @@
 import * as THREE from 'three';
+import { SplatScene } from './SplatScene.js';
 import { SplatTree } from './splattree/SplatTree.js';
 import { uintEncodedFloat, rgbaToInteger } from './Util.js';
 import { Constants } from './Constants.js';
 
 const dummyGeometry = new THREE.BufferGeometry();
 const dummyMaterial = new THREE.MeshBasicMaterial();
-
-export class SplatScene {
-
-    constructor(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3(1, 1, 1)) {
-        this.splatBuffer = splatBuffer;
-        this.position = position.clone();
-        this.quaternion = quaternion.clone();
-        this.scale = scale.clone();
-        this.transform = new THREE.Matrix4();
-        this.updateTransform();
-    }
-
-    copyTransformData(otherScene) {
-        this.position.copy(otherScene.position);
-        this.quaternion.copy(otherScene.quaternion);
-        this.scale.copy(otherScene.scale);
-        this.transform.copy(otherScene.transform);
-    }
-
-    updateTransform() {
-        this.transform.compose(this.position, this.quaternion, this.scale);
-    }
-}
 
 /**
  * SplatMesh: Container for one or more splat scenes, abstracting them into a single unified container for
@@ -38,14 +16,26 @@ export class SplatMesh extends THREE.Mesh {
     constructor(dynamicMode = true, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
                 enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false) {
         super(dummyGeometry, dummyMaterial);
+        // Reference to a Three.js renderer
         this.renderer = undefined;
+        // Use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
+        // When 'dynamicMode' is true, scenes are assumed to be non-static. Dynamic scenes are handled differently
+        // and certain optimizations cannot be made for them. Additionally, by default, all splat data retrieved from
+        // this splat mesh will not have their scene transform applied to them if the splat mesh is dynamic. That
+        // can be overriden via parameters to the individual functions that are used to retrieve splat data.
         this.dynamicMode = dynamicMode;
+        // Ratio of the resolution in physical pixels to the resolution in CSS pixels for the current display device
         this.devicePixelRatio = devicePixelRatio;
+        // Use a transform feedback to calculate splat distances from the camera
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
+        // Use a faster integer-based approach for calculating splat distances from the camera
         this.integerBasedDistancesComputation = integerBasedDistancesComputation;
+        // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
+        // Special octree tailored to SplatMesh instances
         this.splatTree = null;
+        // Textures in which splat data will be stored for rendering
         this.splatDataTextures = null;
         this.distancesTransformFeedback = {
             'id': null,
@@ -199,9 +189,10 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(trace * trace / 4.0 - D);
                 float eigenValue1 = traceOver2 + term2;
+                float eigenValue2 = max(traceOver2 - term2, 0.00); // prevent negative eigen value
 
                 float transparentAdjust = step(1.0 / 255.0, vColor.a);
-                float eigenValue2 = max(traceOver2 - term2, 0.00) * transparentAdjust; // prevent negative eigen value
+                eigenValue2 = eigenValue2 * transparentAdjust; // hide splat if alpha is zero
 
                 const float maxSplatSize = 1024.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
@@ -478,11 +469,7 @@ export class SplatMesh extends THREE.Mesh {
         const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
         this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
         this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
-        if (!this.dynamicMode) {
-            this.splatTree = SplatMesh.buildSplatTree(this, sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1));
-        } else {
-            this.splatTree = null;
-        }
+        this.splatTree = SplatMesh.buildSplatTree(this, sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1));
 
         if (this.enableDistancesComputationOnGPU) this.setupDistancesComputationTransformFeedback();
         this.resetDataFromSplatBuffers();
@@ -656,6 +643,10 @@ export class SplatMesh extends THREE.Mesh {
         geometry.instanceCount = renderSplatCount;
     }
 
+    /**
+     * Update the transforms for each scene in this splat mesh from their individual components (position,
+     * quaternion, and scale)
+     */
     updateTransforms() {
         for (let i = 0; i < this.scenes.length; i++) {
             const scene = this.getScene(i);
@@ -749,6 +740,10 @@ export class SplatMesh extends THREE.Mesh {
         }
     }
 
+    /**
+     * Set the Three.js renderer used by this splat mesh
+     * @param {THREE.WebGLRenderer} renderer Instance of THREE.WebGLRenderer
+     */
     setRenderer(renderer) {
         if (renderer !== this.renderer) {
             this.renderer = renderer;
@@ -949,7 +944,7 @@ export class SplatMesh extends THREE.Mesh {
     }();
 
     /**
-     * Refresh GPU buffers used for pre-computing splat distances with centers data from the splat buffers for this mesh.
+     * Refresh GPU buffers used for computing splat distances with centers data from the scenes for this mesh.
      */
     updateGPUCentersBufferForDistancesComputation() {
 
@@ -974,7 +969,7 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     /**
-     * Refresh GPU buffers used for pre-computing splat distances with centers data from the splat buffers for this mesh.
+     * Refresh GPU buffers used for pre-computing splat distances with centers data from the scenes for this mesh.
      */
     updateGPUTransformIndexesBufferForDistancesComputation() {
 
@@ -992,12 +987,20 @@ export class SplatMesh extends THREE.Mesh {
         if (currentVao) gl.bindVertexArray(currentVao);
     }
 
+    /**
+     * Get a typed array containing a mapping from global splat indexes to their scene index.
+     * @return {Uint32Array}
+     */
     getTransformIndexes() {
         const transformIndexes = new Uint32Array(this.globalSplatIndexToSceneIndexMap.length);
         transformIndexes.set(this.globalSplatIndexToSceneIndexMap);
         return transformIndexes;
     }
 
+    /**
+     * Fill 'array' with the transforms for each scene in this splat mesh.
+     * @param {Array} array Empty array to be filled with scene transforms. If not empty, contents will be overwritten.
+     */
     fillTransformsArray = function() {
 
         const tempArray = [];
@@ -1129,14 +1132,19 @@ export class SplatMesh extends THREE.Mesh {
      * buffer, and the corresponding transform)
      * @param {number} globalIndex Global splat index
      * @param {object} paramsObj Object in which to store local data
-     * @param {boolean} forceTransformApplication Force the scene transform for a splat to be applied. By default
-     *                                            the transform only gets applied if 'dynamicMode' is false.
+     * @param {boolean} returnSceneTransform By default, the transform of the scene to which the splat at 'globalIndex' belongs will be
+     *                                       returned via the 'sceneTransform' property of 'paramsObj' only if the splat mesh is static.
+     *                                       If 'returnSceneTransform' is true, the 'sceneTransform' property will always contain the scene
+     *                                       transform, and if 'returnSceneTransform' is false, the 'sceneTransform' property will always
+     *                                       be null.
      */
-    getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication = false) {
+    getLocalSplatParameters(globalIndex, paramsObj, returnSceneTransform) {
+        if (returnSceneTransform === undefined || returnSceneTransform === null) {
+            returnSceneTransform = this.dynamicMode ? false : true;
+        }
         paramsObj.splatBuffer = this.getSplatBufferForSplat(globalIndex);
         paramsObj.localIndex = this.getSplatLocalIndex(globalIndex);
-        paramsObj.sceneTransform = (this.dynamicMode && !forceTransformApplication) ?
-                                    null : this.getSceneTransformForSplat(globalIndex);
+        paramsObj.sceneTransform = returnSceneTransform ? this.getSceneTransformForSplat(globalIndex) : null;
     }
 
     /**
@@ -1144,15 +1152,19 @@ export class SplatMesh extends THREE.Mesh {
      * @param {Float32Array} covariances Target storage for splat covariances
      * @param {Float32Array} centers Target storage for splat centers
      * @param {Uint8Array} colors Target storage for splat colors
-     * @param {boolean} forceTransformApplication Force the splat buffer transform for a splat to be applied. By default
-     *                                            the transform only gets applied if 'dynamicMode' is false.
+     * @param {boolean} applySceneTransform By default, scene transforms are applied to relevant splat data only if the splat mesh is
+     *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
+     *                                      it is false, they will never be applied. If undefined, the default behavior will apply.
      */
-    fillSplatDataArrays(covariances, centers, colors, forceTransformApplication = false) {
+    fillSplatDataArrays(covariances, centers, colors, applySceneTransform) {
         let offset = 0;
         for (let i = 0; i < this.scenes.length; i++) {
+            if (applySceneTransform === undefined || applySceneTransform === null) {
+                applySceneTransform = this.dynamicMode ? false : true;
+            }
             const scene = this.getScene(i);
             const splatBuffer = scene.splatBuffer;
-            const sceneTransform = (this.dynamicMode && !forceTransformApplication) ? null : scene.transform;
+            const sceneTransform = applySceneTransform ? null : scene.transform;
             if (covariances) splatBuffer.fillSplatCovarianceArray(covariances, offset, sceneTransform);
             if (centers) splatBuffer.fillSplatCenterArray(centers, offset, sceneTransform);
             if (colors) splatBuffer.fillSplatColorArray(colors, offset, sceneTransform);
@@ -1164,14 +1176,15 @@ export class SplatMesh extends THREE.Mesh {
      * Convert splat centers, which are floating point values, to an array of integers and multiply
      * each by 1000. Centers will get transformed as appropriate before conversion to integer.
      * @param {number} padFour Enforce alignement of 4 by inserting a 1000 after every 3 values
-     * @param {boolean} forceTransformApplication Force the splat buffer transform for a splat to be applied. By default
-     *                                            the transform only gets applied if 'dynamicMode' is false.
+     * @param {boolean} applySceneTransform By default, scene transforms are applied to the splat centers only if the splat mesh is
+     *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
+     *                                      it is false, they will never be applied. If undefined, the default behavior will apply.
      * @return {Int32Array}
      */
-    getIntegerCenters(padFour, forceTransformApplication = false) {
+    getIntegerCenters(padFour, applySceneTransform) {
         const splatCount = this.getSplatCount();
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, forceTransformApplication);
+        this.fillSplatDataArrays(null, floatCenters, null, applySceneTransform);
         let intCenters;
         let componentCount = padFour ? 4 : 3;
         intCenters = new Int32Array(splatCount * componentCount);
@@ -1186,16 +1199,17 @@ export class SplatMesh extends THREE.Mesh {
 
 
     /**
-     * Returns an array of splat centers, optionally padded.
+     * Returns an array of splat centers, transformed as appropriate, optionally padded.
      * @param {number} padFour Enforce alignement of 4 by inserting a 1 after every 3 values
-     * @param {boolean} forceTransformApplication Force the splat buffer transform for a splat to be applied. By default
-     *                                            the transform only gets applied if 'dynamicMode' is false.
+     * @param {boolean} applySceneTransform By default, scene transforms are applied to the splat centers only if the splat mesh is
+     *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
+     *                                      it is false, they will never be applied. If undefined, the default behavior will apply.
      * @return {Float32Array}
      */
-    getFloatCenters(padFour, forceTransformApplication = false) {
+    getFloatCenters(padFour) {
         const splatCount = this.getSplatCount();
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, forceTransformApplication);
+        this.fillSplatDataArrays(null, floatCenters, null, applySceneTransform);
         if (!padFour) return floatCenters;
         let paddedFloatCenters = new Float32Array(splatCount * 4);
         for (let i = 0; i < splatCount; i++) {
@@ -1211,15 +1225,17 @@ export class SplatMesh extends THREE.Mesh {
      * Get the center for a splat, transformed as appropriate.
      * @param {number} globalIndex Global index of splat
      * @param {THREE.Vector3} outCenter THREE.Vector3 instance in which to store splat center
-     * @param {boolean} forceTransformApplication Force the splat buffer transform for a splat to be applied. By default
-     *                                            the transform only gets applied if 'dynamicMode' is false.
+     * @param {boolean} applySceneTransform By default, if the splat mesh is static, the transform of the scene to which the splat at
+     *                                      'globalIndex' belongs will be applied to the splat center. If 'applySceneTransform' is true,
+     *                                      the scene transform will always be applied and if 'applySceneTransform' is false, the
+     *                                      scene transform will never be applied. If undefined, the default behavior will apply.
      */
     getSplatCenter = function() {
 
         const paramsObj = {};
 
-        return function(globalIndex, outCenter, forceTransformApplication = false) {
-            this.getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication);
+        return function(globalIndex, outCenter, applySceneTransform) {
+            this.getLocalSplatParameters(globalIndex, paramsObj, applySceneTransform);
             paramsObj.splatBuffer.getSplatCenter(paramsObj.localIndex, outCenter, paramsObj.sceneTransform);
         };
 
@@ -1230,37 +1246,62 @@ export class SplatMesh extends THREE.Mesh {
      * @param {number} globalIndex Global index of splat
      * @param {THREE.Vector3} outScale THREE.Vector3 instance in which to store splat scale
      * @param {THREE.Quaternion} outRotation THREE.Quaternion instance in which to store splat rotation
-     * @param {boolean} forceTransformApplication Force the splat buffer transform for a splat to be applied. By default
-     *                                            the transform only gets applied if 'dynamicMode' is false.
+     * @param {boolean} applySceneTransform By default, if the splat mesh is static, the transform of the scene to which the splat at
+     *                                      'globalIndex' belongs will be applied to the splat scale and rotation. If
+     *                                      'applySceneTransform' is true, the scene transform will always be applied and if
+     *                                      'applySceneTransform' is false, the scene transform will never be applied. If undefined,
+     *                                      the default behavior will apply.
      */
     getSplatScaleAndRotation = function() {
 
         const paramsObj = {};
 
-        return function(globalIndex, outScale, outRotation, forceTransformApplication = false) {
-            this.getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication);
+        return function(globalIndex, outScale, outRotation, applySceneTransform) {
+            this.getLocalSplatParameters(globalIndex, paramsObj, applySceneTransform);
             paramsObj.splatBuffer.getSplatScaleAndRotation(paramsObj.localIndex, outScale, outRotation, paramsObj.sceneTransform);
         };
 
     }();
 
     /**
-     * Get the color for a splat
+     * Get the color for a splat.
      * @param {number} globalIndex Global index of splat
      * @param {THREE.Vector4} outColor THREE.Vector4 instance in which to store splat color
-     * @param {boolean} forceTransformApplication Force the splat buffer transform for a splat to be applied. By default
-     *                                            the transform only gets applied if 'dynamicMode' is false.
      */
     getSplatColor = function() {
 
         const paramsObj = {};
 
-        return function(globalIndex, outColor, forceTransformApplication = false) {
-            this.getLocalSplatParameters(globalIndex, paramsObj, forceTransformApplication);
+        return function(globalIndex, outColor) {
+            this.getLocalSplatParameters(globalIndex, paramsObj);
             paramsObj.splatBuffer.getSplatColor(paramsObj.localIndex, outColor, paramsObj.sceneTransform);
         };
 
     }();
+
+    /**
+     * Store the transform of the scene at 'sceneIndex' in 'outTransform'.
+     * @param {number} sceneIndex Index of the desired scene
+     * @param {THREE.Matrix4} outTransform Instance of THREE.Matrix4 in which to store the scene's transform
+     */
+    getSceneTransform(sceneIndex, outTransform) {
+        const scene = this.getScene(sceneIndex);
+        scene.updateTransform();
+        outTransform.copy(scene.transform);
+    }
+
+    /**
+     * Get the scene at 'sceneIndex'.
+     * @param {number} sceneIndex Index of the desired scene
+     * @return {SplatScene}
+     */
+    getScene(sceneIndex) {
+        let scene = this.scenes[sceneIndex];
+        if (!scene) {
+            this.scenes[sceneIndex] = scene = SplatMesh.createScene();
+        }
+        return scene;
+    }
 
     getSplatBufferForSplat(globalIndex) {
         return this.getScene(this.globalSplatIndexToSceneIndexMap[globalIndex]).splatBuffer;
@@ -1276,14 +1317,6 @@ export class SplatMesh extends THREE.Mesh {
 
     getSplatLocalIndex(globalIndex) {
         return this.globalSplatIndexToLocalSplatIndexMap[globalIndex];
-    }
-
-    getScene(sceneIndex) {
-        let scene = this.scenes[sceneIndex];
-        if (!scene) {
-            this.scenes[sceneIndex] = scene = SplatMesh.createScene();
-        }
-        return scene;
     }
 
     static getIntegerMatrixArray(matrix) {

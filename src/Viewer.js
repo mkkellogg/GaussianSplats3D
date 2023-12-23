@@ -93,13 +93,14 @@ export class Viewer {
         this.sharedMemoryForWorkers = options.sharedMemoryForWorkers;
 
         // if 'dynamicScene' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in the
-        // scene may change. This prevents optimizations that depend on a static scene from being made.
-        this.dynamicMode = !!options.dynamicScene;
+        // scene may change. This prevents optimizations that depend on a static scene from being made. Additionally, if 'dynamicScene' is
+        // true it tells the splat mesh to not apply scene tranforms to splat data that is returned by functions like
+        // SplatMesh.getSplatCenter() by default.
+        const dynamicScene = !!options.dynamicScene;
+        this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
+                                       this.gpuAcceleratedSort, this.integerBasedSort);
 
         this.controls = null;
-
-        this.splatMesh = new SplatMesh(this.dynamicMode, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort);
 
         this.showMeshCursor = false;
         this.showControlPlane = false;
@@ -624,7 +625,7 @@ export class Viewer {
         return new Promise((resolve) => {
             const DistancesArrayType = this.integerBasedSort ? Int32Array : Float32Array;
             const splatCount = splatMesh.getSplatCount();
-            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers, this.integerBasedSort, this.dynamicMode);
+            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers, this.integerBasedSort, this.splatMesh.dynamicMode);
             sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
@@ -971,7 +972,7 @@ export class Viewer {
             angleDiff = sortViewDir.dot(lastSortViewDir);
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
-            if (!force && !this.dynamicMode && queuedSorts.length === 0 && runCount > 0) {
+            if (!force && !this.splatMesh.dynamicMode && queuedSorts.length === 0 && runCount > 0) {
                 if (angleDiff <= 0.95) needsRefreshForRotation = true;
                 if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
@@ -987,7 +988,7 @@ export class Viewer {
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
-            if (this.dynamicMode) {
+            if (this.splatMesh.dynamicMode) {
                 queuedSorts.push(this.splatRenderCount);
             } else {
                 if (queuedSorts.length === 0) {
@@ -1015,7 +1016,7 @@ export class Viewer {
                 'splatSortCount': sortCount,
                 'usePrecomputedDistances': this.gpuAcceleratedSort
             };
-            if (this.dynamicMode) {
+            if (this.splatMesh.dynamicMode) {
                 this.splatMesh.fillTransformsArray(this.sortWorkerTransforms);
             }
             if (!this.sharedMemoryForWorkers) {
@@ -1047,7 +1048,9 @@ export class Viewer {
         const tempVectorYZ = new THREE.Vector3();
         const tempVectorXZ = new THREE.Vector3();
         const tempVector = new THREE.Vector3();
-        const tempMatrix4 = new THREE.Matrix4();
+        const modelView = new THREE.Matrix4();
+        const baseModelView = new THREE.Matrix4();
+        const sceneTransform = new THREE.Matrix4();
         const renderDimensions = new THREE.Vector3();
         const forward = new THREE.Vector3(0, 0, -1);
 
@@ -1060,45 +1063,52 @@ export class Viewer {
 
         return function(gatherAllNodes) {
 
-            if (this.dynamicMode) {
-                return this.splatMesh.getSplatCount();
-            }
-
             this.getRenderDimensions(renderDimensions);
             const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
             const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / cameraFocalLength);
             const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / cameraFocalLength);
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
-            tempMatrix4.copy(this.camera.matrixWorld).invert();
-            tempMatrix4.multiply(this.splatMesh.matrixWorld);
 
             const splatTree = this.splatMesh.getSplatTree();
+            baseModelView.copy(this.camera.matrixWorld).invert();
+            baseModelView.multiply(this.splatMesh.matrixWorld);
+
             let nodeRenderCount = 0;
             let splatRenderCount = 0;
-            const nodeCount = splatTree.nodesWithIndexes.length;
-            for (let i = 0; i < nodeCount; i++) {
-                const node = splatTree.nodesWithIndexes[i];
-                tempVector.copy(node.center).applyMatrix4(tempMatrix4);
-                const distanceToNode = tempVector.length();
-                tempVector.normalize();
 
-                tempVectorYZ.copy(tempVector).setX(0).normalize();
-                tempVectorXZ.copy(tempVector).setY(0).normalize();
-
-                const cameraAngleXZDot = forward.dot(tempVectorXZ);
-                const cameraAngleYZDot = forward.dot(tempVectorYZ);
-
-                const ns = nodeSize(node);
-                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
-                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
-                if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
-                    continue;
+            for (let s = 0; s < splatTree.subTrees.length; s++) {
+                const subTree = splatTree.subTrees[s];
+                modelView.copy(baseModelView);
+                if (this.splatMesh.dynamicMode) {
+                    this.splatMesh.getSceneTransform(s, sceneTransform);
+                    modelView.multiply(sceneTransform);
                 }
-                splatRenderCount += node.data.indexes.length;
-                nodeRenderList[nodeRenderCount] = node;
-                node.data.distanceToNode = distanceToNode;
-                nodeRenderCount++;
+                const nodeCount = subTree.nodesWithIndexes.length;
+                for (let i = 0; i < nodeCount; i++) {
+                    const node = subTree.nodesWithIndexes[i];
+                    tempVector.copy(node.center).applyMatrix4(modelView);
+
+                    const distanceToNode = tempVector.length();
+                    tempVector.normalize();
+
+                    tempVectorYZ.copy(tempVector).setX(0).normalize();
+                    tempVectorXZ.copy(tempVector).setY(0).normalize();
+
+                    const cameraAngleXZDot = forward.dot(tempVectorXZ);
+                    const cameraAngleYZDot = forward.dot(tempVectorYZ);
+
+                    const ns = nodeSize(node);
+                    const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
+                    const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
+                    if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
+                        continue;
+                    }
+                    splatRenderCount += node.data.indexes.length;
+                    nodeRenderList[nodeRenderCount] = node;
+                    node.data.distanceToNode = distanceToNode;
+                    nodeRenderCount++;
+                }
             }
 
             nodeRenderList.length = nodeRenderCount;
@@ -1126,6 +1136,11 @@ export class Viewer {
         return this.splatMesh;
     }
 
+    /**
+     * Get a reference to a splat scene.
+     * @param {number} sceneIndex The index of the scene to which the reference will be returned
+     * @return {SplatScene}
+     */
     getSplatScene(sceneIndex) {
         return this.splatMesh.getScene(sceneIndex);
     }

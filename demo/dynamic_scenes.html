@@ -5,8 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <title>3D Gaussian Splats - Drop-in example</title>
-  <script type="text/javascript" src="js/util.js"></script>
+  <title>3D Gaussian Splats - Dynamic scenes example</title>
   <script type="importmap">
     {
         "imports": {
@@ -34,9 +33,8 @@
 
     const viewer = new GaussianSplats3D.Viewer({
       'cameraUp': [0, -1, -0.54],
-      'initialCameraPosition': [-3.15634, -0.16946, -0.51552],
+      'initialCameraPosition': [-7.14242, -2.25111, -2.36519],
       'initialCameraLookAt': [1.52976, 2.27776, 1.65898],
-      'halfPrecisionCovariancesOnGPU': true,
       'dynamicScene': true
     });
     viewer.addSplatScenes([
@@ -86,7 +84,6 @@
         splatScene.quaternion.copy(quaternion);
         splatScene.scale.copy(scale);
       }
-      viewer.getSplatScene(1);
     }
   </script>
 </body>
