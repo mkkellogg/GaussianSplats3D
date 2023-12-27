@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>3D Gaussian Splats - Dynamic scenes example</title>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "@mkkellogg/gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js"
+        }
+    }
+  </script>
+  <style>
+
+    body {
+      background-color: #000000;
+      height: 100vh;
+      margin: 0px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+  <script type="module">
+    import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
+    import * as THREE from 'three';
+
+    const viewer = new GaussianSplats3D.Viewer({
+      'cameraUp': [0, -1, -0.54],
+      'initialCameraPosition': [-7.14242, -2.25111, -2.36519],
+      'initialCameraLookAt': [1.52976, 2.27776, 1.65898],
+      'dynamicScene': true
+    });
+    viewer.addSplatScenes([
+        {
+          'path': 'assets/data/garden/garden.ksplat',
+          'splatAlphaRemovalThreshold': 20,
+        },
+        {
+          'path': 'assets/data/bonsai/bonsai_trimmed.ksplat',
+          'splatAlphaRemovalThreshold': 20,
+        },
+        {
+          'path': 'assets/data/bonsai/bonsai_trimmed.ksplat',
+          'splatAlphaRemovalThreshold': 20,
+        }
+    ], true).then(() => {
+      viewer.start();
+    })
+
+    const bonsaiCount = 2;
+    const bonsaiStartIndex = 1;
+    const rotationAxis = new THREE.Vector3(0, -1, -0.6).normalize();
+    const baseQuaternion = new THREE.Quaternion(-0.147244, -0.07617, 0.14106, 0.9760);
+    const rotationQuaternion = new THREE.Quaternion();
+    const quaternion = new THREE.Quaternion();
+    const orbitCenter = new THREE.Vector3(0.416161, 1.385, 1.145);
+    const horizontalOffsetVector = new THREE.Vector3();
+    const position = new THREE.Vector3();
+    const scale = new THREE.Vector3(1.25, 1.25, 1.25);
+
+    let startTime = performance.now() / 1000.0;
+    requestAnimationFrame(update);
+    function update() {
+      requestAnimationFrame(update);
+      const timeDelta = performance.now() / 1000.0 - startTime;
+      for (let i = bonsaiStartIndex; i < bonsaiStartIndex + bonsaiCount; i++) {
+        const angle = timeDelta * 0.25 + (Math.PI * 2) / i;
+        const height = Math.cos(timeDelta + (Math.PI * 2) / i) * 0.5 + 3;
+
+        rotationQuaternion.setFromAxisAngle(rotationAxis, angle);
+        horizontalOffsetVector.set(3, 0, 0).applyQuaternion(rotationQuaternion);
+        position.copy(rotationAxis).multiplyScalar(height).add(horizontalOffsetVector).add(orbitCenter);
+        quaternion.copy(baseQuaternion).premultiply(rotationQuaternion);
+
+        const splatScene = viewer.getSplatScene(i);
+        splatScene.position.copy(position);
+        splatScene.quaternion.copy(quaternion);
+        splatScene.scale.copy(scale);
+      }
+    }
+  </script>
+</body>
+
+</html>

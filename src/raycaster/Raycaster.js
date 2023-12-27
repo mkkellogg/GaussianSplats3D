@@ -35,26 +35,41 @@ export class Raycaster {
 
         const toLocal = new THREE.Matrix4();
         const fromLocal = new THREE.Matrix4();
+        const sceneTransform = new THREE.Matrix4();
         const localRay = new Ray();
 
         return function(splatMesh, outHits = []) {
-            fromLocal.copy(splatMesh.matrixWorld);
-            toLocal.copy(fromLocal).invert();
-            localRay.origin.copy(this.ray.origin).applyMatrix4(toLocal);
-            localRay.direction.copy(this.ray.direction).transformDirection(toLocal);
-
             const splatTree = splatMesh.getSplatTree();
-            if (splatTree.rootNode) {
-                this.castRayAtSplatTreeNode(localRay, splatTree, splatTree.rootNode, outHits);
+
+            for (let s = 0; s < splatTree.subTrees.length; s++) {
+                const subTree = splatTree.subTrees[s];
+
+                fromLocal.copy(splatMesh.matrixWorld);
+                splatMesh.getSceneTransform(s, sceneTransform);
+                fromLocal.multiply(sceneTransform);
+                toLocal.copy(fromLocal).invert();
+
+                localRay.origin.copy(this.ray.origin).applyMatrix4(toLocal);
+                localRay.direction.copy(this.ray.direction).transformDirection(toLocal);
+
+                const outHitsForSubTree = [];
+                if (subTree.rootNode) {
+                    this.castRayAtSplatTreeNode(localRay, splatTree, subTree.rootNode, outHitsForSubTree);
+                }
+
+                outHitsForSubTree.forEach((hit) => {
+                    hit.origin.applyMatrix4(fromLocal);
+                    hit.normal.transformDirection(fromLocal);
+                });
+
+                outHits.push(...outHitsForSubTree);
             }
+
             outHits.sort((a, b) => {
                 if (a.distance > b.distance) return 1;
                 else return -1;
             });
-            outHits.forEach((hit) => {
-                hit.origin.applyMatrix4(fromLocal);
-                hit.normal.transformDirection(fromLocal);
-            });
+
             return outHits;
         };
 
@@ -85,8 +100,8 @@ export class Raycaster {
             if (node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
                     const splatGlobalIndex = node.data.indexes[i];
-                    splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter);
-                    splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation);
+                    splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter, false);
+                    splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation, false);
 
                     if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
                         continue;

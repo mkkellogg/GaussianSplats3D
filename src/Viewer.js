@@ -61,8 +61,8 @@ export class Viewer {
         }
         this.halfPrecisionCovariancesOnGPU = options.halfPrecisionCovariancesOnGPU;
 
-        // If 'scene' is valid, it will be rendered by the viewer along with the splat mesh
-        this.scene = options.scene;
+        // If 'threeScene' is valid, it will be rendered by the viewer along with the splat mesh
+        this.threeScene = options.threeScene;
         // Allows for usage of an external Three.js renderer
         this.renderer = options.renderer;
         // Allows for usage of an external Three.js camera
@@ -92,10 +92,15 @@ export class Viewer {
         if (options.sharedMemoryForWorkers === undefined || options.sharedMemoryForWorkers === null) options.sharedMemoryForWorkers = true;
         this.sharedMemoryForWorkers = options.sharedMemoryForWorkers;
 
-        this.controls = null;
-
-        this.splatMesh = new SplatMesh(this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
+        // if 'dynamicScene' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in the
+        // scene may change. This prevents optimizations that depend on a static scene from being made. Additionally, if 'dynamicScene' is
+        // true it tells the splat mesh to not apply scene tranforms to splat data that is returned by functions like
+        // SplatMesh.getSplatCenter() by default.
+        const dynamicScene = !!options.dynamicScene;
+        this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
                                        this.gpuAcceleratedSort, this.integerBasedSort);
+
+        this.controls = null;
 
         this.showMeshCursor = false;
         this.showControlPlane = false;
@@ -109,6 +114,7 @@ export class Viewer {
         this.sortWorkerIndexesToSort = null;
         this.sortWorkerSortedIndexes = null;
         this.sortWorkerPrecomputedDistances = null;
+        this.sortWorkerTransforms = null;
 
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
@@ -182,8 +188,8 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
-        this.scene = this.scene || new THREE.Scene();
-        this.sceneHelper = new SceneHelper(this.scene);
+        this.threeScene = this.threeScene || new THREE.Scene();
+        this.sceneHelper = new SceneHelper(this.threeScene);
         this.sceneHelper.setupMeshCursor();
         this.sceneHelper.setupFocusMarker();
         this.sceneHelper.setupControlPlane();
@@ -369,7 +375,7 @@ export class Viewer {
         this.renderer.domElement.parentElement.prepend(this.infoPanel);
     }
 
-    updateSplatMeshUniforms = function() {
+    updateSplatMesh = function() {
 
         const renderDimensions = new THREE.Vector2();
 
@@ -377,6 +383,7 @@ export class Viewer {
             if (!this.splatMesh) return;
             const splatCount = this.splatMesh.getSplatCount();
             if (splatCount > 0) {
+                this.splatMesh.updateTransforms();
                 this.getRenderDimensions(renderDimensions);
                 this.cameraFocalLengthX = this.camera.projectionMatrix.elements[0] *
                                           this.devicePixelRatio * renderDimensions.x * 0.45;
@@ -409,7 +416,7 @@ export class Viewer {
      * }
      * @return {AbortablePromise}
      */
-    loadFile(path, options = {}) {
+    addSplatScene(path, options = {}) {
         if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
         if (options.showLoadingSpinner) this.loadingSpinner.show();
         const downloadProgress = (percent, percentLabel) => {
@@ -441,14 +448,14 @@ export class Viewer {
             })
             .catch(() => {
                 if (options.showLoadingSpinner) this.loadingSpinner.hide();
-                reject(new Error(`Viewer::loadFile -> Could not load file ${path}`));
+                reject(new Error(`Viewer::addSplatScene -> Could not load file ${path}`));
             });
         }, loadPromise.abortHandler);
     }
 
     /**
      * Add multiple splat scenes to the viewer.
-     * @param {Array<object>} files Array of per-scene options: {
+     * @param {Array<object>} sceneOptions Array of per-scene options: {
      *
      *         path: Path to splat scene to be loaded
      *
@@ -465,8 +472,8 @@ export class Viewer {
      * @param {function} onProgress Function to be called as file data are received
      * @return {AbortablePromise}
      */
-    loadFiles(files, showLoadingSpinner = true, onProgress = undefined) {
-        const fileCount = files.length;
+    addSplatScenes(sceneOptions, showLoadingSpinner = true, onProgress = undefined) {
+        const fileCount = sceneOptions.length;
         const percentComplete = [];
         if (showLoadingSpinner) this.loadingSpinner.show();
         const downloadProgress = (fileIndex, percent, percentLabel) => {
@@ -487,8 +494,8 @@ export class Viewer {
 
         const loadPromises = [];
         const abortHandlers = [];
-        for (let i = 0; i < files.length; i++) {
-            const loadPromise = this.loadFileToSplatBuffer(files[i].path, files[i].splatAlphaRemovalThreshold,
+        for (let i = 0; i < sceneOptions.length; i++) {
+            const loadPromise = this.loadFileToSplatBuffer(sceneOptions[i].path, sceneOptions[i].splatAlphaRemovalThreshold,
                                                            downloadProgress.bind(this, i));
             abortHandlers.push(loadPromise.abortHandler);
             loadPromises.push(loadPromise.promise);
@@ -503,14 +510,14 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingSpinner) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', 'processing');
-                this.addSplatBuffers(splatBuffers, files, showLoadingSpinner).then(() => {
+                this.addSplatBuffers(splatBuffers, sceneOptions, showLoadingSpinner).then(() => {
                     if (onProgress) onProgress(100, '100%', 'processing');
                     resolve();
                 });
             })
             .catch(() => {
                 if (showLoadingSpinner) this.loadingSpinner.hide();
-                reject(new Error(`Viewer::loadFiles -> Could not load one or more files.`));
+                reject(new Error(`Viewer::addSplatScenes -> Could not load one or more splat scenes.`));
             });
         }, abortHandler);
     }
@@ -616,9 +623,9 @@ export class Viewer {
      */
     setupSortWorker(splatMesh) {
         return new Promise((resolve) => {
-            const PrecomputedDistancesArrayType = this.integerBasedSort ? Int32Array : Float32Array;
+            const DistancesArrayType = this.integerBasedSort ? Int32Array : Float32Array;
             const splatCount = splatMesh.getSplatCount();
-            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers, this.integerBasedSort);
+            const sortWorker = createSortWorker(splatCount, this.sharedMemoryForWorkers, this.integerBasedSort, this.splatMesh.dynamicMode);
             sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
@@ -634,20 +641,25 @@ export class Viewer {
                 } else if (e.data.sortSetupPhase1Complete) {
                     console.log('Sorting web worker WASM setup complete.');
                     const centers = this.integerBasedSort ? this.splatMesh.getIntegerCenters(true) : this.splatMesh.getFloatCenters(true);
+                    const transformIndexes = this.splatMesh.getTransformIndexes();
                     sortWorker.postMessage({
-                        'centers': centers.buffer
+                        'centers': centers.buffer,
+                        'transformIndexes': transformIndexes.buffer
                     });
                     if (this.sharedMemoryForWorkers) {
                         this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
                                                                        e.data.sortedIndexesOffset, splatCount);
                         this.sortWorkerIndexesToSort = new Uint32Array(e.data.indexesToSortBuffer,
                                                                        e.data.indexesToSortOffset, splatCount);
-                        this.sortWorkerPrecomputedDistances = new PrecomputedDistancesArrayType(e.data.precomputedDistancesBuffer,
-                                                                                                e.data.precomputedDistancesOffset,
-                                                                                                splatCount);
+                        this.sortWorkerPrecomputedDistances = new DistancesArrayType(e.data.precomputedDistancesBuffer,
+                                                                                     e.data.precomputedDistancesOffset,
+                                                                                     splatCount);
+                         this.sortWorkerTransforms = new Float32Array(e.data.transformsBuffer,
+                                                                      e.data.transformsOffset, Constants.MaxScenes * 16);
                     } else {
                         this.sortWorkerIndexesToSort = new Uint32Array(splatCount);
-                        this.sortWorkerPrecomputedDistances = new PrecomputedDistancesArrayType(splatCount);
+                        this.sortWorkerPrecomputedDistances = new DistancesArrayType(splatCount);
+                        this.sortWorkerTransforms = new Float32Array(Constants.MaxScenes * 16);
                     }
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                 } else if (e.data.sortSetupComplete) {
@@ -698,15 +710,15 @@ export class Viewer {
 
         return function() {
             if (!this.initialized || !this.splatRenderingInitialized) return;
-            const hasRenderables = (scene) => {
-                for (let child of scene.children) {
+            const hasRenderables = (threeScene) => {
+                for (let child of threeScene.children) {
                     if (child.visible) return true;
                 }
                 return false;
             };
             const savedAuoClear = this.renderer.autoClear;
             this.renderer.autoClear = false;
-            if (hasRenderables(this.scene)) this.renderer.render(this.scene, this.camera);
+            if (hasRenderables(this.threeScene)) this.renderer.render(this.threeScene, this.camera);
             this.renderer.render(this.splatMesh, this.camera);
             if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
             if (this.showControlPlane) this.renderer.render(this.sceneHelper.controlPlane, this.camera);
@@ -721,7 +733,7 @@ export class Viewer {
         if (this.controls) this.controls.update();
         this.updateSplatSort();
         this.updateForRendererSizeChanges();
-        this.updateSplatMeshUniforms();
+        this.updateSplatMesh();
         this.updateMeshCursor();
         this.updateFPS();
         this.timingSensitiveUpdates();
@@ -947,7 +959,7 @@ export class Viewer {
             }
         ];
 
-        return function(force = false, gatherAllNodes = false) {
+        return async function(force = false, gatherAllNodes = false) {
             if (this.sortRunning) return;
             if (!this.initialized || !this.splatRenderingInitialized) return;
 
@@ -960,7 +972,7 @@ export class Viewer {
             angleDiff = sortViewDir.dot(lastSortViewDir);
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
-            if (!force && queuedSorts.length === 0 && runCount > 0) {
+            if (!force && !this.splatMesh.dynamicMode && queuedSorts.length === 0 && runCount > 0) {
                 if (angleDiff <= 0.95) needsRefreshForRotation = true;
                 if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
@@ -974,34 +986,42 @@ export class Viewer {
             mvpMatrix.multiply(this.splatMesh.matrixWorld);
 
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
-                this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
+                await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
-            if (queuedSorts.length === 0) {
-                for (let partialSort of partialSorts) {
-                    if (angleDiff < partialSort.angleThreshold) {
-                        for (let sortFraction of partialSort.sortFractions) {
-                            queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
-                        }
-                        break;
-                    }
-                }
+            if (this.splatMesh.dynamicMode) {
                 queuedSorts.push(this.splatRenderCount);
+            } else {
+                if (queuedSorts.length === 0) {
+                    for (let partialSort of partialSorts) {
+                        if (angleDiff < partialSort.angleThreshold) {
+                            for (let sortFraction of partialSort.sortFractions) {
+                                queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
+                            }
+                            break;
+                        }
+                    }
+                    queuedSorts.push(this.splatRenderCount);
+                }
             }
             const sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
 
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
             cameraPositionArray[2] = this.camera.position.z;
-            const sortMVPMatrix = this.integerBasedSort ? SplatMesh.getIntegerMatrixArray(mvpMatrix) : mvpMatrix.elements;
+
             const sortMessage = {
-                'modelViewProj': sortMVPMatrix,
+                'modelViewProj': mvpMatrix.elements,
                 'cameraPosition': cameraPositionArray,
                 'splatRenderCount': this.splatRenderCount,
                 'splatSortCount': sortCount,
                 'usePrecomputedDistances': this.gpuAcceleratedSort
             };
+            if (this.splatMesh.dynamicMode) {
+                this.splatMesh.fillTransformsArray(this.sortWorkerTransforms);
+            }
             if (!this.sharedMemoryForWorkers) {
                 sortMessage.indexesToSort = this.sortWorkerIndexesToSort;
+                sortMessage.transforms = this.sortWorkerTransforms;
                 if (this.gpuAcceleratedSort) {
                     sortMessage.precomputedDistances = this.sortWorkerPrecomputedDistances;
                 }
@@ -1028,7 +1048,9 @@ export class Viewer {
         const tempVectorYZ = new THREE.Vector3();
         const tempVectorXZ = new THREE.Vector3();
         const tempVector = new THREE.Vector3();
-        const tempMatrix4 = new THREE.Matrix4();
+        const modelView = new THREE.Matrix4();
+        const baseModelView = new THREE.Matrix4();
+        const sceneTransform = new THREE.Matrix4();
         const renderDimensions = new THREE.Vector3();
         const forward = new THREE.Vector3(0, 0, -1);
 
@@ -1047,35 +1069,46 @@ export class Viewer {
             const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / cameraFocalLength);
             const cosFovXOver2 = Math.cos(fovXOver2);
             const cosFovYOver2 = Math.cos(fovYOver2);
-            tempMatrix4.copy(this.camera.matrixWorld).invert();
-            tempMatrix4.multiply(this.splatMesh.matrixWorld);
 
             const splatTree = this.splatMesh.getSplatTree();
+            baseModelView.copy(this.camera.matrixWorld).invert();
+            baseModelView.multiply(this.splatMesh.matrixWorld);
+
             let nodeRenderCount = 0;
             let splatRenderCount = 0;
-            const nodeCount = splatTree.nodesWithIndexes.length;
-            for (let i = 0; i < nodeCount; i++) {
-                const node = splatTree.nodesWithIndexes[i];
-                tempVector.copy(node.center).applyMatrix4(tempMatrix4);
-                const distanceToNode = tempVector.length();
-                tempVector.normalize();
 
-                tempVectorYZ.copy(tempVector).setX(0).normalize();
-                tempVectorXZ.copy(tempVector).setY(0).normalize();
-
-                const cameraAngleXZDot = forward.dot(tempVectorXZ);
-                const cameraAngleYZDot = forward.dot(tempVectorYZ);
-
-                const ns = nodeSize(node);
-                const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
-                const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
-                if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
-                    continue;
+            for (let s = 0; s < splatTree.subTrees.length; s++) {
+                const subTree = splatTree.subTrees[s];
+                modelView.copy(baseModelView);
+                if (this.splatMesh.dynamicMode) {
+                    this.splatMesh.getSceneTransform(s, sceneTransform);
+                    modelView.multiply(sceneTransform);
                 }
-                splatRenderCount += node.data.indexes.length;
-                nodeRenderList[nodeRenderCount] = node;
-                node.data.distanceToNode = distanceToNode;
-                nodeRenderCount++;
+                const nodeCount = subTree.nodesWithIndexes.length;
+                for (let i = 0; i < nodeCount; i++) {
+                    const node = subTree.nodesWithIndexes[i];
+                    tempVector.copy(node.center).applyMatrix4(modelView);
+
+                    const distanceToNode = tempVector.length();
+                    tempVector.normalize();
+
+                    tempVectorYZ.copy(tempVector).setX(0).normalize();
+                    tempVectorXZ.copy(tempVector).setY(0).normalize();
+
+                    const cameraAngleXZDot = forward.dot(tempVectorXZ);
+                    const cameraAngleYZDot = forward.dot(tempVectorYZ);
+
+                    const ns = nodeSize(node);
+                    const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
+                    const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
+                    if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
+                        continue;
+                    }
+                    splatRenderCount += node.data.indexes.length;
+                    nodeRenderList[nodeRenderCount] = node;
+                    node.data.distanceToNode = distanceToNode;
+                    nodeRenderCount++;
+                }
             }
 
             nodeRenderList.length = nodeRenderCount;
@@ -1101,6 +1134,15 @@ export class Viewer {
 
     getSplatMesh() {
         return this.splatMesh;
+    }
+
+    /**
+     * Get a reference to a splat scene.
+     * @param {number} sceneIndex The index of the scene to which the reference will be returned
+     * @return {SplatScene}
+     */
+    getSplatScene(sceneIndex) {
+        return this.splatMesh.getScene(sceneIndex);
     }
 
     isMobile() {

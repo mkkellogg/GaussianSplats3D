@@ -112,7 +112,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'initialCameraPosition': [-1, -4, 6],
     'initialCameraLookAt': [0, 4, 0]
 });
-viewer.loadFile('<path to .ply, .ksplat, or .splat file>', {
+viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>', {
     'splatAlphaRemovalThreshold': 5,
     'showLoadingSpinner': true,
     'position': [0, 1, 0],
@@ -134,12 +134,12 @@ Viewer parameters
 | `initialCameraLookAt` | The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
 <br>
 
-Parameters for `loadFile()`
+Parameters for `addSplatScene()`
 <br>
 
 | Parameter | Purpose
 | --- | ---
-| `splatAlphaRemovalThreshold` | Tells `loadFile()` to ignore any splats with an alpha less than the specified value (valid range: 0 - 255). Defaults to `1`.
+| `splatAlphaRemovalThreshold` | Tells `addSplatScene()` to ignore any splats with an alpha less than the specified value (valid range: 0 - 255). Defaults to `1`.
 | `showLoadingSpinner` | Displays a loading spinner while the scene is loading.  Defaults to `true`.
 | `position` | Position of the scene, acts as an offset from its default position. Defaults to `[0, 0, 0]`.
 | `rotation` | Rotation of the scene represented as a quaternion, defaults to `[0, 0, 0, 1]` (identity quaternion).
@@ -147,11 +147,11 @@ Parameters for `loadFile()`
 
 <br>
 
-`Viewer` can also load multiple scenes simultaneously with the `loadFiles()` function:
+`Viewer` can also load multiple scenes simultaneously with the `addSplatScenes()` function:
 ```javascript
 import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 
-viewer.loadFiles([{
+viewer.addSplatScenes([{
         'path': '<path to first .ply, .ksplat, or .splat file>',
         'splatAlphaRemovalThreshold': 20
     },
@@ -167,27 +167,27 @@ viewer.loadFiles([{
 });
 ```
 
-The `loadFile()` and `loadFiles()` methods will accept the original `.ply` files, standard `.splat` files, and my custom `.ksplat` files.
+The `addSplatScene()` and `addSplatScenes()` methods will accept the original `.ply` files, standard `.splat` files, and my custom `.ksplat` files.
 
 <br>
 
 ### Integrating THREE.js scenes
-You can integrate your own Three.js scene into the viewer if you want rendering to be handled for you. Just pass a Three.js scene object as the `scene` parameter to the constructor:
+You can integrate your own Three.js scene into the viewer if you want rendering to be handled for you. Just pass a Three.js scene object as the `threeScene` parameter to the constructor:
 ```javascript
 import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 import * as THREE from 'three';
 
-const scene = new THREE.Scene();
+const threeScene = new THREE.Scene();
 const boxColor = 0xBBBBBB;
 const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
 const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color': boxColor}));
 boxMesh.position.set(3, 2, 2);
-scene.add(boxMesh);
+threeScene.add(boxMesh);
 
 const viewer = new GaussianSplats3D.Viewer({
-    'scene': scene,
+    'threeScene': threeScene,
 });
-viewer.loadFile('<path to .ply, .ksplat, or .splat file>')
+viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
     viewer.start();
 });
@@ -201,11 +201,11 @@ A "drop-in" mode for the viewer is also supported. The `DropInViewer` class enca
 import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 import * as THREE from 'three';
 
-const scene = new THREE.Scene();
+const threeScene = new THREE.Scene();
 const viewer = new GaussianSplats3D.DropInViewer({
     'gpuAcceleratedSort': true
 });
-viewer.addScenesFromFiles([{
+viewer.addSplatScenes([{
         'path': '<path to .ply, .ksplat, or .splat file>'
         'splatAlphaRemovalThreshold': 5
     },
@@ -216,7 +216,7 @@ viewer.addScenesFromFiles([{
         'position': [0, -2, -1.2]
     }
 ]);
-scene.add(viewer);
+threeScene.add(viewer);
 
 ```
 <br>
@@ -258,7 +258,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'sharedMemoryForWorkers': true,
     'integerBasedSort': true
 });
-viewer.loadFile('<path to .ply, .ksplat, or .splat file>')
+viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
     requestAnimationFrame(update);
 });
@@ -284,6 +284,7 @@ Advanced `Viewer` parameters
 | `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `true`.
 | `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
 | `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
+| `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static. Additionally all splat data retrieved from the viewer's splat mesh will not have their respective scene transform applied to them by default.
 <br>
 
 ### Creating KSPLAT files
