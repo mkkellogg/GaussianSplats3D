@@ -77,6 +77,7 @@ export class Raycaster {
 
     castRayAtSplatTreeNode = function() {
 
+        const tempColor = new THREE.Vector4();
         const tempCenter = new THREE.Vector3();
         const tempScale = new THREE.Vector3();
         const tempRotation = new THREE.Quaternion();
@@ -84,14 +85,14 @@ export class Raycaster {
         const scaleEpsilon = 0.0000001;
 
         // Used for raycasting against splat ellipsoid
-        /*
+
         const origin = new THREE.Vector3(0, 0, 0);
-        const tempRotationMatrix = new THREE.Matrix4();
-        const tempScaleMatrix = new THREE.Matrix4();
+        const tempTransform = new THREE.Matrix4();
+        const uniformScaleMatrix = new THREE.Matrix4();
         const toSphereSpace = new THREE.Matrix4();
         const fromSphereSpace = new THREE.Matrix4();
+        const tempPoint = new THREE.Vector3();
         const tempRay = new Ray();
-        */
 
         return function(ray, splatTree, node, outHits = []) {
             if (!ray.intersectBox(node.boundingBox)) {
@@ -100,6 +101,7 @@ export class Raycaster {
             if (node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
                     const splatGlobalIndex = node.data.indexes[i];
+                    splatTree.splatMesh.getSplatColor(splatGlobalIndex, tempColor, false);
                     splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter, false);
                     splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation, false);
 
@@ -108,27 +110,31 @@ export class Raycaster {
                     }
 
                     // Simple approximated sphere intersection
-                    const radius = (tempScale.x + tempScale.y + tempScale.z) / 3;
+                    /*const radius = (tempScale.x + tempScale.y + tempScale.z) / 3;
                     if (ray.intersectSphere(tempCenter, radius, tempHit)) {
-                        outHits.push(tempHit.clone());
-                    }
+                        const hitClone = tempHit.clone();
+                        hitClone.splatIndex = splatGlobalIndex;
+                        outHits.push(hitClone);
+                    }*/
 
                     // Raycast against actual splat ellipsoid ... doesn't actually work as well
                     // as the approximated sphere approach
-                    /*
-                    splatBuffer.getRotation(splatLocalIndex, tempRotation, splatTransform);
-                    tempScaleMatrix.makeScale(tempScale.x, tempScale.y, tempScale.z);
-                    tempRotationMatrix.makeRotationFromQuaternion(tempRotation);
-                    fromSphereSpace.copy(tempScaleMatrix).premultiply(tempRotationMatrix);
+                    tempTransform.compose(origin, tempRotation, tempScale);
+                    const uniformScale = Math.log10(tempColor.w) * 2.0;
+                    uniformScaleMatrix.makeScale(uniformScale, uniformScale, uniformScale);
+                    fromSphereSpace.copy(tempTransform).premultiply(uniformScaleMatrix);
                     toSphereSpace.copy(fromSphereSpace).invert();
                     tempRay.origin.copy(this.ray.origin).sub(tempCenter).applyMatrix4(toSphereSpace);
-                    tempRay.direction.copy(this.ray.direction).transformDirection(toSphereSpace).normalize();
+                    tempRay.direction.copy(this.ray.origin).add(this.ray.direction).sub(tempCenter).applyMatrix4(toSphereSpace).sub(tempRay.origin).normalize();
+                   // tempRay.direction.copy(this.ray.direction).transformDirection(toSphereSpace).normalize();
                     if (tempRay.intersectSphere(origin, 1.0, tempHit)) {
                         const hitClone = tempHit.clone();
+                        hitClone.splatIndex = splatGlobalIndex;
                         hitClone.origin.applyMatrix4(fromSphereSpace).add(tempCenter);
+                        hitClone.distance = tempPoint.copy(hitClone.origin).sub(this.ray.origin).length();
                         outHits.push(hitClone);
                     }
-                    */
+                    
 
                 }
              }
