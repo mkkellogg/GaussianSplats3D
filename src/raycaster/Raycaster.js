@@ -37,6 +37,7 @@ export class Raycaster {
         const fromLocal = new THREE.Matrix4();
         const sceneTransform = new THREE.Matrix4();
         const localRay = new Ray();
+        const tempPoint = new THREE.Vector3();
 
         return function(splatMesh, outHits = []) {
             const splatTree = splatMesh.getSplatTree();
@@ -45,12 +46,13 @@ export class Raycaster {
                 const subTree = splatTree.subTrees[s];
 
                 fromLocal.copy(splatMesh.matrixWorld);
-                splatMesh.getSceneTransform(s, sceneTransform);
+                if (splatMesh.dynamicMode) splatMesh.getSceneTransform(s, sceneTransform);
+                else sceneTransform.identity();
                 fromLocal.multiply(sceneTransform);
                 toLocal.copy(fromLocal).invert();
 
                 localRay.origin.copy(this.ray.origin).applyMatrix4(toLocal);
-                localRay.direction.copy(this.ray.direction).transformDirection(toLocal);
+                localRay.direction.copy(this.ray.origin).add(this.ray.direction).applyMatrix4(toLocal).sub(localRay.origin).normalize();
 
                 const outHitsForSubTree = [];
                 if (subTree.rootNode) {
@@ -59,7 +61,8 @@ export class Raycaster {
 
                 outHitsForSubTree.forEach((hit) => {
                     hit.origin.applyMatrix4(fromLocal);
-                    hit.normal.transformDirection(fromLocal);
+                    hit.normal.applyMatrix4(fromLocal).normalize();
+                    hit.distance = tempPoint.copy(hit.origin).sub(this.ray.origin).length();
                 });
 
                 outHits.push(...outHitsForSubTree);
@@ -87,11 +90,11 @@ export class Raycaster {
         // Used for raycasting against splat ellipsoid
 
         const origin = new THREE.Vector3(0, 0, 0);
-        const tempTransform = new THREE.Matrix4();
         const uniformScaleMatrix = new THREE.Matrix4();
+        const scaleMatrix = new THREE.Matrix4();
+        const rotationMatrix = new THREE.Matrix4();
         const toSphereSpace = new THREE.Matrix4();
         const fromSphereSpace = new THREE.Matrix4();
-        const tempPoint = new THREE.Vector3();
         const tempRay = new Ray();
 
         return function(ray, splatTree, node, outHits = []) {
@@ -101,40 +104,38 @@ export class Raycaster {
             if (node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
                     const splatGlobalIndex = node.data.indexes[i];
-                    splatTree.splatMesh.getSplatColor(splatGlobalIndex, tempColor, false);
-                    splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter, false);
-                    splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation, false);
+                    splatTree.splatMesh.getSplatColor(splatGlobalIndex, tempColor);
+                    splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter);
+                    splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation);
 
                     if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
                         continue;
                     }
 
                     // Simple approximated sphere intersection
-                    /*const radius = (tempScale.x + tempScale.y + tempScale.z) / 3;
+                   /* const radius = (tempScale.x + tempScale.y + tempScale.z) / 3;
                     if (ray.intersectSphere(tempCenter, radius, tempHit)) {
                         const hitClone = tempHit.clone();
                         hitClone.splatIndex = splatGlobalIndex;
                         outHits.push(hitClone);
                     }*/
 
-                    // Raycast against actual splat ellipsoid ... doesn't actually work as well
-                    // as the approximated sphere approach
-                    tempTransform.compose(origin, tempRotation, tempScale);
+                    // Raycast against actual splat ellipsoid
+                    scaleMatrix.makeScale(tempScale.x, tempScale.y, tempScale.z);
+                    rotationMatrix.makeRotationFromQuaternion(tempRotation);
                     const uniformScale = Math.log10(tempColor.w) * 2.0;
                     uniformScaleMatrix.makeScale(uniformScale, uniformScale, uniformScale);
-                    fromSphereSpace.copy(tempTransform).premultiply(uniformScaleMatrix);
+                    fromSphereSpace.copy(uniformScaleMatrix).multiply(rotationMatrix).multiply(scaleMatrix);
                     toSphereSpace.copy(fromSphereSpace).invert();
-                    tempRay.origin.copy(this.ray.origin).sub(tempCenter).applyMatrix4(toSphereSpace);
-                    tempRay.direction.copy(this.ray.origin).add(this.ray.direction).sub(tempCenter).applyMatrix4(toSphereSpace).sub(tempRay.origin).normalize();
-                   // tempRay.direction.copy(this.ray.direction).transformDirection(toSphereSpace).normalize();
+                    tempRay.origin.copy(ray.origin).sub(tempCenter).applyMatrix4(toSphereSpace);
+                    tempRay.direction.copy(ray.origin).add(ray.direction).sub(tempCenter);
+                    tempRay.direction.applyMatrix4(toSphereSpace).sub(tempRay.origin).normalize();
                     if (tempRay.intersectSphere(origin, 1.0, tempHit)) {
                         const hitClone = tempHit.clone();
                         hitClone.splatIndex = splatGlobalIndex;
                         hitClone.origin.applyMatrix4(fromSphereSpace).add(tempCenter);
-                        hitClone.distance = tempPoint.copy(hitClone.origin).sub(this.ray.origin).length();
                         outHits.push(hitClone);
                     }
-                    
 
                 }
              }

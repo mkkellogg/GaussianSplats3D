@@ -286,20 +286,8 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
         const toNewFocalPoint = new THREE.Vector3();
         const outHits = [];
-        const tempCenter = new THREE.Vector3();
-        const tempColor = new THREE.Vector4();
-        const tempScale = new THREE.Vector3();
-        const tempRotation = new THREE.Quaternion();
-        let debugMesh;
 
         return function() {
-            if (!debugMesh) {
-                const geometry = new THREE.SphereGeometry(1, 32, 32);
-                const material = new THREE.MeshBasicMaterial({'color': 0xff0000});
-                debugMesh = new THREE.Mesh(geometry, material);
-                debugMesh.visible = false;
-                this.threeScene.add(debugMesh);
-            }
             if (!this.transitioningCameraTarget) {
                 this.getRenderDimensions(renderDimensions);
                 outHits.length = 0;
@@ -307,15 +295,6 @@ export class Viewer {
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
                     const hit = outHits[0];
-                    const splatIndex = hit.splatIndex;
-                    this.splatMesh.getSplatCenter(splatIndex, tempCenter, false);
-                    this.splatMesh.getSplatColor(splatIndex, tempColor, false);
-                    this.splatMesh.getSplatScaleAndRotation(splatIndex, tempScale, tempRotation, false);
-                    debugMesh.position.copy(tempCenter);
-                    debugMesh.scale.copy(tempScale).multiplyScalar(2 * Math.log10(tempColor.w));
-                    debugMesh.quaternion.copy(tempRotation);
-                    debugMesh.visible = true;
-
                     const intersectionPoint = hit.origin;
                     toNewFocalPoint.copy(intersectionPoint).sub(this.camera.position);
                     if (toNewFocalPoint.length() > MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT) {

@@ -91,7 +91,9 @@
     const threeScene = setupThreeScene();
     const controls = setupControls(camera, renderer);
 
-    const viewer = new GaussianSplats3D.DropInViewer();
+    const viewer = new GaussianSplats3D.DropInViewer({
+      'dynamicScene': false
+    });
     viewer.addSplatScenes([
         {
           'path': 'assets/data/garden/garden.ksplat',

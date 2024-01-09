@@ -456,7 +456,7 @@ export class SplatMesh extends THREE.Mesh {
 
         const newScenes = SplatMesh.buildScenes(splatBuffers, sceneOptions);
         if (keepSceneTransforms) {
-            for (let i = 0; i < this.scenes.length; i++) {
+            for (let i = 0; i < this.scenes.length && i < newScenes.length; i++) {
                 const newScene = newScenes[i];
                 const existingScene = this.getScene(i);
                 newScene.copyTransformData(existingScene);
@@ -1290,11 +1290,10 @@ export class SplatMesh extends THREE.Mesh {
      * @return {SplatScene}
      */
     getScene(sceneIndex) {
-        let scene = this.scenes[sceneIndex];
-        if (!scene) {
-            this.scenes[sceneIndex] = scene = SplatMesh.createScene();
+        if (sceneIndex < 0 || sceneIndex >= this.scenes.length) {
+            throw new Error('SplatMesh::getScene() -> Invalid scene index.');
         }
-        return scene;
+        return this.scenes[sceneIndex];
     }
 
     getSplatBufferForSplat(globalIndex) {
