@@ -1164,7 +1164,7 @@ export class SplatMesh extends THREE.Mesh {
             }
             const scene = this.getScene(i);
             const splatBuffer = scene.splatBuffer;
-            const sceneTransform = applySceneTransform ? null : scene.transform;
+            const sceneTransform = applySceneTransform ? scene.transform : null;
             if (covariances) splatBuffer.fillSplatCovarianceArray(covariances, offset, sceneTransform);
             if (centers) splatBuffer.fillSplatCenterArray(centers, offset, sceneTransform);
             if (colors) splatBuffer.fillSplatColorArray(colors, offset, sceneTransform);
@@ -1176,15 +1176,12 @@ export class SplatMesh extends THREE.Mesh {
      * Convert splat centers, which are floating point values, to an array of integers and multiply
      * each by 1000. Centers will get transformed as appropriate before conversion to integer.
      * @param {number} padFour Enforce alignement of 4 by inserting a 1000 after every 3 values
-     * @param {boolean} applySceneTransform By default, scene transforms are applied to the splat centers only if the splat mesh is
-     *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
-     *                                      it is false, they will never be applied. If undefined, the default behavior will apply.
      * @return {Int32Array}
      */
-    getIntegerCenters(padFour, applySceneTransform) {
+    getIntegerCenters(padFour) {
         const splatCount = this.getSplatCount();
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, applySceneTransform);
+        this.fillSplatDataArrays(null, floatCenters, null);
         let intCenters;
         let componentCount = padFour ? 4 : 3;
         intCenters = new Int32Array(splatCount * componentCount);
@@ -1201,15 +1198,12 @@ export class SplatMesh extends THREE.Mesh {
     /**
      * Returns an array of splat centers, transformed as appropriate, optionally padded.
      * @param {number} padFour Enforce alignement of 4 by inserting a 1 after every 3 values
-     * @param {boolean} applySceneTransform By default, scene transforms are applied to the splat centers only if the splat mesh is
-     *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
-     *                                      it is false, they will never be applied. If undefined, the default behavior will apply.
      * @return {Float32Array}
      */
     getFloatCenters(padFour) {
         const splatCount = this.getSplatCount();
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, applySceneTransform);
+        this.fillSplatDataArrays(null, floatCenters, null);
         if (!padFour) return floatCenters;
         let paddedFloatCenters = new Float32Array(splatCount * 4);
         for (let i = 0; i < splatCount; i++) {
