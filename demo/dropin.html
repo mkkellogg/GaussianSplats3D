@@ -91,9 +91,7 @@
     const threeScene = setupThreeScene();
     const controls = setupControls(camera, renderer);
 
-    const viewer = new GaussianSplats3D.DropInViewer({
-      'dynamicScene': false
-    });
+    const viewer = new GaussianSplats3D.DropInViewer();
     viewer.addSplatScenes([
         {
           'path': 'assets/data/garden/garden.ksplat',
@@ -107,7 +105,7 @@
           'splatAlphaRemovalThreshold': 20,
         }
       ], true);
-      threeScene.add(viewer);
+    threeScene.add(viewer);
 
     requestAnimationFrame(update);
     function update() {

@@ -147,21 +147,31 @@ export class SplatMesh extends THREE.Mesh {
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rg, sampledCovarianceB.r);
                 vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceB.g, sampledCovarianceC.rg);
 
-                // Compute the 2D covariance matrix from the upper-right portion of the 3D covariance matrix
+                // Construct the 3D covariance matrix
                 mat3 Vrk = mat3(
                     cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z,
                     cov3D_M11_M12_M13.y, cov3D_M22_M23_M33.x, cov3D_M22_M23_M33.y,
                     cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
                 );
+
+                // Construct the Jacobian of the affine approximation of the projection matrix. It will be used to transform the
+                // 3D covariance matrix instead of using the actual projection matrix because that transformation would
+                // require a non-linear component (perspective division) which would yield a non-gaussian result. (This assumes
+                // the current projection is a perspective projection).
                 float s = 1.0 / (viewCenter.z * viewCenter.z);
                 mat3 J = mat3(
                     focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
                     0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) * s,
                     0., 0., 0.
                 );
+
+                // Concatenate the projection approximation with the model-view transformation
                 mat3 W = transpose(mat3(transformModelViewMatrix));
                 mat3 T = W * J;
+
+                // Transform the 3D covariance matrix (Vrk) to compute the 2D covariance matrix
                 mat3 cov2Dm = transpose(T) * Vrk * T;
+
                 cov2Dm[0][0] += 0.3;
                 cov2Dm[1][1] += 0.3;
 

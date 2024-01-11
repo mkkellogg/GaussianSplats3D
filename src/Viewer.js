@@ -10,6 +10,7 @@ import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
 import { AbortablePromise } from './AbortablePromise.js';
+import { SceneFormat } from './SceneFormat.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -432,7 +433,7 @@ export class Viewer {
             }
             if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
         };
-        const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold, downloadProgress);
+        const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold, downloadProgress, options.format);
         return new AbortablePromise((resolve, reject) => {
             loadPromise.then((splatBuffer) => {
                 if (options.showLoadingSpinner) this.loadingSpinner.hide();
@@ -498,7 +499,7 @@ export class Viewer {
         const abortHandlers = [];
         for (let i = 0; i < sceneOptions.length; i++) {
             const loadPromise = this.loadFileToSplatBuffer(sceneOptions[i].path, sceneOptions[i].splatAlphaRemovalThreshold,
-                                                           downloadProgress.bind(this, i));
+                                                           downloadProgress.bind(this, i), sceneOptions.format);
             abortHandlers.push(loadPromise.abortHandler);
             loadPromises.push(loadPromise.promise);
         }
@@ -531,19 +532,28 @@ export class Viewer {
      *                                            value (valid range: 0 - 255), defaults to 1
      *
      * @param {function} onProgress Function to be called as file data are received
+     * @param {string} format Optional format specifier, if not specified the format will be inferred from the file extension
      * @return {AbortablePromise}
      */
-    loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined) {
+    loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined, format = undefined) {
         const downloadProgress = (percent, percentLabel) => {
             if (onProgress) onProgress(percent, percentLabel, 'downloading');
         };
-        if (SplatLoader.isFileSplatFormat(path)) {
-            return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
-        } else if (path.endsWith('.ply')) {
-            return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+        if (format) {
+            if (format === SceneFormat.Splat || format === SceneFormat.KSplat) {
+                return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold, undefined, undefined, format);
+            } else if (format === SceneFormat.Ply) {
+                return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            }
         } else {
-            return AbortablePromise.reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
+            if (SplatLoader.isFileSplatFormat(path)) {
+                return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            } else if (path.endsWith('.ply')) {
+                return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            }
         }
+
+        return AbortablePromise.reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
     }
 
     /**

@@ -7,6 +7,7 @@ import { Viewer } from './Viewer.js';
 import { DropInViewer } from './DropInViewer.js';
 import { OrbitControls } from './OrbitControls.js';
 import { AbortablePromise } from './AbortablePromise.js';
+import { SceneFormat } from './SceneFormat.js';
 
 export {
     PlyParser,
@@ -17,5 +18,6 @@ export {
     Viewer,
     DropInViewer,
     OrbitControls,
-    AbortablePromise
+    AbortablePromise,
+    SceneFormat
 };
