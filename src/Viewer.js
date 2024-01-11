@@ -180,11 +180,11 @@ export class Viewer {
             this.renderer.setClearColor(new THREE.Color( 0x000000 ), 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
 
-            const resizeObserver = new ResizeObserver(() => {
+            this.resizeObserver = new ResizeObserver(() => {
                 this.getRenderDimensions(renderDimensions);
                 this.renderer.setSize(renderDimensions.x, renderDimensions.y);
             });
-            resizeObserver.observe(this.rootElement);
+            this.resizeObserver.observe(this.rootElement);
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
@@ -206,7 +206,8 @@ export class Viewer {
             this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
             this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
             this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
-            window.addEventListener('keydown', this.onKeyDown.bind(this), false);
+            this.keyDownListener = this.onKeyDown.bind(this);
+            window.addEventListener('keydown', this.keyDownListener, false);
         }
 
         this.setupInfoPanel();
@@ -682,7 +683,7 @@ export class Viewer {
      */
     start() {
         if (this.selfDrivenMode) {
-            requestAnimationFrame(this.selfDrivenUpdateFunc);
+            this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
             this.selfDrivenModeRunning = true;
         } else {
             throw new Error('Cannot start viewer unless it is in self driven mode.');
@@ -694,14 +695,35 @@ export class Viewer {
      */
     stop() {
         if (this.selfDrivenMode && this.selfDrivenModeRunning) {
-            cancelAnimationFrame();
+            cancelAnimationFrame(this.requestFrameId);
             this.selfDrivenModeRunning = false;
         }
     }
 
+    /**
+     * Dispose resources
+     */
+    dispose() {
+        this.stop();
+        if (this.controls) this.controls.dispose();
+        if (this.splatMesh) this.splatMesh.dispose();
+        if (this.sceneHelper) this.sceneHelper.destroyMeshCursor();
+        if (this.resizeObserver) this.resizeObserver.unobserve(this.rootElement);
+        if (this.renderer) this.renderer.dispose();
+        if (this.sortWorker) this.sortWorker.terminate();
+        window.removeEventListener('keydown', this.keyDownListener);
+        this.controls = null;
+        this.splatMesh = null;
+        this.sceneHelper = null;
+        this.renderer = null;
+        this.sortWorker = null;
+        this.camera = null;
+        this.threeScene = null;
+    }
+
     selfDrivenUpdate() {
         if (this.selfDrivenMode) {
-            requestAnimationFrame(this.selfDrivenUpdateFunc);
+            this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.update();
         this.render();

@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 
-let fbf;
-
 /**
  * SplatBuffer: Container for splat data from a single scene/file and capable of (mediocre) compression.
  */
@@ -63,8 +61,6 @@ export class SplatBuffer {
         this.bytesPerRotation = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerRotation;
 
         this.bytesPerSplat = this.bytesPerCenter + this.bytesPerScale + this.bytesPerColor + this.bytesPerRotation;
-
-        fbf = this.fbf.bind(this);
 
         this.linkBufferArrays();
     }
@@ -130,10 +126,12 @@ export class SplatBuffer {
 
         return function(index, outScale, outRotation, transform) {
             const scaleBase = index * SplatBuffer.ScaleComponentCount;
-            outScale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
+            outScale.set(this.fbf(this.scaleArray[scaleBase]),
+                         this.fbf(this.scaleArray[scaleBase + 1]),
+                         this.fbf(this.scaleArray[scaleBase + 2]));
             const rotationBase = index * SplatBuffer.RotationComponentCount;
-            outRotation.set(fbf(this.rotationArray[rotationBase + 1]), fbf(this.rotationArray[rotationBase + 2]),
-                            fbf(this.rotationArray[rotationBase + 3]), fbf(this.rotationArray[rotationBase]));
+            outRotation.set(this.fbf(this.rotationArray[rotationBase + 1]), this.fbf(this.rotationArray[rotationBase + 2]),
+                            this.fbf(this.rotationArray[rotationBase + 3]), this.fbf(this.rotationArray[rotationBase]));
             if (transform) {
                 scaleMatrix.makeScale(outScale.x, outScale.y, outScale.z);
                 rotationMatrix.makeRotationFromQuaternion(outRotation);
@@ -195,15 +193,17 @@ export class SplatBuffer {
 
         for (let i = 0; i < splatCount; i++) {
             const scaleBase = i * SplatBuffer.ScaleComponentCount;
-            scale.set(fbf(this.scaleArray[scaleBase]), fbf(this.scaleArray[scaleBase + 1]), fbf(this.scaleArray[scaleBase + 2]));
+            scale.set(this.fbf(this.scaleArray[scaleBase]),
+                      this.fbf(this.scaleArray[scaleBase + 1]),
+                      this.fbf(this.scaleArray[scaleBase + 2]));
             tempMatrix4.makeScale(scale.x, scale.y, scale.z);
             scaleMatrix.setFromMatrix4(tempMatrix4);
 
             const rotationBase = i * SplatBuffer.RotationComponentCount;
-            rotation.set(fbf(this.rotationArray[rotationBase + 1]),
-                         fbf(this.rotationArray[rotationBase + 2]),
-                         fbf(this.rotationArray[rotationBase + 3]),
-                         fbf(this.rotationArray[rotationBase]));
+            rotation.set(this.fbf(this.rotationArray[rotationBase + 1]),
+                         this.fbf(this.rotationArray[rotationBase + 2]),
+                         this.fbf(this.rotationArray[rotationBase + 3]),
+                         this.fbf(this.rotationArray[rotationBase]));
             tempMatrix4.makeRotationFromQuaternion(rotation);
             rotationMatrix.setFromMatrix4(tempMatrix4);
 
