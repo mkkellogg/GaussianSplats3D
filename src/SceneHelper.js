@@ -1,20 +1,23 @@
 import * as THREE from 'three';
 import { ArrowHelper } from './ArrowHelper.js';
+import { disposeAllMeshes } from './Util.js';
 
 export class SceneHelper {
 
     constructor(threeScene) {
         this.threeScene = threeScene;
         this.splatRenderTarget = null;
-        this.renderTargetCopyMaterial = null;
         this.renderTargetCopyQuad = null;
         this.renderTargetCopyCamera = null;
         this.meshCursor = null;
         this.focusMarker = null;
         this.controlPlane = null;
+        this.debugRoot = null;
+        this.secondaryDebugRoot = null;
     }
 
     updateSplatRenderTargetForRenderDimensions(width, height) {
+        this.destroySplatRendertarget();
         this.splatRenderTarget = new THREE.WebGLRenderTarget(width, height, {
             format: THREE.RGBAFormat,
             stencilBuffer: false,
@@ -24,6 +27,12 @@ export class SceneHelper {
         this.splatRenderTarget.depthTexture = new THREE.DepthTexture(width, height);
         this.splatRenderTarget.depthTexture.format = THREE.DepthFormat;
         this.splatRenderTarget.depthTexture.type = THREE.UnsignedIntType;
+    }
+
+    destroySplatRendertarget() {
+        if (this.splatRenderTarget) {
+            this.splatRenderTarget = null;
+        }
     }
 
     setupRenderTargetCopyObjects() {
@@ -37,7 +46,7 @@ export class SceneHelper {
                 'value': null
             },
         };
-        this.renderTargetCopyMaterial = new THREE.ShaderMaterial({
+        const renderTargetCopyMaterial = new THREE.ShaderMaterial({
             vertexShader: `
                 varying vec2 vUv;
                 void main() {
@@ -68,9 +77,16 @@ export class SceneHelper {
             blendDst: THREE.OneMinusSrcAlphaFactor,
             blendDstAlpha: THREE.OneMinusSrcAlphaFactor
         });
-        this.renderTargetCopyMaterial.extensions.fragDepth = true;
-        this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.renderTargetCopyMaterial);
+        renderTargetCopyMaterial.extensions.fragDepth = true;
+        this.renderTargetCopyQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), renderTargetCopyMaterial);
         this.renderTargetCopyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    }
+
+    destroyRenderTargetCopyObjects() {
+        if (this.renderTargetCopyQuad) {
+            disposeAllMeshes(this.renderTargetCopyQuad);
+            this.renderTargetCopyQuad = null;
+        }
     }
 
     setupMeshCursor() {
@@ -103,10 +119,7 @@ export class SceneHelper {
 
     destroyMeshCursor() {
         if (this.meshCursor) {
-            this.meshCursor.children.forEach((child) => {
-                child.geometry.dispose();
-                child.material.dispose();
-            });
+            disposeAllMeshes(this.meshCursor);
             this.threeScene.remove(this.meshCursor);
             this.meshCursor = null;
         }
@@ -133,8 +146,14 @@ export class SceneHelper {
             focusMarkerMaterial.depthTest = false;
             focusMarkerMaterial.depthWrite = false;
             focusMarkerMaterial.transparent = true;
-            const sphereMesh = new THREE.Mesh(sphereGeometry, focusMarkerMaterial);
-            this.focusMarker = sphereMesh;
+            this.focusMarker = new THREE.Mesh(sphereGeometry, focusMarkerMaterial);
+        }
+    }
+
+    destroyFocusMarker() {
+        if (this.focusMarker) {
+            disposeAllMeshes(this.focusMarker);
+            this.focusMarker = null;
         }
     }
 
@@ -170,27 +189,36 @@ export class SceneHelper {
     }
 
     setupControlPlane() {
-        const planeGeometry = new THREE.PlaneGeometry(1, 1);
-        planeGeometry.rotateX(-Math.PI / 2);
-        const planeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
-        planeMaterial.transparent = true;
-        planeMaterial.opacity = 0.6;
-        planeMaterial.depthTest = false;
-        planeMaterial.depthWrite = false;
-        planeMaterial.side = THREE.DoubleSide;
-        const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+        if (!this.controlPlane) {
+            const planeGeometry = new THREE.PlaneGeometry(1, 1);
+            planeGeometry.rotateX(-Math.PI / 2);
+            const planeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
+            planeMaterial.transparent = true;
+            planeMaterial.opacity = 0.6;
+            planeMaterial.depthTest = false;
+            planeMaterial.depthWrite = false;
+            planeMaterial.side = THREE.DoubleSide;
+            const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
 
-        const arrowDir = new THREE.Vector3(0, 1, 0);
-        arrowDir.normalize();
-        const arrowOrigin = new THREE.Vector3(0, 0, 0);
-        const arrowLength = 0.5;
-        const arrowRadius = 0.01;
-        const arrowColor = 0x00dd00;
-        const arrowHelper = new ArrowHelper(arrowDir, arrowOrigin, arrowLength, arrowRadius, arrowColor, 0.1, 0.03);
+            const arrowDir = new THREE.Vector3(0, 1, 0);
+            arrowDir.normalize();
+            const arrowOrigin = new THREE.Vector3(0, 0, 0);
+            const arrowLength = 0.5;
+            const arrowRadius = 0.01;
+            const arrowColor = 0x00dd00;
+            const arrowHelper = new ArrowHelper(arrowDir, arrowOrigin, arrowLength, arrowRadius, arrowColor, 0.1, 0.03);
 
-        this.controlPlane = new THREE.Object3D();
-        this.controlPlane.add(planeMesh);
-        this.controlPlane.add(arrowHelper);
+            this.controlPlane = new THREE.Object3D();
+            this.controlPlane.add(planeMesh);
+            this.controlPlane.add(arrowHelper);
+        }
+    }
+
+    destroyControlPlane() {
+        if (this.controlPlane) {
+            disposeAllMeshes(this.controlPlane);
+            this.controlPlane = null;
+        }
     }
 
     setControlPlaneVisibility(visible) {
@@ -215,6 +243,17 @@ export class SceneHelper {
         this.secondaryDebugRoot = this.createSecondaryDebugMeshes();
         this.threeScene.add(this.debugRoot);
         this.threeScene.add(this.secondaryDebugRoot);
+    }
+
+    destroyDebugMeshes() {
+        for (let debugRoot of [this.debugRoot, this.secondaryDebugRoot]) {
+            if (debugRoot) {
+                disposeAllMeshes(debugRoot);
+                this.threeScene.remove(debugRoot);
+            }
+        }
+        this.debugRoot = null;
+        this.secondaryDebugRoot = null;
     }
 
     createDebugMeshes(renderOrder) {
@@ -394,5 +433,14 @@ export class SceneHelper {
         });
 
         return material;
+    }
+
+    dispose() {
+        this.destroyMeshCursor();
+        this.destroyFocusMarker();
+        this.destroyDebugMeshes();
+        this.destroyControlPlane();
+        this.destroyRenderTargetCopyObjects();
+        this.destroySplatRendertarget();
     }
 }

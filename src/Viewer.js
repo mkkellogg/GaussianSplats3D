@@ -135,6 +135,15 @@ export class Viewer {
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
 
+        this.resizeObserver = null;
+        this.mouseMoveListener = null;
+        this.mouseDownListener = null;
+        this.mouseUpListener = null;
+        this.keyDownListener = null;
+
+        this.sortPromise = null;
+        this.sortPromiseResolver = null;
+
         this.loadingSpinner = new LoadingSpinner(null, this.rootElement || document.body);
         this.loadingSpinner.hide();
 
@@ -204,9 +213,12 @@ export class Viewer {
             this.controls.enableDamping = true;
             this.controls.dampingFactor = 0.05;
             this.controls.target.copy(this.initialCameraLookAt);
-            this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
-            this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
-            this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
+            this.mouseMoveListener = this.onMouseMove.bind(this);
+            this.rootElement.addEventListener('pointermove', this.mouseMoveListener, false);
+            this.mouseDownListener = this.onMouseDown.bind(this);
+            this.rootElement.addEventListener('pointerdown', this.mouseDownListener, false);
+            this.mouseUpListener = this.onMouseUp.bind(this);
+            this.rootElement.addEventListener('pointerup', this.mouseUpListener, false);
             this.keyDownListener = this.onKeyDown.bind(this);
             window.addEventListener('keydown', this.keyDownListener, false);
         }
@@ -215,6 +227,19 @@ export class Viewer {
         this.loadingSpinner.setContainer(this.rootElement);
 
         this.initialized = true;
+    }
+
+    removeEventHandlers() {
+        if (this.useBuiltInControls) {
+            this.rootElement.removeEventListener('pointermove', this.mouseMoveListener);
+            this.mouseMoveListener = null;
+            this.rootElement.removeEventListener('pointerdown', this.mouseDownListener);
+            this.mouseDownListener = null;
+            this.rootElement.removeEventListener('pointerup', this.mouseUpListener);
+            this.mouseUpListener = null;
+            window.removeEventListener('keydown', this.keyDownListener);
+            this.keyDownListener = null;
+        }
     }
 
     onKeyDown = function() {
@@ -575,9 +600,7 @@ export class Viewer {
                         this.loadingSpinner.setMessage(`Processing splats...`);
                     }
                     window.setTimeout(() => {
-                        if (this.sortWorker) this.sortWorker.terminate();
-                        this.sortWorker = null;
-                        this.sortRunning = false;
+                        this.disposeSortWorker();
                         this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions);
                         this.setupSortWorker(this.splatMesh).then(() => {
                             loadCount--;
@@ -601,6 +624,12 @@ export class Viewer {
         };
 
     }();
+
+    disposeSortWorker() {
+        if (this.sortWorker) this.sortWorker.terminate();
+        this.sortWorker = null;
+        this.sortRunning = false;
+    }
 
     /**
      * Add one or more instances of SplatBuffer to the SplatMesh instance managed by the viewer. This function is additive; all splat
@@ -648,6 +677,9 @@ export class Viewer {
                         this.splatMesh.updateRenderIndexes(sortedIndexes, e.data.splatRenderCount);
                     }
                     this.lastSortTime = e.data.sortTime;
+                    this.sortPromiseResolver();
+                    this.sortPromise = null;
+                    this.sortPromiseResolver = null;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
@@ -711,24 +743,39 @@ export class Viewer {
     }
 
     /**
-     * Dispose resources
+     * Dispose of all resources held directly and indirectly by this viewer.
      */
-    dispose() {
+    async dispose() {
+        if (this.sortPromise) {
+            await this.sortPromise;
+        }
         this.stop();
-        if (this.controls) this.controls.dispose();
-        if (this.splatMesh) this.splatMesh.dispose();
-        if (this.sceneHelper) this.sceneHelper.destroyMeshCursor();
-        if (this.resizeObserver) this.resizeObserver.unobserve(this.rootElement);
-        if (this.renderer) this.renderer.dispose();
-        if (this.sortWorker) this.sortWorker.terminate();
-        window.removeEventListener('keydown', this.keyDownListener);
-        this.controls = null;
-        this.splatMesh = null;
-        this.sceneHelper = null;
-        this.renderer = null;
-        this.sortWorker = null;
+        if (this.controls) {
+            this.controls.dispose();
+            this.controls = null;
+        }
+        if (this.splatMesh) {
+            this.splatMesh.dispose();
+            this.splatMesh = null;
+        }
+        if (this.sceneHelper) {
+            this.sceneHelper.dispose();
+            this.sceneHelper = null;
+        }
+        if (this.resizeObserver) {
+            this.resizeObserver.unobserve(this.rootElement);
+            this.resizeObserver = null;
+        }
+        if (this.renderer) {
+            if (!this.usingExternalRenderer) this.renderer.dispose();
+            this.renderer = null;
+        }
+        this.disposeSortWorker();
+        this.removeEventHandlers();
         this.camera = null;
         this.threeScene = null;
+        this.splatRenderingInitialized = false;
+        this.initialized = false;
     }
 
     selfDrivenUpdate() {
@@ -1013,6 +1060,9 @@ export class Viewer {
 
             this.sortRunning = true;
             this.splatRenderCount = this.gatherSceneNodesForSort(gatherAllNodes);
+            this.sortPromise = new Promise((resolve) => {
+                this.sortPromiseResolver = resolve;
+            });
 
             mvpMatrix.copy(this.camera.matrixWorld).invert();
             mvpMatrix.premultiply(this.camera.projectionMatrix);
@@ -1021,6 +1071,7 @@ export class Viewer {
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
+
             if (this.splatMesh.dynamicMode) {
                 queuedSorts.push(this.splatRenderCount);
             } else {
