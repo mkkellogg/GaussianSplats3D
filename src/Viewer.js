@@ -10,6 +10,7 @@ import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
 import { AbortablePromise } from './AbortablePromise.js';
+import { SceneFormat } from './SceneFormat.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -134,6 +135,15 @@ export class Viewer {
         this.mouseDownPosition = new THREE.Vector2();
         this.mouseDownTime = null;
 
+        this.resizeObserver = null;
+        this.mouseMoveListener = null;
+        this.mouseDownListener = null;
+        this.mouseUpListener = null;
+        this.keyDownListener = null;
+
+        this.sortPromise = null;
+        this.sortPromiseResolver = null;
+
         this.loadingSpinner = new LoadingSpinner(null, this.rootElement || document.body);
         this.loadingSpinner.hide();
 
@@ -180,11 +190,11 @@ export class Viewer {
             this.renderer.setClearColor(new THREE.Color( 0x000000 ), 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
 
-            const resizeObserver = new ResizeObserver(() => {
+            this.resizeObserver = new ResizeObserver(() => {
                 this.getRenderDimensions(renderDimensions);
                 this.renderer.setSize(renderDimensions.x, renderDimensions.y);
             });
-            resizeObserver.observe(this.rootElement);
+            this.resizeObserver.observe(this.rootElement);
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
@@ -203,16 +213,33 @@ export class Viewer {
             this.controls.enableDamping = true;
             this.controls.dampingFactor = 0.05;
             this.controls.target.copy(this.initialCameraLookAt);
-            this.rootElement.addEventListener('pointermove', this.onMouseMove.bind(this), false);
-            this.rootElement.addEventListener('pointerdown', this.onMouseDown.bind(this), false);
-            this.rootElement.addEventListener('pointerup', this.onMouseUp.bind(this), false);
-            window.addEventListener('keydown', this.onKeyDown.bind(this), false);
+            this.mouseMoveListener = this.onMouseMove.bind(this);
+            this.rootElement.addEventListener('pointermove', this.mouseMoveListener, false);
+            this.mouseDownListener = this.onMouseDown.bind(this);
+            this.rootElement.addEventListener('pointerdown', this.mouseDownListener, false);
+            this.mouseUpListener = this.onMouseUp.bind(this);
+            this.rootElement.addEventListener('pointerup', this.mouseUpListener, false);
+            this.keyDownListener = this.onKeyDown.bind(this);
+            window.addEventListener('keydown', this.keyDownListener, false);
         }
 
         this.setupInfoPanel();
         this.loadingSpinner.setContainer(this.rootElement);
 
         this.initialized = true;
+    }
+
+    removeEventHandlers() {
+        if (this.useBuiltInControls) {
+            this.rootElement.removeEventListener('pointermove', this.mouseMoveListener);
+            this.mouseMoveListener = null;
+            this.rootElement.removeEventListener('pointerdown', this.mouseDownListener);
+            this.mouseDownListener = null;
+            this.rootElement.removeEventListener('pointerup', this.mouseUpListener);
+            this.mouseUpListener = null;
+            window.removeEventListener('keydown', this.keyDownListener);
+            this.keyDownListener = null;
+        }
     }
 
     onKeyDown = function() {
@@ -294,7 +321,8 @@ export class Viewer {
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
                 if (outHits.length > 0) {
-                    const intersectionPoint = outHits[0].origin;
+                    const hit = outHits[0];
+                    const intersectionPoint = hit.origin;
                     toNewFocalPoint.copy(intersectionPoint).sub(this.camera.position);
                     if (toNewFocalPoint.length() > MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT) {
                         this.previousCameraTarget.copy(this.controls.target);
@@ -430,7 +458,7 @@ export class Viewer {
             }
             if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
         };
-        const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold, downloadProgress);
+        const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold, downloadProgress, options.format);
         return new AbortablePromise((resolve, reject) => {
             loadPromise.then((splatBuffer) => {
                 if (options.showLoadingSpinner) this.loadingSpinner.hide();
@@ -496,7 +524,7 @@ export class Viewer {
         const abortHandlers = [];
         for (let i = 0; i < sceneOptions.length; i++) {
             const loadPromise = this.loadFileToSplatBuffer(sceneOptions[i].path, sceneOptions[i].splatAlphaRemovalThreshold,
-                                                           downloadProgress.bind(this, i));
+                                                           downloadProgress.bind(this, i), sceneOptions.format);
             abortHandlers.push(loadPromise.abortHandler);
             loadPromises.push(loadPromise.promise);
         }
@@ -529,19 +557,28 @@ export class Viewer {
      *                                            value (valid range: 0 - 255), defaults to 1
      *
      * @param {function} onProgress Function to be called as file data are received
+     * @param {string} format Optional format specifier, if not specified the format will be inferred from the file extension
      * @return {AbortablePromise}
      */
-    loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined) {
+    loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined, format = undefined) {
         const downloadProgress = (percent, percentLabel) => {
             if (onProgress) onProgress(percent, percentLabel, 'downloading');
         };
-        if (SplatLoader.isFileSplatFormat(path)) {
-            return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
-        } else if (path.endsWith('.ply')) {
-            return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+        if (format) {
+            if (format === SceneFormat.Splat || format === SceneFormat.KSplat) {
+                return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold, undefined, undefined, format);
+            } else if (format === SceneFormat.Ply) {
+                return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            }
         } else {
-            return AbortablePromise.reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
+            if (SplatLoader.isFileSplatFormat(path)) {
+                return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            } else if (path.endsWith('.ply')) {
+                return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            }
         }
+
+        return AbortablePromise.reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
     }
 
     /**
@@ -563,9 +600,7 @@ export class Viewer {
                         this.loadingSpinner.setMessage(`Processing splats...`);
                     }
                     window.setTimeout(() => {
-                        if (this.sortWorker) this.sortWorker.terminate();
-                        this.sortWorker = null;
-                        this.sortRunning = false;
+                        this.disposeSortWorker();
                         this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions);
                         this.setupSortWorker(this.splatMesh).then(() => {
                             loadCount--;
@@ -589,6 +624,12 @@ export class Viewer {
         };
 
     }();
+
+    disposeSortWorker() {
+        if (this.sortWorker) this.sortWorker.terminate();
+        this.sortWorker = null;
+        this.sortRunning = false;
+    }
 
     /**
      * Add one or more instances of SplatBuffer to the SplatMesh instance managed by the viewer. This function is additive; all splat
@@ -636,6 +677,9 @@ export class Viewer {
                         this.splatMesh.updateRenderIndexes(sortedIndexes, e.data.splatRenderCount);
                     }
                     this.lastSortTime = e.data.sortTime;
+                    this.sortPromiseResolver();
+                    this.sortPromise = null;
+                    this.sortPromiseResolver = null;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
@@ -681,7 +725,7 @@ export class Viewer {
      */
     start() {
         if (this.selfDrivenMode) {
-            requestAnimationFrame(this.selfDrivenUpdateFunc);
+            this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
             this.selfDrivenModeRunning = true;
         } else {
             throw new Error('Cannot start viewer unless it is in self driven mode.');
@@ -693,14 +737,50 @@ export class Viewer {
      */
     stop() {
         if (this.selfDrivenMode && this.selfDrivenModeRunning) {
-            cancelAnimationFrame();
+            cancelAnimationFrame(this.requestFrameId);
             this.selfDrivenModeRunning = false;
         }
     }
 
+    /**
+     * Dispose of all resources held directly and indirectly by this viewer.
+     */
+    async dispose() {
+        if (this.sortPromise) {
+            await this.sortPromise;
+        }
+        this.stop();
+        if (this.controls) {
+            this.controls.dispose();
+            this.controls = null;
+        }
+        if (this.splatMesh) {
+            this.splatMesh.dispose();
+            this.splatMesh = null;
+        }
+        if (this.sceneHelper) {
+            this.sceneHelper.dispose();
+            this.sceneHelper = null;
+        }
+        if (this.resizeObserver) {
+            this.resizeObserver.unobserve(this.rootElement);
+            this.resizeObserver = null;
+        }
+        if (this.renderer) {
+            if (!this.usingExternalRenderer) this.renderer.dispose();
+            this.renderer = null;
+        }
+        this.disposeSortWorker();
+        this.removeEventHandlers();
+        this.camera = null;
+        this.threeScene = null;
+        this.splatRenderingInitialized = false;
+        this.initialized = false;
+    }
+
     selfDrivenUpdate() {
         if (this.selfDrivenMode) {
-            requestAnimationFrame(this.selfDrivenUpdateFunc);
+            this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.update();
         this.render();
@@ -980,6 +1060,9 @@ export class Viewer {
 
             this.sortRunning = true;
             this.splatRenderCount = this.gatherSceneNodesForSort(gatherAllNodes);
+            this.sortPromise = new Promise((resolve) => {
+                this.sortPromiseResolver = resolve;
+            });
 
             mvpMatrix.copy(this.camera.matrixWorld).invert();
             mvpMatrix.premultiply(this.camera.projectionMatrix);
@@ -988,6 +1071,7 @@ export class Viewer {
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
+
             if (this.splatMesh.dynamicMode) {
                 queuedSorts.push(this.splatRenderCount);
             } else {

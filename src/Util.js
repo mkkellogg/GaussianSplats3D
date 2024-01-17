@@ -112,3 +112,19 @@ export const clamp = function(val, min, max) {
 export const getCurrentTime = function() {
     return performance.now() / 1000;
 };
+
+export const disposeAllMeshes = (object3D) => {
+    if (object3D.geometry) {
+        object3D.geometry.dispose();
+        object3D.geometry = null;
+    }
+    if (object3D.material) {
+        object3D.material.dispose();
+        object3D.material = null;
+    }
+    if (object3D.children) {
+        for (let child of object3D.children) {
+            disposeAllMeshes(child);
+        }
+    }
+};

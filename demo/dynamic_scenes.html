@@ -52,39 +52,41 @@
         }
     ], true).then(() => {
       viewer.start();
+
+      const bonsaiCount = 2;
+      const bonsaiStartIndex = 1;
+      const rotationAxis = new THREE.Vector3(0, -1, -0.6).normalize();
+      const baseQuaternion = new THREE.Quaternion(-0.147244, -0.07617, 0.14106, 0.9760);
+      const rotationQuaternion = new THREE.Quaternion();
+      const quaternion = new THREE.Quaternion();
+      const orbitCenter = new THREE.Vector3(0.416161, 1.385, 1.145);
+      const horizontalOffsetVector = new THREE.Vector3();
+      const position = new THREE.Vector3();
+      const scale = new THREE.Vector3(1.25, 1.25, 1.25);
+
+      let startTime = performance.now() / 1000.0;
+      requestAnimationFrame(update);
+      function update() {
+        requestAnimationFrame(update);
+        const timeDelta = performance.now() / 1000.0 - startTime;
+        for (let i = bonsaiStartIndex; i < bonsaiStartIndex + bonsaiCount; i++) {
+          const angle = timeDelta * 0.25 + (Math.PI * 2) * (i /bonsaiCount);
+          const height = Math.cos(timeDelta + (Math.PI * 2) * (i / bonsaiCount)) * 0.5 + 3;
+
+          rotationQuaternion.setFromAxisAngle(rotationAxis, angle);
+          horizontalOffsetVector.set(3, 0, 0).applyQuaternion(rotationQuaternion);
+          position.copy(rotationAxis).multiplyScalar(height).add(horizontalOffsetVector).add(orbitCenter);
+          quaternion.copy(baseQuaternion).premultiply(rotationQuaternion);
+
+          const splatScene = viewer.getSplatScene(i);
+          splatScene.position.copy(position);
+          splatScene.quaternion.copy(quaternion);
+          splatScene.scale.copy(scale);
+        }
+      }
+
     })
 
-    const bonsaiCount = 2;
-    const bonsaiStartIndex = 1;
-    const rotationAxis = new THREE.Vector3(0, -1, -0.6).normalize();
-    const baseQuaternion = new THREE.Quaternion(-0.147244, -0.07617, 0.14106, 0.9760);
-    const rotationQuaternion = new THREE.Quaternion();
-    const quaternion = new THREE.Quaternion();
-    const orbitCenter = new THREE.Vector3(0.416161, 1.385, 1.145);
-    const horizontalOffsetVector = new THREE.Vector3();
-    const position = new THREE.Vector3();
-    const scale = new THREE.Vector3(1.25, 1.25, 1.25);
-
-    let startTime = performance.now() / 1000.0;
-    requestAnimationFrame(update);
-    function update() {
-      requestAnimationFrame(update);
-      const timeDelta = performance.now() / 1000.0 - startTime;
-      for (let i = bonsaiStartIndex; i < bonsaiStartIndex + bonsaiCount; i++) {
-        const angle = timeDelta * 0.25 + (Math.PI * 2) / i;
-        const height = Math.cos(timeDelta + (Math.PI * 2) / i) * 0.5 + 3;
-
-        rotationQuaternion.setFromAxisAngle(rotationAxis, angle);
-        horizontalOffsetVector.set(3, 0, 0).applyQuaternion(rotationQuaternion);
-        position.copy(rotationAxis).multiplyScalar(height).add(horizontalOffsetVector).add(orbitCenter);
-        quaternion.copy(baseQuaternion).premultiply(rotationQuaternion);
-
-        const splatScene = viewer.getSplatScene(i);
-        splatScene.position.copy(position);
-        splatScene.quaternion.copy(quaternion);
-        splatScene.scale.copy(scale);
-      }
-    }
   </script>
 </body>
 

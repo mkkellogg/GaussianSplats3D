@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SplatBuffer } from './SplatBuffer.js';
 import { SplatCompressor } from './SplatCompressor.js';
 import { fetchWithProgress } from './Util.js';
+import { SceneFormat } from './SceneFormat.js';
 
 export class SplatLoader {
 
@@ -22,10 +23,11 @@ export class SplatLoader {
         return fileName.endsWith('.splat');
     }
 
-    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
+    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize, format) {
         return fetchWithProgress(fileName, onProgress).then((bufferData) => {
+            const isCustomSplatFormat = format === SceneFormat.KSplat || SplatLoader.isCustomSplatFormat(fileName);
             let splatBuffer;
-            if (SplatLoader.isCustomSplatFormat(fileName)) {
+            if (isCustomSplatFormat) {
                 splatBuffer = new SplatBuffer(bufferData);
             } else {
                 const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
