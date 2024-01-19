@@ -564,7 +564,7 @@ export class Viewer {
         const downloadProgress = (percent, percentLabel) => {
             if (onProgress) onProgress(percent, percentLabel, 'downloading');
         };
-        if (format) {
+        if (format !== undefined) {
             if (format === SceneFormat.Splat || format === SceneFormat.KSplat) {
                 return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold, undefined, undefined, format);
             } else if (format === SceneFormat.Ply) {
