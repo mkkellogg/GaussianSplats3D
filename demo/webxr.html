@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>3D Gaussian Splat WebXR Demo - Garden</title>
+  <script type="text/javascript" src="js/util.js"></script>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "@mkkellogg/gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js",
+            "three/addons/": "./jsm/"
+        }
+    }
+  </script>
+  <style>
+
+    body {
+      background-color: #000000;
+      height: 100vh;
+      margin: 0px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+  <script type="module">
+    import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
+    import * as THREE from 'three';
+    import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+    const container = document.createElement( 'div' );
+    document.body.appendChild( container );
+
+    const renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
+    renderer.setPixelRatio( window.devicePixelRatio );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.xr.enabled = true;
+    container.appendChild( renderer.domElement );
+
+    const camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 20 );
+    const path = 'assets/data/garden/garden.ksplat';
+
+    const threeScene = new THREE.Scene();
+    const viewer = new GaussianSplats3D.Viewer({
+        'threeScene': threeScene,
+        'camera': camera,
+        'renderer': renderer,
+        'selfDrivenMode': false,
+    });
+
+    document.body.appendChild( ARButton.createButton( viewer.renderer ) );
+
+    //rotate 180° along the Z axis
+    const quaternion = new THREE.Quaternion();
+    const euler = new THREE.Euler( 0.0, 0.0, Math.PI);
+    quaternion.setFromEuler(euler);
+
+    viewer.addSplatScene(
+      path,
+      {
+        "scale": [0.1, 0.1, 0.1],
+        "rotation": quaternion.toArray(),
+      }
+    )
+    .then(() => {
+      renderer.setAnimationLoop( function () {
+        viewer.update();
+        viewer.render();
+      } );
+    });
+  </script>
+</body>
+
+</html>
