@@ -11,6 +11,10 @@ import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
 import { AbortablePromise } from './AbortablePromise.js';
 import { SceneFormat } from './SceneFormat.js';
+import { WebXRMode } from './webxr/WebXRMode.js';
+import { VRButton } from './webxr/VRButton.js';
+import { ARButton } from './webxr/ARButton.js';
+
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -100,6 +104,9 @@ export class Viewer {
         const dynamicScene = !!options.dynamicScene;
         this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
                                        this.gpuAcceleratedSort, this.integerBasedSort);
+
+
+        this.webXRMode = options.webXRMode || WebXRMode.None;
 
         this.controls = null;
 
@@ -196,6 +203,15 @@ export class Viewer {
             });
             this.resizeObserver.observe(this.rootElement);
             this.rootElement.appendChild(this.renderer.domElement);
+        }
+
+        if (options.WebXRMode) {
+            if(options.webXRMode === WebXRMode.VR) {
+                this.rootElement.appendChild(VRButton.createButton(this.renderer));
+            } else if(options.webXRMode === WebXRMode.AR) {
+                this.rootElement.appendChild(ARButton.createButton(this.renderer));
+            }
+            this.renderer.xr.enabled = true;
         }
 
         this.threeScene = this.threeScene || new THREE.Scene();
@@ -564,7 +580,7 @@ export class Viewer {
         const downloadProgress = (percent, percentLabel) => {
             if (onProgress) onProgress(percent, percentLabel, 'downloading');
         };
-        if (format) {
+        if (format !== undefined && format !== null) {
             if (format === SceneFormat.Splat || format === SceneFormat.KSplat) {
                 return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold, undefined, undefined, format);
             } else if (format === SceneFormat.Ply) {
@@ -725,7 +741,11 @@ export class Viewer {
      */
     start() {
         if (this.selfDrivenMode) {
-            this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
+            if (this.webXRMode) {
+                this.renderer.setAnimationLoop(this.selfDrivenUpdateFunc);
+            } else {
+                this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
+            }
             this.selfDrivenModeRunning = true;
         } else {
             throw new Error('Cannot start viewer unless it is in self driven mode.');
@@ -737,7 +757,9 @@ export class Viewer {
      */
     stop() {
         if (this.selfDrivenMode && this.selfDrivenModeRunning) {
-            cancelAnimationFrame(this.requestFrameId);
+            if (!this.webXRMode) {
+                cancelAnimationFrame(this.requestFrameId);
+            }
             this.selfDrivenModeRunning = false;
         }
     }

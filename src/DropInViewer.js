@@ -92,6 +92,10 @@ export class DropInViewer extends THREE.Group {
         return this.viewer.getSplatScene(sceneIndex);
     }
 
+    dispose() {
+        return this.viewer.dispose();
+    }
+
     static onBeforeRender(viewer, renderer, threeScene, camera) {
         viewer.update(renderer, camera);
     }
