@@ -169,9 +169,13 @@ export class VRButton {
 
 			} ).catch( showVRNotAllowed );
 
+            console.log ("VR Ready!!")
+
 			return button;
 
 		} else {
+
+            console.log ("FAILED!!")
 
 			const message = document.createElement( 'a' );
 

@@ -183,8 +183,8 @@ export class Viewer {
         if (!this.usingExternalCamera) {
             this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
             this.camera.position.copy(this.initialCameraPosition);
-            this.camera.lookAt(this.initialCameraLookAt);
             this.camera.up.copy(this.cameraUp).normalize();
+            this.camera.lookAt(this.initialCameraLookAt);
         }
 
         if (!this.usingExternalRenderer) {
@@ -205,13 +205,15 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
-        if (options.WebXRMode) {
-            if(options.webXRMode === WebXRMode.VR) {
+        if (this.webXRMode) {
+            if(this.webXRMode === WebXRMode.VR) {
                 this.rootElement.appendChild(VRButton.createButton(this.renderer));
-            } else if(options.webXRMode === WebXRMode.AR) {
+            } else if(this.webXRMode === WebXRMode.AR) {
                 this.rootElement.appendChild(ARButton.createButton(this.renderer));
             }
             this.renderer.xr.enabled = true;
+            this.camera.up.copy(this.cameraUp).normalize();
+            this.camera.lookAt(this.initialCameraLookAt);
         }
 
         this.threeScene = this.threeScene || new THREE.Scene();
@@ -220,7 +222,7 @@ export class Viewer {
         this.sceneHelper.setupFocusMarker();
         this.sceneHelper.setupControlPlane();
 
-        if (this.useBuiltInControls) {
+        if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
             this.controls.listenToKeyEvents(window);
             this.controls.rotateSpeed = 0.5;
