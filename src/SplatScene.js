@@ -5,16 +5,26 @@ import * as THREE from 'three';
  */
 export class SplatScene {
 
-    constructor(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3(1, 1, 1)) {
+    constructor(
+        /** @type {ArrayBuffer} */ splatBuffer,
+        position = new THREE.Vector3(),
+        quaternion = new THREE.Quaternion(),
+        scale = new THREE.Vector3(1, 1, 1)
+    ) {
+        /** @type {ArrayBuffer} */
         this.splatBuffer = splatBuffer;
+        /** @type {THREE.Vector3} */
         this.position = position.clone();
+        /** @type {THREE.Quaternion} */
         this.quaternion = quaternion.clone();
+        /** @type {THREE.Vector3} */
         this.scale = scale.clone();
+        /** @type {THREE.Matrix4} */
         this.transform = new THREE.Matrix4();
         this.updateTransform();
     }
 
-    copyTransformData(otherScene) {
+    copyTransformData(/** @type {THREE.Scene} */ otherScene) {
         this.position.copy(otherScene.position);
         this.quaternion.copy(otherScene.quaternion);
         this.scale.copy(otherScene.scale);

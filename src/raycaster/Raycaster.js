@@ -9,6 +9,13 @@ export class Raycaster {
         this.raycastAgainstTrueSplatEllipsoid = raycastAgainstTrueSplatEllipsoid;
     }
 
+    /**
+     * @type {(
+     *  camera: THREE.Camera,
+     *  screenPosition: THREE.Vector2,
+     *  screenDimensions: THREE.Vector2
+     * ) => void}
+     * */
     setFromCameraAndScreenPosition = function() {
 
         const ndcCoords = new THREE.Vector2();

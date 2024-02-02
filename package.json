@@ -8,22 +8,24 @@
     "description": "Three.js-based 3D Gaussian splat viewer",
     "module": "build/gaussian-splats-3d.module.js",
     "main": "build/gaussian-splats-3d.umd.cjs",
+    "types": "build/index.d.ts",
     "author": "Mark Kellogg",
     "license": "MIT",
     "type": "module",
     "scripts": {
+        "build-types": "tsc",
         "build-demo": "mkdir -p ./build/demo && cp -r ./demo ./build/ && cp ./node_modules/three/build/three.module.js ./build/demo/lib/three.module.js",
         "build-library": "npx rollup -c && mkdir -p ./build/demo/lib && cp ./build/gaussian-splats-3d.module.* ./build/demo/lib/",
-        "build": "npm run build-library && npm run build-demo",
+        "build": "npm run build-library && npm run build-types && npm run build-demo",
         "build-demo-windows": "(if not exist \".\\build\\demo\" mkdir .\\build\\demo) && xcopy /E .\\demo .\\build\\demo && xcopy .\\node_modules\\three\\build\\three.module.js .\\build\\demo\\lib\\",
         "build-library-windows": "npx rollup -c && (if not exist \".\\build\\demo\\lib\" mkdir .\\build\\demo\\lib) && copy .\\build\\gaussian-splats-3d* .\\build\\demo\\lib\\",
-        "build-windows": "npm run build-library-windows && npm run build-demo-windows",
+        "build-windows": "npm run build-library-windows && npm run build-types && npm run build-demo-windows",
         "watch": "npx npm-watch ",
         "demo": "node util/server.js -d ./build/demo",
         "fix-styling": "npx stylelint **/*.scss --fix",
         "fix-js": "npx eslint src --fix",
         "lint": "npx eslint 'src/**/*.js' || true",
-        "prettify": "npx prettier --write 'src/**/*.js'"
+        "prettify": "npx prettier --write \"src/**/*.js\""
     },
     "watch": {
         "build-library": {
@@ -52,6 +54,7 @@
         "@babel/eslint-parser": "7.22.11",
         "@babel/plugin-proposal-class-properties": "7.18.6",
         "@babel/preset-env": "7.22.10",
+        "@types/three": "^0.161.2",
         "babel-loader": "9.1.3",
         "eslint": "8.47.0",
         "eslint-config-google": "0.14.0",

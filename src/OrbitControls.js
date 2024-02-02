@@ -124,6 +124,7 @@ class OrbitControls extends EventDispatcher {
 
         };
 
+        /** @type {(domElement: HTMLElement) => void} */
         this.listenToKeyEvents = function( domElement ) {
 
             domElement.addEventListener( 'keydown', onKeyDown );
@@ -131,6 +132,7 @@ class OrbitControls extends EventDispatcher {
 
         };
 
+        /** @type {() => void} */
         this.stopListenToKeyEvents = function() {
 
             this._domElementKeyEvents.removeEventListener( 'keydown', onKeyDown );

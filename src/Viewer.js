@@ -15,40 +15,86 @@ import { SceneFormat } from './SceneFormat.js';
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 
+/* eslint-disable max-len */
+/**
+ * @internal
+ * @typedef {object} _ViewerOptionsProps
+ * @prop {[x: number, y: number, z: number]} cameraUp The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and when the viewer uses its own camera).
+ * @prop {[x: number, y: number, z: number]} initialCameraPosition The camera's initial position (only used when the viewer uses its own camera).
+ * @prop {[x: number, y: number, z: number]} initialCameraLookAt The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
+ */
+
+/**
+ * @internal
+ * @typedef {object} _ViewerClassProps
+ * @prop {THREE.Vector3} cameraUp The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and when the viewer uses its own camera).
+ * @prop {THREE.Vector3} initialCameraPosition The camera's initial position (only used when the viewer uses its own camera).
+ * @prop {THREE.Vector3} initialCameraLookAt The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
+ */
+
+/**
+ * @internal
+ * @typedef {object} _ViewerCommonProps
+ * @prop {boolean} dropInMode 'dropInMode' is a flag that is used internally to support the usage of the viewer as a Three.js scene object
+ * @prop {boolean} selfDrivenMode If 'selfDrivenMode' is true, the viewer manages its own update/animation loop via requestAnimationFrame()
+ * @prop {THREE.WebGLRenderer} renderer Allows for usage of an external Three.js renderer
+ * @prop {THREE.Camera} camera Allows for usage of an external Three.js camera
+ * @prop {boolean} useBuiltInControls If 'useBuiltInControls' is true, the viewer will create its own instance of OrbitControls and attach to the camera
+ * @prop {boolean} ignoreDevicePixelRatio Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality
+ * @prop {boolean} halfPrecisionCovariancesOnGPU Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit
+ * @prop {boolean} gpuAcceleratedSort If 'gpuAcceleratedSort' is true, a partially GPU-accelerated approach to sorting splats will be used.
+ * @prop {boolean} sharedMemoryForWorkers If 'sharedMemoryForWorkers' is true, a SharedArrayBuffer will be used to communicate with web workers.
+ * @prop {boolean} integerBasedSort If 'integerBasedSort' is true, the integer version of splat centers as well as other values used to calculate splat distances are used instead of the float version.
+ * @prop {boolean} dynamicScene If 'dynamicScene' is true, it tells the viewer to assume scene elements are not stationary or that the number of splats in the scene may change.
+ * @prop {HTMLElement} rootElement parent element of the Three.js renderer canvas
+ */
+
+/**
+ * @typedef {Partial<_ViewerCommonProps & _ViewerOptionsProps>} ViewerOptions
+ */
+
+/**
+ * @typedef AddSplatOptions
+ * @prop {number} [splatAlphaRemovalThreshold] Ignore any splats with an alpha less than the specified value (valid range: 0 - 255), defaults to `1`
+ * @prop {boolean} [showLoadingSpinner] Display a loading spinner while the scene is loading, defaults to `true`
+ * @prop {[x: number, y: number, z: number]} [position] Position of the scene, acts as an offset from its default position, defaults to `[0, 0, 0]`
+ * @prop {[x: number, y: number, z: number, w: number]} [rotation] Rotation of the scene represented as a quaternion, defaults to `[0, 0, 0, 1]`
+ * @prop {[x: number, y: number, z: number]} [scale] Scene's scale, defaults to `[1, 1, 1]`
+ * @prop {(totalPercent: number, percentLabel: string, label: string) => void} [onProgress] Function to be called as file data are received
+ */
+
+/** @typedef {(Omit<AddSplatOptions, 'onProgress'> & { path: string })[]} AddSplatsOptions */
+/* eslint-enable max-len */
+
 /**
  * Viewer: Manages the rendering of splat scenes. Manages an instance of SplatMesh as well as a web worker
  * that performs the sort for its splats.
+ *
+ * @implements {ViewerCommonProps}
+ * @implements {ViewerClassProps}
  */
 export class Viewer {
 
-    constructor(options = {}) {
+    constructor(/** @type {ViewerOptions} */ options = {}) {
 
-        // The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and
-        // when the viewer uses its own camera).
         if (!options.cameraUp) options.cameraUp = [0, 1, 0];
         this.cameraUp = new THREE.Vector3().fromArray(options.cameraUp);
 
-        // The camera's initial position (only used when the viewer uses its own camera).
         if (!options.initialCameraPosition) options.initialCameraPosition = [0, 10, 15];
         this.initialCameraPosition = new THREE.Vector3().fromArray(options.initialCameraPosition);
 
-        // The initial focal point of the camera and center of the camera's orbit (only used when the viewer uses its own camera).
         if (!options.initialCameraLookAt) options.initialCameraLookAt = [0, 0, 0];
         this.initialCameraLookAt = new THREE.Vector3().fromArray(options.initialCameraLookAt);
 
-        // 'dropInMode' is a flag that is used internally to support the usage of the viewer as a Three.js scene object
         this.dropInMode = options.dropInMode || false;
 
-        // If 'selfDrivenMode' is true, the viewer manages its own update/animation loop via requestAnimationFrame()
         if (options.selfDrivenMode === undefined || options.selfDrivenMode === null) options.selfDrivenMode = true;
         this.selfDrivenMode = options.selfDrivenMode && !this.dropInMode;
         this.selfDrivenUpdateFunc = this.selfDrivenUpdate.bind(this);
 
-        // If 'useBuiltInControls' is true, the viewer will create its own instance of OrbitControls and attach to the camera
         if (options.useBuiltInControls === undefined) options.useBuiltInControls = true;
         this.useBuiltInControls = options.useBuiltInControls;
 
-        // parent element of the Three.js renderer canvas
         this.rootElement = options.rootElement;
 
         // Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger,
@@ -242,6 +288,7 @@ export class Viewer {
         }
     }
 
+    /** @type {(e: KeyboardEvent) => void} */
     onKeyDown = function() {
 
         const forward = new THREE.Vector3();
@@ -279,7 +326,7 @@ export class Viewer {
 
     }();
 
-    onMouseMove(mouse) {
+    onMouseMove(/** @type {MouseEvent} */ mouse) {
         this.mousePosition.set(mouse.offsetX, mouse.offsetY);
     }
 
@@ -288,6 +335,7 @@ export class Viewer {
         this.mouseDownTime = getCurrentTime();
     }
 
+    /** @type {(this: this, mouse: MouseEvent) => void} */
     onMouseUp = function() {
 
         const clickOffset = new THREE.Vector2();
@@ -308,6 +356,7 @@ export class Viewer {
         this.checkForFocalPointChange();
     }
 
+    /** @type {() => void} */
     checkForFocalPointChange = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -403,6 +452,7 @@ export class Viewer {
         this.renderer.domElement.parentElement.prepend(this.infoPanel);
     }
 
+    /** @type {() => void} */
     updateSplatMesh = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -426,22 +476,7 @@ export class Viewer {
     /**
      * Add a splat scene to the viewer.
      * @param {string} path Path to splat scene to be loaded
-     * @param {object} options {
-     *
-     *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
-     *                                     value (valid range: 0 - 255), defaults to 1
-     *
-     *         showLoadingSpinner:         Display a loading spinner while the scene is loading, defaults to true
-     *
-     *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
-     *
-     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion, defaults to [0, 0, 0, 1]
-     *
-     *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
-     *
-     *         onProgress:                 Function to be called as file data are received
-     *
-     * }
+     * @param {AddSplatOptions} options
      * @return {AbortablePromise}
      */
     addSplatScene(path, options = {}) {
@@ -483,21 +518,9 @@ export class Viewer {
 
     /**
      * Add multiple splat scenes to the viewer.
-     * @param {Array<object>} sceneOptions Array of per-scene options: {
-     *
-     *         path: Path to splat scene to be loaded
-     *
-     *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
-     *                                     value (valid range: 0 - 255), defaults to 1
-     *
-     *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
-     *
-     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion, defaults to [0, 0, 0, 1]
-     *
-     *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
-     * }
+     * @param {AddSplatsOptions} sceneOptions Array of per-scene options
      * @param {boolean} showLoadingSpinner Display a loading spinner while the scene is loading, defaults to true
-     * @param {function} onProgress Function to be called as file data are received
+     * @param {AddSplatOptions['onProgress']} onProgress Function to be called as file data are received
      * @return {AbortablePromise}
      */
     addSplatScenes(sceneOptions, showLoadingSpinner = true, onProgress = undefined) {
@@ -556,8 +579,9 @@ export class Viewer {
      * @param {number} splatAlphaRemovalThreshold Ignore any splats with an alpha less than the specified
      *                                            value (valid range: 0 - 255), defaults to 1
      *
-     * @param {function} onProgress Function to be called as file data are received
-     * @param {string} format Optional format specifier, if not specified the format will be inferred from the file extension
+     * @param {AddSplatOptions['onProgress']} onProgress Function to be called as file data are received
+     * @param {(typeof SceneFormat)[keyof typeof SceneFormat]} format
+     *  Optional format specifier, if not specified the format will be inferred from the file extension
      * @return {AbortablePromise}
      */
     loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined, format = undefined) {
@@ -584,6 +608,13 @@ export class Viewer {
     /**
      * Add one or more instances of SplatBuffer to the SplatMesh instance managed by the viewer and set up the sorting web worker.
      * This function will terminate the existing sort worker (if there is one).
+     *
+     * @type {(
+     *  this: this,
+     *  splatBuffers: ArrayBuffer[],
+     *  splatBufferOptions?: any[],
+     *  showLoadingSpinner?: boolean
+     * ) => Promise<void>}
      */
     addSplatBuffers = function() {
 
@@ -829,6 +860,7 @@ export class Viewer {
         this.init();
     }
 
+    /** @type {() => void} */
     updateFPS = function() {
 
         let lastCalcTime = getCurrentTime();
@@ -883,6 +915,7 @@ export class Viewer {
 
     }();
 
+    /** @type {(currentTime: number) => void} */
     updateCameraTransition = function() {
 
         let tempCameraTarget = new THREE.Vector3();
@@ -1013,6 +1046,7 @@ export class Viewer {
         }
     }
 
+    /** @type {(force?: boolean, gatherAllNodes?: boolean) => Promise<void>} */
     updateSplatSort = function() {
 
         const mvpMatrix = new THREE.Matrix4();
@@ -1233,3 +1267,5 @@ export class Viewer {
         return navigator.userAgent.includes('Mobi');
     }
 }
+
+new Viewer().cameraUp;

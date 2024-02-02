@@ -2,12 +2,25 @@ import * as THREE from 'three';
 import { Viewer } from './Viewer.js';
 
 /**
+ * @typedef {Omit<
+ *  import('./Viewer.js').ViewerOptions,
+ *  | 'selfDrivenMode'
+ *  | 'useBuiltInControls'
+ *  | 'rootElement'
+ *  | 'ignoreDevicePixelRatio'
+ *  | 'dropInMode'
+ *  | 'camera'
+ *  | 'renderer'
+ * >} DropInViewerOptions
+ */
+
+/**
  * DropInViewer: Wrapper for a Viewer instance that enables it to be added to a Three.js scene like
  * any other Three.js scene object (Mesh, Object3D, etc.)
  */
 export class DropInViewer extends THREE.Group {
 
-    constructor(options = {}) {
+    constructor(/** @type {DropInViewerOptions} */ options) {
         super();
 
         options.selfDrivenMode = false;
@@ -18,8 +31,10 @@ export class DropInViewer extends THREE.Group {
         options.camera = undefined;
         options.renderer = undefined;
 
+        /** @type {import('./Viewer.js').Viewer} */
         this.viewer = new Viewer(options);
 
+        /** @type {THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.Object3DEventMap>} */
         this.callbackMesh = DropInViewer.createCallbackMesh();
         this.add(this.callbackMesh);
         this.callbackMesh.onBeforeRender = DropInViewer.onBeforeRender.bind(this, this.viewer);
@@ -29,22 +44,7 @@ export class DropInViewer extends THREE.Group {
     /**
      * Add a single splat scene to the viewer.
      * @param {string} path Path to splat scene to be loaded
-     * @param {object} options {
-     *
-     *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
-     *                                     value (valid range: 0 - 255), defaults to 1
-     *
-     *         showLoadingSpinner:         Display a loading spinner while the scene is loading, defaults to true
-     *
-     *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
-     *
-     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion, defaults to [0, 0, 0, 1]
-     *
-     *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
-     *
-     *         onProgress:                 Function to be called as file data are received
-     *
-     * }
+     * @param {import('./Viewer.js').AddSplatOptions} options
      * @return {AbortablePromise}
      */
     addSplatScene(path, options = {}) {
@@ -58,19 +58,7 @@ export class DropInViewer extends THREE.Group {
 
     /**
      * Add multiple splat scenes to the viewer.
-     * @param {Array<object>} sceneOptions Array of per-scene options: {
-     *
-     *         path: Path to splat scene to be loaded
-     *
-     *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
-     *                                     value (valid range: 0 - 255), defaults to 1
-     *
-     *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
-     *
-     *         rotation (Array<number>):   Rotation of the scene represented as a quaternion, defaults to [0, 0, 0, 1]
-     *
-     *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
-     * }
+     * @param {import('./Viewer.js').AddSplatsOptions} sceneOptions Array of per-scene options
      * @param {boolean} showLoadingSpinner Display a loading spinner while the scene is loading, defaults to true
      * @return {AbortablePromise}
      */
