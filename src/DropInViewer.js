@@ -20,7 +20,7 @@ import { Viewer } from './Viewer.js';
  */
 export class DropInViewer extends THREE.Group {
 
-    constructor(/** @type {DropInViewerOptions} */ options) {
+    constructor(/** @type {DropInViewerOptions} */ options = {}) {
         super();
 
         options.selfDrivenMode = false;
