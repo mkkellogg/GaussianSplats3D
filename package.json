@@ -65,8 +65,8 @@
         "rollup": "3.28.1",
         "url-loader": "4.1.1"
     },
-    "dependencies": {
-        "three": "0.155.0"
+    "peerDependencies": {
+        "three": "^0.155.0"
     },
     "files": [
         "build/gaussian-splats-3d.umd.cjs",
