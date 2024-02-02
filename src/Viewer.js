@@ -1267,5 +1267,3 @@ export class Viewer {
         return navigator.userAgent.includes('Mobi');
     }
 }
-
-new Viewer().cameraUp;
