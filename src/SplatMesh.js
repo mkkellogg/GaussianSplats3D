@@ -137,7 +137,7 @@ export class SplatMesh extends THREE.Mesh {
                     return;
                 }
 
-                vPosition = position.xy * 2.0;
+                vPosition = position.xy;
                 vColor = uintToRGBAVec(sampledCenterColor.r);
 
                 vec2 sampledCovarianceA = texture(covariancesTexture, getDataUV(3, 0, covariancesTextureSize)).rg;
@@ -208,8 +208,9 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
                 // since the eigen vectors are orthogonal, we derive the second one from the first
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
-                vec2 basisVector1 = eigenVector1 * min(sqrt(2.0 * eigenValue1), maxSplatSize);
-                vec2 basisVector2 = eigenVector2 * min(sqrt(2.0 * eigenValue2), maxSplatSize);
+
+                vec2 basisVector1 = 4.0 * eigenVector1 * sqrt(2.0 * eigenValue1); //min(sqrt(32.0 * eigenValue1), maxSplatSize);
+                vec2 basisVector2 = 4.0 * eigenVector2 * sqrt(2.0 * eigenValue2); //min(sqrt(32.0 * eigenValue2), maxSplatSize);
 
                 vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) * basisViewport;
 
@@ -230,10 +231,10 @@ export class SplatMesh extends THREE.Mesh {
             void main () {
                 // compute the negative squared distance from the center of the splat to the
                 // current fragment in the splat's local space.
-                float A = -dot(vPosition, vPosition);
-                if (A < -4.0) discard;
+                float A = dot(vPosition, vPosition);
+                if (A > 1.0) discard;
                 vec3 color = vColor.rgb;
-                A = exp(A) * vColor.a;
+                A = exp(A * -4.0) * vColor.a;
                 gl_FragColor = vec4(color.rgb, A);
             }`;
 
@@ -674,7 +675,7 @@ export class SplatMesh extends THREE.Mesh {
                 viewport.set(renderDimensions.x * this.devicePixelRatio,
                              renderDimensions.y * this.devicePixelRatio);
                 this.material.uniforms.viewport.value.copy(viewport);
-                this.material.uniforms.basisViewport.value.set(2.0 / viewport.x, 2.0 / viewport.y);
+                this.material.uniforms.basisViewport.value.set(1.0 / viewport.x, 1.0 / viewport.y);
                 this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
                 if (this.dynamicMode) {
                     for (let i = 0; i < this.scenes.length; i++) {
