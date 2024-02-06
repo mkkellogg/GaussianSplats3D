@@ -93,6 +93,8 @@ export class SplatMesh extends THREE.Mesh {
 
             varying vec2 vPosition;
 
+            const float sqrt8 = sqrt(8.0);
+
             const vec4 encodeNorm4 = vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0);
             const uvec4 mask4 = uvec4(uint(0x000000FF), uint(0x0000FF00), uint(0x00FF0000), uint(0xFF000000));
             const uvec4 shift4 = uvec4(0, 8, 16, 24);
@@ -186,35 +188,44 @@ export class SplatMesh extends THREE.Mesh {
                 // We now need to solve for the eigen-values and eigen vectors of the 2D covariance matrix
                 // so that we can determine the 2D basis for the splat. This is done using the method described
                 // here: https://people.math.harvard.edu/~knill/teaching/math21b2004/exhibits/2dmatrices/index.html
+                // After calculating the eigen-values and eigen-vectors, we calculate the basis for rendering the splat
+                // by normalizing the eigen-vectors and then multiplying them by (sqrt(8) * eigen-value), which is
+                // equal to scaling them by sqrt(8) standard deviations.
                 //
                 // This is a different approach than in the original work at INRIA. In that work they compute the
-                // max extents of the 2D covariance matrix in screen space to form an axis aligned bounding rectangle
-                // which forms the geometry that is actually rasterized. They then use the inverse 2D covariance
-                // matrix (called 'conic') to determine fragment opacity.
+                // max extents of the projected splat in screen space to form a screen-space aligned bounding rectangle
+                // which forms the geometry that is actually rasterized. The dimensions of that bounding box are 3.0
+                // times the maximum eigen-value, or 3 standard deviations. They then use the inverse 2D covariance
+                // matrix (called 'conic') in the CUDA rendering thread to determine fragment opacity by calculating the
+                // full gaussian: exp(-0.5 * (X - mean) * conic * (X - mean)) * splat opacity
                 float a = cov2Dv.x;
                 float d = cov2Dv.z;
                 float b = cov2Dv.y;
                 float D = a * d - b * b;
                 float trace = a + d;
                 float traceOver2 = 0.5 * trace;
-                float term2 = sqrt(trace * trace / 4.0 - D);
+                float term2 = sqrt(max(0.1f, traceOver2 * traceOver2 - D));
                 float eigenValue1 = traceOver2 + term2;
-                float eigenValue2 = max(traceOver2 - term2, 0.00); // prevent negative eigen value
+	            float eigenValue2 = traceOver2 - term2;
 
                 float transparentAdjust = step(1.0 / 255.0, vColor.a);
                 eigenValue2 = eigenValue2 * transparentAdjust; // hide splat if alpha is zero
 
-                const float maxSplatSize = 1024.0;
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
                 // since the eigen vectors are orthogonal, we derive the second one from the first
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
 
-                vec2 basisVector1 = 4.0 * eigenVector1 * sqrt(2.0 * eigenValue1); //min(sqrt(32.0 * eigenValue1), maxSplatSize);
-                vec2 basisVector2 = 4.0 * eigenVector2 * sqrt(2.0 * eigenValue2); //min(sqrt(32.0 * eigenValue2), maxSplatSize);
+                // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
+                vec2 basisVector1 = eigenVector1 * sqrt8 * sqrt(eigenValue1);
+                vec2 basisVector2 = eigenVector2 * sqrt8 * sqrt(eigenValue2);
 
-                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) * basisViewport;
+                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) * basisViewport * 2.0;
+
+                // Similarly scale the position data we send to the fragment shader
+                vPosition *= sqrt8;
 
                 gl_Position = vec4(ndcCenter.xy  + ndcOffset, ndcCenter.z, 1.0);
+
             }`;
 
         const fragmentShaderSource = `
@@ -229,13 +240,21 @@ export class SplatMesh extends THREE.Mesh {
             varying vec2 vPosition;
 
             void main () {
-                // compute the negative squared distance from the center of the splat to the
-                // current fragment in the splat's local space.
+                // Compute the positional squared distance from the center of the splat to the current fragment.
                 float A = dot(vPosition, vPosition);
-                if (A > 1.0) discard;
+                // Since the positional data in vPosition has been scaled by sqrt(8), the squared result will be
+                // scaled by a factor of 8. If the squared result is larger than 8, it means it is outside the ellipse
+                // defined by the rectangle formed by vPosition. It also means it's farther
+                // away than sqrt(8) standard deviations from the mean.
+                if (A > 8.0) discard;
                 vec3 color = vColor.rgb;
-                A = exp(A * -4.0) * vColor.a;
-                gl_FragColor = vec4(color.rgb, A);
+
+                // Since the rendered splat is scaled by sqrt(8), the inverse covariance matrix that is part of
+                // the gaussian formula becomes the identity matrix. We're then left with (X - mean) * (X - mean),
+                // and since 'mean' is zero, we have X * X, which is the same as A:
+                float opacity = exp(-0.5 * A) * vColor.a;
+
+                gl_FragColor = vec4(color.rgb, opacity);
             }`;
 
         const uniforms = {
