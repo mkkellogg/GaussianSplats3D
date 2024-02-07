@@ -206,9 +206,9 @@ export class Viewer {
         }
 
         if (this.webXRMode) {
-            if(this.webXRMode === WebXRMode.VR) {
+            if (this.webXRMode === WebXRMode.VR) {
                 this.rootElement.appendChild(VRButton.createButton(this.renderer));
-            } else if(this.webXRMode === WebXRMode.AR) {
+            } else if (this.webXRMode === WebXRMode.AR) {
                 this.rootElement.appendChild(ARButton.createButton(this.renderer));
             }
             this.renderer.xr.enabled = true;
@@ -803,7 +803,7 @@ export class Viewer {
     }
 
     selfDrivenUpdate() {
-        if (this.selfDrivenMode) {
+        if (this.selfDrivenMode && !this.webXRMode) {
             this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.update();
@@ -1000,9 +1000,11 @@ export class Viewer {
             const cameraPosString = `[${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}]`;
             this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
 
+            if (this.controls) {
             const cameraLookAt = this.controls.target;
             const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
             this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
+            }
 
             const cameraUp = this.camera.up;
             const cameraUpString = `[${cameraUp.x.toFixed(5)}, ${cameraUp.y.toFixed(5)}, ${cameraUp.z.toFixed(5)}]`;

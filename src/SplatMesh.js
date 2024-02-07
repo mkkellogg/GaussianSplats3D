@@ -206,7 +206,7 @@ export class SplatMesh extends THREE.Mesh {
                 float traceOver2 = 0.5 * trace;
                 float term2 = sqrt(max(0.1f, traceOver2 * traceOver2 - D));
                 float eigenValue1 = traceOver2 + term2;
-	            float eigenValue2 = traceOver2 - term2;
+                float eigenValue2 = traceOver2 - term2;
 
                 float transparentAdjust = step(1.0 / 255.0, vColor.a);
                 eigenValue2 = eigenValue2 * transparentAdjust; // hide splat if alpha is zero
