@@ -15,6 +15,7 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
 - Viewer can import `.ply` files, `.splat` files, or my custom compressed `.ksplat` files
 - Users can convert `.ply` or `.splat` files to the `.ksplat` file format
 - Allows a Three.js scene or object group to be rendered along with the splats
+- Built-in WebXR support
 - Focus on optimization:
     - Splats culled prior to sorting & rendering using a custom octree
     - WASM splat sort: Implemented in C++ using WASM SIMD instructions
@@ -34,8 +35,7 @@ This is still very much a work in progress! There are several things that still 
   - Properly incorporate spherical harmonics data to achieve view dependent lighting effects
   - Continue optimizing CPU-based splat sort - maybe try an incremental sort of some kind?
   - Add editing mode, allowing users to modify scene and export changes
-  - Add WebXR compatibility
-  - Support very large scenes and/or multiple splat files
+  - Support very large scenes
 
 ## Online demo
 [https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php](https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php)
@@ -256,7 +256,9 @@ const viewer = new GaussianSplats3D.Viewer({
     'gpuAcceleratedSort': true,
     'halfPrecisionCovariancesOnGPU': true,
     'sharedMemoryForWorkers': true,
-    'integerBasedSort': true
+    'integerBasedSort': true,
+    'dynamicScene': false,
+    'webXRMode': GaussianSplats3D.WebXRMode.None
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -285,6 +287,7 @@ Advanced `Viewer` parameters
 | `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
 | `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
 | `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static. Additionally all splat data retrieved from the viewer's splat mesh will not have their respective scene transform applied to them by default.
+| `webXRMode` | Tells the viewer whether or not to enable built-in Web VR or Web AR. Valid values are defined in the `WebXRMode` enum: `None`, `VR`, and `AR`. Defaults to `None`.
 <br>
 
 ### Creating KSPLAT files

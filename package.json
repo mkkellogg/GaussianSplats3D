@@ -4,7 +4,7 @@
         "type": "git",
         "url": "https://github.com/mkkellogg/GaussianSplat3D"
     },
-    "version": "0.2.2",
+    "version": "0.2.3",
     "description": "Three.js-based 3D Gaussian splat viewer",
     "module": "build/gaussian-splats-3d.module.js",
     "main": "build/gaussian-splats-3d.umd.cjs",
@@ -45,7 +45,8 @@
         "splatting",
         "3D",
         "gaussian",
-        "webgl"
+        "webgl",
+        "javascript"
     ],
     "devDependencies": {
         "@babel/core": "7.22.0",
@@ -53,21 +54,20 @@
         "@babel/plugin-proposal-class-properties": "7.18.6",
         "@babel/preset-env": "7.22.10",
         "babel-loader": "9.1.3",
+        "@rollup/plugin-terser": "0.4.4",
+        "@rollup/pluginutils": "5.0.5",
         "eslint": "8.47.0",
         "eslint-config-google": "0.14.0",
         "file-loader": "6.2.0",
+        "http-server": "14.1.1",
+        "npm-watch": "0.11.0",
         "prettier": "3.0.2",
         "prettier-eslint": "15.0.1",
+        "rollup": "3.28.1",
         "url-loader": "4.1.1"
     },
-    "dependencies": {
-        "@rollup/plugin-terser": "0.4.4",
-        "@rollup/pluginutils": "5.0.5",
-        "http-server": "14.1.1",
-        "install": "0.13.0",
-        "npm-watch": "0.11.0",
-        "rollup": "3.28.1",
-        "three": "0.155.0"
+    "peerDependencies": {
+        "three": ">=0.160.0"
     },
     "files": [
         "build/gaussian-splats-3d.umd.cjs",

@@ -8,6 +8,7 @@ import { DropInViewer } from './DropInViewer.js';
 import { OrbitControls } from './OrbitControls.js';
 import { AbortablePromise } from './AbortablePromise.js';
 import { SceneFormat } from './SceneFormat.js';
+import { WebXRMode } from './webxr/WebXRMode.js';
 
 export {
     PlyParser,
@@ -19,5 +20,6 @@ export {
     DropInViewer,
     OrbitControls,
     AbortablePromise,
-    SceneFormat
+    SceneFormat,
+    WebXRMode
 };

@@ -11,6 +11,10 @@ import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
 import { AbortablePromise } from './AbortablePromise.js';
 import { SceneFormat } from './SceneFormat.js';
+import { WebXRMode } from './webxr/WebXRMode.js';
+import { VRButton } from './webxr/VRButton.js';
+import { ARButton } from './webxr/ARButton.js';
+
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -101,6 +105,9 @@ export class Viewer {
         this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
                                        this.gpuAcceleratedSort, this.integerBasedSort);
 
+
+        this.webXRMode = options.webXRMode || WebXRMode.None;
+
         this.controls = null;
 
         this.showMeshCursor = false;
@@ -176,8 +183,8 @@ export class Viewer {
         if (!this.usingExternalCamera) {
             this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
             this.camera.position.copy(this.initialCameraPosition);
-            this.camera.lookAt(this.initialCameraLookAt);
             this.camera.up.copy(this.cameraUp).normalize();
+            this.camera.lookAt(this.initialCameraLookAt);
         }
 
         if (!this.usingExternalRenderer) {
@@ -198,13 +205,24 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
+        if (this.webXRMode) {
+            if (this.webXRMode === WebXRMode.VR) {
+                this.rootElement.appendChild(VRButton.createButton(this.renderer));
+            } else if (this.webXRMode === WebXRMode.AR) {
+                this.rootElement.appendChild(ARButton.createButton(this.renderer));
+            }
+            this.renderer.xr.enabled = true;
+            this.camera.up.copy(this.cameraUp).normalize();
+            this.camera.lookAt(this.initialCameraLookAt);
+        }
+
         this.threeScene = this.threeScene || new THREE.Scene();
         this.sceneHelper = new SceneHelper(this.threeScene);
         this.sceneHelper.setupMeshCursor();
         this.sceneHelper.setupFocusMarker();
         this.sceneHelper.setupControlPlane();
 
-        if (this.useBuiltInControls) {
+        if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
             this.controls = new OrbitControls(this.camera, this.renderer.domElement);
             this.controls.listenToKeyEvents(window);
             this.controls.rotateSpeed = 0.5;
@@ -564,7 +582,7 @@ export class Viewer {
         const downloadProgress = (percent, percentLabel) => {
             if (onProgress) onProgress(percent, percentLabel, 'downloading');
         };
-        if (format) {
+        if (format !== undefined && format !== null) {
             if (format === SceneFormat.Splat || format === SceneFormat.KSplat) {
                 return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold, undefined, undefined, format);
             } else if (format === SceneFormat.Ply) {
@@ -725,7 +743,11 @@ export class Viewer {
      */
     start() {
         if (this.selfDrivenMode) {
-            this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
+            if (this.webXRMode) {
+                this.renderer.setAnimationLoop(this.selfDrivenUpdateFunc);
+            } else {
+                this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
+            }
             this.selfDrivenModeRunning = true;
         } else {
             throw new Error('Cannot start viewer unless it is in self driven mode.');
@@ -737,7 +759,9 @@ export class Viewer {
      */
     stop() {
         if (this.selfDrivenMode && this.selfDrivenModeRunning) {
-            cancelAnimationFrame(this.requestFrameId);
+            if (!this.webXRMode) {
+                cancelAnimationFrame(this.requestFrameId);
+            }
             this.selfDrivenModeRunning = false;
         }
     }
@@ -779,7 +803,7 @@ export class Viewer {
     }
 
     selfDrivenUpdate() {
-        if (this.selfDrivenMode) {
+        if (this.selfDrivenMode && !this.webXRMode) {
             this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.update();
@@ -976,9 +1000,11 @@ export class Viewer {
             const cameraPosString = `[${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}]`;
             this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
 
+            if (this.controls) {
             const cameraLookAt = this.controls.target;
             const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
             this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
+            }
 
             const cameraUp = this.camera.up;
             const cameraUpString = `[${cameraUp.x.toFixed(5)}, ${cameraUp.y.toFixed(5)}, ${cameraUp.z.toFixed(5)}]`;

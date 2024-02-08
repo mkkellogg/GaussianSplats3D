@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>3D Gaussian Splat Demo - VR Garden</title>
+  <script type="text/javascript" src="js/util.js"></script>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./lib/three.module.js",
+            "@mkkellogg/gaussian-splats-3d": "./lib/gaussian-splats-3d.module.js"
+        }
+    }
+  </script>
+  <style>
+
+    body {
+      background-color: #000000;
+      height: 100vh;
+      margin: 0px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+  <script type="module">
+    import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
+    import * as THREE from 'three';
+    const viewer = new GaussianSplats3D.Viewer({
+      'initialCameraPosition': [-0.77493, -0.54359, 1.63199],
+      'initialCameraLookAt': [0.20786, -0.68154, -0.27311],
+      'webXRMode': GaussianSplats3D.WebXRMode.AR,
+      'gpuAcceleratesSort': false,
+      'sharedMemoryForWebWorkers': false
+    });
+    let path = 'assets/data/bonsai/bonsai.ksplat';
+    viewer.addSplatScene(path, {
+        'rotation': new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0.01933, -0.75830, -0.65161).normalize(), new THREE.Vector3(0, 1, 0)).toArray(),
+        'scale': [0.25, 0.25, 0.25],
+        'position': [0, 1, 0]
+    })
+    .then(() => {
+        viewer.start();
+    });
+  </script>
+</body>
+
+</html>
