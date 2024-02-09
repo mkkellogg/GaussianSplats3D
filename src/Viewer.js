@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from './OrbitControls.js';
-import { PlyLoader } from './PlyLoader.js';
-import { SplatLoader } from './SplatLoader.js';
+import { PlyLoader } from './loaders/PlyLoader.js';
+import { SplatLoader } from './loaders/SplatLoader.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { SceneHelper } from './SceneHelper.js';
 import { Raycaster } from './raycaster/Raycaster.js';
@@ -1155,6 +1155,7 @@ export class Viewer {
     gatherSceneNodesForSort = function() {
 
         const nodeRenderList = [];
+        let allSplatsSortBuffer = null;
         const tempVectorYZ = new THREE.Vector3();
         const tempVectorXZ = new THREE.Vector3();
         const tempVector = new THREE.Vector3();
@@ -1181,63 +1182,76 @@ export class Viewer {
             const cosFovYOver2 = Math.cos(fovYOver2);
 
             const splatTree = this.splatMesh.getSplatTree();
-            baseModelView.copy(this.camera.matrixWorld).invert();
-            baseModelView.multiply(this.splatMesh.matrixWorld);
 
-            let nodeRenderCount = 0;
-            let splatRenderCount = 0;
+            if (splatTree) {
+                baseModelView.copy(this.camera.matrixWorld).invert();
+                baseModelView.multiply(this.splatMesh.matrixWorld);
 
-            for (let s = 0; s < splatTree.subTrees.length; s++) {
-                const subTree = splatTree.subTrees[s];
-                modelView.copy(baseModelView);
-                if (this.splatMesh.dynamicMode) {
-                    this.splatMesh.getSceneTransform(s, sceneTransform);
-                    modelView.multiply(sceneTransform);
-                }
-                const nodeCount = subTree.nodesWithIndexes.length;
-                for (let i = 0; i < nodeCount; i++) {
-                    const node = subTree.nodesWithIndexes[i];
-                    tempVector.copy(node.center).applyMatrix4(modelView);
+                let nodeRenderCount = 0;
+                let splatRenderCount = 0;
 
-                    const distanceToNode = tempVector.length();
-                    tempVector.normalize();
-
-                    tempVectorYZ.copy(tempVector).setX(0).normalize();
-                    tempVectorXZ.copy(tempVector).setY(0).normalize();
-
-                    const cameraAngleXZDot = forward.dot(tempVectorXZ);
-                    const cameraAngleYZDot = forward.dot(tempVectorYZ);
-
-                    const ns = nodeSize(node);
-                    const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
-                    const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
-                    if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
-                        continue;
+                for (let s = 0; s < splatTree.subTrees.length; s++) {
+                    const subTree = splatTree.subTrees[s];
+                    modelView.copy(baseModelView);
+                    if (this.splatMesh.dynamicMode) {
+                        this.splatMesh.getSceneTransform(s, sceneTransform);
+                        modelView.multiply(sceneTransform);
                     }
-                    splatRenderCount += node.data.indexes.length;
-                    nodeRenderList[nodeRenderCount] = node;
-                    node.data.distanceToNode = distanceToNode;
-                    nodeRenderCount++;
+                    const nodeCount = subTree.nodesWithIndexes.length;
+                    for (let i = 0; i < nodeCount; i++) {
+                        const node = subTree.nodesWithIndexes[i];
+                        tempVector.copy(node.center).applyMatrix4(modelView);
+
+                        const distanceToNode = tempVector.length();
+                        tempVector.normalize();
+
+                        tempVectorYZ.copy(tempVector).setX(0).normalize();
+                        tempVectorXZ.copy(tempVector).setY(0).normalize();
+
+                        const cameraAngleXZDot = forward.dot(tempVectorXZ);
+                        const cameraAngleYZDot = forward.dot(tempVectorYZ);
+
+                        const ns = nodeSize(node);
+                        const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
+                        const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
+                        if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
+                            continue;
+                        }
+                        splatRenderCount += node.data.indexes.length;
+                        nodeRenderList[nodeRenderCount] = node;
+                        node.data.distanceToNode = distanceToNode;
+                        nodeRenderCount++;
+                    }
                 }
+
+                nodeRenderList.length = nodeRenderCount;
+                nodeRenderList.sort((a, b) => {
+                    if (a.data.distanceToNode < b.data.distanceToNode) return -1;
+                    else return 1;
+                });
+
+                let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
+                for (let i = 0; i < nodeRenderCount; i++) {
+                    const node = nodeRenderList[i];
+                    const windowSizeInts = node.data.indexes.length;
+                    const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
+                    let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
+                    destView.set(node.data.indexes);
+                    currentByteOffset -= windowSizeBytes;
+                }
+
+                return splatRenderCount;
+            } else {
+                const totalSplatCount = this.splatMesh.getSplatCount();
+                if (!allSplatsSortBuffer || allSplatsSortBuffer.length !== totalSplatCount) {
+                    allSplatsSortBuffer = new Uint32Array(totalSplatCount);
+                    for (let i = 0; i < totalSplatCount; i++) {
+                        allSplatsSortBuffer[i] = i;
+                    }
+                }
+                this.sortWorkerIndexesToSort.set(allSplatsSortBuffer);
+                return totalSplatCount;
             }
-
-            nodeRenderList.length = nodeRenderCount;
-            nodeRenderList.sort((a, b) => {
-                if (a.data.distanceToNode < b.data.distanceToNode) return -1;
-                else return 1;
-            });
-
-            let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
-            for (let i = 0; i < nodeRenderCount; i++) {
-                const node = nodeRenderList[i];
-                const windowSizeInts = node.data.indexes.length;
-                const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
-                let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
-                destView.set(node.data.indexes);
-                currentByteOffset -= windowSizeBytes;
-            }
-
-            return splatRenderCount;
         };
 
     }();

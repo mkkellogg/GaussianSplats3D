@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SplatBuffer } from './SplatBuffer.js';
-import { clamp } from './Util.js';
+import { SplatBuffer } from '../SplatBuffer.js';
+import { clamp } from '../Util.js';
 
 const SplatBufferBucketSize = 256;
 const SplatBufferBucketBlockSize = 5.0;

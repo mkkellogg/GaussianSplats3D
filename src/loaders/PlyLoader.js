@@ -1,5 +1,5 @@
 import { PlyParser } from './PlyParser.js';
-import { fetchWithProgress } from './Util.js';
+import { fetchWithProgress } from '../Util.js';
 
 export class PlyLoader {
 

@@ -1,8 +1,8 @@
-import { PlyParser } from './PlyParser.js';
-import { PlyLoader } from './PlyLoader.js';
-import { SplatLoader } from './SplatLoader.js';
+import { PlyParser } from './loaders/PlyParser.js';
+import { PlyLoader } from './loaders/PlyLoader.js';
+import { SplatLoader } from './loaders/SplatLoader.js';
 import { SplatBuffer } from './SplatBuffer.js';
-import { SplatCompressor } from './SplatCompressor.js';
+import { SplatCompressor } from './loaders/SplatCompressor.js';
 import { Viewer } from './Viewer.js';
 import { DropInViewer } from './DropInViewer.js';
 import { OrbitControls } from './OrbitControls.js';

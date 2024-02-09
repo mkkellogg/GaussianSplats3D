@@ -502,7 +502,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatTree = SplatMesh.buildSplatTree(this, sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1));
 
         if (this.enableDistancesComputationOnGPU) this.setupDistancesComputationTransformFeedback();
-        this.resetDataFromSplatBuffers();
+        this.resetGPUDataFromSplatBuffers();
     }
 
     /**
@@ -547,7 +547,7 @@ export class SplatMesh extends THREE.Mesh {
     /**
      * Refresh data textures and GPU buffers for splat distance pre-computation with data from the splat buffers for this mesh.
      */
-    resetDataFromSplatBuffers() {
+    resetGPUDataFromSplatBuffers() {
         this.uploadSplatDataToTextures();
         if (this.enableDistancesComputationOnGPU) {
             this.updateGPUCentersBufferForDistancesComputation();

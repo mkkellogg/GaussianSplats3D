@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { SplatBuffer } from './SplatBuffer.js';
+import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatCompressor } from './SplatCompressor.js';
-import { fetchWithProgress } from './Util.js';
-import { SceneFormat } from './SceneFormat.js';
+import { fetchWithProgress } from '../Util.js';
+import { SceneFormat } from '../SceneFormat.js';
 
 export class SplatLoader {
 
@@ -75,20 +75,26 @@ export class SplatLoader {
         this.splatBuffer = splatBuffer;
     }
 
-    downloadFile(fileName) {
-        const headerData = new Uint8Array(this.splatBuffer.getHeaderBufferData());
-        const splatData = new Uint8Array(this.splatBuffer.getSplatBufferData());
-        const blob = new Blob([headerData.buffer, splatData.buffer], {
-            type: 'application/octet-stream',
-        });
+    static downloadFile = function () {
 
-        if (!this.downLoadLink) {
-            this.downLoadLink = document.createElement('a');
-            document.body.appendChild(this.downLoadLink);
-        }
-        this.downLoadLink.download = fileName;
-        this.downLoadLink.href = URL.createObjectURL(blob);
-        this.downLoadLink.click();
-    }
+        let downLoadLink;
+
+        return function (splatBuffer, fileName) {
+            const headerData = new Uint8Array(splatBuffer.getHeaderBufferData());
+            const splatData = new Uint8Array(splatBuffer.getSplatBufferData());
+            const blob = new Blob([headerData.buffer, splatData.buffer], {
+                type: 'application/octet-stream',
+            });
+
+            if (!downLoadLink) {
+                downLoadLink = document.createElement('a');
+                document.body.appendChild(downLoadLink);
+            }
+            downLoadLink.download = fileName;
+            downLoadLink.href = URL.createObjectURL(blob);
+            downLoadLink.click();
+        };
+
+    }();
 
 }
