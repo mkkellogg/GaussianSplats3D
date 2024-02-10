@@ -246,13 +246,13 @@ export class SplatCompressor {
         // ignore the first splat since it's the invalid designator
         for (let i = 1; i < splatCount; i++) {
             const center = [splatArray['x'][i], splatArray['y'][i], splatArray['z'][i]];
-            const xBlock = Math.ceil((center[0] - min.x) / blockSize);
-            const yBlock = Math.ceil((center[1] - min.y) / blockSize);
-            const zBlock = Math.ceil((center[2] - min.z) / blockSize);
+            const xBlock = Math.floor((center[0] - min.x) / blockSize);
+            const yBlock = Math.floor((center[1] - min.y) / blockSize);
+            const zBlock = Math.floor((center[2] - min.z) / blockSize);
 
-            blockCenter.x = (xBlock - 1) * blockSize + min.x + halfBlockSize;
-            blockCenter.y = (yBlock - 1) * blockSize + min.y + halfBlockSize;
-            blockCenter.z = (zBlock - 1) * blockSize + min.z + halfBlockSize;
+            blockCenter.x = xBlock * blockSize + min.x + halfBlockSize;
+            blockCenter.y = yBlock * blockSize + min.y + halfBlockSize;
+            blockCenter.z = zBlock * blockSize + min.z + halfBlockSize;
 
             const bucketId = xBlock * (yBlocks * zBlocks) + yBlock * zBlocks + zBlock;
             let bucket = partiallyFullBuckets[bucketId];
