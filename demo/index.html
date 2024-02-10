@@ -97,6 +97,8 @@
       width: 95%;
       border-radius: 5px;
       margin-bottom: 10px;
+      width: 209px;
+      height: 149px;
     }
 
     .button {
@@ -205,6 +207,11 @@
             width: 340px;
         }
 
+        .demo-scene-panel-image {
+          width: 95%;
+          height: 95%;
+        }
+
     }
 
     @media (max-width: 370px){
@@ -219,6 +226,11 @@
 
         .header-content-container {
           min-width: 330px;
+        }
+
+        .demo-scene-panel-image {
+          width: 95%;
+          height: 95%;
         }
 
     }
@@ -549,7 +561,8 @@
             Demo scenes
           </div>
         </div>
-        <div class="content-row">
+        <div style="text-align:center;">
+          <div class="content-row" style="max-width: 800px; margin:auto; display:flex; align-items: center; justify-content: center;">
             <div class="demo-scene-panel" onclick="openDemo('garden')">
                 <img src="assets/images/garden.png" class="demo-scene-panel-image">
                 <span class="small-title">Garden</span>
@@ -565,6 +578,11 @@
             <div class="demo-scene-panel" onclick="openDemo('dynamic_scenes')">
               <img src="assets/images/dynamic_scenes.png" class="demo-scene-panel-image">
               <span class="small-title">Dynamic scenes</span>
+            </div>
+            <div class="demo-scene-panel" onclick="openDemo('vr')">
+              <img src="assets/images/bonsai.png" class="demo-scene-panel-image">
+              <span class="small-title">AR/VR</span>
+            </div>
           </div>
         </div>
     </div>
