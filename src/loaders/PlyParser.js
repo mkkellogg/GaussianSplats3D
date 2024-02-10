@@ -2,16 +2,18 @@ import { SplatCompressor } from './SplatCompressor.js';
 
 export class PlyParser {
 
+    static HeaderEndToken = 'end_header';
+
     constructor(plyBuffer) {
         this.plyBuffer = plyBuffer;
     }
 
-    decodeHeader(plyBuffer) {
+    static decodeHeader(plyBuffer) {
         const decoder = new TextDecoder();
         let headerOffset = 0;
         let headerText = '';
 
-        console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
+        //console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
 
         const readChunkSize = 100;
 
@@ -54,7 +56,7 @@ export class PlyParser {
             }
         }
 
-        const vertexByteOffset = headerText.indexOf('end_header') + 'end_header'.length + 1;
+        const vertexByteOffset = headerText.indexOf('end_header') + PlyParser.HeaderEndToken.length + 1;
         const vertexData = new DataView(plyBuffer, vertexByteOffset);
 
         return {
@@ -65,7 +67,7 @@ export class PlyParser {
         };
     }
 
-    readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, outVertex) {
+    static readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, outVertex) {
         let rawVertex = outVertex || {};
         for (let property of propertiesToRead) {
             const propertyType = propertyTypes[property];
@@ -79,11 +81,11 @@ export class PlyParser {
 
     parseToSplatBuffer(compressionLevel, minimumAlpha, blockSize, bucketSize) {
 
-        const startTime = performance.now();
+        // const startTime = performance.now();
 
-        console.log('Parsing PLY to SPLAT...');
+        // console.log('Parsing PLY to SPLAT...');
 
-        const {splatCount, propertyTypes, vertexData} = this.decodeHeader(this.plyBuffer);
+        const {splatCount, propertyTypes, vertexData} = PlyParser.decodeHeader(this.plyBuffer);
 
         // figure out the SH degree from the number of coefficients
         let nRestCoeffs = 0;
@@ -96,9 +98,8 @@ export class PlyParser {
 
         // TODO: Eventually properly support multiple degree spherical harmonics
         // const sphericalHarmonicsDegree = Math.sqrt(nCoeffsPerColor + 1) - 1;
-        const sphericalHarmonicsDegree = 0;
-
-        console.log('Detected degree', sphericalHarmonicsDegree, 'with ', nCoeffsPerColor, 'coefficients per color');
+        // const sphericalHarmonicsDegree = 0;
+        // console.log('Detected degree', sphericalHarmonicsDegree, 'with ', nCoeffsPerColor, 'coefficients per color');
 
         // figure out the order in which spherical harmonics should be read
         const shFeatureOrder = [];
@@ -138,7 +139,7 @@ export class PlyParser {
         const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
 
         for (let row = 0; row < splatCount; row++) {
-            this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
+            PlyParser.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             if (rawVertex['scale_0'] !== undefined) {
                 splatArray['scale_0'][row] = Math.exp(rawVertex['scale_0']);
                 splatArray['scale_1'][row] = Math.exp(rawVertex['scale_1']);
@@ -174,17 +175,14 @@ export class PlyParser {
             splatArray.splatCount++;
         }
 
-        const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
-        const splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+        return splatArray;
 
-        console.log('Total valid splats: ', splatBuffer.getSplatCount(), 'out of', splatCount);
+        // console.log('Total valid splats: ', splatBuffer.getSplatCount(), 'out of', splatCount);
 
-        const endTime = performance.now();
+        // const endTime = performance.now();
 
-        console.log('Parsing PLY to SPLAT complete!');
-        console.log('Total time: ', (endTime - startTime).toFixed(2) + ' ms');
-
-        return splatBuffer;
+        // console.log('Parsing PLY to SPLAT complete!');
+        // console.log('Total time: ', (endTime - startTime).toFixed(2) + ' ms');
     }
 
 }

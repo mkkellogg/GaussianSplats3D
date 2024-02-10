@@ -476,7 +476,11 @@ export class Viewer {
             }
             if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
         };
-        const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold, downloadProgress, options.format);
+        let format = options.format;
+        if (format === undefined || format === null) {
+            format = Viewer.sceneFormatFromPath(path);
+        }
+        const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold, downloadProgress, format);
         return new AbortablePromise((resolve, reject) => {
             loadPromise.then((splatBuffer) => {
                 if (options.showLoadingSpinner) this.loadingSpinner.hide();
@@ -541,8 +545,14 @@ export class Viewer {
         const loadPromises = [];
         const abortHandlers = [];
         for (let i = 0; i < sceneOptions.length; i++) {
+
+            let format = sceneOptions.format;
+            if (format === undefined || format === null) {
+                format = Viewer.sceneFormatFromPath(sceneOptions[i].path);
+            }
+
             const loadPromise = this.loadFileToSplatBuffer(sceneOptions[i].path, sceneOptions[i].splatAlphaRemovalThreshold,
-                                                           downloadProgress.bind(this, i), sceneOptions.format);
+                                                           downloadProgress.bind(this, i), format);
             abortHandlers.push(loadPromise.abortHandler);
             loadPromises.push(loadPromise.promise);
         }
@@ -575,28 +585,32 @@ export class Viewer {
      *                                            value (valid range: 0 - 255), defaults to 1
      *
      * @param {function} onProgress Function to be called as file data are received
-     * @param {string} format Optional format specifier, if not specified the format will be inferred from the file extension
+     * @param {string} format File format of the scene
      * @return {AbortablePromise}
      */
-    loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined, format = undefined) {
+    loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined, format) {
         const downloadProgress = (percent, percentLabel) => {
             if (onProgress) onProgress(percent, percentLabel, 'downloading');
         };
-        if (format !== undefined && format !== null) {
-            if (format === SceneFormat.Splat || format === SceneFormat.KSplat) {
-                return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold, undefined, undefined, format);
-            } else if (format === SceneFormat.Ply) {
-                return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
-            }
-        } else {
-            if (SplatLoader.isFileSplatFormat(path)) {
-                return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
-            } else if (path.endsWith('.ply')) {
-                return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
-            }
+
+        if (format === SceneFormat.Splat || format === SceneFormat.KSplat) {
+            return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold, undefined, undefined, format);
+        } else if (format === SceneFormat.Ply) {
+            return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
         }
 
         return AbortablePromise.reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
+    }
+
+    static sceneFormatFromPath(path) {
+        if (path.endsWith('.ply')) return SceneFormat.Ply;
+        else if (path.endsWith('.splat')) return SceneFormat.Splat;
+        else if (path.endsWith('.ksplat')) return SceneFormat.KSplat;
+        return null;
+    }
+
+    static isStreamable(format) {
+        return format === SceneFormat.Ply || format === SceneFormat.KSplat;
     }
 
     /**
@@ -1214,7 +1228,8 @@ export class Viewer {
                         const ns = nodeSize(node);
                         const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
                         const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
-                        if (!gatherAllNodes && ((outOfFovX || outOfFovY || distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
+                        if (!gatherAllNodes && ((outOfFovX || outOfFovY ||
+                             distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
                             continue;
                         }
                         splatRenderCount += node.data.indexes.length;
@@ -1235,7 +1250,8 @@ export class Viewer {
                     const node = nodeRenderList[i];
                     const windowSizeInts = node.data.indexes.length;
                     const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
-                    let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer, currentByteOffset - windowSizeBytes, windowSizeInts);
+                    let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer,
+                                                   currentByteOffset - windowSizeBytes, windowSizeInts);
                     destView.set(node.data.indexes);
                     currentByteOffset -= windowSizeBytes;
                 }

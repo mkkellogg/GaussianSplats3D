@@ -35,9 +35,13 @@ function fileBufferToSplatBuffer(fileBufferData, isPly, isStandardSplat, compres
         splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
     } else {
         if (isStandardSplat) {
-            const splatArray = GaussianSplats3D.SplatLoader.parseStandardSplatToUncompressedSplatArray(fileBufferData);
-            const splatCompressor = new GaussianSplats3D.SplatCompressor(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
-            splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+            const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(fileBufferData);
+            const splatPartitioner = GaussianSplats3D.SplatPartitioner.getStandardPartitioner();
+            const partitionResults = splatPartitioner.partitionUncompressedSplatArray(splatArray);
+            const splatCompressor = new GaussianSplats3D.SplatCompressor(alphaRemovalThreshold, compressionLevel);
+            return splatCompressor.uncompressedSplatArraysToSplatBuffer(partitionResults.splatArrays,
+                                                                        blockSize, bucketSize, partitionResults.parameters);
+
         } else {
             splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);
         }

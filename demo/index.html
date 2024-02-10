@@ -253,15 +253,23 @@
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
 
+    const splatPartitioner = GaussianSplats3D.SplatPartitioner.getStandardPartitioner();
+
     function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
-      return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
+      const splatArray = plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
+      const partitionResults = splatPartitioner.partitionUncompressedSplatArray(splatArray);
+      const splatCompressor = new GaussianSplats3D.SplatCompressor(alphaRemovalThreshold, compressionLevel);
+      return splatCompressor.uncompressedSplatArraysToSplatBuffer(partitionResults.splatArrays,
+                                                                  blockSize, bucketSize, partitionResults.parameters);
     }
 
     function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize){
-      const splatArray = GaussianSplats3D.SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
-      const splatCompressor = new GaussianSplats3D.SplatCompressor(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
-      return splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+      const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
+      const partitionResults = splatPartitioner.partitionUncompressedSplatArray(splatArray);
+      const splatCompressor = new GaussianSplats3D.SplatCompressor(alphaRemovalThreshold, compressionLevel);
+      return splatCompressor.uncompressedSplatArraysToSplatBuffer(partitionResults.splatArrays,
+                                                                  blockSize, bucketSize, partitionResults.parameters);
     }
 
     function isPlyFile(fileName) {
