@@ -6,16 +6,59 @@ class SplatSubTree {
     constructor(maxDepth, maxCentersPerNode) {
         this.maxDepth = maxDepth;
         this.maxCentersPerNode = maxCentersPerNode;
+
         this.sceneDimensions = new THREE.Vector3();
         this.sceneMin = new THREE.Vector3();
         this.sceneMax = new THREE.Vector3();
-        this.splatMesh = null;
         this.rootNode = null;
         this.addedIndexes = {};
         this.nodesWithIndexes = [];
+
+        this.splatMesh = null;
     }
 
 }
+
+let splatTreeWorker;
+function createSplatTreeWorker(self) {
+
+    function createSplatTree(splatMesh) {
+        console.log(splatMesh)
+    }
+
+    self.onmessage = (e) => {
+        if (e.data.init) {
+
+        } else if (e.data.process) {
+            createSplatTree(e.data.process.splatMesh);
+        }
+    };
+}
+
+function workerProcessSplatMesh(splatMesh) {
+    splatTreeWorker.postMessage({
+        'process': {
+            'splatMesh': splatMesh
+        }
+    });
+}
+
+function checkAndCreateWorker() {
+    if (!splatTreeWorker) {
+        splatTreeWorker = new Worker(
+            URL.createObjectURL(
+                new Blob(['(', createSplatTreeWorker.toString(), ')(self)'], {
+                    type: 'application/javascript',
+                }),
+            ),
+        );
+    
+    
+        splatTreeWorker.postMessage({
+            'init': {}
+        });
+    }
+} 
 
 /**
  * SplatTree: Octree tailored to splat data from a SplatMesh instance
@@ -25,11 +68,14 @@ export class SplatTree {
     constructor(maxDepth, maxCentersPerNode) {
         this.maxDepth = maxDepth;
         this.maxCentersPerNode = maxCentersPerNode;
-        this.splatMesh = null;
         this.subTrees = [];
+        this.splatMesh = null;
     }
 
-    processSplatMesh(splatMesh, filterFunc = () => true) {
+    processSplatMesh = function(splatMesh, filterFunc = () => true) {
+        //checkAndCreateWorker();
+        //workerProcessSplatMesh(splatMesh);
+
         this.splatMesh = splatMesh;
         this.subTrees = [];
         const center = new THREE.Vector3();
@@ -54,7 +100,6 @@ export class SplatTree {
             }
 
             subTree.sceneDimensions.copy(subTree.sceneMax).sub(subTree.sceneMin);
-
             subTree.rootNode = new SplatTreeNode(subTree.sceneMin, subTree.sceneMax, 0);
             subTree.rootNode.data = {
                 'indexes': indexes
@@ -78,9 +123,9 @@ export class SplatTree {
             this.subTrees[0] = subTree;
             SplatTree.processNode(subTree, subTree.rootNode, splatMesh);
         }
-    }
+    };
 
-    static processNode(tree, node, splatMesh) {
+    static processNode = function (tree, node, splatMesh) {
         const splatCount = node.data.indexes.length;
 
         if (splatCount < tree.maxCentersPerNode || node.depth > tree.maxDepth) {
@@ -154,8 +199,9 @@ export class SplatTree {
 
         node.data = {};
         for (let child of node.children) {
-            SplatTree.processNode(tree, child, splatMesh);
+           SplatTree.processNode(tree, child, splatMesh);
         }
+        return;
     }
 
     countLeaves() {

@@ -18,8 +18,14 @@ for(let i = 0; i < process.argv.length; ++i) {
   } 
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 http
-  .createServer(function (request, response) {
+  .createServer( async function (request, response) {
 
     response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
@@ -87,7 +93,7 @@ http
       // ignore
     }
 
-    fs.readFile(filePath, function (error, content) {
+    fs.readFile(filePath, async function (error, content) {
       if (error) {
         if (error.code == "ENOENT") {
           console.log("HTTP(404) Request for " + filePath + " -> File not found.");
@@ -102,9 +108,22 @@ http
           response.end();
         }
       } else {
+       // console.log(response);
         console.log("HTTP(200) Request for " + filePath);
         response.writeHead(200, { "Content-Type": contentType });
-        response.end(content, "utf-8");
+
+        const chunkSize = Math.ceil(1024 * 1024 * 0.5);
+        const chunkCount = Math.ceil(content.length / chunkSize);
+        for (let i = 0; i < chunkCount; i++) {
+          const start = i * chunkSize;
+          const end = start + chunkSize < content.length ? start + chunkSize : content.length;
+          const chunk = content.subarray(start, end);
+          await sleep(100);
+          response.write(chunk);
+        }
+        response.end();
+        
+        //response.end(content, "utf-8");
       }
     });
 

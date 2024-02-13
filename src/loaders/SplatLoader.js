@@ -1,8 +1,6 @@
-import { SplatBuffer } from './SplatBuffer.js';
-import { SplatCompressor } from './SplatCompressor.js';
+import { SplatBufferGenerator } from './SplatBufferGenerator.js';
 import { SplatParser } from './SplatParser.js';
 import { fetchWithProgress } from '../Util.js';
-import { SceneFormat } from '../SceneFormat.js';
 
 export class SplatLoader {
 
@@ -11,33 +9,12 @@ export class SplatLoader {
         this.downLoadLink = null;
     }
 
-    static isFileSplatFormat(fileName) {
-        return SplatLoader.isCustomSplatFormat(fileName) || SplatLoader.isStandardSplatFormat(fileName);
-    }
-
-    static isCustomSplatFormat(fileName) {
-        return fileName.endsWith('.ksplat');
-    }
-
-    static isStandardSplatFormat(fileName) {
-        return fileName.endsWith('.splat');
-    }
-
-    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize, format) {
+    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
         return fetchWithProgress(fileName, onProgress).then((bufferData) => {
-            const isCustomSplatFormat = format === SceneFormat.KSplat || SplatLoader.isCustomSplatFormat(fileName);
-            let splatBuffer;
-            if (isCustomSplatFormat) {
-                splatBuffer = new SplatBuffer(bufferData);
-            } else {
-                const splatArray = SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
-                const splatPartitioner = GaussianSplats3D.SplatPartitioner.getStandardPartitioner();
-                const partitionResults = splatPartitioner.partitionUncompressedSplatArray(splatArray);
-                const splatCompressor = new GaussianSplats3D.SplatCompressor(minimumAlpha, compressionLevel);
-                return splatCompressor.uncompressedSplatArraysToSplatBuffer(partitionResults.splatArrays,
-                                                                            blockSize, bucketSize, partitionResults.parameters);
-            }
-            return splatBuffer;
+            const splatArray = SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
+            const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
+                                                                                   blockSize, bucketSize);
+             return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
         });
     }
 
@@ -50,10 +27,7 @@ export class SplatLoader {
         let downLoadLink;
 
         return function(splatBuffer, fileName) {
-            const headerData = new Uint8Array(splatBuffer.getHeaderBufferData());
-            const sectionHeaderData = new Uint8Array(splatBuffer.getSectionHeaderBufferData());
-            const splatData = new Uint8Array(splatBuffer.getSplatBufferData());
-            const blob = new Blob([headerData.buffer, sectionHeaderData.buffer, splatData.buffer], {
+            const blob = new Blob([splatBuffer.bufferData], {
                 type: 'application/octet-stream',
             });
 

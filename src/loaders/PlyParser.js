@@ -1,4 +1,4 @@
-import { SplatCompressor } from './SplatCompressor.js';
+import { UncompressedSplatArray } from './UncompressedSplatArray.js';
 
 export class PlyParser {
 
@@ -13,7 +13,7 @@ export class PlyParser {
         let headerOffset = 0;
         let headerText = '';
 
-        //console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
+        // console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
 
         const readChunkSize = 100;
 
@@ -79,7 +79,7 @@ export class PlyParser {
         }
     }
 
-    parseToSplatBuffer(compressionLevel, minimumAlpha, blockSize, bucketSize) {
+    parseToUncompressedSplatArray() {
 
         // const startTime = performance.now();
 
@@ -136,7 +136,7 @@ export class PlyParser {
         const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
                                   'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
-        const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
+        const splatArray = new UncompressedSplatArray();
 
         for (let row = 0; row < splatCount; row++) {
             PlyParser.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);

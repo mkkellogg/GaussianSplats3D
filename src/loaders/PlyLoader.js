@@ -9,10 +9,11 @@ export class PlyLoader {
 
     loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
         return fetchWithProgress(fileName, onProgress).then((plyFileData) => {
-            const plyParser = new PlyParser(plyFileData);
-            const splatBuffer = plyParser.parseToSplatBuffer(compressionLevel, minimumAlpha, blockSize, bucketSize);
-            this.splatBuffer = splatBuffer;
-            return splatBuffer;
+            const splatArray = new PlyParser(plyFileData).parseToUncompressedSplatArray();
+            const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(minimumAlpha,
+                                                                                                    compressionLevel,
+                                                                                                    blockSize, bucketSize);
+            return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
         });
     }
 

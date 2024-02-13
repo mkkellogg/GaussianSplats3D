@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SplatCompressor } from './SplatCompressor';
+import { UncompressedSplatArray } from './UncompressedSplatArray.js';
 
 export class SplatParser {
 
@@ -13,7 +13,7 @@ export class SplatParser {
         const InBufferRowSizeBytes = 32;
         const splatCount = inBuffer.byteLength / InBufferRowSizeBytes;
 
-        const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
+        const splatArray = new UncompressedSplatArray();
 
         for (let i = 0; i < splatCount; i++) {
             const inCenterSizeBytes = 3 * 4;
