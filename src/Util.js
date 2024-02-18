@@ -50,6 +50,10 @@ export const rgbaToInteger = function(r, g, b, a) {
     return r + (g << 8) + (b << 16) + (a << 24);
 };
 
+export const rgbaArrayToInteger = function(arr, offset) {
+    return arr[offset] + (arr[offset + 1] << 8) + (arr[offset + 2] << 16) + (arr[offset + 3] << 24);
+};
+
 export const fetchWithProgress = function(path, onProgress) {
 
     const abortController = new AbortController();

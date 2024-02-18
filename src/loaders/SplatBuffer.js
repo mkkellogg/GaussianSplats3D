@@ -17,13 +17,15 @@ export class SplatBuffer {
         0: {
             BytesPerCenter: 12,
             BytesPerColor: 4,
-            BytesPerCovariance: 24,
+            BytesPerScale: 12,
+            BytesPerRotation: 16,
             ScaleRange: 1
         },
         1: {
             BytesPerCenter: 6,
             BytesPerColor: 4,
-            BytesPerCovariance: 12,
+            BytesPerScale: 6,
+            BytesPerRotation: 8,
             ScaleRange: 32767
         }
     };
@@ -81,17 +83,21 @@ export class SplatBuffer {
         if (transform) outCenter.applyMatrix4(transform);
     }
 
-    // TODO: Re-implement to use eigen decomposition to compute scale & rotation from covariance.
-    /* getSplatScaleAndRotation = function() {
+    getSplatScaleAndRotation = function() {
 
         const scaleMatrix = new THREE.Matrix4();
         const rotationMatrix = new THREE.Matrix4();
         const tempMatrix = new THREE.Matrix4();
         const tempPosition = new THREE.Vector3();
 
-        return function(globalSplatIndex, outScale, outRotation, transform) {
-            // TODO: Implement!!
-
+        return function(index, outScale, outRotation, transform) {
+            const scaleBase = index * SplatBuffer.ScaleComponentCount;
+            outScale.set(this.fbf(this.scaleArray[scaleBase]),
+                         this.fbf(this.scaleArray[scaleBase + 1]),
+                         this.fbf(this.scaleArray[scaleBase + 2]));
+            const rotationBase = index * SplatBuffer.RotationComponentCount;
+            outRotation.set(this.fbf(this.rotationArray[rotationBase + 1]), this.fbf(this.rotationArray[rotationBase + 2]),
+                            this.fbf(this.rotationArray[rotationBase + 3]), this.fbf(this.rotationArray[rotationBase]));
             if (transform) {
                 scaleMatrix.makeScale(outScale.x, outScale.y, outScale.z);
                 rotationMatrix.makeRotationFromQuaternion(outRotation);
@@ -100,7 +106,7 @@ export class SplatBuffer {
             }
         };
 
-    }();*/
+    }();
 
     getSplatColor(globalSplatIndex, outColor, transform) {
         const sectionIndex = this.globalSplatIndexToSectionMap[globalSplatIndex];
@@ -159,8 +165,10 @@ export class SplatBuffer {
         const transformedCovariance = new THREE.Matrix3();
         const transform3x3 = new THREE.Matrix3();
         const transform3x3Transpose = new THREE.Matrix3();
+        const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
 
-        return function(scale, rotation, transform, outCovariance, outOffset = 0) {
+        return function(scale, rotation, transform, outCovariance, outOffset = 0, desiredOutputCompressionLevel) {
+
             tempMatrix4.makeScale(scale.x, scale.y, scale.z);
             scaleMatrix.setFromMatrix4(tempMatrix4);
 
@@ -177,19 +185,31 @@ export class SplatBuffer {
                 transformedCovariance.premultiply(transform3x3);
             }
 
-            outCovariance[outOffset] = transformedCovariance.elements[0];
-            outCovariance[outOffset + 1] = transformedCovariance.elements[3];
-            outCovariance[outOffset + 2] = transformedCovariance.elements[6];
-            outCovariance[outOffset + 3] = transformedCovariance.elements[4];
-            outCovariance[outOffset + 4] = transformedCovariance.elements[7];
-            outCovariance[outOffset + 5] = transformedCovariance.elements[8];
+            if (desiredOutputCompressionLevel === 1) {
+                outCovariance[outOffset] = thf(transformedCovariance.elements[0]);
+                outCovariance[outOffset + 1] = thf(transformedCovariance.elements[3]);
+                outCovariance[outOffset + 2] = thf(transformedCovariance.elements[6]);
+                outCovariance[outOffset + 3] = thf(transformedCovariance.elements[4]);
+                outCovariance[outOffset + 4] = thf(transformedCovariance.elements[7]);
+                outCovariance[outOffset + 5] = thf(transformedCovariance.elements[8]);
+            } else {
+                outCovariance[outOffset] = transformedCovariance.elements[0];
+                outCovariance[outOffset + 1] = transformedCovariance.elements[3];
+                outCovariance[outOffset + 2] = transformedCovariance.elements[6];
+                outCovariance[outOffset + 3] = transformedCovariance.elements[4];
+                outCovariance[outOffset + 4] = transformedCovariance.elements[7];
+                outCovariance[outOffset + 5] = transformedCovariance.elements[8];
+            }
+                
         };
 
     }();
 
     fillSplatCovarianceArray(covarianceArray, transform, srcFrom, srcTo, destFrom, desiredOutputCompressionLevel) {
         const splatCount = this.splatCount;
-        const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
+
+        const scale = new THREE.Vector3();
+        const rotation = new THREE.Quaternion();
 
         srcFrom = srcFrom || 0;
         srcTo = srcTo || splatCount - 1;
@@ -200,39 +220,21 @@ export class SplatBuffer {
             const section = this.sections[sectionIndex];
             const localSplatIndex = i - section.splatCountOffset;
 
-            const covarianceSrcBase = localSplatIndex * SplatBuffer.CovarianceComponentCount;
+            const scaleSrcBase = localSplatIndex * SplatBuffer.ScaleComponentCount;
+            const rotationSrcBase = localSplatIndex * SplatBuffer.RotationComponentCount;
             const covarianceDestBase = (i - srcFrom + destFrom) * SplatBuffer.CovarianceComponentCount;
 
-            if (desiredOutputCompressionLevel === this.compressionLevel) {
-                covarianceArray[covarianceDestBase] = section.covarianceArray[covarianceSrcBase];
-                covarianceArray[covarianceDestBase + 1] = section.covarianceArray[covarianceSrcBase + 1];
-                covarianceArray[covarianceDestBase + 2] = section.covarianceArray[covarianceSrcBase + 2];
-                covarianceArray[covarianceDestBase + 3] = section.covarianceArray[covarianceSrcBase + 3];
-                covarianceArray[covarianceDestBase + 4] = section.covarianceArray[covarianceSrcBase + 4];
-                covarianceArray[covarianceDestBase + 5] = section.covarianceArray[covarianceSrcBase + 5];
-            } else {
-                if (desiredOutputCompressionLevel === 1 && this.compressionLevel === 0) {
-                    covarianceArray[covarianceDestBase] = thf(section.covarianceArray[covarianceSrcBase]);
-                    covarianceArray[covarianceDestBase + 1] = thf(section.covarianceArray[covarianceSrcBase + 1]);
-                    covarianceArray[covarianceDestBase + 2] = thf(section.covarianceArray[covarianceSrcBase + 2]);
-                    covarianceArray[covarianceDestBase + 3] = thf(section.covarianceArray[covarianceSrcBase + 3]);
-                    covarianceArray[covarianceDestBase + 4] = thf(section.covarianceArray[covarianceSrcBase + 4]);
-                    covarianceArray[covarianceDestBase + 5] = thf(section.covarianceArray[covarianceSrcBase + 5]);
-                } else {
-                    covarianceArray[covarianceDestBase] = this.fbf(section.covarianceArray[covarianceSrcBase]);
-                    covarianceArray[covarianceDestBase + 1] = this.fbf(section.covarianceArray[covarianceSrcBase + 1]);
-                    covarianceArray[covarianceDestBase + 2] = this.fbf(section.covarianceArray[covarianceSrcBase + 2]);
-                    covarianceArray[covarianceDestBase + 3] = this.fbf(section.covarianceArray[covarianceSrcBase + 3]);
-                    covarianceArray[covarianceDestBase + 4] = this.fbf(section.covarianceArray[covarianceSrcBase + 4]);
-                    covarianceArray[covarianceDestBase + 5] = this.fbf(section.covarianceArray[covarianceSrcBase + 5]);
-                }
-            }
+            scale.set(this.fbf(section.scaleArray[scaleSrcBase]),
+                      this.fbf(section.scaleArray[scaleSrcBase + 1]),
+                      this.fbf(section.scaleArray[scaleSrcBase + 2]));
+            rotation.set(this.fbf(section.rotationArray[rotationSrcBase + 1]),
+                         this.fbf(section.rotationArray[rotationSrcBase + 2]),
+                         this.fbf(section.rotationArray[rotationSrcBase + 3]),
+                         this.fbf(section.rotationArray[rotationSrcBase]));
 
-            if (transform) {
-                // TODO: transform covariance
-            }
+            SplatBuffer.computeCovariance(scale, rotation, transform, covarianceArray, covarianceDestBase, desiredOutputCompressionLevel);
         }
-    };
+    }
 
     fillSplatColorArray(outColorArray, transform, srcFrom, srcTo, destFrom) {
         const splatCount = this.splatCount;
@@ -299,7 +301,8 @@ export class SplatBuffer {
         const compressionLevel = header.compressionLevel;
         const bytesPerCenter = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCenter;
         const bytesPerColor = SplatBuffer.CompressionLevels[compressionLevel].BytesPerColor;
-        const bytesPerCovariance = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCovariance;
+        const bytesPerScale = SplatBuffer.CompressionLevels[compressionLevel].BytesPerScale;
+        const bytesPerRotation = SplatBuffer.CompressionLevels[compressionLevel].BytesPerRotation;
 
         const maxSectionCount = header.maxSectionCount;
         const sectionHeaderArrayUint16 = new Uint16Array(buffer, offset, maxSectionCount * SplatBuffer.SectionHeaderSizeBytes / 2);
@@ -325,7 +328,7 @@ export class SplatBuffer {
 
             let centerBufferSizeBytes = splatCount * bytesPerCenter;
             centerBufferSizeBytes += centerBufferSizeBytes % 4;
-            const splatDataStorageSizeBytes = centerBufferSizeBytes + (bytesPerCovariance + bytesPerColor) * splatCount;
+            const splatDataStorageSizeBytes = centerBufferSizeBytes + (bytesPerScale + bytesPerRotation + bytesPerColor) * splatCount;
             const storageSizeBytes = splatDataStorageSizeBytes + bucketsStorageSizeBytes;
             const sectionHeader = {
                 splatCountOffset: splatCountOffset,
@@ -370,9 +373,10 @@ export class SplatBuffer {
         this.compressionLevel = header.compressionLevel;
 
         this.bytesPerCenter = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerCenter;
-        this.bytesPerCovariance = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerCovariance;
+        this.bytesPerScale = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerScale;
+        this.bytesPerRotation = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerRotation;
         this.bytesPerColor = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerColor;
-        this.bytesPerSplat = this.bytesPerCenter + this.bytesPerCovariance + this.bytesPerColor;
+        this.bytesPerSplat = this.bytesPerCenter + this.bytesPerScale + this.bytesPerRotation + this.bytesPerColor;
 
         this.sections = SplatBuffer.parseSectionHeaders(header, this.bufferData, SplatBuffer.HeaderSizeBytes);
 
@@ -390,12 +394,16 @@ export class SplatBuffer {
             centerArraySizeBytes += centerArraySizeBytes % 4;
             const centerArraySizeElements = centerArraySizeBytes / ((this.compressionLevel === 0) ? 4 : 2);
             section.centerArray = new FloatArray(this.bufferData, sectionBase, centerArraySizeElements);
-            section.covarianceArray = new FloatArray(this.bufferData, sectionBase + centerArraySizeBytes,
-                                                     section.splatCount * SplatBuffer.CovarianceComponentCount);
+            section.scaleArray = new FloatArray(this.bufferData, sectionBase + centerArraySizeBytes,
+                                                section.splatCount * SplatBuffer.ScaleComponentCount);
+            section.rotationArray = new FloatArray(this.bufferData,
+                                                   sectionBase + centerArraySizeBytes + this.bytesPerScale * section.splatCount,
+                                                   section.splatCount * SplatBuffer.RotationComponentCount);
             section.colorArray = new Uint8Array(this.bufferData,
-                                                sectionBase + centerArraySizeBytes + this.bytesPerCovariance * section.splatCount,
+                                                sectionBase + centerArraySizeBytes +
+                                                (this.bytesPerScale + this.bytesPerRotation) * section.splatCount,
                                                 section.splatCount * SplatBuffer.ColorComponentCount);
-            sectionBase += centerArraySizeBytes + (this.bytesPerCovariance + this.bytesPerColor) * section.splatCount +
+            sectionBase += centerArraySizeBytes + (this.bytesPerScale + this.bytesPerRotation + this.bytesPerColor) * section.splatCount +
                                                    SplatBuffer.BucketStorageSizeBytes * section.bucketCount;
         }
     }
@@ -421,7 +429,8 @@ export class SplatBuffer {
     static generateFromUncompressedSplatArrays(splatArrays, minimumAlpha, compressionLevel, blockSize, bucketSize, options = []) {
 
         const bytesPerCenter = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCenter;
-        const bytesPerCovariance = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCovariance;
+        const bytesPerScale = SplatBuffer.CompressionLevels[compressionLevel].BytesPerScale;
+        const bytesPerRotation = SplatBuffer.CompressionLevels[compressionLevel].BytesPerRotation;
         const bytesPerColor = SplatBuffer.CompressionLevels[compressionLevel].BytesPerColor;
         const compressionScaleRange = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
 
@@ -429,9 +438,8 @@ export class SplatBuffer {
         const sectionHeaderBuffers = [];
         let totalSplatCount = 0;
 
-        const tempScale = new THREE.Vector3();
         const tempRotation = new THREE.Quaternion();
-        const tempCov = [];
+        const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
 
         for (let i = 0; i < splatArrays.length; i ++) {
             const splatArray = splatArrays[i];
@@ -467,7 +475,8 @@ export class SplatBuffer {
             let centerBufferSizeBytes = bytesPerCenter * paddedSplatCount;
             centerBufferSizeBytes += centerBufferSizeBytes % 4;
             const centerBuffer = new ArrayBuffer(centerBufferSizeBytes);
-            const covarianceBuffer = new ArrayBuffer(bytesPerCovariance * paddedSplatCount);
+            const rotationBuffer = new ArrayBuffer(bytesPerRotation * paddedSplatCount);
+            const scaleBuffer = new ArrayBuffer(bytesPerScale * paddedSplatCount);
             const colorBuffer = new ArrayBuffer(bytesPerColor * paddedSplatCount);
 
             const blockHalfSize = sectionBlockSize / 2.0;
@@ -489,32 +498,32 @@ export class SplatBuffer {
 
                     if (compressionLevel === 0) {
                         const center = new Float32Array(centerBuffer, outSplatCount * bytesPerCenter, SplatBuffer.CenterComponentCount);
-                        const cov = new Float32Array(covarianceBuffer, outSplatCount * bytesPerCovariance,
-                                                     SplatBuffer.CovarianceComponentCount);
+                        const rot = new Float32Array(rotationBuffer, outSplatCount * bytesPerRotation, SplatBuffer.RotationComponentCount);
+                        const scale = new Float32Array(scaleBuffer, outSplatCount * bytesPerScale, SplatBuffer.ScaleComponentCount);
                         if (validSplats['scale_0'][row] !== undefined) {
                             tempRotation.set(validSplats['rot_1'][row], validSplats['rot_2'][row],
                                              validSplats['rot_3'][row], validSplats['rot_0'][row]);
                             tempRotation.normalize();
-                            tempScale.set(validSplats['scale_0'][row], validSplats['scale_1'][row], validSplats['scale_2'][row]);
-                            SplatBuffer.computeCovariance(tempScale, tempRotation, undefined, cov);
+                            rot.set([tempRotation.w, tempRotation.x, tempRotation.y, tempRotation.z]);
+                            scale.set([validSplats['scale_0'][row], validSplats['scale_1'][row], validSplats['scale_2'][row]]);
                         } else {
-                            cov.set([1.0, 0.0, 0.0, 1.0, 0.0, 1.0]);
+                            rot.set([1.0, 0.0, 0.0, 0.0]);
+                            scale.set([0.01, 0.01, 0.01]);
                         }
                         center.set([validSplats['x'][row], validSplats['y'][row], validSplats['z'][row]]);
                     } else {
                         const center = new Uint16Array(centerBuffer, outSplatCount * bytesPerCenter, SplatBuffer.CenterComponentCount);
-                        const cov = new Uint16Array(covarianceBuffer, outSplatCount * bytesPerCovariance,
-                                                    SplatBuffer.CovarianceComponentCount);
-                        const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
+                        const scale = new Uint16Array(scaleBuffer, outSplatCount * bytesPerScale, 3);
+                        const rot = new Uint16Array(rotationBuffer, outSplatCount * bytesPerRotation, 4);
                         if (validSplats['scale_0'][row] !== undefined) {
                             tempRotation.set(validSplats['rot_1'][row], validSplats['rot_2'][row],
                                              validSplats['rot_3'][row], validSplats['rot_0'][row]);
                             tempRotation.normalize();
-                            tempScale.set(validSplats['scale_0'][row], validSplats['scale_1'][row], validSplats['scale_2'][row]);
-                            SplatBuffer.computeCovariance(tempScale, tempRotation, undefined, tempCov);
-                            cov.set([thf(tempCov[0]), thf(tempCov[1]), thf(tempCov[2]), thf(tempCov[3]), thf(tempCov[4]), thf(tempCov[5])]);
+                            rot.set([thf(tempRotation.w), thf(tempRotation.x), thf(tempRotation.y), thf(tempRotation.z)]);
+                            scale.set([thf(validSplats['scale_0'][row]), thf(validSplats['scale_1'][row]), thf(validSplats['scale_2'][row])]);
                         } else {
-                            cov.set([thf(1.0), thf(0.0), thf(0.0), thf(1.0), thf(0.0), thf(1.0)]);
+                            rot.set([thf(1.), 0, 0, 0]);
+                            scale.set([thf(0.01), thf(0.01), thf(0.01)]);
                         }
                         bucketCenterDelta.set(validSplats['x'][row], validSplats['y'][row], validSplats['z'][row]).sub(bucketCenter);
                         bucketCenterDelta.x = Math.round(bucketCenterDelta.x * compressionScaleFactor) + compressionScaleRange;
@@ -550,7 +559,7 @@ export class SplatBuffer {
             }
             totalSplatCount += outSplatCount;
 
-            const sectionSplatDataSizeBytes = centerBuffer.byteLength + covarianceBuffer.byteLength +
+            const sectionSplatDataSizeBytes = centerBuffer.byteLength + scaleBuffer.byteLength + rotationBuffer.byteLength +
                                               colorBuffer.byteLength;
             const sectionSizeBytes = compressionLevel > 0 ?
                                      sectionSplatDataSizeBytes + buckets.length * SplatBuffer.BucketStorageSizeBytes :
@@ -558,8 +567,9 @@ export class SplatBuffer {
             const sectionBuffer = new ArrayBuffer(sectionSizeBytes);
 
             new Uint8Array(sectionBuffer, 0, centerBuffer.byteLength).set(new Uint8Array(centerBuffer));
-            new Uint8Array(sectionBuffer, centerBuffer.byteLength, covarianceBuffer.byteLength).set(new Uint8Array(covarianceBuffer));
-            new Uint8Array(sectionBuffer, centerBuffer.byteLength + covarianceBuffer.byteLength,
+            new Uint8Array(sectionBuffer, centerBuffer.byteLength, scaleBuffer.byteLength).set(new Uint8Array(scaleBuffer));
+            new Uint8Array(sectionBuffer, centerBuffer.byteLength + scaleBuffer.byteLength, rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
+            new Uint8Array(sectionBuffer, centerBuffer.byteLength + scaleBuffer.byteLength + rotationBuffer.byteLength,
                            colorBuffer.byteLength).set(new Uint8Array(colorBuffer));
 
             if (compressionLevel > 0) {
