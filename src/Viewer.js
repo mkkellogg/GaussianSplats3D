@@ -691,7 +691,7 @@ export class Viewer {
                     if (this.sharedMemoryForWorkers) {
                         this.splatMesh.updateRenderIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
                     } else {
-                        const sortedIndexes = new Uint32Array(e.data.sortedIndexes, 0, e.data.splatRenderCount);
+                        const sortedIndexes = new Uint32Array(e.data.sortedIndexes.buffer, 0, e.data.splatRenderCount);
                         this.splatMesh.updateRenderIndexes(sortedIndexes, e.data.splatRenderCount);
                     }
                     this.lastSortTime = e.data.sortTime;
