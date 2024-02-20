@@ -1,6 +1,11 @@
 export class LoadingSpinner {
 
     constructor(message, container) {
+
+        this.idGen = 0;
+
+        this.tasks = [];
+
         this.message = message || 'Loading...';
         this.container = container || document.body;
 
@@ -45,6 +50,11 @@ export class LoadingSpinner {
             }
 
             .container {
+                background-color: rgba(128, 128, 128, 0.75);
+                border: #666666 1px solid;
+                border-radius: 5px;
+                padding-top: 20px;
+                padding-bottom: 10px;
                 margin: 0;
                 position: absolute;
                 top: 50%;
@@ -79,6 +89,47 @@ export class LoadingSpinner {
 
         `;
         this.spinnerDivContainerOuter.appendChild(style);
+    }
+
+    addTask(message) {
+        const newTask = {
+            'message': message,
+            'id': this.idGen++
+        };
+        this.tasks.push(newTask);
+        this.update();
+        return newTask.id;
+    }
+
+    removeTask(id) {
+        let index = 0;
+        for (let task of this.tasks) {
+            if (task.id === id) {
+                this.tasks.splice(index, 1);
+                break;
+            }
+            index++;
+        }
+        this.update();
+    }
+
+    setMessageForTask(id, message) {
+        for (let task of this.tasks) {
+            if (task.id === id) {
+                task.message = message;
+                break;
+            }
+        }
+        this.update();
+    }
+
+    update() {
+        if (this.tasks.length > 0) {
+            this.show();
+            this.setMessage(this.tasks[this.tasks.length - 1].message);
+        } else {
+            this.hide();
+        }
     }
 
     show() {

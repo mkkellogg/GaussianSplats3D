@@ -1,46 +1,6 @@
 import { SplatBuffer } from './SplatBuffer.js';
 import { fetchWithProgress } from '../Util.js';
 
-
-let fetchWorker;
-function fetchWorkerFunc(self) {
-
-    function fetchFile(path) {
-        console.log(path)
-    }
-
-    self.onmessage = (e) => {
-        if (e.data.init) {
-
-        } else if (e.data.fetch) {
-            fetchFile(e.data.fetch.path);
-        }
-    };
-}
-
-function workerFetchFile(path) {
-    fetchWorker.postMessage({
-        'fetch': {
-            'path': path
-        }
-    });
-}
-
-function checkAndCreateFetchWorker() {
-    if (!fetchWorker) {
-        fetchWorker = new Worker(
-            URL.createObjectURL(
-                new Blob(['(', fetchWorkerFunc.toString(), ')(self)'], {
-                    type: 'application/javascript',
-                }),
-            ),
-        );
-        fetchWorker.postMessage({
-            'init': {}
-        });
-    }
-}
-
 export class KSplatLoader {
 
     constructor(splatBuffer = null) {
@@ -107,12 +67,14 @@ export class KSplatLoader {
                     }
                     totalStorageSizeBytes = SplatBuffer.HeaderSizeBytes + header.maxSectionCount *
                                             SplatBuffer.SectionHeaderSizeBytes + totalSectionStorageStorageByes;
-                    fullBuffer = new ArrayBuffer(totalStorageSizeBytes);
-                    let offset = 0;
-                    for (let i = 0; i < chunks.length; i++) {
-                        const chunk = chunks[i];
-                        new Uint8Array(fullBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
-                        offset += chunk.byteLength;
+                    if (!fullBuffer) {
+                        fullBuffer = new ArrayBuffer(totalStorageSizeBytes);
+                        let offset = 0;
+                        for (let i = 0; i < chunks.length; i++) {
+                            const chunk = chunks[i];
+                            new Uint8Array(fullBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
+                            offset += chunk.byteLength;
+                        }
                     }
                     window.setTimeout(() => checkAndLoadSections(), 100);
                 });
@@ -143,9 +105,10 @@ export class KSplatLoader {
                             if (!fullSplatBuffer) fullSplatBuffer = new SplatBuffer(fullBuffer, false);
                             fullSplatBuffer.updateLoadedCounts(sectionCount, splatCount);
 
-                            onSectionBuilt(fullSplatBuffer);
+                            const loadComplete = sectionCount >= header.maxSectionCount;
 
-                            if (sectionCount >= header.maxSectionCount) {
+                            onSectionBuilt(fullSplatBuffer, loadComplete);
+                            if (loadComplete) {
                                 sectionsLoadResolvePromise();
                             } else {
                                 window.setTimeout(() => checkAndLoadSections(), 100);

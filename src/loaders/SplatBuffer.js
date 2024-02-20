@@ -91,13 +91,17 @@ export class SplatBuffer {
         const tempPosition = new THREE.Vector3();
 
         return function(index, outScale, outRotation, transform) {
-            const scaleBase = index * SplatBuffer.ScaleComponentCount;
-            outScale.set(this.fbf(this.scaleArray[scaleBase]),
-                         this.fbf(this.scaleArray[scaleBase + 1]),
-                         this.fbf(this.scaleArray[scaleBase + 2]));
-            const rotationBase = index * SplatBuffer.RotationComponentCount;
-            outRotation.set(this.fbf(this.rotationArray[rotationBase + 1]), this.fbf(this.rotationArray[rotationBase + 2]),
-                            this.fbf(this.rotationArray[rotationBase + 3]), this.fbf(this.rotationArray[rotationBase]));
+            const sectionIndex = this.globalSplatIndexToSectionMap[index];
+            const section = this.sections[sectionIndex];
+            const localSplatIndex = index - section.splatCountOffset;
+
+            const scaleBase = localSplatIndex * SplatBuffer.ScaleComponentCount;
+            outScale.set(this.fbf(section.scaleArray[scaleBase]),
+                         this.fbf(section.scaleArray[scaleBase + 1]),
+                         this.fbf(section.scaleArray[scaleBase + 2]));
+            const rotationBase = localSplatIndex * SplatBuffer.RotationComponentCount;
+            outRotation.set(this.fbf(section.rotationArray[rotationBase + 1]), this.fbf(section.rotationArray[rotationBase + 2]),
+                            this.fbf(section.rotationArray[rotationBase + 3]), this.fbf(section.rotationArray[rotationBase]));
             if (transform) {
                 scaleMatrix.makeScale(outScale.x, outScale.y, outScale.z);
                 rotationMatrix.makeRotationFromQuaternion(outRotation);
@@ -200,7 +204,7 @@ export class SplatBuffer {
                 outCovariance[outOffset + 4] = transformedCovariance.elements[7];
                 outCovariance[outOffset + 5] = transformedCovariance.elements[8];
             }
-                
+
         };
 
     }();
@@ -328,7 +332,10 @@ export class SplatBuffer {
 
             let centerBufferSizeBytes = splatCount * bytesPerCenter;
             centerBufferSizeBytes += centerBufferSizeBytes % 4;
-            const splatDataStorageSizeBytes = centerBufferSizeBytes + (bytesPerScale + bytesPerRotation + bytesPerColor) * splatCount;
+            let scaleBufferSizeBytes = splatCount * bytesPerScale;
+            scaleBufferSizeBytes += scaleBufferSizeBytes % 4;
+            const splatDataStorageSizeBytes = centerBufferSizeBytes + scaleBufferSizeBytes +
+                                              (bytesPerRotation + bytesPerColor) * splatCount;
             const storageSizeBytes = splatDataStorageSizeBytes + bucketsStorageSizeBytes;
             const sectionHeader = {
                 splatCountOffset: splatCountOffset,
@@ -392,19 +399,20 @@ export class SplatBuffer {
             let FloatArray = (this.compressionLevel === 0) ? Float32Array : Uint16Array;
             let centerArraySizeBytes = section.splatCount * this.bytesPerCenter;
             centerArraySizeBytes += centerArraySizeBytes % 4;
-            const centerArraySizeElements = centerArraySizeBytes / ((this.compressionLevel === 0) ? 4 : 2);
-            section.centerArray = new FloatArray(this.bufferData, sectionBase, centerArraySizeElements);
+            let scaleArraySizeBytes = section.splatCount * this.bytesPerScale;
+            scaleArraySizeBytes += scaleArraySizeBytes % 4;
+            section.centerArray = new FloatArray(this.bufferData, sectionBase, section.splatCount * SplatBuffer.CenterComponentCount);
             section.scaleArray = new FloatArray(this.bufferData, sectionBase + centerArraySizeBytes,
                                                 section.splatCount * SplatBuffer.ScaleComponentCount);
             section.rotationArray = new FloatArray(this.bufferData,
-                                                   sectionBase + centerArraySizeBytes + this.bytesPerScale * section.splatCount,
+                                                   sectionBase + centerArraySizeBytes + scaleArraySizeBytes,
                                                    section.splatCount * SplatBuffer.RotationComponentCount);
             section.colorArray = new Uint8Array(this.bufferData,
                                                 sectionBase + centerArraySizeBytes +
-                                                (this.bytesPerScale + this.bytesPerRotation) * section.splatCount,
+                                                scaleArraySizeBytes + this.bytesPerRotation * section.splatCount,
                                                 section.splatCount * SplatBuffer.ColorComponentCount);
-            sectionBase += centerArraySizeBytes + (this.bytesPerScale + this.bytesPerRotation + this.bytesPerColor) * section.splatCount +
-                                                   SplatBuffer.BucketStorageSizeBytes * section.bucketCount;
+            sectionBase += centerArraySizeBytes + scaleArraySizeBytes + (this.bytesPerRotation + this.bytesPerColor) * section.splatCount +
+                           SplatBuffer.BucketStorageSizeBytes * section.bucketCount;
         }
     }
 
@@ -475,8 +483,10 @@ export class SplatBuffer {
             let centerBufferSizeBytes = bytesPerCenter * paddedSplatCount;
             centerBufferSizeBytes += centerBufferSizeBytes % 4;
             const centerBuffer = new ArrayBuffer(centerBufferSizeBytes);
+            let scaleBufferSizeBytes = bytesPerScale * paddedSplatCount;
+            scaleBufferSizeBytes += scaleBufferSizeBytes % 4;
+            const scaleBuffer = new ArrayBuffer(scaleBufferSizeBytes);
             const rotationBuffer = new ArrayBuffer(bytesPerRotation * paddedSplatCount);
-            const scaleBuffer = new ArrayBuffer(bytesPerScale * paddedSplatCount);
             const colorBuffer = new ArrayBuffer(bytesPerColor * paddedSplatCount);
 
             const blockHalfSize = sectionBlockSize / 2.0;
@@ -520,7 +530,9 @@ export class SplatBuffer {
                                              validSplats['rot_3'][row], validSplats['rot_0'][row]);
                             tempRotation.normalize();
                             rot.set([thf(tempRotation.w), thf(tempRotation.x), thf(tempRotation.y), thf(tempRotation.z)]);
-                            scale.set([thf(validSplats['scale_0'][row]), thf(validSplats['scale_1'][row]), thf(validSplats['scale_2'][row])]);
+                            scale.set([thf(validSplats['scale_0'][row]),
+                                       thf(validSplats['scale_1'][row]),
+                                       thf(validSplats['scale_2'][row])]);
                         } else {
                             rot.set([thf(1.), 0, 0, 0]);
                             scale.set([thf(0.01), thf(0.01), thf(0.01)]);
@@ -568,7 +580,8 @@ export class SplatBuffer {
 
             new Uint8Array(sectionBuffer, 0, centerBuffer.byteLength).set(new Uint8Array(centerBuffer));
             new Uint8Array(sectionBuffer, centerBuffer.byteLength, scaleBuffer.byteLength).set(new Uint8Array(scaleBuffer));
-            new Uint8Array(sectionBuffer, centerBuffer.byteLength + scaleBuffer.byteLength, rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
+            new Uint8Array(sectionBuffer, centerBuffer.byteLength + scaleBuffer.byteLength,
+                           rotationBuffer.byteLength).set(new Uint8Array(rotationBuffer));
             new Uint8Array(sectionBuffer, centerBuffer.byteLength + scaleBuffer.byteLength + rotationBuffer.byteLength,
                            colorBuffer.byteLength).set(new Uint8Array(colorBuffer));
 

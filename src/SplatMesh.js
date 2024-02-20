@@ -419,8 +419,8 @@ export class SplatMesh extends THREE.Mesh {
         let totalSplatCount = 0;
         for (let s = 0; s < splatBuffers.length; s++) {
             const splatBuffer = splatBuffers[s];
-            const splatCount = splatBuffer.getSplatCount();
-            for (let i = 0; i < splatCount; i++) {
+            const maxSplatCount = splatBuffer.getMaxSplatCount();
+            for (let i = 0; i < maxSplatCount; i++) {
                 localSplatIndexMap[totalSplatCount] = i;
                 sceneIndexMap[totalSplatCount] = s;
                 totalSplatCount++;
@@ -436,9 +436,13 @@ export class SplatMesh extends THREE.Mesh {
      * Build an instance of SplatTree (a specialized octree) for the given splat mesh.
      * @param {SplatMesh} splatMesh SplatMesh instance for which the splat tree will be built
      * @param {Array<number>} minAlphas Array of minimum splat slphas for each scene
+     * @param {function} onSplatTreeIndexesUpload Function to be called when the upload of splat centers to the splat tree
+     *                                            builder worker starts and finishes.
+     * @param {function} onSplatTreeConstruction Function to be called when the conversion of the local splat tree from
+     *                                           the format produced by the splat tree builder worker starts and ends.
      * @return {SplatTree}
      */
-    static buildSplatTree = function(splatMesh, minAlphas = []) {
+    static buildSplatTree = function(splatMesh, minAlphas = [], onSplatTreeIndexesUpload, onSplatTreeConstruction) {
         return new Promise((resolve) => {
             // TODO: expose SplatTree constructor parameters (maximumDepth and maxCentersPerNode) so that they can
             // be configured on a per-scene basis
@@ -450,7 +454,7 @@ export class SplatMesh extends THREE.Mesh {
                 const sceneIndex = splatMesh.getSceneIndexForSplat(splatIndex);
                 const minAlpha = minAlphas[sceneIndex] || 1;
                 return splatColor.w >= minAlpha;
-            })
+            }, onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
                 console.timeEnd('SplatTree build');
 
@@ -493,10 +497,16 @@ export class SplatMesh extends THREE.Mesh {
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      *
      * }
-     * @param {Boolean} keepSceneTransforms For a scene that already exists and is being overwritten, this flag
+     * @param {boolean} keepSceneTransforms For a scene that already exists and is being overwritten, this flag
      *                                      says to keep the transform from the existing scene.
+     * @param {boolean} buildSplatTree Whether or not to build splat tree.
+     * @param {function} onSplatTreeIndexesUpload Function to be called when the upload of splat centers to the splat tree
+     *                                            builder worker starts and finishes.
+     * @param {function} onSplatTreeConstruction Function to be called when the conversion of the local splat tree from
+     *                                           the format produced by the splat tree builder worker starts and ends.
      */
-    build(splatBuffers, sceneOptions, keepSceneTransforms = true) {
+    build(splatBuffers, sceneOptions, keepSceneTransforms = true, buildSplatTree = false,
+          onSplatTreeIndexesUpload, onSplatTreeConstruction) {
 
         const maxSplatCount = SplatMesh.getTotalMaxSplatCountForSplatBuffers(splatBuffers);
 
@@ -534,7 +544,6 @@ export class SplatMesh extends THREE.Mesh {
             this.disposeMeshData();
             this.geometry = SplatMesh.buildGeomtery(maxSplatCount);
             this.material = SplatMesh.buildMaterial(this.dynamicMode);
-
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
@@ -550,14 +559,14 @@ export class SplatMesh extends THREE.Mesh {
         this.lastBuildMaxSplatCount = this.getMaxSplatCount();
         this.lastBuildSceneCount = this.scenes.length;
 
-        // TODO: Re-enable splat tree construction after figuring out how to speed it up or
-        // move it to the backgound
-        /*
-        this.disposeSplatTree();
-        SplatMesh.buildSplatTree(this, sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1))
-        .then((splatTree) => {
-            this.splatTree = splatTree;
-        });*/
+        if (buildSplatTree) {
+            this.disposeSplatTree();
+            SplatMesh.buildSplatTree(this, sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1),
+                                     onSplatTreeIndexesUpload, onSplatTreeConstruction)
+            .then((splatTree) => {
+                this.splatTree = splatTree;
+            });
+        }
     }
 
     /**

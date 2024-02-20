@@ -16,6 +16,7 @@ import { SceneFormat } from './loaders/SceneFormat.js';
 import { WebXRMode } from './webxr/WebXRMode.js';
 import { VRButton } from './webxr/VRButton.js';
 import { ARButton } from './webxr/ARButton.js';
+import { delayedExecute } from './Util.js';
 
 
 const THREE_CAMERA_FOV = 50;
@@ -125,6 +126,7 @@ export class Viewer {
         this.sortWorkerSortedIndexes = null;
         this.sortWorkerPrecomputedDistances = null;
         this.sortWorkerTransforms = null;
+        this.afterFirstSort = [];
 
         this.selfDrivenModeRunning = false;
         this.splatRenderingInitialized = false;
@@ -475,14 +477,19 @@ export class Viewer {
         let showLoadingSpinner = options.showLoadingSpinner;
         if (showLoadingSpinner !== false) showLoadingSpinner = true;
 
-        if (showLoadingSpinner) this.loadingSpinner.show();
+        let downloadingTaskId = null;
+        if (showLoadingSpinner) downloadingTaskId = this.loadingSpinner.addTask('Downloading...');
         const downloadProgress = (percent, percentLabel) => {
             if (showLoadingSpinner) {
                 if (percent == 100) {
-                    this.loadingSpinner.setMessage(`Download complete!`);
+                    this.loadingSpinner.setMessageForTask(downloadingTaskId, 'Download complete!');
                 } else {
-                    const suffix = percentLabel ? `: ${percentLabel}` : `...`;
-                    this.loadingSpinner.setMessage(`Downloading${suffix}`);
+                    if (streamAndBuildSections) {
+                        this.loadingSpinner.setMessageForTask(downloadingTaskId, 'Downloading splats...');
+                    } else {
+                        const suffix = percentLabel ? `: ${percentLabel}` : `...`;
+                        this.loadingSpinner.setMessageForTask(downloadingTaskId, `Downloading${suffix}`);
+                    }
                 }
             }
             if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
@@ -495,24 +502,30 @@ export class Viewer {
             'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
         };
 
-        const onFirstBuild = (splatBuffer, resolve) => {
-            let hideLoadingSpinnerAfterAdd = false;
-            if (showLoadingSpinner) {
-                hideLoadingSpinnerAfterAdd = true;
-                if (streamAndBuildSections) showLoadingSpinner = false;
-            }
+        const onSectionBuild = (splatBuffer, resolve, sectionBuildCount, finalBuild) => {
             if (options.onProgress) options.onProgress(0, '0%', 'processing');
-            this.addSplatBuffers([splatBuffer], [splatBufferOptions], showLoadingSpinner).then(() => {
+            this.addSplatBuffers([splatBuffer], [splatBufferOptions], sectionBuildCount === 0,
+                                  finalBuild, showLoadingSpinner).then(() => {
                 if (options.onProgress) options.onProgress(100, '100%', 'processing');
-                if (hideLoadingSpinnerAfterAdd) this.loadingSpinner.hide();
+                if (downloadingTaskId !== null) {
+                    if (sectionBuildCount === 0 && streamAndBuildSections || finalBuild && !streamAndBuildSections) {
+                        const taskToClearAfterSort = downloadingTaskId;
+                        this.afterFirstSort.push(() => {
+                            this.loadingSpinner.removeTask(taskToClearAfterSort);
+                        });
+                        downloadingTaskId = null;
+                    }
+                }
                 resolve();
             });
         };
 
         if (streamAndBuildSections) {
             let resolve;
-            const sectionProgress = (splatBuffer) => {
-                onFirstBuild(splatBuffer, resolve);
+            let sectionBuildCount = 0;
+            const sectionProgress = (splatBuffer, loadComplete) => {
+                onSectionBuild(splatBuffer, resolve, sectionBuildCount, loadComplete);
+                sectionBuildCount++;
             };
             const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold,
                                                            downloadProgress, true, sectionProgress, format);
@@ -524,10 +537,10 @@ export class Viewer {
                                                            downloadProgress, false, undefined, format);
             return new AbortablePromise((resolve, reject) => {
                 loadPromise.then((splatBuffer) => {
-                    onFirstBuild(splatBuffer, resolve);
+                    onSectionBuild(splatBuffer, resolve, 0, true);
                 })
                 .catch(() => {
-                    if (showLoadingSpinner) this.loadingSpinner.hide();
+                    if (showLoadingSpinner) this.loadingSpinner.removeTask(downloadingTaskId);
                     reject(new Error(`Viewer::addSplatScene -> Could not load file ${path}`));
                 });
             }, loadPromise.abortHandler);
@@ -597,7 +610,7 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingSpinner) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', 'processing');
-                this.addSplatBuffers(splatBuffers, sceneOptions, showLoadingSpinner).then(() => {
+                this.addSplatBuffers(splatBuffers, sceneOptions, showLoadingSpinner, true, showLoadingSpinner).then(() => {
                     if (onProgress) onProgress(100, '100%', 'processing');
                     resolve();
                 });
@@ -651,15 +664,20 @@ export class Viewer {
 
         let loadPromise;
         let loadCount = 0;
+        let splatProcessingTaskId = null;
 
-        return function(splatBuffers, splatBufferOptions = [], showLoadingSpinner = true) {
+        return function(splatBuffers, splatBufferOptions = [], showLoadingSpinner = true,
+                        buildSplatTree = true, showLoadingSpinnerForSplatTreeBuild = true) {
             this.splatRenderingInitialized = false;
             loadCount++;
 
             const finish = (resolver) => {
                 loadCount--;
                 if (loadCount === 0) {
-                    if (showLoadingSpinner) this.loadingSpinner.hide();
+                    if (splatProcessingTaskId !== null) {
+                        this.loadingSpinner.removeTask(splatProcessingTaskId);
+                        splatProcessingTaskId = null;
+                    }
                     this.splatRenderingInitialized = true;
                 }
                 if (!this.gpuAcceleratedSort) {
@@ -677,11 +695,10 @@ export class Viewer {
             const performLoad = () => {
                 return new Promise((resolve) => {
                     if (showLoadingSpinner) {
-                        this.loadingSpinner.show();
-                        this.loadingSpinner.setMessage(`Processing splats...`);
+                        splatProcessingTaskId = this.loadingSpinner.addTask('Processing splats...');
                     }
-                    window.setTimeout(() => {
-                        this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions);
+                    delayedExecute(() => {
+                        this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, buildSplatTree, showLoadingSpinnerForSplatTreeBuild);
                         // TODO(StreamBuild): Clean up check for streaming construction here
                         const maxSplatCount = this.splatMesh.getMaxSplatCount();
                         if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
@@ -694,7 +711,7 @@ export class Viewer {
                         } else {
                             finish(resolve);
                         }
-                    }, 1);
+                    });
                 });
             };
 
@@ -732,14 +749,28 @@ export class Viewer {
      *
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
+     * @param {boolean} buildSplatTree Whetehr or not to build a splat tree in addition to the splat mesh.
+     * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whetehr or not to show the loading spinner during
+     *                                                      construction of the splat tree.
      */
-    addSplatBuffersToMesh(splatBuffers, splatBufferOptions) {
+    addSplatBuffersToMesh(splatBuffers, splatBufferOptions, buildSplatTree = true, showLoadingSpinnerForSplatTreeBuild = false) {
         const allSplatBuffers = this.splatMesh.splatBuffers || [];
         const allSplatBufferOptions = this.splatMesh.splatBufferOptions || [];
         allSplatBuffers.push(...splatBuffers);
         allSplatBufferOptions.push(...splatBufferOptions);
         if (this.renderer) this.splatMesh.setRenderer(this.renderer);
-        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true);
+        let splatOptimizingTaskId;
+        const onSplatTreeIndexesUpload = (finished) => {
+            if (showLoadingSpinnerForSplatTreeBuild) {
+                if (!finished) {
+                    splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
+                } else {
+                    this.loadingSpinner.removeTask(splatOptimizingTaskId);
+                }
+            }
+        };
+        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, buildSplatTree,
+                             onSplatTreeIndexesUpload);
         this.splatMesh.frustumCulled = false;
     }
 
@@ -755,6 +786,7 @@ export class Viewer {
             const maxSplatCount = splatMesh.getMaxSplatCount();
             const sortWorker = createSortWorker(maxSplatCount, this.sharedMemoryForWorkers,
                                                 this.integerBasedSort, this.splatMesh.dynamicMode);
+            let sortCount = 0;
             sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
@@ -768,6 +800,12 @@ export class Viewer {
                     this.sortPromiseResolver();
                     this.sortPromise = null;
                     this.sortPromiseResolver = null;
+                    if (sortCount === 0) {
+                        this.afterFirstSort.forEach((func) => {
+                            func();
+                        });
+                    }
+                    sortCount++;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
@@ -1265,6 +1303,7 @@ export class Viewer {
                     const nodeCount = subTree.nodesWithIndexes.length;
                     for (let i = 0; i < nodeCount; i++) {
                         const node = subTree.nodesWithIndexes[i];
+                        if (!node.data || !node.data.indexes || node.data.indexes.length === 0) continue;
                         tempVector.copy(node.center).applyMatrix4(modelView);
 
                         const distanceToNode = tempVector.length();

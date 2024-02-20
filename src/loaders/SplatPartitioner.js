@@ -44,7 +44,7 @@ export class SplatPartitioner {
     static getFineGrainedPartitioner() {
         const partitionGenerator = (splatArray) => {
             const partitionSize = 50000;
-            const bucketSizeFactor = partitionSize / 1300000;
+            const bucketSizeFactor = partitionSize / splatArray.splatCount;
             const sectionFilters = [];
             const groupingParameters = [];
             const patitionCount = Math.floor(splatArray.splatCount / partitionSize);
