@@ -60,7 +60,6 @@ function sortWorker(self) {
             'splatRenderCount': splatRenderCount,
             'sortTime': 0
         };
-        const transferBuffers = [];
         if (!useSharedMemory) {
             const sortedIndexes = new Uint32Array(wasmMemory, sortedIndexesOffset, splatRenderCount);
             if (!sortedIndexesOut || sortedIndexesOut.length < splatRenderCount) {
@@ -68,7 +67,6 @@ function sortWorker(self) {
             }
             sortedIndexesOut.set(sortedIndexes);
             sortMessage.sortedIndexes = sortedIndexesOut;
-            transferBuffers.push(sortedIndexesOut.buffer);
         }
         const sortEndTime = performance.now();
 
