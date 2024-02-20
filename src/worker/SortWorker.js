@@ -19,6 +19,7 @@ function sortWorker(self) {
     let centersOffset;
     let modelViewProjOffset;
     let countsZero;
+    let sortedIndexesOut;
 
     let Constants;
 
@@ -62,16 +63,18 @@ function sortWorker(self) {
         const transferBuffers = [];
         if (!useSharedMemory) {
             const sortedIndexes = new Uint32Array(wasmMemory, sortedIndexesOffset, splatRenderCount);
-            const sortedIndexesOut = new Uint32Array(splatRenderCount);
+            if (!sortedIndexesOut || sortedIndexesOut.length < splatRenderCount) {
+                sortedIndexesOut = new Uint32Array(splatRenderCount);
+            }
             sortedIndexesOut.set(sortedIndexes);
-            sortMessage.sortedIndexes = sortedIndexesOut.buffer;
+            sortMessage.sortedIndexes = sortedIndexesOut;
             transferBuffers.push(sortedIndexesOut.buffer);
         }
         const sortEndTime = performance.now();
 
         sortMessage.sortTime = sortEndTime - sortStartTime;
 
-        self.postMessage(sortMessage, transferBuffers);
+        self.postMessage(sortMessage);
     }
 
     self.onmessage = (e) => {
