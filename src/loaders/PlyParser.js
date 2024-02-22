@@ -140,39 +140,39 @@ export class PlyParser {
 
         for (let row = 0; row < splatCount; row++) {
             PlyParser.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
+            const newSplat = splatArray.addDefaultSplat();
             if (rawVertex['scale_0'] !== undefined) {
-                splatArray['scale_0'][row] = Math.exp(rawVertex['scale_0']);
-                splatArray['scale_1'][row] = Math.exp(rawVertex['scale_1']);
-                splatArray['scale_2'][row] = Math.exp(rawVertex['scale_2']);
+                newSplat['scale_0'] = Math.exp(rawVertex['scale_0']);
+                newSplat['scale_1'] = Math.exp(rawVertex['scale_1']);
+                newSplat['scale_2'] = Math.exp(rawVertex['scale_2']);
             } else {
-                splatArray['scale_0'][row] = 0.01;
-                splatArray['scale_1'][row] = 0.01;
-                splatArray['scale_2'][row] = 0.01;
+                newSplat['scale_0'] = 0.01;
+                newSplat['scale_1'] = 0.01;
+                newSplat['scale_2'] = 0.01;
             }
 
             if (rawVertex['f_dc_0'] !== undefined) {
                 const SH_C0 = 0.28209479177387814;
-                splatArray['f_dc_0'][row] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
-                splatArray['f_dc_1'][row] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
-                splatArray['f_dc_2'][row] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
+                newSplat['f_dc_0'] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
+                newSplat['f_dc_1'] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
+                newSplat['f_dc_2'] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
             } else {
-                splatArray['f_dc_0'][row] = 0;
-                splatArray['f_dc_1'][row] = 0;
-                splatArray['f_dc_2'][row] = 0;
+                newSplat['f_dc_0'] = 0;
+                newSplat['f_dc_1'] = 0;
+                newSplat['f_dc_2'] = 0;
             }
             if (rawVertex['opacity'] !== undefined) {
-                splatArray['opacity'][row] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
+                newSplat['opacity'] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
             }
 
-            splatArray['rot_0'][row] = rawVertex['rot_0'];
-            splatArray['rot_1'][row] = rawVertex['rot_1'];
-            splatArray['rot_2'][row] = rawVertex['rot_2'];
-            splatArray['rot_3'][row] = rawVertex['rot_3'];
+            newSplat['rot_0'] = rawVertex['rot_0'];
+            newSplat['rot_1'] = rawVertex['rot_1'];
+            newSplat['rot_2'] = rawVertex['rot_2'];
+            newSplat['rot_3'] = rawVertex['rot_3'];
 
-            splatArray['x'][row] = rawVertex['x'];
-            splatArray['y'][row] = rawVertex['y'];
-            splatArray['z'][row] = rawVertex['z'];
-            splatArray.splatCount++;
+            newSplat['x'] = rawVertex['x'];
+            newSplat['y'] = rawVertex['y'];
+            newSplat['z'] = rawVertex['z'];
         }
 
         return splatArray;

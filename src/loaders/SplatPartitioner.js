@@ -41,22 +41,23 @@ export class SplatPartitioner {
         };
     }
 
-    static getFineGrainedPartitioner() {
+    static getStandardPartitioner(partitionSize = 20000, blockSize = 10.0, bucketSize = 5) {
         const partitionGenerator = (splatArray) => {
-            const partitionSize = 50000;
-            const bucketSizeFactor = partitionSize / splatArray.splatCount;
             const sectionFilters = [];
             const groupingParameters = [];
-            const patitionCount = Math.floor(splatArray.splatCount / partitionSize);
+            partitionSize = Math.min(splatArray.splatCount, partitionSize);
+            const patitionCount = Math.ceil(splatArray.splatCount / partitionSize);
+            let currentStartSplat = 0;
             for (let i = 0; i < patitionCount; i ++) {
-                let targetIndex = i;
+                let startSplat = currentStartSplat;
                 sectionFilters.push((splatIndex) => {
-                    return splatIndex % patitionCount === targetIndex;
+                    return splatIndex >= startSplat && splatIndex < startSplat + partitionSize;
                 });
                 groupingParameters.push({
-                    blockSizeFactor: 1.0,
-                    bucketSizeFactor: bucketSizeFactor,
+                    'blocksSize': blockSize,
+                    'bucketSize': bucketSize,
                 });
+                currentStartSplat += partitionSize;
             }
             return {
                 'sectionCount': sectionFilters.length,
@@ -65,37 +66,5 @@ export class SplatPartitioner {
             };
         };
         return new SplatPartitioner(undefined, undefined, undefined, partitionGenerator);
-    }
-
-    static getStandardPartitioner() {
-        const sectionFilters = [
-            (splatIndex) => {
-                return splatIndex % 10 === 0;
-            },
-            (splatIndex) => {
-                return splatIndex % 10 !== 0;
-            }
-        ];
-        const groupingParameters = [
-            {
-                blockSizeFactor: 1.0,
-                bucketSizeFactor: 1.0,
-            },
-            {
-                blockSizeFactor: 1.0,
-                bucketSizeFactor: 0.1,
-            }
-        ];
-        return new SplatPartitioner(sectionFilters.length, sectionFilters, groupingParameters);
-    }
-
-    static getSingleSectionPartitioner() {
-        const groupingParameters = [
-            {
-                blockSizeFactor: 1.0,
-                bucketSizeFactor: 1.0,
-            }
-        ];
-        return new SplatPartitioner(1, [() => true], groupingParameters);
     }
 }

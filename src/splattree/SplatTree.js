@@ -56,13 +56,24 @@ class SplatSubTree {
         convertedSubTree.sceneMin = new THREE.Vector3().fromArray(workerSubTree.sceneMin);
         convertedSubTree.sceneMax = new THREE.Vector3().fromArray(workerSubTree.sceneMax);
 
-        convertedSubTree.nodesWithIndexes = [];
-        for (let workerNodeWithIndexes of workerSubTree.nodesWithIndexes) {
-            convertedSubTree.nodesWithIndexes.push(SplatSubTree.convertWorkerSubTreeNode(workerNodeWithIndexes));
-        }
-
         convertedSubTree.splatMesh = splatMesh;
         convertedSubTree.rootNode = SplatSubTree.convertWorkerSubTreeNode(workerSubTree.rootNode);
+
+
+        const visitLeavesFromNode = (node, visitFunc) => {
+            if (node.children.length === 0) visitFunc(node);
+            for (let child of node.children) {
+                visitLeavesFromNode(child, visitFunc);
+            }
+        };
+
+        convertedSubTree.nodesWithIndexes = [];
+        visitLeavesFromNode(convertedSubTree.rootNode, (node) => {
+            if (node.data && node.data.indexes && node.data.indexes.length > 0) {
+                convertedSubTree.nodesWithIndexes.push(node);
+            }
+        })
+
         return convertedSubTree;
     }
 }
@@ -128,6 +139,10 @@ function createSplatTreeWorker(self) {
                 }
             }
             node.data.indexes = newIndexes;
+            node.data.indexes.sort((a,b) => {
+                if (a > b) return 1;
+                else return -1;
+            })
             tree.nodesWithIndexes.push(node);
             return;
         }

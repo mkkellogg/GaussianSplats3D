@@ -3,10 +3,11 @@ import { SplatBuffer } from './SplatBuffer.js';
 
 export class SplatBufferGenerator {
 
-    constructor(splatPartitioner, alphaRemovalThreshold, compressionLevel, blockSize, bucketSize) {
+    constructor(splatPartitioner, alphaRemovalThreshold, compressionLevel, sectionSize, blockSize, bucketSize) {
         this.splatPartitioner = splatPartitioner;
         this.alphaRemovalThreshold = alphaRemovalThreshold;
         this.compressionLevel = compressionLevel;
+        this.sectionSize = sectionSize;
         this.blockSize = blockSize;
         this.bucketSize = bucketSize;
     }
@@ -18,8 +19,8 @@ export class SplatBufferGenerator {
                                                                this.blockSize, this.bucketSize, partitionResults.parameters);
     }
 
-    static getStandardGenerator(alphaRemovalThreshold, compressionLevel, blockSize, bucketSize) {
-        const splatPartitioner = SplatPartitioner.getFineGrainedPartitioner();
-        return new SplatBufferGenerator(splatPartitioner, alphaRemovalThreshold, compressionLevel, blockSize, bucketSize);
+    static getStandardGenerator(alphaRemovalThreshold = 1, compressionLevel = 1, sectionSize = 20000, blockSize = 10, bucketSize = 5) {
+        const splatPartitioner = SplatPartitioner.getStandardPartitioner(sectionSize, blockSize, bucketSize);
+        return new SplatBufferGenerator(splatPartitioner, alphaRemovalThreshold, compressionLevel, sectionSize, blockSize, bucketSize);
     }
 }

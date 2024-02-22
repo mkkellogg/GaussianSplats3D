@@ -50,6 +50,17 @@ export class KSplatLoader {
             }
         };
 
+        let queuedCheckAndLoadSectionsCount = 0;
+        const queueCheckAndLoadSections = () => {
+            if (queuedCheckAndLoadSectionsCount === 0) {
+                queuedCheckAndLoadSectionsCount++;
+                window.setTimeout(() => {
+                    queuedCheckAndLoadSectionsCount--;
+                    checkAndLoadSections(true);
+                }, 100);
+            }
+        }
+
         const checkAndLoadSectionHeaders = () => {
             const performLoad = () => {
                 sectionHeadersLoading = true;
@@ -76,7 +87,8 @@ export class KSplatLoader {
                             offset += chunk.byteLength;
                         }
                     }
-                    window.setTimeout(() => checkAndLoadSections(), 100);
+
+                    queueCheckAndLoadSections();
                 });
             };
 
@@ -86,8 +98,10 @@ export class KSplatLoader {
             }
         };
 
+        let lastSectionLoadTime = 0;
         const checkAndLoadSections = () => {
             if (sectionHeadersLoaded) {
+                let queueNextCheck = false;
                 let byteOffset = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount;
                 for (let i = 0; i <= sectionCount && i < header.maxSectionCount; i++) byteOffset += sectionHeaders[i].storageSizeBytes;
                 for (let i = sectionCount + 1; i <= header.maxSectionCount; i++) {
@@ -106,17 +120,20 @@ export class KSplatLoader {
                             fullSplatBuffer.updateLoadedCounts(sectionCount, splatCount);
 
                             const loadComplete = sectionCount >= header.maxSectionCount;
+                            lastSectionLoadTime = performance.now();
 
                             onSectionBuilt(fullSplatBuffer, loadComplete);
                             if (loadComplete) {
                                 sectionsLoadResolvePromise();
                             } else {
-                                window.setTimeout(() => checkAndLoadSections(), 100);
+                                queueNextCheck = true;
                             }
+                           // break;
                         }
                         if (i < header.maxSectionCount) byteOffset += sectionHeaders[i].storageSizeBytes;
                     }
                 }
+                if (queueNextCheck) queueCheckAndLoadSections();
             }
         };
 

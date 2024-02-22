@@ -2,73 +2,61 @@
 export class UncompressedSplatArray {
 
     constructor() {
+        this.splats = [];
         this.splatCount = 0;
-        this.scale_0 = [];
-        this.scale_1 = [];
-        this.scale_2 = [];
-        this.rot_0 = [];
-        this.rot_1 = [];
-        this.rot_2 = [];
-        this.rot_3 = [];
-        this.x = [];
-        this.y = [];
-        this.z = [];
-        this.f_dc_0 = [];
-        this.f_dc_1 = [];
-        this.f_dc_2 = [];
-        this.opacity = [];
     }
 
-    addSplat(x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity) {
-        this.x.push(x);
-        this.y.push(y);
-        this.z.push(z);
-        this.scale_0.push(scale0);
-        this.scale_1.push(scale1);
-        this.scale_2.push(scale2);
-        this.rot_0.push(rot0);
-        this.rot_1.push(rot1);
-        this.rot_2.push(rot2);
-        this.rot_3.push(rot3);
-        this.f_dc_0.push(r);
-        this.f_dc_1.push(g);
-        this.f_dc_2.push(b);
-        this.opacity.push(opacity);
+    addSplat(splat) {
+        this.splats.push(splat);
         this.splatCount++;
+    }
+
+    addDefaultSplat() {
+        const newSplat = {
+            'x': 0,
+            'y': 0,
+            'z': 0,
+            'scale_0': 1,
+            'scale_1': 1,
+            'scale_2': 1,
+            'rot_0': 1,
+            'rot_1': 0,
+            'rot_2': 0,
+            'rot_3': 0,
+            'f_dc_0': 0,
+            'f_dc_1': 0,
+            'f_dc_2': 0,
+            'opacity': 0
+        };
+        this.addSplat(newSplat);
+        return newSplat;
+    }
+
+    addSplatFromComonents(x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity) {
+        const newSplat = {
+            'x': x,
+            'y': y,
+            'z': z,
+            'scale_0': scale0,
+            'scale_1': scale1,
+            'scale_2': scale2,
+            'rot_0': rot0,
+            'rot_1': rot1,
+            'rot_2': rot2,
+            'rot_3': rot3,
+            'f_dc_0': r,
+            'f_dc_1': g,
+            'f_dc_2': b,
+            'opacity': opacity
+        };
+        this.addSplat(newSplat);
+        return newSplat;
     }
 
     addSplatFromArray(src, srcIndex) {
-        this.x.push(src.x[srcIndex]);
-        this.y.push(src.y[srcIndex]);
-        this.z.push(src.z[srcIndex]);
-        this.scale_0.push(src.scale_0[srcIndex]);
-        this.scale_1.push(src.scale_1[srcIndex]);
-        this.scale_2.push(src.scale_2[srcIndex]);
-        this.rot_0.push(src.rot_0[srcIndex]);
-        this.rot_1.push(src.rot_1[srcIndex]);
-        this.rot_2.push(src.rot_2[srcIndex]);
-        this.rot_3.push(src.rot_3[srcIndex]);
-        this.f_dc_0.push(src.f_dc_0[srcIndex]);
-        this.f_dc_1.push(src.f_dc_1[srcIndex]);
-        this.f_dc_2.push(src.f_dc_2[srcIndex]);
-        this.opacity.push(src.opacity[srcIndex]);
-        this.splatCount++;
-    }
-
-    copySplat(src, srcIndex, dest, destIndex) {
-        dest.scale_0[destIndex] = src.scale_0[srcIndex];
-        dest.scale_1[destIndex] = src.scale_1[srcIndex];
-        dest.scale_2[destIndex] = src.scale_2[srcIndex];
-        dest.rot_0[destIndex] = src.rot_0[srcIndex];
-        dest.rot_1[destIndex] = src.rot_1[srcIndex];
-        dest.rot_2[destIndex] = src.rot_2[srcIndex];
-        dest.rot_3[destIndex] = src.rot_3[srcIndex];
-        dest.x[destIndex] = src.x[srcIndex];
-        dest.y[destIndex] = src.y[srcIndex];
-        dest.z[destIndex] = src.z[srcIndex];
-        dest.f_dc_0[destIndex] = src.f_dc_0[srcIndex];
-        dest.f_dc_1[destIndex] = src.f_dc_1[srcIndex];
-        dest.f_dc_2[destIndex] = src.f_dc_2[srcIndex];
-        dest.opacity[destIndex] = src.opacity[srcIndex];
+        const srcSplat = src.splats[srcIndex];
+        this.addSplatFromComonents(srcSplat.x, srcSplat.y, srcSplat.z, srcSplat.scale_0, srcSplat.scale_1, srcSplat.scale_2,
+                                   srcSplat.rot_0, srcSplat.rot_1, srcSplat.rot_2, srcSplat.rot_3,
+                                   srcSplat.f_dc_0, srcSplat.f_dc_1, srcSplat.f_dc_2, srcSplat.opacity);
     }
 }

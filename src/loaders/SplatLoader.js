@@ -9,11 +9,11 @@ export class SplatLoader {
         this.downLoadLink = null;
     }
 
-    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, blockSize, bucketSize) {
+    loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, sectionSize, blockSize, bucketSize) {
         return fetchWithProgress(fileName, onProgress).then((bufferData) => {
             const splatArray = SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
             const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
-                                                                                   blockSize, bucketSize);
+                                                                                   sectionSize, blockSize, bucketSize);
              return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
         });
     }

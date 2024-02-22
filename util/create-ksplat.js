@@ -3,16 +3,17 @@ import * as fs from 'fs';
 
 if (process.argv.length < 4) {
     console.log('Expected at least 2 arguments!');
-    console.log('Usage: node create-ksplat.js [path to .PLY or .SPLAT] [output file name] [compression level = 0] [alpha removal threshold = 1] [block size = 5.0] [bucket size = 256]');
+    console.log('Usage: node create-ksplat.js [path to .PLY or .SPLAT] [output file name] [compression level = 0] [alpha removal threshold = 1] [section size = 20000] [block size = 5.0] [bucket size = 256]');
     process.exit(1);
 }
 
 const intputFile = process.argv[2];
 const outputFile = process.argv[3];
-const compressionLevel = (process.argv.length >= 5) ? parseInt(process.argv[4]) : 0;
-const splatAlphaRemovalThreshold = (process.argv.length >= 6) ? parseInt(process.argv[5]) : 1;
-const blockSize = (process.argv.length >= 7) ? parseFloat(process.argv[6]) : 5.0;
-const bucketSize = (process.argv.length >= 8) ? parseInt(process.argv[7]) : 256;
+const splatAlphaRemovalThreshold = (process.argv.length >= 6) ? parseInt(process.argv[5]) : undefined;
+const compressionLevel = (process.argv.length >= 5) ? parseInt(process.argv[4]) : undefined;
+const sectionSize = (process.argv.length >= 7) ? parseFloat(process.argv[6]) : undefined;
+const blockSize = (process.argv.length >= 8) ? parseFloat(process.argv[7]) : undefined;
+const bucketSize = (process.argv.length >= 9) ? parseInt(process.argv[8]) : undefined;
 
 const fileData = fs.readFileSync(intputFile);
 const path = intputFile.toLowerCase().trim();
@@ -32,7 +33,8 @@ function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alpha
         } else {
             splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(fileBufferData);
         }
-        const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, blockSize, bucketSize);
+        const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel,
+                                                                                                sectionSize, blockSize, bucketSize);
         splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     } else {
         splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);

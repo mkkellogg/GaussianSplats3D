@@ -108,11 +108,10 @@ http
           response.end();
         }
       } else {
-       // console.log(response);
         console.log("HTTP(200) Request for " + filePath);
         response.writeHead(200, { "Content-Type": contentType });
 
-        const chunkSize = Math.ceil(1024 * 1024);
+       /* const chunkSize = Math.ceil(1024 * 1024);
         const chunkCount = Math.ceil(content.length / chunkSize);
         for (let i = 0; i < chunkCount; i++) {
           const start = i * chunkSize;
@@ -121,9 +120,9 @@ http
           await sleep(100);
           response.write(chunk);
         }
-        response.end();
+        response.end();*/
         
-       // response.end(content, "utf-8");
+        response.end(content, "utf-8");
       }
     });
 

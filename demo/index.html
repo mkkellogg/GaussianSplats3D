@@ -253,16 +253,16 @@
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
 
-    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
+    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
       const splatArray = plyParser.parseToUncompressedSplatArray();
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, blockSize, bucketSize);
+      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, blockSize, bucketSize);
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
-    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize){
+    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize){
       const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, blockSize, bucketSize);
+      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, blockSize, bucketSize);
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
@@ -270,13 +270,13 @@
       return fileName.toLowerCase().trim().endsWith('.ply');
     }
 
-    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
+    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize) {
       let splatBuffer;
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
+        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
-          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
+          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize);
         } else {
           splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);
         }
@@ -315,6 +315,7 @@
       const conversionFile = document.getElementById("conversionFile");
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
+      const sectionSize = parseInt(document.getElementById("sectionSize").value);
       const blockSize = parseFloat(document.getElementById("blockSize").value);
       const bucketSize = parseInt(document.getElementById("bucketSize").value);
 
@@ -323,6 +324,9 @@
         return;
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
         setConversionError("Invalid alpha remval threshold.");
+        return;
+      } else if (isNaN(sectionSize) || sectionSize < 1000) {
+        setConversionError("Invalid section size.");
         return;
       } else if (isNaN(blockSize) || blockSize < 0.1) {
         setConversionError("Invalid block size.");
@@ -363,7 +367,7 @@
           window.setTimeout(() => {
             try {
               const splatBuffer = fileBufferToSplatBuffer(fileReader.result, format, compressionLevel,
-                                                          alphaRemovalThreshold, blockSize, bucketSize);
+                                                          alphaRemovalThreshold, sectionSize, blockSize, bucketSize);
               GaussianSplats3D.SplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
               conversionDone();
             } catch (e) {
@@ -660,7 +664,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:360px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:380px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -688,6 +692,16 @@
                       </td>
                       </tr>
                     <tr>
+                    <tr>
+                        <td>
+                            Splats per section:&nbsp;
+                        </td>
+                        <td>
+                            <input id="sectionSize" type="text" class="text-input" style="width: 50px" value="20000"></input>
+                            <span style="color:#888888">( > 1000 )</span>
+                        </td>
+                    </tr>
+                    <tr>
                     <td>
                         Compression level:
                     </td>
@@ -706,7 +720,7 @@
                         Block size:&nbsp;
                       </td>
                       <td>
-                        <input id="blockSize" type="text" class="text-input" style="width: 50px" value="5.0"></input>
+                        <input id="blockSize" type="text" class="text-input" style="width: 50px" value="10.0"></input>
                         <span style="color:#888888">( >= 0.1 )</span>
                       </td>
                     </tr>
@@ -715,7 +729,7 @@
                         Bucket size&nbsp;
                       </td>
                       <td>
-                          <input id="bucketSize" type="text" class="text-input" style="width: 50px" value="256"></input>
+                          <input id="bucketSize" type="text" class="text-input" style="width: 50px" value="5"></input>
                           <span style="color:#888888">(2 - 65536)</span>
                       </td>
                     </tr>
@@ -743,7 +757,7 @@
                 <span id="conversionError" style="color: #ff0000"></span>
             </div>
 
-            <div id ="controls-panel" class="splat-panel" style="height:360px;">
+            <div id ="controls-panel" class="splat-panel" style="height:380px;">
 
                 <br>
                 <span class="small-title">Mouse input</span>
