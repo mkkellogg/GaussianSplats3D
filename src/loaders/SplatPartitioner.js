@@ -1,4 +1,6 @@
+import * as THREE from 'three';
 import { UncompressedSplatArray } from './UncompressedSplatArray.js';
+import { SplatBuffer } from './SplatBuffer.js';
 
 export class SplatPartitioner {
 
@@ -41,8 +43,28 @@ export class SplatPartitioner {
         };
     }
 
-    static getStandardPartitioner(partitionSize = 20000, blockSize = 10.0, bucketSize = 5) {
+    static getStandardPartitioner(partitionSize = 20000, blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
         const partitionGenerator = (splatArray) => {
+
+            const centerA = new THREE.Vector3();
+            const centerB = new THREE.Vector3();
+            const bucketizeSize = 0.5;
+            const bucketSize = (point) => {
+                point.x = Math.floor(point.x / bucketizeSize) * bucketizeSize;
+                point.y = Math.floor(point.y / bucketizeSize) * bucketizeSize;
+                point.z = Math.floor(point.z / bucketizeSize) * bucketizeSize;
+            };
+            splatArray.splats.sort((a, b) => {
+                centerA.set(a['x'], a['y'], a['z']);
+                bucketSize(centerA);
+                const centerADist = centerA.lengthSq();
+                centerB.set(b['x'], b['y'], b['z']);
+                bucketSize(centerB);
+                const centerBDist = centerB.lengthSq();
+                if (centerADist > centerBDist) return 1;
+                else return -1;
+            });
+
             const sectionFilters = [];
             const groupingParameters = [];
             partitionSize = Math.min(splatArray.splatCount, partitionSize);

@@ -59,7 +59,7 @@ export class KSplatLoader {
                     checkAndLoadSections(true);
                 }, 100);
             }
-        }
+        };
 
         const checkAndLoadSectionHeaders = () => {
             const performLoad = () => {
@@ -98,7 +98,6 @@ export class KSplatLoader {
             }
         };
 
-        let lastSectionLoadTime = 0;
         const checkAndLoadSections = () => {
             if (sectionHeadersLoaded) {
                 let queueNextCheck = false;
@@ -120,7 +119,6 @@ export class KSplatLoader {
                             fullSplatBuffer.updateLoadedCounts(sectionCount, splatCount);
 
                             const loadComplete = sectionCount >= header.maxSectionCount;
-                            lastSectionLoadTime = performance.now();
 
                             onSectionBuilt(fullSplatBuffer, loadComplete);
                             if (loadComplete) {

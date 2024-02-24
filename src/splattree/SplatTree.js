@@ -72,7 +72,7 @@ class SplatSubTree {
             if (node.data && node.data.indexes && node.data.indexes.length > 0) {
                 convertedSubTree.nodesWithIndexes.push(node);
             }
-        })
+        });
 
         return convertedSubTree;
     }
@@ -139,10 +139,10 @@ function createSplatTreeWorker(self) {
                 }
             }
             node.data.indexes = newIndexes;
-            node.data.indexes.sort((a,b) => {
+            node.data.indexes.sort((a, b) => {
                 if (a > b) return 1;
                 else return -1;
-            })
+            });
             tree.nodesWithIndexes.push(node);
             return;
         }

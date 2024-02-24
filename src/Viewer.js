@@ -1187,7 +1187,8 @@ export class Viewer {
             }
 
             this.sortRunning = true;
-            this.splatRenderCount = this.gatherSceneNodesForSort();
+            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
+            this.splatRenderCount = splatRenderCount;
             this.sortPromise = new Promise((resolve) => {
                 this.sortPromiseResolver = resolve;
             });
@@ -1200,7 +1201,7 @@ export class Viewer {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
 
-            if (this.splatMesh.dynamicMode) {
+            if (this.splatMesh.dynamicMode || shouldSortAll) {
                 queuedSorts.push(this.splatRenderCount);
             } else {
                 if (queuedSorts.length === 0) {
@@ -1215,7 +1216,7 @@ export class Viewer {
                     queuedSorts.push(this.splatRenderCount);
                 }
             }
-            const sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
+            let sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
 
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
@@ -1346,7 +1347,10 @@ export class Viewer {
                     currentByteOffset -= windowSizeBytes;
                 }
 
-                return splatRenderCount;
+                return {
+                    'splatRenderCount': splatRenderCount,
+                    'shouldSortAll': false
+                };
             } else {
                 const totalSplatCount = this.splatMesh.getSplatCount();
                 if (!allSplatsSortBuffer || allSplatsSortBuffer.length !== totalSplatCount) {
@@ -1356,7 +1360,10 @@ export class Viewer {
                     }
                 }
                 this.sortWorkerIndexesToSort.set(allSplatsSortBuffer);
-                return totalSplatCount;
+                return {
+                    'splatRenderCount': totalSplatCount,
+                    'shouldSortAll': true
+                };
             }
         };
 

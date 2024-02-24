@@ -64,13 +64,35 @@ export class SplatBuffer {
         return this.maxSplatCount;
     }
 
+    getBucketIndex(section, localSplatIndex) {
+        let bucketIndex;
+        const maxSplatIndexInFullBuckets = section.fullBucketCount * section.bucketSize;
+        if (localSplatIndex < maxSplatIndexInFullBuckets) {
+            bucketIndex = Math.floor(localSplatIndex / section.bucketSize);
+        } else {
+            let bucketSplatIndex = maxSplatIndexInFullBuckets;
+            bucketIndex = section.fullBucketCount;
+            let partiallyFullBucketIndex = 0;
+            while (bucketSplatIndex < section.splatCount) {
+                let currentPartiallyFilledBucketSize = section.partiallyFilledBucketLengths[partiallyFullBucketIndex];
+                if (localSplatIndex >= bucketSplatIndex && localSplatIndex < bucketSplatIndex + currentPartiallyFilledBucketSize) {
+                    break;
+                }
+                bucketSplatIndex += currentPartiallyFilledBucketSize;
+                bucketIndex++;
+                partiallyFullBucketIndex++;
+            }
+        }
+        return bucketIndex;
+    }
+
     getSplatCenter(globalSplatIndex, outCenter, transform) {
         const sectionIndex = this.globalSplatIndexToSectionMap[globalSplatIndex];
         const section = this.sections[sectionIndex];
         const localSplatIndex = globalSplatIndex - section.splatCountOffset;
         if (this.compressionLevel === 1) {
             const centerBase = localSplatIndex * this.uint16PerSplat;
-            const bucketIndex = Math.floor(localSplatIndex / section.bucketSize);
+            const bucketIndex = this.getBucketIndex(section, localSplatIndex);
             const bucketBase = bucketIndex * SplatBuffer.BucketStorageSizeFloats;
             const sf = section.compressionScaleFactor;
             const sr = section.compressionScaleRange;
@@ -149,7 +171,7 @@ export class SplatBuffer {
             const centerDestBase = (i - srcFrom + destFrom) * SplatBuffer.CenterComponentCount;
             if (this.compressionLevel === 1) {
                 const centerBase = localSplatIndex * this.uint16PerSplat;
-                const bucketIndex = Math.floor(localSplatIndex / section.bucketSize);
+                const bucketIndex = this.getBucketIndex(section, localSplatIndex);
                 const bucketBase = bucketIndex * SplatBuffer.BucketStorageSizeFloats;
                 const sf = section.compressionScaleFactor;
                 const sr = section.compressionScaleRange;
@@ -345,9 +367,12 @@ export class SplatBuffer {
             const bucketBlockSize = sectionHeaderArrayFloat32[sectionHeaderBaseUint32 + 4];
             const halfBucketBlockSize = bucketBlockSize / 2.0;
             const bucketStorageSizeBytes = sectionHeaderArrayUint16[sectionHeaderBaseUint16 + 10];
-            const bucketsStorageSizeBytes = bucketStorageSizeBytes * bucketCount;
             const compressionScaleRange = sectionHeaderArrayUint32[sectionHeaderBaseUint32 + 6] ||
                                           SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
+            const fullBucketCount = sectionHeaderArrayUint32[sectionHeaderBaseUint32 + 8];
+            const partiallyFilledBucketCount = sectionHeaderArrayUint32[sectionHeaderBaseUint32 + 9];
+            const bucketsMetaDataSizeBytes = partiallyFilledBucketCount * 4;
+            const bucketsStorageSizeBytes = bucketStorageSizeBytes * bucketCount + bucketsMetaDataSizeBytes;
 
             const splatDataStorageSizeBytes = (bytesPerCenter + bytesPerScale + bytesPerRotation + bytesPerColor) * maxSplatCount;
             const storageSizeBytes = splatDataStorageSizeBytes + bucketsStorageSizeBytes;
@@ -366,7 +391,10 @@ export class SplatBuffer {
                 compressionScaleRange: compressionScaleRange,
                 compressionScaleFactor: halfBucketBlockSize / compressionScaleRange,
                 base: sectionBase,
-                bucketsBase: sectionBase + splatDataStorageSizeBytes
+                bucketsBase: sectionBase + bucketsMetaDataSizeBytes,
+                dataBase: sectionBase + bucketsStorageSizeBytes,
+                fullBucketCount: fullBucketCount,
+                partiallyFilledBucketCount: partiallyFilledBucketCount
             };
             sectionHeaders[i] = sectionHeader;
             sectionBase += storageSizeBytes;
@@ -414,12 +442,16 @@ export class SplatBuffer {
     linkBufferArrays() {
         for (let i = 0; i < this.maxSectionCount; i++) {
             const section = this.sections[i];
-            section.dataArrayUint8 = new Uint8Array(this.bufferData, section.base, section.maxSplatCount * this.bytesPerSplat);
-            section.dataArrayUint16 = new Uint16Array(this.bufferData, section.base, section.maxSplatCount * this.uint16PerSplat);
-            section.dataArrayUint32 = new Uint32Array(this.bufferData, section.base, section.maxSplatCount * this.uint32PerSplat);
-            section.dataArrayFloat32 = new Float32Array(this.bufferData, section.base, section.maxSplatCount * this.float32PerSplat);
+            section.dataArrayUint8 = new Uint8Array(this.bufferData, section.dataBase, section.maxSplatCount * this.bytesPerSplat);
+            section.dataArrayUint16 = new Uint16Array(this.bufferData, section.dataBase, section.maxSplatCount * this.uint16PerSplat);
+            section.dataArrayUint32 = new Uint32Array(this.bufferData, section.dataBase, section.maxSplatCount * this.uint32PerSplat);
+            section.dataArrayFloat32 = new Float32Array(this.bufferData, section.dataBase, section.maxSplatCount * this.float32PerSplat);
             section.bucketArray = new Float32Array(this.bufferData, section.bucketsBase,
                                                    section.bucketCount * SplatBuffer.BucketStorageSizeFloats);
+            if (section.partiallyFilledBucketCount > 0) {
+                section.partiallyFilledBucketLengths = new Uint32Array(this.bufferData, section.base,
+                                                                       section.partiallyFilledBucketCount);
+            }
         }
     }
 
@@ -457,16 +489,15 @@ export class SplatBuffer {
         const tempRotation = new THREE.Quaternion();
         const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
 
-        for (let i = 0; i < splatArrays.length; i ++) {
-            const splatArray = splatArrays[i];
+        for (let sa = 0; sa < splatArrays.length; sa ++) {
+            const splatArray = splatArrays[sa];
 
-            const sectionOptions = options[i] || {};
+            const sectionOptions = options[sa] || {};
 
             const sectionBlockSize = (sectionOptions.blockSizeFactor || 1) * (blockSize || SplatBuffer.BucketBlockSize);
             const sectionBucketSize = Math.ceil((sectionOptions.bucketSizeFactor || 1) * (bucketSize || SplatBuffer.BucketSize));
 
             const validSplats = new UncompressedSplatArray();
-            validSplats.addSplatFromComonents(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0);
 
             for (let i = 0; i < splatArray.splatCount; i++) {
                 let alpha;
@@ -486,13 +517,17 @@ export class SplatBuffer {
                 }
             }
 
-            const buckets = SplatBuffer.computeBucketsForUncompressedSplatArray(validSplats, sectionBlockSize, sectionBucketSize);
+            const bucketInfo = SplatBuffer.computeBucketsForUncompressedSplatArray(validSplats, sectionBlockSize, sectionBucketSize);
+            const fullBucketCount = bucketInfo.fullBuckets.length;
+            const partiallyFullBucketLengths = bucketInfo.partiallyFullBuckets.map((bucket) => bucket.splats.length);
+            const partiallyFilledBucketCount = partiallyFullBucketLengths.length;
+            const buckets = [...bucketInfo.fullBuckets, ...bucketInfo.partiallyFullBuckets];
 
-            const paddedSplatCount = buckets.length * sectionBucketSize;
-            const sectionDataSizeBytes = paddedSplatCount * bytesPerSplat;
-            const sectionSizeBytes = compressionLevel === 1 ?
-                                     sectionDataSizeBytes + buckets.length * SplatBuffer.BucketStorageSizeBytes :
-                                     sectionDataSizeBytes;
+            const sectionDataSizeBytes = validSplats.splats.length * bytesPerSplat;
+            const bucketMetaDataSizeBytes = partiallyFilledBucketCount * 4;
+            const bucketDataBytes = compressionLevel === 1 ? buckets.length *
+                                                             SplatBuffer.BucketStorageSizeBytes + bucketMetaDataSizeBytes : 0;
+            const sectionSizeBytes = sectionDataSizeBytes + bucketDataBytes;
             const sectionBuffer = new ArrayBuffer(sectionSizeBytes);
 
             const blockHalfSize = sectionBlockSize / 2.0;
@@ -507,12 +542,8 @@ export class SplatBuffer {
                 bucketCenter.fromArray(bucket.center);
                 for (let i = 0; i < bucket.splats.length; i++) {
                     let row = bucket.splats[i];
-                    let invalidSplat = false;
-                    if (row === 0) {
-                        invalidSplat = true;
-                    }
 
-                    const centerBase = outSplatCount * bytesPerSplat;
+                    const centerBase = bucketDataBytes + outSplatCount * bytesPerSplat;
                     const scaleBase = centerBase + bytesPerCenter;
                     const rotationBase = scaleBase + bytesPerScale;
                     const colorBase = rotationBase + bytesPerRotation;
@@ -525,7 +556,9 @@ export class SplatBuffer {
                                              validSplats.splats[row]['rot_3'], validSplats.splats[row]['rot_0']);
                             tempRotation.normalize();
                             rot.set([tempRotation.w, tempRotation.x, tempRotation.y, tempRotation.z]);
-                            scale.set([validSplats.splats[row]['scale_0'], validSplats.splats[row]['scale_1'], validSplats.splats[row]['scale_2']]);
+                            scale.set([validSplats.splats[row]['scale_0'],
+                                       validSplats.splats[row]['scale_1'],
+                                       validSplats.splats[row]['scale_2']]);
                         } else {
                             rot.set([1.0, 0.0, 0.0, 0.0]);
                             scale.set([0.01, 0.01, 0.01]);
@@ -548,7 +581,9 @@ export class SplatBuffer {
                             rot.set([thf(1.), 0, 0, 0]);
                             scale.set([thf(0.01), thf(0.01), thf(0.01)]);
                         }
-                        bucketCenterDelta.set(validSplats.splats[row]['x'], validSplats.splats[row]['y'], validSplats.splats[row]['z']).sub(bucketCenter);
+                        bucketCenterDelta.set(validSplats.splats[row]['x'],
+                                              validSplats.splats[row]['y'],
+                                              validSplats.splats[row]['z']).sub(bucketCenter);
                         bucketCenterDelta.x = Math.round(bucketCenterDelta.x * compressionScaleFactor) + compressionScaleRange;
                         bucketCenterDelta.x = clamp(bucketCenterDelta.x, 0, doubleCompressionScaleRange);
                         bucketCenterDelta.y = Math.round(bucketCenterDelta.y * compressionScaleFactor) + compressionScaleRange;
@@ -559,22 +594,18 @@ export class SplatBuffer {
                     }
 
                     const rgba = new Uint8ClampedArray(sectionBuffer, colorBase, 4);
-                    if (invalidSplat) {
-                        rgba[0] = 255;
-                        rgba[1] = 0;
-                        rgba[2] = 0;
-                        rgba[3] = 0;
+
+                    if (validSplats.splats[row]['f_dc_0'] !== undefined) {
+                        rgba.set([validSplats.splats[row]['f_dc_0'],
+                                  validSplats.splats[row]['f_dc_1'],
+                                  validSplats.splats[row]['f_dc_2']]);
                     } else {
-                        if (validSplats.splats[row]['f_dc_0'] !== undefined) {
-                            rgba.set([validSplats.splats[row]['f_dc_0'], validSplats.splats[row]['f_dc_1'], validSplats.splats[row]['f_dc_2']]);
-                        } else {
-                            rgba.set([255, 0, 0]);
-                        }
-                        if (validSplats.splats[row]['opacity'] !== undefined) {
-                            rgba[3] = validSplats.splats[row]['opacity'];
-                        } else {
-                            rgba[3] = 255;
-                        }
+                        rgba.set([255, 0, 0]);
+                    }
+                    if (validSplats.splats[row]['opacity'] !== undefined) {
+                        rgba[3] = validSplats.splats[row]['opacity'];
+                    } else {
+                        rgba[3] = 255;
                     }
 
                     outSplatCount++;
@@ -583,11 +614,15 @@ export class SplatBuffer {
             totalSplatCount += outSplatCount;
 
             if (compressionLevel === 1) {
-                const bucketArray = new Float32Array(sectionBuffer, sectionDataSizeBytes,
+                const bucketMetaDataArray = new Uint32Array(sectionBuffer);
+                for (let pfb = 0; pfb < partiallyFullBucketLengths.length; pfb ++) {
+                    bucketMetaDataArray[pfb] = partiallyFullBucketLengths[pfb];
+                }
+                const bucketArray = new Float32Array(sectionBuffer, bucketMetaDataSizeBytes,
                                                      buckets.length * SplatBuffer.BucketStorageSizeFloats);
-                for (let i = 0; i < buckets.length; i++) {
-                    const bucket = buckets[i];
-                    const base = i * 3;
+                for (let b = 0; b < buckets.length; b++) {
+                    const bucket = buckets[b];
+                    const base = b * 3;
                     bucketArray[base] = bucket.center[0];
                     bucketArray[base + 1] = bucket.center[1];
                     bucketArray[base + 2] = bucket.center[2];
@@ -608,6 +643,8 @@ export class SplatBuffer {
             sectionHeadeArrayUint16[10] = compressionLevel === 1 ? SplatBuffer.BucketStorageSizeBytes : 0;
             sectionHeadeArrayUint32[6] = compressionLevel === 1 ? compressionScaleRange : 0;
             sectionHeadeArrayUint32[7] = sectionSizeBytes;
+            sectionHeadeArrayUint32[8] = compressionLevel === 1 ? fullBucketCount : 0;
+            sectionHeadeArrayUint32[9] = compressionLevel === 1 ? partiallyFilledBucketCount : 0;
 
             sectionHeaderBuffers.push(sectionHeaderBuffer);
         }
@@ -650,8 +687,7 @@ export class SplatBuffer {
         const min = new THREE.Vector3();
         const max = new THREE.Vector3();
 
-        // ignore the first splat since it's the invalid designator
-        for (let i = 1; i < splatCount; i++) {
+        for (let i = 0; i < splatCount; i++) {
             const center = [splatArray.splats[i]['x'], splatArray.splats[i]['y'], splatArray.splats[i]['z']];
             if (i === 0 || center[0] < min.x) min.x = center[0];
             if (i === 0 || center[0] > max.x) max.x = center[0];
@@ -669,8 +705,7 @@ export class SplatBuffer {
         const fullBuckets = [];
         const partiallyFullBuckets = {};
 
-        // ignore the first splat since it's the invalid designator
-        for (let i = 1; i < splatCount; i++) {
+        for (let i = 0; i < splatCount; i++) {
             const center = [splatArray.splats[i]['x'], splatArray.splats[i]['y'], splatArray.splats[i]['z']];
             const xBlock = Math.floor((center[0] - min.x) / blockSize);
             const yBlock = Math.floor((center[1] - min.y) / blockSize);
@@ -696,20 +731,19 @@ export class SplatBuffer {
             }
         }
 
-        // fill partially full buckets with invalid splats (splat 0)
-        // to get them up to this.bucketSize
+        const partiallyFullBucketArray = [];
         for (let bucketId in partiallyFullBuckets) {
             if (partiallyFullBuckets.hasOwnProperty(bucketId)) {
                 const bucket = partiallyFullBuckets[bucketId];
                 if (bucket) {
-                    while (bucket.splats.length < bucketSize) {
-                        bucket.splats.push(0);
-                    }
-                    fullBuckets.push(bucket);
+                    partiallyFullBucketArray.push(bucket);
                 }
             }
         }
 
-        return fullBuckets;
+        return {
+            'fullBuckets': fullBuckets,
+            'partiallyFullBuckets': partiallyFullBucketArray,
+        };
     }
 }

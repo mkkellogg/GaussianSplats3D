@@ -19,7 +19,8 @@ export class SplatBufferGenerator {
                                                                this.blockSize, this.bucketSize, partitionResults.parameters);
     }
 
-    static getStandardGenerator(alphaRemovalThreshold = 1, compressionLevel = 1, sectionSize = 20000, blockSize = 10, bucketSize = 5) {
+    static getStandardGenerator(alphaRemovalThreshold = 1, compressionLevel = 1, sectionSize = 20000,
+                                blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
         const splatPartitioner = SplatPartitioner.getStandardPartitioner(sectionSize, blockSize, bucketSize);
         return new SplatBufferGenerator(splatPartitioner, alphaRemovalThreshold, compressionLevel, sectionSize, blockSize, bucketSize);
     }
