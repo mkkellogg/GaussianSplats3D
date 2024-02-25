@@ -667,7 +667,7 @@ export class Viewer {
         let splatProcessingTaskId = null;
 
         return function(splatBuffers, splatBufferOptions = [], showLoadingSpinner = true,
-                        buildSplatTree = true, showLoadingSpinnerForSplatTreeBuild = true) {
+                        finalBuild = true, showLoadingSpinnerForSplatTreeBuild = true) {
             this.splatRenderingInitialized = false;
             loadCount++;
 
@@ -698,7 +698,7 @@ export class Viewer {
                         splatProcessingTaskId = this.loadingSpinner.addTask('Processing splats...');
                     }
                     delayedExecute(() => {
-                        this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, buildSplatTree, showLoadingSpinnerForSplatTreeBuild);
+                        this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild, showLoadingSpinnerForSplatTreeBuild);
                         // TODO(StreamBuild): Clean up check for streaming construction here
                         const maxSplatCount = this.splatMesh.getMaxSplatCount();
                         if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
@@ -749,11 +749,11 @@ export class Viewer {
      *
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
-     * @param {boolean} buildSplatTree Whetehr or not to build a splat tree in addition to the splat mesh.
+     * @param {boolean} finalBuild Will the splat mesh be in its final state after this build?
      * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whetehr or not to show the loading spinner during
      *                                                      construction of the splat tree.
      */
-    addSplatBuffersToMesh(splatBuffers, splatBufferOptions, buildSplatTree = true, showLoadingSpinnerForSplatTreeBuild = false) {
+    addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingSpinnerForSplatTreeBuild = false) {
         const allSplatBuffers = this.splatMesh.splatBuffers || [];
         const allSplatBufferOptions = this.splatMesh.splatBufferOptions || [];
         allSplatBuffers.push(...splatBuffers);
@@ -769,7 +769,7 @@ export class Viewer {
                 }
             }
         };
-        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, buildSplatTree,
+        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
                              onSplatTreeIndexesUpload);
         this.splatMesh.frustumCulled = false;
     }
@@ -938,6 +938,7 @@ export class Viewer {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
         if (!this.initialized || !this.splatRenderingInitialized) return;
         if (this.controls) this.controls.update();
+        this.splatMesh.updateSceneExtremes();
         this.updateSplatSort();
         this.updateForRendererSizeChanges();
         this.updateSplatMesh();

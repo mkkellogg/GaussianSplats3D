@@ -252,17 +252,18 @@
   </script>
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
+    import * as THREE from 'three';
 
-    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize) {
+    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
       const splatArray = plyParser.parseToUncompressedSplatArray();
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, blockSize, bucketSize);
+      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
     function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize){
       const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, blockSize, bucketSize);
+      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
@@ -270,13 +271,13 @@
       return fileName.toLowerCase().trim().endsWith('.ply');
     }
 
-    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize) {
+    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
       let splatBuffer;
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize);
+        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
-          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize);
+          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
         } else {
           splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);
         }
@@ -316,8 +317,27 @@
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
       const sectionSize = parseInt(document.getElementById("sectionSize").value);
+      let sceneCenterArray = document.getElementById("sceneCenter").value;
       const blockSize = parseFloat(document.getElementById("blockSize").value);
       const bucketSize = parseInt(document.getElementById("bucketSize").value);
+
+      sceneCenterArray = sceneCenterArray.split(',');
+  
+      if (sceneCenterArray.length !== 3) {
+        setViewError("Scene center must contain 3 elements.");
+        return;
+      }
+
+      for (let i = 0; i < 3; i++) {
+        sceneCenterArray[i] = parseFloat(sceneCenterArray[i]);
+
+        if (isNaN(sceneCenterArray[i])) {
+          setViewError("Invalid scene center.");
+          return;
+        }
+      }
+  
+      const sceneCenter = new THREE.Vector3().fromArray(sceneCenterArray);
 
       if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
         setConversionError("Invalid compression level.");
@@ -367,7 +387,7 @@
           window.setTimeout(() => {
             try {
               const splatBuffer = fileBufferToSplatBuffer(fileReader.result, format, compressionLevel,
-                                                          alphaRemovalThreshold, sectionSize, blockSize, bucketSize);
+                                                          alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
               GaussianSplats3D.SplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
               conversionDone();
             } catch (e) {
@@ -664,7 +684,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:380px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:410px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -700,6 +720,15 @@
                             <input id="sectionSize" type="text" class="text-input" style="width: 50px" value="20000"></input>
                             <span style="color:#888888">( > 1000 )</span>
                         </td>
+                    </tr>
+                    <tr>
+                      <td>
+                          Scene center:&nbsp;
+                      </td>
+                      <td>
+                          <input id="sceneCenter" type="text" class="text-input" style="width: 50px" value="0, 0, 0"></input>
+                          <span style="color:#888888">( > 1000 )</span>
+                      </td>
                     </tr>
                     <tr>
                     <td>

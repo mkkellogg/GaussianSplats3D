@@ -307,6 +307,7 @@ export class SplatBuffer {
         const headerArrayUint8 = new Uint8Array(buffer, 0, SplatBuffer.HeaderSizeBytes);
         const headerArrayUint16 = new Uint16Array(buffer, 0, SplatBuffer.HeaderSizeBytes / 2);
         const headerArrayUint32 = new Uint32Array(buffer, 0, SplatBuffer.HeaderSizeBytes / 4);
+        const headerArrayFloat32 = new Float32Array(buffer, 0, SplatBuffer.HeaderSizeBytes / 4);
         const versionMajor = headerArrayUint8[0];
         const versionMinor = headerArrayUint8[1];
         const maxSectionCount = headerArrayUint32[1];
@@ -314,6 +315,7 @@ export class SplatBuffer {
         const maxSplatCount = headerArrayUint32[3];
         const splatCount = headerArrayUint32[4];
         const compressionLevel = headerArrayUint16[10];
+        const sceneCenter = new THREE.Vector3(headerArrayFloat32[6], headerArrayFloat32[7], headerArrayFloat32[8]);
 
         return {
             versionMajor,
@@ -322,13 +324,15 @@ export class SplatBuffer {
             sectionCount,
             maxSplatCount,
             splatCount,
-            compressionLevel
+            compressionLevel,
+            sceneCenter
         };
     }
 
     static writeHeaderToBuffer(header, buffer) {
         const headerArrayUint8 = new Uint8Array(buffer);
         const headerArrayUint32 = new Uint32Array(buffer);
+        const headerArrayFloat32 = new Float32Array(buffer);
         const headerArrayUint16 = new Uint16Array(buffer);
         headerArrayUint8[0] = header.versionMajor;
         headerArrayUint8[1] = header.versionMinor;
@@ -339,6 +343,9 @@ export class SplatBuffer {
         headerArrayUint32[3] = header.maxSplatCount;
         headerArrayUint32[4] = header.splatCount;
         headerArrayUint16[10] = header.compressionLevel;
+        headerArrayFloat32[6] = header.sceneCenter.x;
+        headerArrayFloat32[7] = header.sceneCenter.y;
+        headerArrayFloat32[8] = header.sceneCenter.z;
     }
 
     static parseSectionHeaders(header, buffer, offset = 0) {
@@ -421,6 +428,7 @@ export class SplatBuffer {
         this.maxSplatCount = header.maxSplatCount;
         this.splatCount = secLoadedCountsToMax ? header.maxSplatCount : 0;
         this.compressionLevel = header.compressionLevel;
+        this.sceneCenter = new THREE.Vector3().copy(header.sceneCenter);
 
         this.bytesPerCenter = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerCenter;
         this.bytesPerScale = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerScale;
@@ -473,7 +481,8 @@ export class SplatBuffer {
         this.splatCount = newSplatCount;
     }
 
-    static generateFromUncompressedSplatArrays(splatArrays, minimumAlpha, compressionLevel, blockSize, bucketSize, options = []) {
+    static generateFromUncompressedSplatArrays(splatArrays, minimumAlpha, compressionLevel,
+                                               sceneCenter, blockSize, bucketSize, options = []) {
 
         const bytesPerCenter = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCenter;
         const bytesPerScale = SplatBuffer.CompressionLevels[compressionLevel].BytesPerScale;
@@ -645,7 +654,6 @@ export class SplatBuffer {
             sectionHeadeArrayUint32[7] = sectionSizeBytes;
             sectionHeadeArrayUint32[8] = compressionLevel === 1 ? fullBucketCount : 0;
             sectionHeadeArrayUint32[9] = compressionLevel === 1 ? partiallyFilledBucketCount : 0;
-
             sectionHeaderBuffers.push(sectionHeaderBuffer);
         }
 
@@ -662,7 +670,8 @@ export class SplatBuffer {
             sectionCount: sectionBuffers.length,
             maxSplatCount: totalSplatCount,
             splatCount: totalSplatCount,
-            compressionLevel: compressionLevel
+            compressionLevel: compressionLevel,
+            sceneCenter: sceneCenter
         }, unifiedBuffer);
 
         let currentUnifiedBase = SplatBuffer.HeaderSizeBytes;

@@ -43,8 +43,11 @@ export class SplatPartitioner {
         };
     }
 
-    static getStandardPartitioner(partitionSize = 20000, blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
+    static getStandardPartitioner(partitionSize = 20000, sceneCenter = new THREE.Vector3(),
+                                  blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
         const partitionGenerator = (splatArray) => {
+
+            console.log(sceneCenter);
 
             const centerA = new THREE.Vector3();
             const centerB = new THREE.Vector3();
@@ -55,10 +58,10 @@ export class SplatPartitioner {
                 point.z = Math.floor(point.z / bucketizeSize) * bucketizeSize;
             };
             splatArray.splats.sort((a, b) => {
-                centerA.set(a['x'], a['y'], a['z']);
+                centerA.set(a['x'], a['y'], a['z']).sub(sceneCenter);
                 bucketSize(centerA);
                 const centerADist = centerA.lengthSq();
-                centerB.set(b['x'], b['y'], b['z']);
+                centerB.set(b['x'], b['y'], b['z']).sub(sceneCenter);
                 bucketSize(centerB);
                 const centerBDist = centerB.lengthSq();
                 if (centerADist > centerBDist) return 1;
