@@ -237,19 +237,24 @@
     let currentCameraUpArray;
     let currentCameraPositionArray;
     let currentCameraLookAtArray;
+
   </script>
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
+    import * as THREE from 'three';
+
 
     function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
+      console.log(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize)
       return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
     }
 
     function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize){
       const splatArray = GaussianSplats3D.SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
       const splatCompressor = new GaussianSplats3D.SplatCompressor(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
-      return splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+      const res = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+      return res;
     }
 
     function isPlyFile(fileName) {
@@ -388,7 +393,6 @@
     }
 
     window.viewSplat = function() {
-
       const viewFile = document.getElementById("viewFile");
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThresholdView").value);
 
@@ -442,6 +446,8 @@
           setViewError("Invalid camera look-at.");
           return;
         }
+
+
       }
 
       const viewFileName = viewFile.files[0].name;
@@ -452,12 +458,21 @@
       currentCameraUpArray = cameraUpArray;
       currentCameraPositionArray = cameraPositionArray;
       currentCameraLookAtArray = cameraLookAtArray;
+
+
       try {
         const fileReader = new FileReader();
-        fileReader.onload = function(){
-          try {
-           runViewer(fileReader.result, isPly, isStandardSplat, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+        fileReader.onload = async function(){
+          let isCompressedPly = false;
+
+          try {            
+            if(isCompressedPly ){
+              decompressThenRunViewer(fileReader.result, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+              return;
+            }
+            runViewer(fileReader.result, isPly, isStandardSplat, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
           } catch (e) {
+            console.error(e);
             setViewError("Could not view scene.");
           }
         }
@@ -468,6 +483,102 @@
         setViewError("Could not view scene.");
       }
     }
+
+    async function runViewer(splatBufferData, isPly, isStandardSplat, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
+      const viewerOptions = {
+        'cameraUp': cameraUpArray,
+        'initialCameraPosition': cameraPositionArray,
+        'initialCameraLookAt': cameraLookAtArray,
+        'halfPrecisionCovariancesOnGPU': true,
+      };
+      const splatBufferOptions = {
+        'splatAlphaRemovalThreshold': alphaRemovalThreshold
+      };
+
+      const parser = new GaussianSplats3D.CompressedPlyParser();
+      await parser.readPly(splatBufferData);
+      parser.convertFileToSplatData();
+      const compressedFile = parser.compress();
+      console.log(compressedFile);
+
+      const download = (filename, data) => {
+        const blob = new Blob([data], { type: "octet/stream" });
+        const url = window.URL.createObjectURL(blob);
+
+        const lnk = document.createElement("a");
+        lnk.download = filename;
+        lnk.href = url;
+
+        // create a "fake" click-event to trigger the download
+        if (document.createEvent) {
+          const e = document.createEvent("MouseEvents");
+          e.initMouseEvent(
+            "click",
+            true,
+            true,
+            window,
+            0,
+            0,
+            0,
+            0,
+            0,
+            false,
+            false,
+            false,
+            false,
+            0,
+            null
+          );
+          lnk.dispatchEvent(e);
+        } else {
+          // @ts-ignore
+          lnk.fireEvent?.("onclick");
+        }
+
+        window.URL.revokeObjectURL(url);
+      };
+
+      download("compressed.ply", compressedFile);
+
+      const splatBuffer = fileBufferToSplatBuffer(splatBufferData, isPly, isStandardSplat, 0, alphaRemovalThreshold);
+      console.log(splatBuffer)
+      document.getElementById("demo-content").style.display = 'none';
+      document.body.style.backgroundColor = "#000000";
+      history.pushState("ViewSplat", null);
+      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+      viewer.addSplatBuffers([splatBuffer], [splatBufferOptions])
+      .then(() => {
+          viewer.start();
+      });
+    }
+
+    async function decompressThenRunViewer(splatBufferData, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
+      const parser = new GaussianSplats3D.CompressedPlyParser();
+      await parser.readPly(splatBufferData);
+      const ply = parser.decompress(0, alphaRemovalThreshold, 5.0, 256);
+      const splatBuffer = fileBufferToSplatBuffer(ply.buffer, false, true, 0, alphaRemovalThreshold);
+
+      const splatBufferOptions = {
+          'splatAlphaRemovalThreshold': alphaRemovalThreshold
+      };
+      const viewerOptions = {
+          'cameraUp': cameraUpArray,
+          'initialCameraPosition': cameraPositionArray,
+          'initialCameraLookAt': cameraLookAtArray,
+          'halfPrecisionCovariancesOnGPU': true,
+      };
+
+      document.getElementById("demo-content").style.display = 'none';
+      document.body.style.backgroundColor = "#000000";
+      history.pushState("ViewSplat", null);
+
+      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+      viewer
+          .addSplatBuffers([splatBuffer], [splatBufferOptions])
+          .then(() => {
+              viewer.start();
+          }); 
+    };
 
     function setViewError(msg) {
       setViewLoadingIconVisibility(false);
@@ -493,27 +604,7 @@
       }
     });
 
-    function runViewer(splatBufferData, isPly, isStandardSplat, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
-      const viewerOptions = {
-        'cameraUp': cameraUpArray,
-        'initialCameraPosition': cameraPositionArray,
-        'initialCameraLookAt': cameraLookAtArray,
-        'halfPrecisionCovariancesOnGPU': true,
-      };
-      const splatBufferOptions = {
-        'splatAlphaRemovalThreshold': alphaRemovalThreshold
-      };
 
-      const splatBuffer = fileBufferToSplatBuffer(splatBufferData, isPly, isStandardSplat, 0, alphaRemovalThreshold);
-      document.getElementById("demo-content").style.display = 'none';
-      document.body.style.backgroundColor = "#000000";
-      history.pushState("ViewSplat", null);
-      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
-      viewer.addSplatBuffers([splatBuffer], [splatBufferOptions])
-      .then(() => {
-          viewer.start();
-      });
-    }
 
   </script>
   <script>

@@ -1,11 +1,12 @@
 import { base64 } from "./util/import-base-64.js";
+import resolve from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
 
 export default [
     {
         input: './src/index.js',
         treeshake: false,
-        external: p => /^three/.test( p ),
+        external: p => /^three/.test(p),
         output: [
             {
                 name: 'Gaussian Splats 3D',
@@ -13,7 +14,7 @@ export default [
                 format: 'umd',
                 file: './build/gaussian-splats-3d.umd.cjs',
                 sourcemap: true,
-                globals: p => /^three/.test( p ) ? 'THREE' : null,
+                globals: p => /^three/.test(p) ? 'THREE' : null,
             },
             {
                 name: 'Gaussian Splats 3D',
@@ -21,7 +22,7 @@ export default [
                 format: 'umd',
                 file: './build/gaussian-splats-3d.umd.min.cjs',
                 sourcemap: true,
-                globals: p => /^three/.test( p ) ? 'THREE' : null,
+                globals: p => /^three/.test(p) ? 'THREE' : null,
                 plugins: [terser()]
             }
         ],
@@ -32,29 +33,46 @@ export default [
     {
         input: './src/index.js',
         treeshake: false,
-        external: p => /^three/.test( p ),
+        external: p => /^three/.test(p),
         output: [
             {
                 name: 'Gaussian Splats 3D',
                 format: 'esm',
                 file: './build/gaussian-splats-3d.module.js',
                 sourcemap: true,
-                globals: p => /^three/.test( p ) ? 'THREE' : null,
+                globals: p => /^three/.test(p) ? 'THREE' : null,
             },
             {
                 name: 'Gaussian Splats 3D',
                 format: 'esm',
                 file: './build/gaussian-splats-3d.module.min.js',
                 sourcemap: true,
-                globals: p => /^three/.test( p ) ? 'THREE' : null,
+                globals: p => /^three/.test(p) ? 'THREE' : null,
                 plugins: [terser()]
             }
         ],
         plugins: [
-            base64({ 
+            base64({
                 include: "**/*.wasm",
                 sourceMap: false
             })
         ]
-    }
+    },
+    {
+        input: './src/index.compress.js',
+        treeshake: false,
+        output: [
+            {
+                name: 'Gaussian Splats 3D',
+                extend: true,
+                format: 'esm',
+                file: './build/gaussian-splats-3d.compress.js',
+                sourcemap: true,
+            },
+
+        ],
+        plugins: [
+            resolve(),
+        ]
+    },
 ];

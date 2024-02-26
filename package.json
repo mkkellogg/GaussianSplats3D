@@ -1,78 +1,82 @@
 {
-    "name": "@mkkellogg/gaussian-splats-3d",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/mkkellogg/GaussianSplat3D"
+  "name": "@mkkellogg/gaussian-splats-3d",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mkkellogg/GaussianSplat3D"
+  },
+  "version": "0.2.3",
+  "description": "Three.js-based 3D Gaussian splat viewer",
+  "module": "build/gaussian-splats-3d.module.js",
+  "main": "build/gaussian-splats-3d.umd.cjs",
+  "author": "Mark Kellogg",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build-demo": "mkdir -p ./build/demo && cp -r ./demo ./build/ && cp ./node_modules/three/build/three.module.js ./build/demo/lib/three.module.js",
+    "build-library": "npx rollup -c && mkdir -p ./build/demo/lib && cp ./build/gaussian-splats-3d.module.* ./build/demo/lib/",
+    "build": "npm run build-library && npm run build-demo",
+    "build-demo-windows": "(if not exist \".\\build\\demo\" mkdir .\\build\\demo) && xcopy /E .\\demo .\\build\\demo && xcopy .\\node_modules\\three\\build\\three.module.js .\\build\\demo\\lib\\",
+    "build-library-windows": "npx rollup -c && (if not exist \".\\build\\demo\\lib\" mkdir .\\build\\demo\\lib) && copy .\\build\\gaussian-splats-3d* .\\build\\demo\\lib\\",
+    "build-windows": "npm run build-library-windows && npm run build-demo-windows",
+    "watch": "npx npm-watch ",
+    "demo": "node util/server.js -d ./build/demo",
+    "fix-styling": "npx stylelint **/*.scss --fix",
+    "fix-js": "npx eslint src --fix",
+    "lint": "npx eslint 'src/**/*.js' || true",
+    "prettify": "npx prettier --write 'src/**/*.js'",
+    "compress": "node util/compress.js"
+  },
+  "watch": {
+    "build-library": {
+      "patterns": [
+        "src/**/*.js"
+      ]
     },
-    "version": "0.2.3",
-    "description": "Three.js-based 3D Gaussian splat viewer",
-    "module": "build/gaussian-splats-3d.module.js",
-    "main": "build/gaussian-splats-3d.umd.cjs",
-    "author": "Mark Kellogg",
-    "license": "MIT",
-    "type": "module",
-    "scripts": {
-        "build-demo": "mkdir -p ./build/demo && cp -r ./demo ./build/ && cp ./node_modules/three/build/three.module.js ./build/demo/lib/three.module.js",
-        "build-library": "npx rollup -c && mkdir -p ./build/demo/lib && cp ./build/gaussian-splats-3d.module.* ./build/demo/lib/",
-        "build": "npm run build-library && npm run build-demo",
-        "build-demo-windows": "(if not exist \".\\build\\demo\" mkdir .\\build\\demo) && xcopy /E .\\demo .\\build\\demo && xcopy .\\node_modules\\three\\build\\three.module.js .\\build\\demo\\lib\\",
-        "build-library-windows": "npx rollup -c && (if not exist \".\\build\\demo\\lib\" mkdir .\\build\\demo\\lib) && copy .\\build\\gaussian-splats-3d* .\\build\\demo\\lib\\",
-        "build-windows": "npm run build-library-windows && npm run build-demo-windows",
-        "watch": "npx npm-watch ",
-        "demo": "node util/server.js -d ./build/demo",
-        "fix-styling": "npx stylelint **/*.scss --fix",
-        "fix-js": "npx eslint src --fix",
-        "lint": "npx eslint 'src/**/*.js' || true",
-        "prettify": "npx prettier --write 'src/**/*.js'"
-    },
-    "watch": {
-        "build-library": {
-            "patterns": [
-                "src/**/*.js"
-            ]
-        },
-        "build-demo": {
-            "patterns": [
-                "demo/**/*.*"
-            ]
-        }
-    },
-    "babel": {},
-    "keywords": [
-        "three",
-        "threejs",
-        "three.js",
-        "splatting",
-        "3D",
-        "gaussian",
-        "webgl",
-        "javascript"
-    ],
-    "devDependencies": {
-        "@babel/core": "7.22.0",
-        "@babel/eslint-parser": "7.22.11",
-        "@babel/plugin-proposal-class-properties": "7.18.6",
-        "@babel/preset-env": "7.22.10",
-        "babel-loader": "9.1.3",
-        "@rollup/plugin-terser": "0.4.4",
-        "@rollup/pluginutils": "5.0.5",
-        "eslint": "8.47.0",
-        "eslint-config-google": "0.14.0",
-        "file-loader": "6.2.0",
-        "http-server": "14.1.1",
-        "npm-watch": "0.11.0",
-        "prettier": "3.0.2",
-        "prettier-eslint": "15.0.1",
-        "rollup": "3.28.1",
-        "url-loader": "4.1.1"
-    },
-    "peerDependencies": {
-        "three": ">=0.160.0"
-    },
-    "files": [
-        "build/gaussian-splats-3d.umd.cjs",
-        "build/gaussian-splats-3d.umd.cjs.map",
-        "build/gaussian-splats-3d.module.js",
-        "build/gaussian-splats-3d.module.js.map"
-    ]
+    "build-demo": {
+      "patterns": [
+        "demo/**/*.*"
+      ]
+    }
+  },
+  "babel": {},
+  "keywords": [
+    "three",
+    "threejs",
+    "three.js",
+    "splatting",
+    "3D",
+    "gaussian",
+    "webgl",
+    "javascript"
+  ],
+  "devDependencies": {
+    "@babel/core": "7.22.0",
+    "@babel/eslint-parser": "7.22.11",
+    "@babel/plugin-proposal-class-properties": "7.18.6",
+    "@babel/preset-env": "7.22.10",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "0.4.4",
+    "@rollup/pluginutils": "5.0.5",
+    "babel-loader": "9.1.3",
+    "eslint": "8.47.0",
+    "eslint-config-google": "0.14.0",
+    "file-loader": "6.2.0",
+    "http-server": "14.1.1",
+    "npm-watch": "0.11.0",
+    "prettier": "3.0.2",
+    "prettier-eslint": "15.0.1",
+    "rollup": "3.28.1",
+    "three": "^0.161.0",
+    "url-loader": "4.1.1"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "files": [
+    "build/gaussian-splats-3d.umd.cjs",
+    "build/gaussian-splats-3d.umd.cjs.map",
+    "build/gaussian-splats-3d.module.js",
+    "build/gaussian-splats-3d.module.js.map"
+  ]
 }
