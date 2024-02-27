@@ -22,6 +22,7 @@ export class SplatBuffer {
             BytesPerColor: 4,
             BytesPerScale: 12,
             BytesPerRotation: 16,
+            BytesPerSplat: 44,
             ScaleRange: 1
         },
         1: {
@@ -29,6 +30,7 @@ export class SplatBuffer {
             BytesPerColor: 4,
             BytesPerScale: 6,
             BytesPerRotation: 8,
+            BytesPerSplat: 24,
             ScaleRange: 32767
         }
     };
@@ -414,6 +416,24 @@ export class SplatBuffer {
         return sectionHeaders;
     }
 
+
+    static writeSectionHeaderToBuffer(sectionHeader, compressionLevel, buffer, offset = 0) {
+        const sectionHeadeArrayUint16 = new Uint16Array(buffer, offset, SplatBuffer.SectionHeaderSizeBytes / 2);
+        const sectionHeadeArrayUint32 = new Uint32Array(buffer, offset, SplatBuffer.SectionHeaderSizeBytes / 4);
+        const sectionHeadeArrayFloat32 = new Float32Array(buffer, offset, SplatBuffer.SectionHeaderSizeBytes / 4);
+
+        sectionHeadeArrayUint32[0] = sectionHeader.splatCount;
+        sectionHeadeArrayUint32[1] = sectionHeader.maxSplatCount;
+        sectionHeadeArrayUint32[2] = compressionLevel === 1 ? sectionHeader.bucketSize : 0;
+        sectionHeadeArrayUint32[3] = compressionLevel === 1 ? sectionHeader.bucketCount : 0;
+        sectionHeadeArrayFloat32[4] = compressionLevel === 1 ? sectionHeader.bucketBlockSize : 0.0;
+        sectionHeadeArrayUint16[10] = compressionLevel === 1 ? SplatBuffer.BucketStorageSizeBytes : 0;
+        sectionHeadeArrayUint32[6] = compressionLevel === 1 ? sectionHeader.compressionScaleRange : 0;
+        sectionHeadeArrayUint32[7] = sectionHeader.storageSizeBytes;
+        sectionHeadeArrayUint32[8] = compressionLevel === 1 ? sectionHeader.fullBucketCount : 0;
+        sectionHeadeArrayUint32[9] = compressionLevel === 1 ? sectionHeader.partiallyFilledBucketCount : 0;
+    }
+
     constructFromBuffer(bufferData, secLoadedCountsToMax) {
         this.bufferData = bufferData;
 
@@ -467,12 +487,12 @@ export class SplatBuffer {
         let cumulativeSplatCount = 0;
         for (let i = 0; i < this.maxSectionCount; i++) {
             const section = this.sections[i];
-            for (let j = 0; j < section.splatCount; j++) {
+            for (let j = 0; j < section.maxSplatCount; j++) {
                 const globalSplatIndex = cumulativeSplatCount + j;
                 this.globalSplatIndexToLocalSplatIndexMap[globalSplatIndex] = j;
                 this.globalSplatIndexToSectionMap[globalSplatIndex] = i;
             }
-            cumulativeSplatCount += section.splatCount;
+            cumulativeSplatCount += section.maxSplatCount;
         }
     }
 
@@ -640,21 +660,19 @@ export class SplatBuffer {
             sectionBuffers.push(sectionBuffer);
 
             const sectionHeaderBuffer = new ArrayBuffer(SplatBuffer.SectionHeaderSizeBytes);
-            const sectionHeadeArrayUint16 = new Uint16Array(sectionHeaderBuffer);
-            const sectionHeadeArrayUint32 = new Uint32Array(sectionHeaderBuffer);
-            const sectionHeadeArrayFloat32 = new Float32Array(sectionHeaderBuffer);
-
-            sectionHeadeArrayUint32[0] = outSplatCount;
-            sectionHeadeArrayUint32[1] = outSplatCount;
-            sectionHeadeArrayUint32[2] = compressionLevel === 1 ? sectionBucketSize : 0;
-            sectionHeadeArrayUint32[3] = compressionLevel === 1 ? buckets.length : 0;
-            sectionHeadeArrayFloat32[4] = compressionLevel === 1 ? sectionBlockSize : 0.0;
-            sectionHeadeArrayUint16[10] = compressionLevel === 1 ? SplatBuffer.BucketStorageSizeBytes : 0;
-            sectionHeadeArrayUint32[6] = compressionLevel === 1 ? compressionScaleRange : 0;
-            sectionHeadeArrayUint32[7] = sectionSizeBytes;
-            sectionHeadeArrayUint32[8] = compressionLevel === 1 ? fullBucketCount : 0;
-            sectionHeadeArrayUint32[9] = compressionLevel === 1 ? partiallyFilledBucketCount : 0;
+            SplatBuffer.writeSectionHeaderToBuffer({
+                maxSplatCount: outSplatCount,
+                splatCount: outSplatCount,
+                bucketSize: sectionBucketSize,
+                bucketCount: buckets.length,
+                bucketBlockSize: sectionBlockSize,
+                compressionScaleRange: compressionScaleRange,
+                storageSizeBytes: sectionSizeBytes,
+                fullBucketCount: fullBucketCount,
+                partiallyFilledBucketCount: partiallyFilledBucketCount
+            }, compressionLevel, sectionHeaderBuffer, 0);
             sectionHeaderBuffers.push(sectionHeaderBuffer);
+
         }
 
         let sectionsCumulativeSizeBytes = 0;

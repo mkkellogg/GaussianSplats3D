@@ -301,7 +301,7 @@ const splatAlphaRemovalThreshold = 5; // out of 255
 const plyLoader = new GaussianSplats3D.PlyLoader();
 plyLoader.loadFromURL('<path to .ply or .splat file>', compressionLevel, splatAlphaRemovalThreshold)
 .then((splatBuffer) => {
-    GaussianSplats3D.SplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
+    GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
 });
 ```
 Both of the above methods will prompt your browser to automatically start downloading the converted `.ksplat` file.

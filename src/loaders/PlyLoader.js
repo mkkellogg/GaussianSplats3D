@@ -1,5 +1,6 @@
 import { PlyParser } from './PlyParser.js';
-import { fetchWithProgress } from '../Util.js';
+import { fetchWithProgress, delayedExecute } from '../Util.js';
+import { LoaderStatus } from './LoaderStatus.js';
 
 export class PlyLoader {
 
@@ -8,12 +9,20 @@ export class PlyLoader {
     }
 
     loadFromURL(fileName, onProgress, compressionLevel, minimumAlpha, sectionSize, sceneCenter, blockSize, bucketSize) {
-        return fetchWithProgress(fileName, onProgress).then((plyFileData) => {
-            const splatArray = new PlyParser(plyFileData).parseToUncompressedSplatArray();
-            const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(minimumAlpha,
-                                                                                                    compressionLevel, sectionSize,
-                                                                                                    sceneCenter, blockSize, bucketSize);
-            return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
+        const downloadProgress = (percent, percentLabel) => {
+            if (onProgress) onProgress(percent, percentLabel, LoaderStatus.Downloading);
+        };
+        return fetchWithProgress(fileName, downloadProgress).then((plyFileData) => {
+            if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
+            return delayedExecute(() => {
+                const splatArray = new PlyParser(plyFileData).parseToUncompressedSplatArray();
+                const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(minimumAlpha,
+                                                                                                        compressionLevel, sectionSize,
+                                                                                                        sceneCenter, blockSize, bucketSize);
+                const splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
+                if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
+                return splatBuffer;
+            });
         });
     }
 

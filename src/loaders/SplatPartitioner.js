@@ -47,7 +47,7 @@ export class SplatPartitioner {
                                   blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
         const partitionGenerator = (splatArray) => {
 
-            console.log(sceneCenter);
+            if (partitionSize <= 0) partitionSize = splatArray.splatCount;
 
             const centerA = new THREE.Vector3();
             const centerB = new THREE.Vector3();

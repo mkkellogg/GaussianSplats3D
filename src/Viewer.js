@@ -17,6 +17,7 @@ import { WebXRMode } from './webxr/WebXRMode.js';
 import { VRButton } from './webxr/VRButton.js';
 import { ARButton } from './webxr/ARButton.js';
 import { delayedExecute } from './Util.js';
+import { LoaderStatus } from './loaders/LoaderStatus.js';
 
 
 const THREE_CAMERA_FOV = 50;
@@ -477,22 +478,29 @@ export class Viewer {
         let showLoadingSpinner = options.showLoadingSpinner;
         if (showLoadingSpinner !== false) showLoadingSpinner = true;
 
-        let downloadingTaskId = null;
-        if (showLoadingSpinner) downloadingTaskId = this.loadingSpinner.addTask('Downloading...');
-        const downloadProgress = (percent, percentLabel) => {
+        let loadingTaskId = null;
+        if (showLoadingSpinner) loadingTaskId = this.loadingSpinner.addTask('Downloading...');
+
+        const onLoadProgress = (percent, percentLabel, loaderStatus) => {
             if (showLoadingSpinner) {
-                if (percent == 100) {
-                    this.loadingSpinner.setMessageForTask(downloadingTaskId, 'Download complete!');
-                } else {
-                    if (streamAndBuildSections) {
-                        this.loadingSpinner.setMessageForTask(downloadingTaskId, 'Downloading splats...');
+                if (loaderStatus === LoaderStatus.Downloading) {
+                    if (percent == 100) {
+                        this.loadingSpinner.setMessageForTask(loadingTaskId, 'Download complete!');
                     } else {
-                        const suffix = percentLabel ? `: ${percentLabel}` : `...`;
-                        this.loadingSpinner.setMessageForTask(downloadingTaskId, `Downloading${suffix}`);
+                        if (streamAndBuildSections) {
+                            this.loadingSpinner.setMessageForTask(loadingTaskId, 'Downloading splats...');
+                        } else {
+                            const suffix = percentLabel ? `: ${percentLabel}` : `...`;
+                            this.loadingSpinner.setMessageForTask(loadingTaskId, `Downloading${suffix}`);
+                        }
                     }
+                } else if (loaderStatus === LoaderStatus.Processing) {
+                    this.loadingSpinner.setMessageForTask(loadingTaskId, 'Processing splats...');
+                } else {
+                    this.loadingSpinner.setMessageForTask(loadingTaskId, 'Ready!');
                 }
             }
-            if (options.onProgress) options.onProgress(percent, percentLabel, 'downloading');
+            if (options.onProgress) options.onProgress(percent, percentLabel, loaderStatus);
         };
 
         const splatBufferOptions = {
@@ -503,17 +511,17 @@ export class Viewer {
         };
 
         const onSectionBuild = (splatBuffer, resolve, sectionBuildCount, finalBuild) => {
-            if (options.onProgress) options.onProgress(0, '0%', 'processing');
+            if (options.onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
             this.addSplatBuffers([splatBuffer], [splatBufferOptions], sectionBuildCount === 0,
                                   finalBuild, showLoadingSpinner).then(() => {
-                if (options.onProgress) options.onProgress(100, '100%', 'processing');
-                if (downloadingTaskId !== null) {
+                if (options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
+                if (loadingTaskId !== null) {
                     if (sectionBuildCount === 0 && streamAndBuildSections || finalBuild && !streamAndBuildSections) {
-                        const taskToClearAfterSort = downloadingTaskId;
+                        const taskToClearAfterSort = loadingTaskId;
                         this.afterFirstSort.push(() => {
                             this.loadingSpinner.removeTask(taskToClearAfterSort);
                         });
-                        downloadingTaskId = null;
+                        loadingTaskId = null;
                     }
                 }
                 resolve();
@@ -528,19 +536,19 @@ export class Viewer {
                 sectionBuildCount++;
             };
             const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold,
-                                                           downloadProgress, true, sectionProgress, format);
+                                                           onLoadProgress, true, sectionProgress, format);
             return new AbortablePromise((resolver) => {
                resolve = resolver;
             }, loadPromise.abortHandler);
         } else {
             const loadPromise = this.loadFileToSplatBuffer(path, options.splatAlphaRemovalThreshold,
-                                                           downloadProgress, false, undefined, format);
+                                                           onLoadProgress, false, undefined, format);
             return new AbortablePromise((resolve, reject) => {
                 loadPromise.then((splatBuffer) => {
                     onSectionBuild(splatBuffer, resolve, 0, true);
                 })
-                .catch(() => {
-                    if (showLoadingSpinner) this.loadingSpinner.removeTask(downloadingTaskId);
+                .catch((e) => {
+                    if (showLoadingSpinner) this.loadingSpinner.removeTask(loadingTaskId);
                     reject(new Error(`Viewer::addSplatScene -> Could not load file ${path}`));
                 });
             }, loadPromise.abortHandler);
@@ -570,7 +578,7 @@ export class Viewer {
         const fileCount = sceneOptions.length;
         const percentComplete = [];
         if (showLoadingSpinner) this.loadingSpinner.show();
-        const downloadProgress = (fileIndex, percent, percentLabel) => {
+        const onLoadProgress = (fileIndex, percent, percentLabel) => {
             percentComplete[fileIndex] = percent;
             let totalPercent = 0;
             for (let i = 0; i < fileCount; i++) totalPercent += percentComplete[i] || 0;
@@ -583,7 +591,7 @@ export class Viewer {
                     this.loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
                 }
             }
-            if (onProgress) onProgress(totalPercent, percentLabel, 'downloading');
+            if (onProgress) onProgress(totalPercent, percentLabel, LoaderStatus.Downloading);
         };
 
         const loadPromises = [];
@@ -596,7 +604,7 @@ export class Viewer {
             }
 
             const loadPromise = this.loadFileToSplatBuffer(sceneOptions[i].path, sceneOptions[i].splatAlphaRemovalThreshold,
-                                                           downloadProgress.bind(this, i), false, undefined, format);
+                                                           onLoadProgress.bind(this, i), false, undefined, format);
             abortHandlers.push(loadPromise.abortHandler);
             loadPromises.push(loadPromise.promise);
         }
@@ -609,9 +617,9 @@ export class Viewer {
             Promise.all(loadPromises)
             .then((splatBuffers) => {
                 if (showLoadingSpinner) this.loadingSpinner.hide();
-                if (onProgress) options.onProgress(0, '0%', 'processing');
+                if (onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
                 this.addSplatBuffers(splatBuffers, sceneOptions, showLoadingSpinner, true, showLoadingSpinner).then(() => {
-                    if (onProgress) onProgress(100, '100%', 'processing');
+                    if (onProgress) onProgress(100, '100%', LoaderStatus.Processing);
                     resolve();
                 });
             })
@@ -636,24 +644,21 @@ export class Viewer {
      */
     loadFileToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
                           streamBuiltSections = false, onSectionBuilt = undefined, format) {
-        const downloadProgress = (percent, percentLabel) => {
-            if (onProgress) onProgress(percent, percentLabel, 'downloading');
-        };
-
         if (format === SceneFormat.Splat) {
-            return new SplatLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            return new SplatLoader().loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt,
+                                                 0, splatAlphaRemovalThreshold, false);
         } else if (format === SceneFormat.KSplat) {
-            return new KSplatLoader().loadFromURL(path, downloadProgress, streamBuiltSections,
+            return new KSplatLoader().loadFromURL(path, onProgress, streamBuiltSections,
                                                   onSectionBuilt, 0, splatAlphaRemovalThreshold);
         } else if (format === SceneFormat.Ply) {
-            return new PlyLoader().loadFromURL(path, downloadProgress, 0, splatAlphaRemovalThreshold);
+            return new PlyLoader().loadFromURL(path, onProgress, 0, splatAlphaRemovalThreshold);
         }
 
         return AbortablePromise.reject(new Error(`Viewer::loadFileToSplatBuffer -> File format not supported: ${path}`));
     }
 
     static isStreamable(format) {
-        return format === SceneFormat.Ply || format === SceneFormat.KSplat;
+        return format === SceneFormat.Splat || format === SceneFormat.KSplat;
     }
 
     /**

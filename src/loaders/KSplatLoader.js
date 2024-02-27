@@ -1,5 +1,6 @@
 import { SplatBuffer } from './SplatBuffer.js';
-import { fetchWithProgress } from '../Util.js';
+import { fetchWithProgress, delayedExecute } from '../Util.js';
+import { LoaderStatus } from './LoaderStatus.js';
 
 export class KSplatLoader {
 
@@ -12,8 +13,8 @@ export class KSplatLoader {
         let bytesLoaded = 0;
         let totalStorageSizeBytes = 0;
 
-        let fullBuffer;
-        let fullSplatBuffer;
+        let streamBuffer;
+        let streamSplatBuffer;
 
         let headerBuffer;
         let header;
@@ -78,12 +79,12 @@ export class KSplatLoader {
                     }
                     totalStorageSizeBytes = SplatBuffer.HeaderSizeBytes + header.maxSectionCount *
                                             SplatBuffer.SectionHeaderSizeBytes + totalSectionStorageStorageByes;
-                    if (!fullBuffer) {
-                        fullBuffer = new ArrayBuffer(totalStorageSizeBytes);
+                    if (!streamBuffer) {
+                        streamBuffer = new ArrayBuffer(totalStorageSizeBytes);
                         let offset = 0;
                         for (let i = 0; i < chunks.length; i++) {
                             const chunk = chunks[i];
-                            new Uint8Array(fullBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
+                            new Uint8Array(streamBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
                             offset += chunk.byteLength;
                         }
                     }
@@ -115,18 +116,17 @@ export class KSplatLoader {
                                 splatCount += sectionHeaders[s].splatCount;
                             }
 
-                            if (!fullSplatBuffer) fullSplatBuffer = new SplatBuffer(fullBuffer, false);
-                            fullSplatBuffer.updateLoadedCounts(sectionCount, splatCount);
+                            if (!streamSplatBuffer) streamSplatBuffer = new SplatBuffer(streamBuffer, false);
+                            streamSplatBuffer.updateLoadedCounts(sectionCount, splatCount);
 
                             const loadComplete = sectionCount >= header.maxSectionCount;
 
-                            onSectionBuilt(fullSplatBuffer, loadComplete);
+                            onSectionBuilt(streamSplatBuffer, loadComplete);
                             if (loadComplete) {
                                 sectionsLoadResolvePromise();
                             } else {
                                 queueNextCheck = true;
                             }
-                           // break;
                         }
                         if (i < header.maxSectionCount) byteOffset += sectionHeaders[i].storageSizeBytes;
                     }
@@ -136,10 +136,11 @@ export class KSplatLoader {
         };
 
         const localOnProgress = (percent, percentStr, chunk) => {
+
             if (chunk) {
                 chunks.push(chunk);
-                if (fullBuffer) {
-                    new Uint8Array(fullBuffer, bytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
+                if (streamBuffer) {
+                    new Uint8Array(streamBuffer, bytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
                 }
                 bytesLoaded += chunk.byteLength;
             }
@@ -148,16 +149,25 @@ export class KSplatLoader {
                 checkAndLoadSectionHeaders();
                 checkAndLoadSections();
             }
-            if (onProgress) onProgress(percent, percentStr, chunk);
+            if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
         };
-        return fetchWithProgress(fileName, localOnProgress).then((bufferData) => {
-            if (streamBuiltSections) {
-                return sectionsLoadPromise.then(() => {
-                    return new SplatBuffer(bufferData);
-                });
-            } else {
-                return new SplatBuffer(bufferData);
-            }
+
+        return fetchWithProgress(fileName, localOnProgress, !streamBuiltSections).then((fullBuffer) => {
+            if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
+            return delayedExecute(() => {
+                function finish(buffer) {
+                    if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
+                    if (buffer instanceof SplatBuffer) return buffer;
+                    else return new SplatBuffer(buffer);
+                }
+                if (streamBuiltSections) {
+                    return sectionsLoadPromise.then(() => {
+                        return finish(streamSplatBuffer);
+                    });
+                } else {
+                    return finish(fullBuffer);
+                }
+            });
         });
     }
 

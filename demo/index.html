@@ -388,7 +388,7 @@
             try {
               const splatBuffer = fileBufferToSplatBuffer(fileReader.result, format, compressionLevel,
                                                           alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
-              GaussianSplats3D.SplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
+              GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
               conversionDone();
             } catch (e) {
               conversionDone(e);
