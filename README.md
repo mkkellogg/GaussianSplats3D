@@ -144,6 +144,7 @@ Parameters for `addSplatScene()`
 | `position` | Position of the scene, acts as an offset from its default position. Defaults to `[0, 0, 0]`.
 | `rotation` | Rotation of the scene represented as a quaternion, defaults to `[0, 0, 0, 1]` (identity quaternion).
 | `scale` | Scene's scale, defaults to `[1, 1, 1]`.
+| `streamView` | Stream the scene's splat data and allow the scene to be rendered and viewed as the splats are loaded. Option is only valid for `addSplatScene()`, and not for `addSplatScenes()`.
 
 <br>
 

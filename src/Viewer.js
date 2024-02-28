@@ -476,7 +476,7 @@ export class Viewer {
         if (format === undefined || format === null) {
             format = sceneFormatFromPath(path);
         }
-        const streamAndBuildSections = Viewer.isStreamable(format);
+        const streamAndBuildSections = Viewer.isStreamable(format) && options.streamView;
 
         let showLoadingUI = options.showLoadingUI;
         if (showLoadingUI !== false) showLoadingUI = true;
