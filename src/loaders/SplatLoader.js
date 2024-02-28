@@ -4,6 +4,7 @@ import { SplatBufferGenerator } from './SplatBufferGenerator.js';
 import { SplatParser } from './SplatParser.js';
 import { fetchWithProgress, delayedExecute } from '../Util.js';
 import { LoaderStatus } from './LoaderStatus.js';
+import { Constants } from '../Constants.js';
 
 export class SplatLoader {
 
@@ -19,7 +20,7 @@ export class SplatLoader {
         let streamBufferOut;
         let streamSplatBuffer;
         let lastSectionBytes = 0;
-        let streamSectionSizeBytes = 524288;
+        let streamSectionSizeBytes = Constants.StreamingSectionSize;
         let sectionCount = 1;
         let maxSplatCount = 0;
         let splatCount = 0;

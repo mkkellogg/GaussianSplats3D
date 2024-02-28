@@ -22,7 +22,7 @@ export class SplatBufferGenerator {
                                                                partitionResults.parameters);
     }
 
-    static getStandardGenerator(alphaRemovalThreshold = 1, compressionLevel = 1, sectionSize = 20000, sceneCenter = new THREE.Vector3(),
+    static getStandardGenerator(alphaRemovalThreshold = 1, compressionLevel = 1, sectionSize = 0, sceneCenter = new THREE.Vector3(),
                                 blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
         const splatPartitioner = SplatPartitioner.getStandardPartitioner(sectionSize, sceneCenter, blockSize, bucketSize);
         return new SplatBufferGenerator(splatPartitioner, alphaRemovalThreshold, compressionLevel,

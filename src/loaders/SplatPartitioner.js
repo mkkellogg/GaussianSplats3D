@@ -43,7 +43,7 @@ export class SplatPartitioner {
         };
     }
 
-    static getStandardPartitioner(partitionSize = 20000, sceneCenter = new THREE.Vector3(),
+    static getStandardPartitioner(partitionSize = 0, sceneCenter = new THREE.Vector3(),
                                   blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
         const partitionGenerator = (splatArray) => {
 

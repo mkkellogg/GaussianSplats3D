@@ -485,12 +485,14 @@ export class Viewer {
         if (showLoadingUI) loadingTaskId = this.loadingSpinner.addTask('Downloading...');
 
         let loadedPercent = 0;
+        let downloadComplete = false;
 
         const onLoadProgress = (percent, percentLabel, loaderStatus) => {
             loadedPercent = percent;
             if (showLoadingUI) {
                 if (loaderStatus === LoaderStatus.Downloading) {
                     if (percent == 100) {
+                        downloadComplete = true;
                         this.loadingSpinner.setMessageForTask(loadingTaskId, 'Download complete!');
                     } else {
                         if (streamAndBuildSections) {
@@ -521,23 +523,16 @@ export class Viewer {
             this.addSplatBuffers([splatBuffer], [splatBufferOptions], sectionBuildCount === 0,
                                   finalBuild, showLoadingUI).then(() => {
                 if (options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
-                if (loadingTaskId !== null) {
+                if (showLoadingUI) {
                     if (sectionBuildCount === 0 && streamAndBuildSections || finalBuild && !streamAndBuildSections) {
-                        const taskToClearAfterSort = loadingTaskId;
                         this.afterFirstSort.push(() => {
-                            this.loadingSpinner.removeTask(taskToClearAfterSort);
+                            this.loadingSpinner.removeTask(loadingTaskId);
+                            if (!downloadComplete) this.loadingProgressBar.show();
                         });
-                        loadingTaskId = null;
                     }
-                }
-                if (streamAndBuildSections) {
-                    if (finalBuild) {
-                        if (showLoadingUI) this.loadingProgressBar.hide();
-                    } else {
-                        if (showLoadingUI) {
-                            this.loadingProgressBar.show();
-                            this.loadingProgressBar.setProgress(loadedPercent);
-                        }
+                    if (streamAndBuildSections) {
+                        if (downloadComplete) this.loadingProgressBar.hide();
+                        else this.loadingProgressBar.setProgress(loadedPercent);
                     }
                 }
                 resolve();
@@ -614,7 +609,7 @@ export class Viewer {
         const abortHandlers = [];
         for (let i = 0; i < sceneOptions.length; i++) {
 
-            let format = sceneOptions.format;
+            let format = sceneOptions[i].format;
             if (format === undefined || format === null) {
                 format = sceneFormatFromPath(sceneOptions[i].path);
             }

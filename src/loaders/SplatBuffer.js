@@ -331,6 +331,12 @@ export class SplatBuffer {
         };
     }
 
+    static writeHeaderCountsToBuffer(sectionCount, splatCount, buffer) {
+        const headerArrayUint32 = new Uint32Array(buffer);
+        headerArrayUint32[2] = sectionCount;
+        headerArrayUint32[4] = splatCount;
+    }
+
     static writeHeaderToBuffer(header, buffer) {
         const headerArrayUint8 = new Uint8Array(buffer);
         const headerArrayUint32 = new Uint32Array(buffer);
@@ -350,7 +356,7 @@ export class SplatBuffer {
         headerArrayFloat32[8] = header.sceneCenter.z;
     }
 
-    static parseSectionHeaders(header, buffer, offset = 0) {
+    static parseSectionHeaders(header, buffer, offset = 0, secLoadedCountsToMax) {
         const compressionLevel = header.compressionLevel;
         const bytesPerCenter = SplatBuffer.CompressionLevels[compressionLevel].BytesPerCenter;
         const bytesPerColor = SplatBuffer.CompressionLevels[compressionLevel].BytesPerColor;
@@ -369,7 +375,6 @@ export class SplatBuffer {
         let sectionBase = SplatBuffer.HeaderSizeBytes + header.maxSectionCount * SplatBuffer.SectionHeaderSizeBytes;
         let splatCountOffset = 0;
         for (let i = 0; i < maxSectionCount; i++) {
-            const splatCount = sectionHeaderArrayUint32[sectionHeaderBaseUint32];
             const maxSplatCount = sectionHeaderArrayUint32[sectionHeaderBaseUint32 + 1];
             const bucketSize = sectionHeaderArrayUint32[sectionHeaderBaseUint32 + 2];
             const bucketCount = sectionHeaderArrayUint32[sectionHeaderBaseUint32 + 3];
@@ -387,7 +392,7 @@ export class SplatBuffer {
             const storageSizeBytes = splatDataStorageSizeBytes + bucketsStorageSizeBytes;
             const sectionHeader = {
                 splatCountOffset: splatCountOffset,
-                splatCount: splatCount,
+                splatCount: secLoadedCountsToMax ? maxSplatCount : 0,
                 maxSplatCount: maxSplatCount,
                 bucketSize: bucketSize,
                 bucketCount: bucketCount,
@@ -434,6 +439,11 @@ export class SplatBuffer {
         sectionHeadeArrayUint32[9] = compressionLevel === 1 ? sectionHeader.partiallyFilledBucketCount : 0;
     }
 
+    static writeSectionHeaderSplatCountToBuffer(splatCount, buffer, offset = 0) {
+        const sectionHeadeArrayUint32 = new Uint32Array(buffer, offset, SplatBuffer.SectionHeaderSizeBytes / 4);
+        sectionHeadeArrayUint32[0] = splatCount;
+    }
+
     constructFromBuffer(bufferData, secLoadedCountsToMax) {
         this.bufferData = bufferData;
 
@@ -460,7 +470,7 @@ export class SplatBuffer {
         this.uint32PerSplat = this.bytesPerSplat / 4;
         this.uint16PerSplat = this.bytesPerSplat / 2;
 
-        this.sections = SplatBuffer.parseSectionHeaders(header, this.bufferData, SplatBuffer.HeaderSizeBytes);
+        this.sections = SplatBuffer.parseSectionHeaders(header, this.bufferData, SplatBuffer.HeaderSizeBytes, secLoadedCountsToMax);
 
         this.linkBufferArrays();
         this.buildMaps();
@@ -497,8 +507,15 @@ export class SplatBuffer {
     }
 
     updateLoadedCounts(newSectionCount, newSplatCount) {
+        SplatBuffer.writeHeaderCountsToBuffer(newSectionCount, newSplatCount, this.bufferData);
         this.sectionCount = newSectionCount;
         this.splatCount = newSplatCount;
+    }
+
+    updateSectionLoadedCounts(sectionIndex, newSplatCount) {
+        const sectionHeaderOffset = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * sectionIndex;
+        SplatBuffer.writeSectionHeaderSplatCountToBuffer(newSplatCount, this.bufferData, sectionHeaderOffset);
+        this.sections[sectionIndex].splatCount = newSplatCount;
     }
 
     static generateFromUncompressedSplatArrays(splatArrays, minimumAlpha, compressionLevel,

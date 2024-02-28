@@ -316,7 +316,7 @@
       const conversionFile = document.getElementById("conversionFile");
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
-      const sectionSize = parseInt(document.getElementById("sectionSize").value);
+      const sectionSize = 0;
       let sceneCenterArray = document.getElementById("sceneCenter").value;
       const blockSize = parseFloat(document.getElementById("blockSize").value);
       const bucketSize = parseInt(document.getElementById("bucketSize").value);
@@ -344,9 +344,6 @@
         return;
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
         setConversionError("Invalid alpha remval threshold.");
-        return;
-      } else if (isNaN(sectionSize) || sectionSize < 1000) {
-        setConversionError("Invalid section size.");
         return;
       } else if (isNaN(blockSize) || blockSize < 0.1) {
         setConversionError("Invalid block size.");
@@ -684,7 +681,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:410px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:380px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -710,16 +707,6 @@
                           <input id="alphaRemovalThreshold" type="text" class="text-input" style="width: 50px" value="1"></input>
                           <span style="color:#888888">(1 - 255)</span>
                       </td>
-                      </tr>
-                    <tr>
-                    <tr>
-                        <td>
-                            Splats per section:&nbsp;
-                        </td>
-                        <td>
-                            <input id="sectionSize" type="text" class="text-input" style="width: 50px" value="20000"></input>
-                            <span style="color:#888888">( > 1000 )</span>
-                        </td>
                     </tr>
                     <tr>
                       <td>
