@@ -5,6 +5,7 @@ import { SplatLoader } from './loaders/SplatLoader.js';
 import { KSplatLoader } from './loaders/KSplatLoader.js';
 import { sceneFormatFromPath } from './loaders/Utils.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
+import { LoadingProgressBar } from './LoadingProgressBar.js';
 import { SceneHelper } from './SceneHelper.js';
 import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
@@ -158,6 +159,8 @@ export class Viewer {
 
         this.loadingSpinner = new LoadingSpinner(null, this.rootElement || document.body);
         this.loadingSpinner.hide();
+        this.loadingProgressBar = new LoadingProgressBar(this.rootElement || document.body);
+        this.loadingProgressBar.hide();
 
         this.usingExternalCamera = (this.dropInMode || this.camera) ? true : false;
         this.usingExternalRenderer = (this.dropInMode || this.renderer) ? true : false;
@@ -454,7 +457,7 @@ export class Viewer {
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
      *                                     value (valid range: 0 - 255), defaults to 1
      *
-     *         showLoadingSpinner:         Display a loading spinner while the scene is loading, defaults to true
+     *         showLoadingUI:         Display a loading spinner while the scene is loading, defaults to true
      *
      *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
      *
@@ -475,14 +478,17 @@ export class Viewer {
         }
         const streamAndBuildSections = Viewer.isStreamable(format);
 
-        let showLoadingSpinner = options.showLoadingSpinner;
-        if (showLoadingSpinner !== false) showLoadingSpinner = true;
+        let showLoadingUI = options.showLoadingUI;
+        if (showLoadingUI !== false) showLoadingUI = true;
 
         let loadingTaskId = null;
-        if (showLoadingSpinner) loadingTaskId = this.loadingSpinner.addTask('Downloading...');
+        if (showLoadingUI) loadingTaskId = this.loadingSpinner.addTask('Downloading...');
+
+        let loadedPercent = 0;
 
         const onLoadProgress = (percent, percentLabel, loaderStatus) => {
-            if (showLoadingSpinner) {
+            loadedPercent = percent;
+            if (showLoadingUI) {
                 if (loaderStatus === LoaderStatus.Downloading) {
                     if (percent == 100) {
                         this.loadingSpinner.setMessageForTask(loadingTaskId, 'Download complete!');
@@ -513,7 +519,7 @@ export class Viewer {
         const onSectionBuild = (splatBuffer, resolve, sectionBuildCount, finalBuild) => {
             if (options.onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
             this.addSplatBuffers([splatBuffer], [splatBufferOptions], sectionBuildCount === 0,
-                                  finalBuild, showLoadingSpinner).then(() => {
+                                  finalBuild, showLoadingUI).then(() => {
                 if (options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
                 if (loadingTaskId !== null) {
                     if (sectionBuildCount === 0 && streamAndBuildSections || finalBuild && !streamAndBuildSections) {
@@ -522,6 +528,16 @@ export class Viewer {
                             this.loadingSpinner.removeTask(taskToClearAfterSort);
                         });
                         loadingTaskId = null;
+                    }
+                }
+                if (streamAndBuildSections) {
+                    if (finalBuild) {
+                        if (showLoadingUI) this.loadingProgressBar.hide();
+                    } else {
+                        if (showLoadingUI) {
+                            this.loadingProgressBar.show();
+                            this.loadingProgressBar.setProgress(loadedPercent);
+                        }
                     }
                 }
                 resolve();
@@ -548,7 +564,7 @@ export class Viewer {
                     onSectionBuild(splatBuffer, resolve, 0, true);
                 })
                 .catch((e) => {
-                    if (showLoadingSpinner) this.loadingSpinner.removeTask(loadingTaskId);
+                    if (showLoadingUI) this.loadingSpinner.removeTask(loadingTaskId);
                     reject(new Error(`Viewer::addSplatScene -> Could not load file ${path}`));
                 });
             }, loadPromise.abortHandler);
@@ -570,21 +586,21 @@ export class Viewer {
      *
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
-     * @param {boolean} showLoadingSpinner Display a loading spinner while the scene is loading, defaults to true
+     * @param {boolean} showLoadingUI Display a loading spinner while the scene is loading, defaults to true
      * @param {function} onProgress Function to be called as file data are received
      * @return {AbortablePromise}
      */
-    addSplatScenes(sceneOptions, showLoadingSpinner = true, onProgress = undefined) {
+    addSplatScenes(sceneOptions, showLoadingUI = true, onProgress = undefined) {
         const fileCount = sceneOptions.length;
         const percentComplete = [];
-        if (showLoadingSpinner) this.loadingSpinner.show();
+        if (showLoadingUI) this.loadingSpinner.show();
         const onLoadProgress = (fileIndex, percent, percentLabel) => {
             percentComplete[fileIndex] = percent;
             let totalPercent = 0;
             for (let i = 0; i < fileCount; i++) totalPercent += percentComplete[i] || 0;
             totalPercent = totalPercent / fileCount;
             percentLabel = `${totalPercent.toFixed(2)}%`;
-            if (showLoadingSpinner) {
+            if (showLoadingUI) {
                 if (totalPercent == 100) {
                     this.loadingSpinner.setMessage(`Download complete!`);
                 } else {
@@ -616,15 +632,15 @@ export class Viewer {
         return new AbortablePromise((resolve, reject) => {
             Promise.all(loadPromises)
             .then((splatBuffers) => {
-                if (showLoadingSpinner) this.loadingSpinner.hide();
+                if (showLoadingUI) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
-                this.addSplatBuffers(splatBuffers, sceneOptions, showLoadingSpinner, true, showLoadingSpinner).then(() => {
+                this.addSplatBuffers(splatBuffers, sceneOptions, showLoadingUI, true, showLoadingUI).then(() => {
                     if (onProgress) onProgress(100, '100%', LoaderStatus.Processing);
                     resolve();
                 });
             })
             .catch((e) => {
-                if (showLoadingSpinner) this.loadingSpinner.hide();
+                if (showLoadingUI) this.loadingSpinner.hide();
                 reject(new Error(`Viewer::addSplatScenes -> Could not load one or more splat scenes.`));
             });
         }, abortHandler);
@@ -671,7 +687,7 @@ export class Viewer {
         let loadCount = 0;
         let splatProcessingTaskId = null;
 
-        return function(splatBuffers, splatBufferOptions = [], showLoadingSpinner = true,
+        return function(splatBuffers, splatBufferOptions = [], showLoadingUI = true,
                         finalBuild = true, showLoadingSpinnerForSplatTreeBuild = true) {
             this.splatRenderingInitialized = false;
             loadCount++;
@@ -699,7 +715,7 @@ export class Viewer {
 
             const performLoad = () => {
                 return new Promise((resolve) => {
-                    if (showLoadingSpinner) {
+                    if (showLoadingUI) {
                         splatProcessingTaskId = this.loadingSpinner.addTask('Processing splats...');
                     }
                     delayedExecute(() => {
@@ -755,7 +771,7 @@ export class Viewer {
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
      * @param {boolean} finalBuild Will the splat mesh be in its final state after this build?
-     * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whetehr or not to show the loading spinner during
+     * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whether or not to show the loading spinner during
      *                                                      construction of the splat tree.
      */
     addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingSpinnerForSplatTreeBuild = false) {
@@ -767,15 +783,20 @@ export class Viewer {
         let splatOptimizingTaskId;
         const onSplatTreeIndexesUpload = (finished) => {
             if (showLoadingSpinnerForSplatTreeBuild) {
-                if (!finished) {
+                if (!splatOptimizingTaskId) {
                     splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
-                } else {
+                }
+            }
+        };
+        const onSplatTreeConstruction = (finished) => {
+            if (showLoadingSpinnerForSplatTreeBuild) {
+                if (finished) {
                     this.loadingSpinner.removeTask(splatOptimizingTaskId);
                 }
             }
         };
         this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
-                             onSplatTreeIndexesUpload);
+                             onSplatTreeIndexesUpload, onSplatTreeConstruction);
         this.splatMesh.frustumCulled = false;
     }
 
