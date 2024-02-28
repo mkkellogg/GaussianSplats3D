@@ -542,7 +542,7 @@ export class Viewer {
         const abortHandlers = [];
         for (let i = 0; i < sceneOptions.length; i++) {
             const loadPromise = this.loadFileToSplatBuffer(sceneOptions[i].path, sceneOptions[i].splatAlphaRemovalThreshold,
-                                                           downloadProgress.bind(this, i), sceneOptions.format);
+                                                           downloadProgress.bind(this, i), sceneOptions[i].format);
             abortHandlers.push(loadPromise.abortHandler);
             loadPromises.push(loadPromise.promise);
         }
