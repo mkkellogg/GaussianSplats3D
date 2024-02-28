@@ -9,7 +9,7 @@ export class LoadingProgressBar {
         this.container = container || document.body;
 
         this.progressBarContainerOuter = document.createElement('div');
-        this.progressBarContainerOuter.className = 'outerContainer';
+        this.progressBarContainerOuter.className = 'progressBarOuterContainer';
         this.progressBarContainerOuter.style.display = 'none';
 
         this.progressBarBox = document.createElement('div');
@@ -29,12 +29,12 @@ export class LoadingProgressBar {
         const style = document.createElement('style');
         style.innerHTML = `
 
-            .outerContainer {
+            .progressBarOuterContainer {
                 width: 100%;
                 height: 100%;
                 margin: 0;
                 top: 0;
-                left: 05
+                left: 0;
                 position: absolute;
             }
 

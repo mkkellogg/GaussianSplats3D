@@ -23,6 +23,7 @@ import { LoaderStatus } from './loaders/LoaderStatus.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
+const MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER = 1500000;
 
 /**
  * Viewer: Manages the rendering of splat scenes. Manages an instance of SplatMesh as well as a web worker
@@ -250,7 +251,6 @@ export class Viewer {
         }
 
         this.setupInfoPanel();
-        this.loadingSpinner.setContainer(this.rootElement);
 
         this.initialized = true;
     }
@@ -519,10 +519,10 @@ export class Viewer {
         };
 
         const onSectionBuild = (splatBuffer, resolve, sectionBuildCount, finalBuild) => {
-            if (options.onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
+            if (!streamAndBuildSections && options.onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
             this.addSplatBuffers([splatBuffer], [splatBufferOptions], sectionBuildCount === 0,
                                   finalBuild, showLoadingUI).then(() => {
-                if (options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
+                if (!streamAndBuildSections && options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
                 if (showLoadingUI) {
                     if (sectionBuildCount === 0 && streamAndBuildSections || finalBuild && !streamAndBuildSections) {
                         this.afterFirstSort.push(() => {
@@ -715,7 +715,6 @@ export class Viewer {
                     }
                     delayedExecute(() => {
                         this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild, showLoadingSpinnerForSplatTreeBuild);
-                        // TODO(StreamBuild): Clean up check for streaming construction here
                         const maxSplatCount = this.splatMesh.getMaxSplatCount();
                         if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
                             this.disposeSortWorker();
@@ -777,21 +776,23 @@ export class Viewer {
         if (this.renderer) this.splatMesh.setRenderer(this.renderer);
         let splatOptimizingTaskId;
         const onSplatTreeIndexesUpload = (finished) => {
-            if (showLoadingSpinnerForSplatTreeBuild) {
-                if (!splatOptimizingTaskId) {
+            const splatCount = this.splatMesh.getSplatCount();
+            if (showLoadingSpinnerForSplatTreeBuild && splatCount >= MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER) {
+                if (finished) {
+                    this.loadingSpinner.setMinimized(true);
+                    this.loadingSpinner.setMessageForTask(splatOptimizingTaskId, 'Building splat tree...');
+                } else {
                     splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
                 }
             }
         };
-        const onSplatTreeConstruction = (finished) => {
-            if (showLoadingSpinnerForSplatTreeBuild) {
-                if (finished) {
-                    this.loadingSpinner.removeTask(splatOptimizingTaskId);
-                }
+        const onSplatTreeConstructed = (finished) => {
+            if (finished && splatOptimizingTaskId) {
+                this.loadingSpinner.removeTask(splatOptimizingTaskId);
             }
         };
         this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
-                             onSplatTreeIndexesUpload, onSplatTreeConstruction);
+                             onSplatTreeIndexesUpload, onSplatTreeConstructed);
         this.splatMesh.frustumCulled = false;
     }
 

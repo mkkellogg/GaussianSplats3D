@@ -35,9 +35,8 @@
         'initialCameraPosition': [-3.3816, 1.96931, -1.71890],
         'initialCameraLookAt': [0.60910, 1.42099, 2.02511]
     });
-  //  let path = 'assets/data/stump/stump';
-   // path += isMobile() ? '.ksplat' : '_high.ksplat';
-   let path = 'assets/data/treehill/treehill.splat';
+    let path = 'assets/data/stump/stump';
+    path += isMobile() ? '.ksplat' : '_high.ksplat';
     viewer.addSplatScene(path)
     .then(() => {
         viewer.start();

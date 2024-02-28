@@ -593,10 +593,6 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildScenes = [];
             this.lastBuildSplatCount = 0;
             this.lastBuildMaxSplatCount = 0;
-        }
-
-        // TODO(StreamBuild): Clean up check for streaming construction here
-        if (!isUpdateBuild) {
             this.disposeMeshData();
             this.geometry = SplatMesh.buildGeomtery(maxSplatCount);
             this.material = SplatMesh.buildMaterial(this.dynamicMode);
