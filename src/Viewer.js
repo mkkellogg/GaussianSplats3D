@@ -4,8 +4,8 @@ import { PlyLoader } from './loaders/PlyLoader.js';
 import { SplatLoader } from './loaders/SplatLoader.js';
 import { KSplatLoader } from './loaders/KSplatLoader.js';
 import { sceneFormatFromPath } from './loaders/Utils.js';
-import { LoadingSpinner } from './LoadingSpinner.js';
-import { LoadingProgressBar } from './LoadingProgressBar.js';
+import { LoadingSpinner } from './ui/LoadingSpinner.js';
+import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
 import { SceneHelper } from './SceneHelper.js';
 import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './SplatMesh.js';
@@ -114,6 +114,10 @@ export class Viewer {
 
         this.webXRMode = options.webXRMode || WebXRMode.None;
 
+        if (this.webXRMode !== WebXRMode.None) {
+            this.gpuAcceleratedSort = false;
+        }
+
         this.controls = null;
 
         this.showMeshCursor = false;
@@ -221,6 +225,7 @@ export class Viewer {
                 this.rootElement.appendChild(ARButton.createButton(this.renderer));
             }
             this.renderer.xr.enabled = true;
+            this.camera.position.copy(this.initialCameraPosition);
             this.camera.up.copy(this.cameraUp).normalize();
             this.camera.lookAt(this.initialCameraLookAt);
         }
@@ -251,6 +256,9 @@ export class Viewer {
         }
 
         this.setupInfoPanel();
+
+        this.loadingProgressBar.setContainer(this.rootElement);
+        this.loadingSpinner.setContainer(this.rootElement);
 
         this.initialized = true;
     }
@@ -696,6 +704,9 @@ export class Viewer {
                     }
                     this.splatRenderingInitialized = true;
                 }
+
+                // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs splat centers and
+                // transform indexes so that it can calculate those distance values.
                 if (!this.gpuAcceleratedSort) {
                     const centers = this.integerBasedSort ? this.splatMesh.getIntegerCenters(true) : this.splatMesh.getFloatCenters(true);
                     const transformIndexes = this.splatMesh.getTransformIndexes();
@@ -778,10 +789,8 @@ export class Viewer {
         const onSplatTreeIndexesUpload = (finished) => {
             const splatCount = this.splatMesh.getSplatCount();
             if (showLoadingSpinnerForSplatTreeBuild && splatCount >= MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER) {
-                if (finished) {
-                    this.loadingSpinner.setMinimized(true);
-                    this.loadingSpinner.setMessageForTask(splatOptimizingTaskId, 'Building splat tree...');
-                } else {
+                if (!finished && !splatOptimizingTaskId) {
+                    this.loadingSpinner.setMinimized(true, true);
                     splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
                 }
             }

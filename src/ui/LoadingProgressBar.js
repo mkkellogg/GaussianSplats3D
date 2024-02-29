@@ -36,6 +36,7 @@ export class LoadingProgressBar {
                 top: 0;
                 left: 0;
                 position: absolute;
+                pointer-events: none;
             }
 
             .progressBarBox {
@@ -51,6 +52,7 @@ export class LoadingProgressBar {
                 transform: translate(-50%, 0);
                 width: 180px;
                 height: 30px;
+                pointer-events: auto;
             }
 
             .progressBarBackground {

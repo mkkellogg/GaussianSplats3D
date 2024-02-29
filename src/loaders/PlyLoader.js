@@ -15,14 +15,16 @@ export class PlyLoader {
         return fetchWithProgress(fileName, downloadProgress).then((plyFileData) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             return delayedExecute(() => {
-                const splatArray = new PlyParser(plyFileData).parseToUncompressedSplatArray();
-                const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(minimumAlpha,
-                                                                                                        compressionLevel, sectionSize,
-                                                                                                        sceneCenter, blockSize, bucketSize);
-                const splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-                if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                return splatBuffer;
+                return new PlyParser(plyFileData).parseToUncompressedSplatArray();
             });
+        })
+        .then((splatArray) => {
+            const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(minimumAlpha,
+                                                                                                    compressionLevel, sectionSize,
+                                                                                                    sceneCenter, blockSize, bucketSize);
+            const splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
+            if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
+            return splatBuffer;
         });
     }
 

@@ -25,9 +25,9 @@ export class SplatLoader {
         let maxSplatCount = 0;
         let splatCount = 0;
 
-        let sectionsLoadResolvePromise;
-        let sectionsLoadPromise = new Promise((resolve) => {
-            sectionsLoadResolvePromise = resolve;
+        let streamLoadCompleteResolver;
+        let streamLoadPromise = new Promise((resolve) => {
+            streamLoadCompleteResolver = resolve;
         });
 
         let bytesLoaded = 0;
@@ -88,7 +88,7 @@ export class SplatLoader {
                     }
                 }
                 if (loadComplete) {
-                    sectionsLoadResolvePromise();
+                    streamLoadCompleteResolver();
                 }
             }
             if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
@@ -98,7 +98,7 @@ export class SplatLoader {
         return fetchWithProgress(fileName, localOnProgress, true).then((fullBuffer) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             if (stream) {
-                return sectionsLoadPromise.then(() => {
+                return streamLoadPromise.then(() => {
                     if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
                     return streamSplatBuffer;
                 });

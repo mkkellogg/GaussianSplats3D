@@ -546,20 +546,28 @@ export class SplatBuffer {
             const validSplats = new UncompressedSplatArray();
 
             for (let i = 0; i < splatArray.splatCount; i++) {
+                const targetSplat = splatArray.splats[i];
                 let alpha;
-                if (splatArray.splats[i]['opacity']) {
-                    alpha = splatArray.splats[i]['opacity'];
+                if (targetSplat[UncompressedSplatArray.OFFSET.OPACITY]) {
+                    alpha = targetSplat[UncompressedSplatArray.OFFSET.OPACITY];
                 } else {
                     alpha = 255;
                 }
                 if (alpha >= minimumAlpha) {
-                    validSplats.addSplatFromComonents(splatArray.splats[i]['x'], splatArray.splats[i]['y'], splatArray.splats[i]['z'],
-                                                      splatArray.splats[i]['scale_0'], splatArray.splats[i]['scale_1'],
-                                                      splatArray.splats[i]['scale_2'], splatArray.splats[i]['rot_0'],
-                                                      splatArray.splats[i]['rot_1'], splatArray.splats[i]['rot_2'],
-                                                      splatArray.splats[i]['rot_3'], splatArray.splats[i]['f_dc_0'],
-                                                      splatArray.splats[i]['f_dc_1'], splatArray.splats[i]['f_dc_2'],
-                                                      splatArray.splats[i]['opacity']);
+                    validSplats.addSplatFromComonents(targetSplat[UncompressedSplatArray.OFFSET.X],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.Y],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.Z],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.SCALE0],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.SCALE1],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.SCALE2],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.ROTATION0],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.ROTATION1],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.ROTATION2],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.ROTATION3],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.FDC0],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.FDC1],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.FDC2],
+                                                      targetSplat[UncompressedSplatArray.OFFSET.OPACITY]);
                 }
             }
 
@@ -588,6 +596,7 @@ export class SplatBuffer {
                 bucketCenter.fromArray(bucket.center);
                 for (let i = 0; i < bucket.splats.length; i++) {
                     let row = bucket.splats[i];
+                    const targetSplat = validSplats.splats[row];
 
                     const centerBase = bucketDataBytes + outSplatCount * bytesPerSplat;
                     const scaleBase = centerBase + bytesPerCenter;
@@ -597,39 +606,45 @@ export class SplatBuffer {
                         const center = new Float32Array(sectionBuffer, centerBase, SplatBuffer.CenterComponentCount);
                         const rot = new Float32Array(sectionBuffer, rotationBase, SplatBuffer.RotationComponentCount);
                         const scale = new Float32Array(sectionBuffer, scaleBase, SplatBuffer.ScaleComponentCount);
-                        if (validSplats.splats[row]['scale_0'] !== undefined) {
-                            tempRotation.set(validSplats.splats[row]['rot_1'], validSplats.splats[row]['rot_2'],
-                                             validSplats.splats[row]['rot_3'], validSplats.splats[row]['rot_0']);
+                        if (targetSplat[UncompressedSplatArray.OFFSET.SCALE0] !== undefined) {
+                            tempRotation.set(targetSplat[UncompressedSplatArray.OFFSET.ROTATION1],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION2],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION3],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION0]);
                             tempRotation.normalize();
                             rot.set([tempRotation.w, tempRotation.x, tempRotation.y, tempRotation.z]);
-                            scale.set([validSplats.splats[row]['scale_0'],
-                                       validSplats.splats[row]['scale_1'],
-                                       validSplats.splats[row]['scale_2']]);
+                            scale.set([targetSplat[UncompressedSplatArray.OFFSET.SCALE0],
+                                       targetSplat[UncompressedSplatArray.OFFSET.SCALE1],
+                                       targetSplat[UncompressedSplatArray.OFFSET.SCALE2]]);
                         } else {
                             rot.set([1.0, 0.0, 0.0, 0.0]);
                             scale.set([0.01, 0.01, 0.01]);
                         }
-                        center.set([validSplats.splats[row]['x'], validSplats.splats[row]['y'], validSplats.splats[row]['z']]);
+                        center.set([targetSplat[UncompressedSplatArray.OFFSET.X],
+                                    targetSplat[UncompressedSplatArray.OFFSET.Y],
+                                    targetSplat[UncompressedSplatArray.OFFSET.Z]]);
                     } else {
                         const center = new Uint16Array(sectionBuffer, centerBase, SplatBuffer.CenterComponentCount);
                         const rot = new Uint16Array(sectionBuffer, rotationBase, SplatBuffer.RotationComponentCount);
                         const scale = new Uint16Array(sectionBuffer, scaleBase, SplatBuffer.ScaleComponentCount);
 
-                        if (validSplats.splats[row]['scale_0'] !== undefined) {
-                            tempRotation.set(validSplats.splats[row]['rot_1'], validSplats.splats[row]['rot_2'],
-                                             validSplats.splats[row]['rot_3'], validSplats.splats[row]['rot_0']);
+                        if (targetSplat[UncompressedSplatArray.OFFSET.SCALE0] !== undefined) {
+                            tempRotation.set(targetSplat[UncompressedSplatArray.OFFSET.ROTATION1],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION2],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION3],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION0]);
                             tempRotation.normalize();
                             rot.set([thf(tempRotation.w), thf(tempRotation.x), thf(tempRotation.y), thf(tempRotation.z)]);
-                            scale.set([thf(validSplats.splats[row]['scale_0']),
-                                       thf(validSplats.splats[row]['scale_1']),
-                                       thf(validSplats.splats[row]['scale_2'])]);
+                            scale.set([thf(targetSplat[UncompressedSplatArray.OFFSET.SCALE0]),
+                                       thf(targetSplat[UncompressedSplatArray.OFFSET.SCALE1]),
+                                       thf(targetSplat[UncompressedSplatArray.OFFSET.SCALE2])]);
                         } else {
                             rot.set([thf(1.), 0, 0, 0]);
                             scale.set([thf(0.01), thf(0.01), thf(0.01)]);
                         }
-                        bucketCenterDelta.set(validSplats.splats[row]['x'],
-                                              validSplats.splats[row]['y'],
-                                              validSplats.splats[row]['z']).sub(bucketCenter);
+                        bucketCenterDelta.set(targetSplat[UncompressedSplatArray.OFFSET.X],
+                                              targetSplat[UncompressedSplatArray.OFFSET.Y],
+                                              targetSplat[UncompressedSplatArray.OFFSET.Z]).sub(bucketCenter);
                         bucketCenterDelta.x = Math.round(bucketCenterDelta.x * compressionScaleFactor) + compressionScaleRange;
                         bucketCenterDelta.x = clamp(bucketCenterDelta.x, 0, doubleCompressionScaleRange);
                         bucketCenterDelta.y = Math.round(bucketCenterDelta.y * compressionScaleFactor) + compressionScaleRange;
@@ -641,15 +656,15 @@ export class SplatBuffer {
 
                     const rgba = new Uint8ClampedArray(sectionBuffer, colorBase, 4);
 
-                    if (validSplats.splats[row]['f_dc_0'] !== undefined) {
-                        rgba.set([validSplats.splats[row]['f_dc_0'],
-                                  validSplats.splats[row]['f_dc_1'],
-                                  validSplats.splats[row]['f_dc_2']]);
+                    if (targetSplat[UncompressedSplatArray.OFFSET.FDC0] !== undefined) {
+                        rgba.set([targetSplat[UncompressedSplatArray.OFFSET.FDC0],
+                                  targetSplat[UncompressedSplatArray.OFFSET.FDC1],
+                                  targetSplat[UncompressedSplatArray.OFFSET.FDC2]]);
                     } else {
                         rgba.set([255, 0, 0]);
                     }
-                    if (validSplats.splats[row]['opacity'] !== undefined) {
-                        rgba[3] = validSplats.splats[row]['opacity'];
+                    if (targetSplat[UncompressedSplatArray.OFFSET.OPACITY] !== undefined) {
+                        rgba[3] = targetSplat[UncompressedSplatArray.OFFSET.OPACITY];
                     } else {
                         rgba[3] = 255;
                     }
@@ -732,7 +747,10 @@ export class SplatBuffer {
         const max = new THREE.Vector3();
 
         for (let i = 0; i < splatCount; i++) {
-            const center = [splatArray.splats[i]['x'], splatArray.splats[i]['y'], splatArray.splats[i]['z']];
+            const targetSplat = splatArray.splats[i];
+            const center = [targetSplat[UncompressedSplatArray.OFFSET.X],
+                            targetSplat[UncompressedSplatArray.OFFSET.Y],
+                            targetSplat[UncompressedSplatArray.OFFSET.Z]];
             if (i === 0 || center[0] < min.x) min.x = center[0];
             if (i === 0 || center[0] > max.x) max.x = center[0];
             if (i === 0 || center[1] < min.y) min.y = center[1];
@@ -750,7 +768,10 @@ export class SplatBuffer {
         const partiallyFullBuckets = {};
 
         for (let i = 0; i < splatCount; i++) {
-            const center = [splatArray.splats[i]['x'], splatArray.splats[i]['y'], splatArray.splats[i]['z']];
+            const targetSplat = splatArray.splats[i];
+            const center = [targetSplat[UncompressedSplatArray.OFFSET.X],
+                            targetSplat[UncompressedSplatArray.OFFSET.Y],
+                            targetSplat[UncompressedSplatArray.OFFSET.Z]];
             const xBlock = Math.floor((center[0] - min.x) / blockSize);
             const yBlock = Math.floor((center[1] - min.y) / blockSize);
             const zBlock = Math.floor((center[2] - min.z) / blockSize);

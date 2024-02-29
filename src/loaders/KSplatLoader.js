@@ -35,9 +35,9 @@ export class KSplatLoader {
 
         let chunks = [];
 
-        let sectionsLoadResolvePromise;
-        let sectionsLoadPromise = new Promise((resolve) => {
-            sectionsLoadResolvePromise = resolve;
+        let streamLoadCompleteResolver;
+        let streamLoadPromise = new Promise((resolve) => {
+            streamLoadCompleteResolver = resolve;
         });
 
         const checkAndLoadHeader = () => {
@@ -130,7 +130,7 @@ export class KSplatLoader {
                     for (let i = 0; i < header.maxSectionCount; i++) {
                         const sectionHeader = sectionHeaders[i];
                         const bucketsDataOffset = sectionBase + sectionHeader.partiallyFilledBucketCount * 4 +
-                                                sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
+                                                  sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
                         const bytesRequiredToReachSectionSplatData = baseDataOffset + bucketsDataOffset;
                         if (bytesLoaded >= bytesRequiredToReachSectionSplatData) {
                             reachedSections++;
@@ -150,7 +150,7 @@ export class KSplatLoader {
                     onSectionBuilt(streamSplatBuffer, loadComplete);
 
                     if (loadComplete) {
-                        sectionsLoadResolvePromise();
+                        streamLoadCompleteResolver();
                     } else {
                         queueNextCheck = true;
                     }
@@ -188,7 +188,7 @@ export class KSplatLoader {
                     else return new SplatBuffer(buffer);
                 }
                 if (streamBuiltSections) {
-                    return sectionsLoadPromise.then(() => {
+                    return streamLoadPromise.then(() => {
                         return finish(streamSplatBuffer);
                     });
                 } else {

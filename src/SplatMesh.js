@@ -67,9 +67,9 @@ export class SplatMesh extends THREE.Mesh {
 
         this.boundingBox = new THREE.Box3();
         this.calculatedSceneCenter = new THREE.Vector3();
-        this.currentSceneExtreme = 0;
-        this.currentSceneExtremeBuffered = 0;
-        this.currentSceneExtremeLive = 0;
+        this.maxRadius = 0;
+        this.visibleRegionRadius = 0;
+        this.visibleRegionFadeStartRadius = 0;
 
         this.firstRenderTime = 0;
         this.finalBuild = false;
@@ -108,8 +108,8 @@ export class SplatMesh extends THREE.Mesh {
             uniform vec2 basisViewport;
             uniform vec2 covariancesTextureSize;
             uniform vec2 centersColorsTextureSize;
-            uniform float currentSceneExtremeBuffered;
-            uniform float currentSceneExtremeLive;
+            uniform float visibleRegionRadius;
+            uniform float visibleRegionFadeStartRadius;
             uniform float firstRenderTime;
             uniform float currentTime;
             uniform int fadeInComplete;
@@ -257,9 +257,9 @@ export class SplatMesh extends THREE.Mesh {
                     float renderTime = max(currentTime - firstRenderTime, 0.0);
 
                     float fadeDistance = 0.75;
-                    float distanceLoadFadeInFactor = step(currentSceneExtremeLive, centerDist);
+                    float distanceLoadFadeInFactor = step(visibleRegionFadeStartRadius, centerDist);
                     distanceLoadFadeInFactor = (1.0 - distanceLoadFadeInFactor) +
-                                               (1.0 - clamp((centerDist - currentSceneExtremeLive) / fadeDistance, 0.0, 1.0)) *
+                                               (1.0 - clamp((centerDist - visibleRegionFadeStartRadius) / fadeDistance, 0.0, 1.0)) *
                                                distanceLoadFadeInFactor;
                     opacityAdjust *= distanceLoadFadeInFactor;
                     vColor.a *= opacityAdjust;
@@ -307,11 +307,11 @@ export class SplatMesh extends THREE.Mesh {
                 'type': 'i',
                 'value': 0
             },
-            'currentSceneExtremeLive': {
+            'visibleRegionFadeStartRadius': {
                 'type': 'f',
                 'value': 0.0
             },
-            'currentSceneExtremeBuffered': {
+            'visibleRegionRadius': {
                 'type': 'f',
                 'value': 0.0
             },
@@ -585,9 +585,9 @@ export class SplatMesh extends THREE.Mesh {
        if (!isUpdateBuild) {
             isUpdateBuild = false;
             this.boundingBox = new THREE.Box3();
-            this.currentSceneExtreme = 0;
-            this.currentSceneExtremeBuffered = 0;
-            this.currentSceneExtremeLive = 0;
+            this.maxRadius = 0;
+            this.visibleRegionRadius = 0;
+            this.visibleRegionFadeStartRadius = 0;
             this.firstRenderTime = -1;
             this.finalBuild = false;
             this.lastBuildScenes = [];
@@ -893,24 +893,24 @@ export class SplatMesh extends THREE.Mesh {
             if (distFromCSceneCenter > maxDistFromSceneCenter) maxDistFromSceneCenter = distFromCSceneCenter;
         }
 
-        const ringSize = 1;
-        const currentSceneExtreme = maxDistFromSceneCenter;
-        if (currentSceneExtreme - this.currentSceneExtreme > (ringSize)) {
-            this.currentSceneExtreme = currentSceneExtreme;
-            this.currentSceneExtremeBuffered = Math.max(this.currentSceneExtreme - ringSize, 0.0);
+        const visibleAreaEpansionRadius = 1;
+        const maxRadius = maxDistFromSceneCenter;
+        if (maxRadius - this.maxRadius > visibleAreaEpansionRadius) {
+            this.maxRadius = maxRadius;
+            this.visibleRegionRadius = Math.max(this.maxRadius - visibleAreaEpansionRadius, 0.0);
         }
-        if (this.finalBuild) this.currentSceneExtremeBuffered = this.currentSceneExtreme;
+        if (this.finalBuild) this.visibleRegionRadius = this.maxRadius;
 
         this.updateSceneExtremes();
     }
 
     updateSceneExtremes() {
         const fadeInRate = this.finalBuild ? 0.01 : 0.003;
-        this.currentSceneExtremeLive = (this.currentSceneExtremeBuffered - this.currentSceneExtremeLive) *
-                                        fadeInRate + this.currentSceneExtremeLive;
-        const fadeInComplete = (this.currentSceneExtremeLive / this.currentSceneExtreme) > 0.99 ? 1 : 0;
-        this.material.uniforms.currentSceneExtremeLive.value = this.currentSceneExtremeLive;
-        this.material.uniforms.currentSceneExtremeBuffered.value = this.currentSceneExtremeBuffered;
+        this.visibleRegionFadeStartRadius = (this.visibleRegionRadius - this.visibleRegionFadeStartRadius) *
+                                        fadeInRate + this.visibleRegionFadeStartRadius;
+        const fadeInComplete = (this.visibleRegionFadeStartRadius / this.maxRadius) > 0.99 ? 1 : 0;
+        this.material.uniforms.visibleRegionFadeStartRadius.value = this.visibleRegionFadeStartRadius;
+        this.material.uniforms.visibleRegionRadius.value = this.visibleRegionRadius;
         this.material.uniforms.firstRenderTime.value = this.firstRenderTime;
         this.material.uniforms.currentTime.value = performance.now();
         this.material.uniforms.fadeInComplete.value = fadeInComplete;
@@ -1555,8 +1555,8 @@ export class SplatMesh extends THREE.Mesh {
 
         const splatCount = this.getSplatCount();
         const fillCount = sinceLastBuild ? splatCount - this.lastBuildSplatCount : splatCount;
-        this.fillSplatDataArrays(null, floatCenters, null, undefined, sinceLastBuild, sinceLastBuild);
         const floatCenters = new Float32Array(fillCount * 3);
+        this.fillSplatDataArrays(null, floatCenters, null, undefined, sinceLastBuild, sinceLastBuild);
         if (!padFour) return floatCenters;
         let paddedFloatCenters = new Float32Array(fillCount * 4);
         for (let i = 0; i < fillCount; i++) {

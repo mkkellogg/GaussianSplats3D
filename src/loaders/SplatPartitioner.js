@@ -51,18 +51,22 @@ export class SplatPartitioner {
 
             const centerA = new THREE.Vector3();
             const centerB = new THREE.Vector3();
-            const bucketizeSize = 0.5;
-            const bucketSize = (point) => {
-                point.x = Math.floor(point.x / bucketizeSize) * bucketizeSize;
-                point.y = Math.floor(point.y / bucketizeSize) * bucketizeSize;
-                point.z = Math.floor(point.z / bucketizeSize) * bucketizeSize;
+            const clampDistance = 0.5;
+            const clampPoint = (point) => {
+                point.x = Math.floor(point.x / clampDistance) * clampDistance;
+                point.y = Math.floor(point.y / clampDistance) * clampDistance;
+                point.z = Math.floor(point.z / clampDistance) * clampDistance;
             };
             splatArray.splats.sort((a, b) => {
-                centerA.set(a['x'], a['y'], a['z']).sub(sceneCenter);
-                bucketSize(centerA);
+                centerA.set(a[UncompressedSplatArray.OFFSET.X],
+                            a[UncompressedSplatArray.OFFSET.Y],
+                            a[UncompressedSplatArray.OFFSET.Z]).sub(sceneCenter);
+                clampPoint(centerA);
                 const centerADist = centerA.lengthSq();
-                centerB.set(b['x'], b['y'], b['z']).sub(sceneCenter);
-                bucketSize(centerB);
+                centerB.set(b[UncompressedSplatArray.OFFSET.X],
+                            b[UncompressedSplatArray.OFFSET.Y],
+                            b[UncompressedSplatArray.OFFSET.Z]).sub(sceneCenter);
+                clampPoint(centerB);
                 const centerBDist = centerB.lengthSq();
                 if (centerADist > centerBDist) return 1;
                 else return -1;

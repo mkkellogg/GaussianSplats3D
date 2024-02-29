@@ -142,37 +142,37 @@ export class PlyParser {
             PlyParser.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
             const newSplat = splatArray.addDefaultSplat();
             if (rawVertex['scale_0'] !== undefined) {
-                newSplat['scale_0'] = Math.exp(rawVertex['scale_0']);
-                newSplat['scale_1'] = Math.exp(rawVertex['scale_1']);
-                newSplat['scale_2'] = Math.exp(rawVertex['scale_2']);
+                newSplat[UncompressedSplatArray.OFFSET.SCALE0] = Math.exp(rawVertex['scale_0']);
+                newSplat[UncompressedSplatArray.OFFSET.SCALE1] = Math.exp(rawVertex['scale_1']);
+                newSplat[UncompressedSplatArray.OFFSET.SCALE2] = Math.exp(rawVertex['scale_2']);
             } else {
-                newSplat['scale_0'] = 0.01;
-                newSplat['scale_1'] = 0.01;
-                newSplat['scale_2'] = 0.01;
+                newSplat[UncompressedSplatArray.OFFSET.SCALE0] = 0.01;
+                newSplat[UncompressedSplatArray.OFFSET.SCALE1] = 0.01;
+                newSplat[UncompressedSplatArray.OFFSET.SCALE2] = 0.01;
             }
 
             if (rawVertex['f_dc_0'] !== undefined) {
                 const SH_C0 = 0.28209479177387814;
-                newSplat['f_dc_0'] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
-                newSplat['f_dc_1'] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
-                newSplat['f_dc_2'] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.FDC0] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.FDC1] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.FDC2] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
             } else {
-                newSplat['f_dc_0'] = 0;
-                newSplat['f_dc_1'] = 0;
-                newSplat['f_dc_2'] = 0;
+                newSplat[UncompressedSplatArray.OFFSET.FDC0] = 0;
+                newSplat[UncompressedSplatArray.OFFSET.FDC1] = 0;
+                newSplat[UncompressedSplatArray.OFFSET.FDC2] = 0;
             }
             if (rawVertex['opacity'] !== undefined) {
-                newSplat['opacity'] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.OPACITY] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
             }
 
-            newSplat['rot_0'] = rawVertex['rot_0'];
-            newSplat['rot_1'] = rawVertex['rot_1'];
-            newSplat['rot_2'] = rawVertex['rot_2'];
-            newSplat['rot_3'] = rawVertex['rot_3'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION0] = rawVertex['rot_0'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION1] = rawVertex['rot_1'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION2] = rawVertex['rot_2'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION3] = rawVertex['rot_3'];
 
-            newSplat['x'] = rawVertex['x'];
-            newSplat['y'] = rawVertex['y'];
-            newSplat['z'] = rawVertex['z'];
+            newSplat[UncompressedSplatArray.OFFSET.X] = rawVertex['x'];
+            newSplat[UncompressedSplatArray.OFFSET.Y] = rawVertex['y'];
+            newSplat[UncompressedSplatArray.OFFSET.Z] = rawVertex['z'];
         }
 
         return splatArray;
