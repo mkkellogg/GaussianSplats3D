@@ -158,10 +158,10 @@ export class Viewer {
         this.usingExternalRenderer = (this.dropInMode || this.renderer) ? true : false;
 
         this.initialized = false;
-        if (!this.dropInMode) this.init();
+        if (!this.dropInMode) this.init(options);
     }
 
-    init() {
+    init(options = {}) {
 
         if (this.initialized) return;
 
@@ -223,7 +223,7 @@ export class Viewer {
         this.sceneHelper.setupControlPlane();
 
         if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
-            this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+            this.controls = new OrbitControls(this.camera, this.renderer.domElement, options);
             this.controls.listenToKeyEvents(window);
             this.controls.rotateSpeed = 0.5;
             this.controls.maxPolarAngle = Math.PI * .75;

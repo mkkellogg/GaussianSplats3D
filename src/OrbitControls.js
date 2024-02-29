@@ -41,7 +41,7 @@ const TILT_LIMIT = Math.cos( 70 * MathUtils.DEG2RAD );
 
 class OrbitControls extends EventDispatcher {
 
-    constructor( object, domElement ) {
+    constructor( object, domElement, options = {} ) {
 
         super();
 
@@ -96,7 +96,7 @@ class OrbitControls extends EventDispatcher {
 
         // Set to true to automatically rotate around the target
         // If auto-rotate is enabled, you must call controls.update() in your animation loop
-        this.autoRotate = false;
+        this.autoRotate = !!options.autoRotate; // default false
         this.autoRotateSpeed = 2.0; // 30 seconds per orbit when fps is 60
 
         // The four arrow keys
@@ -981,6 +981,8 @@ class OrbitControls extends EventDispatcher {
 
         function onPointerDown( event ) {
 
+            scope.autoRotate = false;
+
             if ( scope.enabled === false ) return;
 
             if ( pointers.length === 0 ) {
@@ -1174,6 +1176,8 @@ class OrbitControls extends EventDispatcher {
 
         function onMouseWheel( event ) {
 
+            scope.autoRotate = false;
+
             if ( scope.enabled === false || scope.enableZoom === false || state !== STATE.NONE ) return;
 
             event.preventDefault();
@@ -1187,6 +1191,8 @@ class OrbitControls extends EventDispatcher {
         }
 
         function onKeyDown( event ) {
+
+            scope.autoRotate = false;
 
             if ( scope.enabled === false || scope.enablePan === false ) return;
 
@@ -1333,6 +1339,8 @@ class OrbitControls extends EventDispatcher {
         }
 
         function onContextMenu( event ) {
+
+            scope.autoRotate = false;
 
             if ( scope.enabled === false ) return;
 
