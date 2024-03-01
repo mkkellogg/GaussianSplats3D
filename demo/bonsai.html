@@ -39,10 +39,7 @@
     let path = 'assets/data/bonsai/bonsai';
     path += isMobile() ? '.ksplat' : '_high.ksplat';
     viewer.addSplatScene(path, {
-      'streamView': true,
-     /* 'rotation': new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0.01933, -0.75830, -0.65161).normalize(), new THREE.Vector3(0, 1, 0)).toArray(),
-      'scale': [0.25, 0.25, 0.25],
-      'position': [0, 0.5, 0]*/
+      'streamView': true
     })
     .then(() => {
         viewer.start();

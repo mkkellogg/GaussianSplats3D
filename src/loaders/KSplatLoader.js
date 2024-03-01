@@ -62,7 +62,7 @@ export class KSplatLoader {
                 window.setTimeout(() => {
                     queuedCheckAndLoadSectionsCount--;
                     checkAndLoadSections(true);
-                }, 100);
+                }, 1);
             }
         };
 
@@ -115,7 +115,6 @@ export class KSplatLoader {
 
                 loadComplete = bytesLoaded >= totalBytesToDownload;
 
-                let queueNextCheck = false;
                 const bytesLoadedSinceLastSection = bytesLoaded - lastStreamUpdateBytes;
                 if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
 
@@ -151,14 +150,8 @@ export class KSplatLoader {
 
                     if (loadComplete) {
                         streamLoadCompleteResolver();
-                    } else {
-                        queueNextCheck = true;
                     }
-                } else {
-                    queueNextCheck = true;
                 }
-                if (queueNextCheck) queueCheckAndLoadSections();
-
             }
         };
 

@@ -4,9 +4,12 @@ const STANDARD_FADE_DURATION = 500;
 
 export class LoadingSpinner {
 
+    static elementIDGen = 0;
+
     constructor(message, container) {
 
-        this.idGen = 0;
+        this.taskIDGen = 0;
+        this.elementID = LoadingSpinner.elementIDGen++;
 
         this.tasks = [];
 
@@ -14,23 +17,23 @@ export class LoadingSpinner {
         this.container = container || document.body;
 
         this.spinnerContainerOuter = document.createElement('div');
-        this.spinnerContainerOuter.className = 'spinnerOuterContainer';
+        this.spinnerContainerOuter.className = `spinnerOuterContainer${this.elementID}`;
         this.spinnerContainerOuter.style.display = 'none';
 
         this.spinnerContainerPrimary = document.createElement('div');
-        this.spinnerContainerPrimary.className = 'spinnerContainerPrimary';
+        this.spinnerContainerPrimary.className = `spinnerContainerPrimary${this.elementID}`;
         this.spinnerPrimary = document.createElement('div');
-        this.spinnerPrimary.classList.add('spinner', 'spinnerPrimary');
+        this.spinnerPrimary.classList.add(`spinner${this.elementID}`, `spinnerPrimary${this.elementID}`);
         this.messageContainerPrimary = document.createElement('div');
-        this.messageContainerPrimary.classList.add('messageContainer', 'messageContainerPrimary');
+        this.messageContainerPrimary.classList.add(`messageContainer${this.elementID}`, `messageContainerPrimary${this.elementID}`);
         this.messageContainerPrimary.innerHTML = this.message;
 
         this.spinnerContainerMin = document.createElement('div');
-        this.spinnerContainerMin.className = 'spinnerContainerMin';
+        this.spinnerContainerMin.className = `spinnerContainerMin${this.elementID}`;
         this.spinnerMin = document.createElement('div');
-        this.spinnerMin.classList.add('spinner', 'spinnerMin');
+        this.spinnerMin.classList.add(`spinner${this.elementID}`, `spinnerMin${this.elementID}`);
         this.messageContainerMin = document.createElement('div');
-        this.messageContainerMin.classList.add('messageContainer', 'messageContainerMin');
+        this.messageContainerMin.classList.add(`messageContainer${this.elementID}`, `messageContainerMin${this.elementID}`);
         this.messageContainerMin.innerHTML = this.message;
 
         this.spinnerContainerPrimary.appendChild(this.spinnerPrimary);
@@ -41,12 +44,10 @@ export class LoadingSpinner {
         this.spinnerContainerMin.appendChild(this.messageContainerMin);
         this.spinnerContainerOuter.appendChild(this.spinnerContainerMin);
 
-        this.container.appendChild(this.spinnerContainerOuter);
-
         const style = document.createElement('style');
         style.innerHTML = `
 
-            .spinnerOuterContainer {
+            .spinnerOuterContainer${this.elementID} {
                 width: 100%;
                 height: 100%;
                 margin: 0;
@@ -56,15 +57,16 @@ export class LoadingSpinner {
                 pointer-events: none;
             }
 
-            .messageContainer {
+            .messageContainer${this.elementID} {
+                height: 20px;
                 font-family: arial;
                 font-size: 12pt;
                 color: #ffffff;
                 text-align: center;
-                padding-top:15px;
+                vertical-align: middle;
             }
 
-            .spinner {
+            .spinner${this.elementID} {
                 padding: 15px;
                 background: #07e8d6;
                 z-index:99999;
@@ -82,7 +84,7 @@ export class LoadingSpinner {
                 animation: load 1s linear infinite;
             }
 
-            .spinnerContainerPrimary {
+            .spinnerContainerPrimary${this.elementID} {
                 z-index:99999;
                 background-color: rgba(128, 128, 128, 0.75);
                 border: #666666 1px solid;
@@ -98,12 +100,16 @@ export class LoadingSpinner {
                 pointer-events: auto;
             }
 
-            .spinnerPrimary {
+            .spinnerPrimary${this.elementID} {
                 width: 120px;
                 margin-left: 30px;
             }
 
-            .spinnerContainerMin {
+            .messageContainerPrimary${this.elementID} {
+                padding-top: 15px;
+            }
+
+            .spinnerContainerMin${this.elementID} {
                 z-index:99999;
                 background-color: rgba(128, 128, 128, 0.75);
                 border: #666666 1px solid;
@@ -118,16 +124,22 @@ export class LoadingSpinner {
                 display: flex;
                 flex-direction: left;
                 pointer-events: auto;
+                min-width: 250px;
             }
 
-            .messageContainerMin {
+            .messageContainerMin${this.elementID} {
                 margin-right: 15px;
             }
 
-            .spinnerMin {
+            .spinnerMin${this.elementID} {
                 width: 50px;
+                height: 50px;
                 margin-left: 15px;
-                margin-right: 15px;
+                margin-right: 25px;
+            }
+
+            .messageContainerMin${this.elementID} {
+                padding-top: 15px;
             }
             
             @keyframes load {
@@ -136,16 +148,17 @@ export class LoadingSpinner {
 
         `;
         this.spinnerContainerOuter.appendChild(style);
+        this.container.appendChild(this.spinnerContainerOuter);
+
         this.setMinimized(false, true);
 
-        this.spinnerFadeTransition = null;
-        this.spinnerMinFadeTransition = null;
+        this.fadeTransitions = [];
     }
 
     addTask(message) {
         const newTask = {
             'message': message,
-            'id': this.idGen++
+            'id': this.taskIDGen++
         };
         this.tasks.push(newTask);
         this.update();
@@ -161,6 +174,11 @@ export class LoadingSpinner {
             }
             index++;
         }
+        this.update();
+    }
+
+    removeAllTasks() {
+        this.tasks = [];
         this.update();
     }
 
@@ -197,37 +215,25 @@ export class LoadingSpinner {
         if (this.container) {
             this.container.removeChild(this.spinnerContainerOuter);
         }
-        this.container = container;
-        this.container.appendChild(this.spinnerContainerOuter);
-        this.spinnerContainerOuter.style.zIndex = this.container.style.zIndex + 1;
+        if (container) {
+            this.container = container;
+            this.container.appendChild(this.spinnerContainerOuter);
+            this.spinnerContainerOuter.style.zIndex = this.container.style.zIndex + 1;
+        }
     }
 
     setMinimized(minimized, instant) {
-        if (minimized) {
+        const showHideSpinner = (element, show, instant, displayStyle, fadeTransitionsIndex) => {
             if (instant) {
-                this.spinnerContainerPrimary.style.display = 'none';
-                this.spinnerContainerMin.style.display = 'flex';
+                element.style.display = show ? displayStyle : 'none';
             } else {
-                this.spinnerFadeTransition = fadeElement(this.spinnerContainerPrimary, true, 'block', STANDARD_FADE_DURATION, () => {
-                    this.spinnerFadeTransition = null;
-                });
-                this.spinnerMinFadeTransition = fadeElement(this.spinnerContainerMin, false, 'flex', STANDARD_FADE_DURATION, () => {
-                    this.spinnerMinFadeTransition = null;
+                this.fadeTransitions[fadeTransitionsIndex] = fadeElement(element, !show, displayStyle, STANDARD_FADE_DURATION, () => {
+                    this.fadeTransitions[fadeTransitionsIndex] = null;
                 });
             }
-        } else {
-            if (instant) {
-                this.spinnerContainerPrimary.style.display = 'block';
-                this.spinnerContainerMin.style.display = 'none';
-            } else {
-                this.spinnerFadeTransition = fadeElement(this.spinnerContainerPrimary, false, 'block', STANDARD_FADE_DURATION, () => {
-                    this.spinnerFadeTransition = null;
-                });
-                this.spinnerMinFadeTransition = fadeElement(this.spinnerContainerMin, true, 'flex', STANDARD_FADE_DURATION, () => {
-                    this.spinnerMinFadeTransition = null;
-                });
-            }
-        }
+        };
+        showHideSpinner(this.spinnerContainerPrimary, !minimized, instant, 'block', 0);
+        showHideSpinner(this.spinnerContainerMin, minimized, instant, 'flex', 1);
         this.minimized = minimized;
     }
 

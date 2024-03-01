@@ -1,4 +1,4 @@
-import { AbortablePromise } from './AbortablePromise.js';
+import { AbortablePromise, AbortedPromiseError } from './AbortablePromise.js';
 
 export const floatToHalf = function() {
 
@@ -62,7 +62,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
     let rejectFunc = null;
     const abortHandler = () => {
         abortController.abort();
-        rejectFunc('Fetch aborted');
+        rejectFunc(new AbortedPromiseError('Fetch aborted.'));
         aborted = true;
     };
 

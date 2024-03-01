@@ -345,11 +345,27 @@ export class SplatTree {
             return sceneCenters;
         };
 
+        const diposeSplatTreeWorker = () => {
+            splatTreeWorker.terminate();
+            splatTreeWorker = null;
+        };
+
+        const checkForEarlyExit = (resolve) => {
+            if (splatMesh.disposed) {
+                diposeSplatTreeWorker();
+                resolve();
+                return true;
+            }
+            return false;
+        };
+
         return new Promise((resolve) => {
 
             if (onIndexesUpload) onIndexesUpload(false);
 
             delayedExecute(() => {
+
+                if (checkForEarlyExit(resolve)) return;
 
                 const allCenters = [];
                 if (splatMesh.dynamicMode) {
@@ -367,18 +383,22 @@ export class SplatTree {
                 }
 
                 splatTreeWorker.onmessage = (e) => {
-                     if (e.data.subTrees) {
+
+                    if (checkForEarlyExit(resolve)) return;
+
+                    if (e.data.subTrees) {
 
                         if (onSplatTreeConstruction) onSplatTreeConstruction(false);
 
                         delayedExecute(() => {
 
+                            if (checkForEarlyExit(resolve)) return;
+
                             for (let workerSubTree of e.data.subTrees) {
                                 const convertedSubTree = SplatSubTree.convertWorkerSubTree(workerSubTree, splatMesh);
                                 this.subTrees.push(convertedSubTree);
                             }
-                            splatTreeWorker.terminate();
-                            splatTreeWorker = null;
+                            diposeSplatTreeWorker();
 
                             if (onSplatTreeConstruction) onSplatTreeConstruction(true);
 
@@ -391,6 +411,7 @@ export class SplatTree {
                 };
 
                 delayedExecute(() => {
+                    if (checkForEarlyExit(resolve)) return;
                     if (onIndexesUpload) onIndexesUpload(true);
                     const transferBuffers = allCenters.map((array) => array.buffer);
                     workerProcessCenters(allCenters, transferBuffers, this.maxDepth, this.maxCentersPerNode);

@@ -24,7 +24,6 @@ export class LoadingProgressBar {
         this.progressBarBackground.appendChild(this.progressBar);
         this.progressBarBox.appendChild(this.progressBarBackground);
         this.progressBarContainerOuter.appendChild(this.progressBarBox);
-        this.container.appendChild(this.progressBarContainerOuter);
 
         const style = document.createElement('style');
         style.innerHTML = `
@@ -75,6 +74,7 @@ export class LoadingProgressBar {
 
         `;
         this.progressBarContainerOuter.appendChild(style);
+        this.container.appendChild(this.progressBarContainerOuter);
     }
 
     show() {
@@ -93,9 +93,11 @@ export class LoadingProgressBar {
         if (this.container) {
             this.container.removeChild(this.progressBarContainerOuter);
         }
-        this.container = container;
-        this.container.appendChild(this.progressBarContainerOuter);
-        this.progressBarContainerOuter.style.zIndex = this.container.style.zIndex + 1;
+        if (container) {
+            this.container = container;
+            this.container.appendChild(this.progressBarContainerOuter);
+            this.progressBarContainerOuter.style.zIndex = this.container.style.zIndex + 1;
+        }
     }
 
 }
