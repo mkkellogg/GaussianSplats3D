@@ -246,11 +246,11 @@ export class Viewer {
             this.controls.dampingFactor = 0.05;
             this.controls.target.copy(this.initialCameraLookAt);
             this.mouseMoveListener = this.onMouseMove.bind(this);
-            this.rootElement.addEventListener('pointermove', this.mouseMoveListener, false);
+            this.renderer.domElement.addEventListener('pointermove', this.mouseMoveListener, false);
             this.mouseDownListener = this.onMouseDown.bind(this);
-            this.rootElement.addEventListener('pointerdown', this.mouseDownListener, false);
+            this.renderer.domElement.addEventListener('pointerdown', this.mouseDownListener, false);
             this.mouseUpListener = this.onMouseUp.bind(this);
-            this.rootElement.addEventListener('pointerup', this.mouseUpListener, false);
+            this.renderer.domElement.addEventListener('pointerup', this.mouseUpListener, false);
             this.keyDownListener = this.onKeyDown.bind(this);
             window.addEventListener('keydown', this.keyDownListener, false);
         }
@@ -265,11 +265,11 @@ export class Viewer {
 
     removeEventHandlers() {
         if (this.useBuiltInControls) {
-            this.rootElement.removeEventListener('pointermove', this.mouseMoveListener);
+            this.renderer.domElement.removeEventListener('pointermove', this.mouseMoveListener);
             this.mouseMoveListener = null;
-            this.rootElement.removeEventListener('pointerdown', this.mouseDownListener);
+            this.renderer.domElement.removeEventListener('pointerdown', this.mouseDownListener);
             this.mouseDownListener = null;
-            this.rootElement.removeEventListener('pointerup', this.mouseUpListener);
+            this.renderer.domElement.removeEventListener('pointerup', this.mouseUpListener);
             this.mouseUpListener = null;
             window.removeEventListener('keydown', this.keyDownListener);
             this.keyDownListener = null;
@@ -380,16 +380,6 @@ export class Viewer {
     }
 
     setupInfoPanel() {
-        this.infoPanel = document.createElement('div');
-        this.infoPanel.style.position = 'absolute';
-        this.infoPanel.style.padding = '10px';
-        this.infoPanel.style.backgroundColor = '#cccccc';
-        this.infoPanel.style.border = '#aaaaaa 1px solid';
-        this.infoPanel.style.zIndex = 100;
-        this.infoPanel.style.width = '375px';
-        this.infoPanel.style.fontFamily = 'arial';
-        this.infoPanel.style.fontSize = '10pt';
-        this.infoPanel.style.textAlign = 'left';
 
         const layout = [
             ['Camera position', 'cameraPosition'],
@@ -402,26 +392,66 @@ export class Viewer {
             ['Sort time', 'sortTime']
         ];
 
+        this.infoPanelContainer = document.createElement('div');
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .infoPanel {
+                width: 430px;
+                padding: 10px;
+                background-color: rgba(50, 50, 50, 0.85);
+                border: #555555 2px solid;
+                color: #dddddd;
+                border-radius: 10px;
+                z-index: 9999;
+                font-family: arial;
+                font-size: 11pt;
+                text-align: left;
+                margin: 0;
+                top: 10px;
+                left:10px;
+                position: absolute;
+                pointer-events: auto;
+            }
+
+            .info-panel-cell {
+                margin-bottom: 5px;
+                padding-bottom: 2px;
+            }
+
+            .label-cell {
+                font-weight: bold;
+                font-size: 12pt;
+                width: 140px;
+            }
+        `;
+        this.infoPanelContainer.append(style);
+
+        this.infoPanel = document.createElement('div');
+        this.infoPanel.className = 'infoPanel';
+
         const infoTable = document.createElement('div');
         infoTable.style.display = 'table';
 
         for (let layoutEntry of layout) {
             const row = document.createElement('div');
             row.style.display = 'table-row';
+            row.className = 'info-panel-row';
 
             const labelCell = document.createElement('div');
             labelCell.style.display = 'table-cell';
-            labelCell.style.width = '110px';
             labelCell.innerHTML = `${layoutEntry[0]}: `;
+            labelCell.classList.add('info-panel-cell', 'label-cell');
 
             const spacerCell = document.createElement('div');
             spacerCell.style.display = 'table-cell';
             spacerCell.style.width = '10px';
             spacerCell.innerHTML = ' ';
+            spacerCell.className = 'info-panel-cell';
 
             const infoCell = document.createElement('div');
             infoCell.style.display = 'table-cell';
             infoCell.innerHTML = '';
+            infoCell.className = 'info-panel-cell';
 
             this.infoPanelCells[layoutEntry[1]] = infoCell;
 
@@ -434,7 +464,8 @@ export class Viewer {
 
         this.infoPanel.appendChild(infoTable);
         this.infoPanel.style.display = 'none';
-        this.renderer.domElement.parentElement.prepend(this.infoPanel);
+        this.infoPanelContainer.append(this.infoPanel);
+        this.renderer.domElement.parentElement.append(this.infoPanelContainer);
     }
 
     updateSplatMesh = function() {
@@ -1132,22 +1163,28 @@ export class Viewer {
             this.getRenderDimensions(renderDimensions);
 
             const cameraPos = this.camera.position;
-            const cameraPosString = `[${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}]`;
-            this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
+            const cameraPosString = `${cameraPos.x.toFixed(5)}, ${cameraPos.y.toFixed(5)}, ${cameraPos.z.toFixed(5)}`;
+            if (this.infoPanelCells.cameraPosition.innerHTML !== cameraPosString) {
+                this.infoPanelCells.cameraPosition.innerHTML = cameraPosString;
+            }
 
             if (this.controls) {
-            const cameraLookAt = this.controls.target;
-            const cameraLookAtString = `[${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}]`;
-            this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
+                const cameraLookAt = this.controls.target;
+                const cameraLookAtString = `${cameraLookAt.x.toFixed(5)}, ${cameraLookAt.y.toFixed(5)}, ${cameraLookAt.z.toFixed(5)}`;
+                if (this.infoPanelCells.cameraLookAt.innerHTML !== cameraLookAtString) {
+                    this.infoPanelCells.cameraLookAt.innerHTML = cameraLookAtString;
+                }
             }
 
             const cameraUp = this.camera.up;
-            const cameraUpString = `[${cameraUp.x.toFixed(5)}, ${cameraUp.y.toFixed(5)}, ${cameraUp.z.toFixed(5)}]`;
-            this.infoPanelCells.cameraUp.innerHTML = cameraUpString;
+            const cameraUpString = `${cameraUp.x.toFixed(5)}, ${cameraUp.y.toFixed(5)}, ${cameraUp.z.toFixed(5)}`;
+            if (this.infoPanelCells.cameraUp.innerHTML !== cameraUpString) {
+                this.infoPanelCells.cameraUp.innerHTML = cameraUpString;
+            }
 
             if (this.showMeshCursor) {
                 const cursorPos = this.sceneHelper.meshCursor.position;
-                const cursorPosString = `[${cursorPos.x.toFixed(5)}, ${cursorPos.y.toFixed(5)}, ${cursorPos.z.toFixed(5)}]`;
+                const cursorPosString = `${cursorPos.x.toFixed(5)}, ${cursorPos.y.toFixed(5)}, ${cursorPos.z.toFixed(5)}`;
                 this.infoPanelCells.cursorPosition.innerHTML = cursorPosString;
             } else {
                 this.infoPanelCells.cursorPosition.innerHTML = 'N/A';
