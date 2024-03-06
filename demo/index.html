@@ -280,6 +280,7 @@
         if (format === GaussianSplats3D.SceneFormat.Splat) {
           splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData.data, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
         } else {
+          GaussianSplats3D.KSplatLoader.checkVersion(fileBufferData.data);
           splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData.data);
         }
       }
@@ -493,6 +494,7 @@
           try {
            runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
           } catch (e) {
+            console.error(e);
             setViewError("Could not view scene.");
           }
         }

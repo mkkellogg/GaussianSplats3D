@@ -3,12 +3,26 @@ import { fetchWithProgress, delayedExecute } from '../Util.js';
 import { LoaderStatus } from './LoaderStatus.js';
 import { Constants } from '../Constants.js';
 
+const MINIMUM_REQUIRED_MAJOR_VERSION = 0;
+const MINIMUM_REQUIRED_MINOR_VERSION = 1;
+
 export class KSplatLoader {
 
     constructor(splatBuffer = null) {
         this.splatBuffer = splatBuffer;
         this.downLoadLink = null;
     }
+
+   static checkVersion(buffer) {
+        const header = SplatBuffer.parseHeader(buffer);
+        if (header.versionMajor === MINIMUM_REQUIRED_MAJOR_VERSION && header.versionMinor >= MINIMUM_REQUIRED_MINOR_VERSION ||
+            header.versionMajor > MINIMUM_REQUIRED_MAJOR_VERSION) {
+           return true;
+        } else {
+            throw new Error(`KSplat version not supported: v${header.versionMajor}.${header.versionMinor}. ` +
+                            `Minimum required: v${MINIMUM_REQUIRED_MAJOR_VERSION}.${MINIMUM_REQUIRED_MINOR_VERSION}`);
+        }
+    };
 
     loadFromURL(fileName, onProgress, streamBuiltSections, onSectionBuilt) {
         let bytesLoaded = 0;
@@ -47,10 +61,10 @@ export class KSplatLoader {
                 headerAssemblyPromise.then((bufferData) => {
                     headerBuffer = new ArrayBuffer(SplatBuffer.HeaderSizeBytes);
                     new Uint8Array(headerBuffer).set(new Uint8Array(bufferData, 0, SplatBuffer.HeaderSizeBytes));
+                    KSplatLoader.checkVersion(headerBuffer);
                     headerLoading = false;
                     headerLoaded = true;
                     header = SplatBuffer.parseHeader(headerBuffer);
-                    checkAndLoadSectionHeaders();
                 });
             }
         };
@@ -178,7 +192,10 @@ export class KSplatLoader {
                 function finish(buffer) {
                     if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
                     if (buffer instanceof SplatBuffer) return buffer;
-                    else return new SplatBuffer(buffer);
+                    else {
+                        KSplatLoader.checkVersion(buffer);
+                        return new SplatBuffer(buffer);
+                    }
                 }
                 if (streamBuiltSections) {
                     return streamLoadPromise.then(() => {
