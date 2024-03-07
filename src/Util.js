@@ -1,4 +1,4 @@
-import { AbortablePromise } from './AbortablePromise.js';
+import { AbortablePromise, AbortedPromiseError } from './AbortablePromise.js';
 
 export const floatToHalf = function() {
 
@@ -50,7 +50,11 @@ export const rgbaToInteger = function(r, g, b, a) {
     return r + (g << 8) + (b << 16) + (a << 24);
 };
 
-export const fetchWithProgress = function(path, onProgress) {
+export const rgbaArrayToInteger = function(arr, offset) {
+    return arr[offset] + (arr[offset + 1] << 8) + (arr[offset + 2] << 16) + (arr[offset + 3] << 24);
+};
+
+export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
 
     const abortController = new AbortController();
     const signal = abortController.signal;
@@ -58,7 +62,7 @@ export const fetchWithProgress = function(path, onProgress) {
     let rejectFunc = null;
     const abortHandler = () => {
         abortController.abort();
-        rejectFunc('Fetch aborted');
+        rejectFunc(new AbortedPromiseError('Fetch aborted.'));
         aborted = true;
     };
 
@@ -78,10 +82,14 @@ export const fetchWithProgress = function(path, onProgress) {
                     const { value: chunk, done } = await reader.read();
                     if (done) {
                         if (onProgress) {
-                            onProgress(100, '100%', chunk);
+                            onProgress(100, '100%', chunk, fileSize);
                         }
-                        const buffer = new Blob(chunks).arrayBuffer();
-                        resolve(buffer);
+                        if (saveChunks) {
+                            const buffer = new Blob(chunks).arrayBuffer();
+                            resolve(buffer);
+                        } else {
+                            resolve();
+                        }
                         break;
                     }
                     bytesDownloaded += chunk.length;
@@ -91,9 +99,10 @@ export const fetchWithProgress = function(path, onProgress) {
                         percent = bytesDownloaded / fileSize * 100;
                         percentLabel = `${percent.toFixed(2)}%`;
                     }
-                    chunks.push(chunk);
+                    if (saveChunks) chunks.push(chunk);
                     if (onProgress) {
-                        onProgress(percent, percentLabel, chunk);
+                        const cancelSaveChucnks = onProgress(percent, percentLabel, chunk, fileSize);
+                        if (cancelSaveChucnks) saveChunks = false;
                     }
                 } catch (error) {
                     reject(error);
@@ -127,4 +136,12 @@ export const disposeAllMeshes = (object3D) => {
             disposeAllMeshes(child);
         }
     }
+};
+
+export const delayedExecute = (func) => {
+    return new Promise((resolve) => {
+        window.setTimeout(() => {
+            resolve(func());
+        }, 1);
+    });
 };

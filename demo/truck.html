@@ -33,11 +33,13 @@
     const viewer = new GaussianSplats3D.Viewer({
         'cameraUp': [0, -1, -.17],
         'initialCameraPosition': [-5, -1, -1],
-        'initialCameraLookAt': [1, 1, 0]
+        'initialCameraLookAt': [-1.72477, 0.05395, -0.00147]
     });
     let path = 'assets/data/truck/truck';
     path += isMobile() ? '.ksplat' : '_high.ksplat';
-    viewer.addSplatScene(path)
+    viewer.addSplatScene(path, {
+      'streamView': true
+    })
     .then(() => {
         viewer.start();
     });

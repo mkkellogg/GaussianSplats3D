@@ -34,7 +34,7 @@ export class DropInViewer extends THREE.Group {
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
      *                                     value (valid range: 0 - 255), defaults to 1
      *
-     *         showLoadingSpinner:         Display a loading spinner while the scene is loading, defaults to true
+     *         showLoadingUI:         Display a loading spinner while the scene is loading, defaults to true
      *
      *         position (Array<number>):   Position of the scene, acts as an offset from its default position, defaults to [0, 0, 0]
      *
@@ -48,7 +48,7 @@ export class DropInViewer extends THREE.Group {
      * @return {AbortablePromise}
      */
     addSplatScene(path, options = {}) {
-        if (options.showLoadingSpinner !== false) options.showLoadingSpinner = true;
+        if (options.showLoadingUI !== false) options.showLoadingUI = true;
         const loadPromise = this.viewer.addSplatScene(path, options);
         loadPromise.then(() => {
             this.add(this.viewer.splatMesh);
@@ -71,12 +71,12 @@ export class DropInViewer extends THREE.Group {
      *
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
-     * @param {boolean} showLoadingSpinner Display a loading spinner while the scene is loading, defaults to true
+     * @param {boolean} showLoadingUI Display a loading spinner while the scene is loading, defaults to true
      * @return {AbortablePromise}
      */
-    addSplatScenes(sceneOptions, showLoadingSpinner) {
-        if (showLoadingSpinner !== false) showLoadingSpinner = true;
-        const loadPromise = this.viewer.addSplatScenes(sceneOptions, showLoadingSpinner);
+    addSplatScenes(sceneOptions, showLoadingUI) {
+        if (showLoadingUI !== false) showLoadingUI = true;
+        const loadPromise = this.viewer.addSplatScenes(sceneOptions, showLoadingUI);
         loadPromise.then(() => {
             this.add(this.viewer.splatMesh);
         });

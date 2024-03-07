@@ -43,6 +43,8 @@ export class Raycaster {
         return function(splatMesh, outHits = []) {
             const splatTree = splatMesh.getSplatTree();
 
+            if (!splatTree) return;
+
             for (let s = 0; s < splatTree.subTrees.length; s++) {
                 const subTree = splatTree.subTrees[s];
 
@@ -102,7 +104,7 @@ export class Raycaster {
             if (!ray.intersectBox(node.boundingBox)) {
                 return;
             }
-            if (node.data.indexes && node.data.indexes.length > 0) {
+            if (node.data && node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
                     const splatGlobalIndex = node.data.indexes[i];
                     splatTree.splatMesh.getSplatColor(splatGlobalIndex, tempColor);

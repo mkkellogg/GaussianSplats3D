@@ -114,7 +114,7 @@ const viewer = new GaussianSplats3D.Viewer({
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>', {
     'splatAlphaRemovalThreshold': 5,
-    'showLoadingSpinner': true,
+    'showLoadingUI': true,
     'position': [0, 1, 0],
     'rotation': [0, 0, 0, 1],
     'scale': [1.5, 1.5, 1.5]
@@ -140,10 +140,11 @@ Parameters for `addSplatScene()`
 | Parameter | Purpose
 | --- | ---
 | `splatAlphaRemovalThreshold` | Tells `addSplatScene()` to ignore any splats with an alpha less than the specified value (valid range: 0 - 255). Defaults to `1`.
-| `showLoadingSpinner` | Displays a loading spinner while the scene is loading.  Defaults to `true`.
+| `showLoadingUI` | Displays a loading spinner and/or loading progress bar while the scene is loading.  Defaults to `true`.
 | `position` | Position of the scene, acts as an offset from its default position. Defaults to `[0, 0, 0]`.
 | `rotation` | Rotation of the scene represented as a quaternion, defaults to `[0, 0, 0, 1]` (identity quaternion).
 | `scale` | Scene's scale, defaults to `[1, 1, 1]`.
+| `streamView` | Stream the scene's splat data and allow the scene to be rendered and viewed as the splats are loaded. Option is only valid for `addSplatScene()`, and not for `addSplatScenes()`.
 
 <br>
 
@@ -301,7 +302,7 @@ const splatAlphaRemovalThreshold = 5; // out of 255
 const plyLoader = new GaussianSplats3D.PlyLoader();
 plyLoader.loadFromURL('<path to .ply or .splat file>', compressionLevel, splatAlphaRemovalThreshold)
 .then((splatBuffer) => {
-    new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.ksplat');
+    GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
 });
 ```
 Both of the above methods will prompt your browser to automatically start downloading the converted `.ksplat` file.

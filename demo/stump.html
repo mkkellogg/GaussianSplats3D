@@ -33,11 +33,13 @@
     const viewer = new GaussianSplats3D.Viewer({
         'cameraUp': [0, -1, -1.0],
         'initialCameraPosition': [-3.3816, 1.96931, -1.71890],
-        'initialCameraLookAt': [0.60910, 1.42099, 2.02511]
+        'initialCameraLookAt': [-0.04979, 1.37519, 1.13443]
     });
     let path = 'assets/data/stump/stump';
     path += isMobile() ? '.ksplat' : '_high.ksplat';
-    viewer.addSplatScene(path)
+    viewer.addSplatScene(path, {
+      'streamView': true
+    })
     .then(() => {
         viewer.start();
     });

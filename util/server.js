@@ -18,8 +18,14 @@ for(let i = 0; i < process.argv.length; ++i) {
   } 
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 http
-  .createServer(function (request, response) {
+  .createServer( async function (request, response) {
 
     response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
@@ -87,7 +93,7 @@ http
       // ignore
     }
 
-    fs.readFile(filePath, function (error, content) {
+    fs.readFile(filePath, async function (error, content) {
       if (error) {
         if (error.code == "ENOENT") {
           console.log("HTTP(404) Request for " + filePath + " -> File not found.");

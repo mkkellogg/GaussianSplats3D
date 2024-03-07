@@ -252,31 +252,36 @@
   </script>
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
+    import * as THREE from 'three';
 
-    function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
-      const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
-      return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
+    function convertPLYToSplatBuffer(plyBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
+      const plyParser = new GaussianSplats3D.PlyParser(plyBufferData.data);
+      const splatArray = plyParser.parseToUncompressedSplatArray();
+      plyBufferData.data = null;
+      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
+      return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
-    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize){
-      const splatArray = GaussianSplats3D.SplatLoader.parseStandardSplatToUncompressedSplatArray(bufferData);
-      const splatCompressor = new GaussianSplats3D.SplatCompressor(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
-      return splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize){
+      const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
+      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
+      return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
     function isPlyFile(fileName) {
       return fileName.toLowerCase().trim().endsWith('.ply');
     }
 
-    function fileBufferToSplatBuffer(fileBufferData, isPly, isStandardSplat, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
+    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
       let splatBuffer;
-      if (isPly) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
+      if (format === GaussianSplats3D.SceneFormat.Ply) {
+        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
-        if (isStandardSplat) {
-          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
+        if (format === GaussianSplats3D.SceneFormat.Splat) {
+          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData.data, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
         } else {
-          splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);
+          GaussianSplats3D.KSplatLoader.checkVersion(fileBufferData.data);
+          splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData.data);
         }
       }
       return splatBuffer;
@@ -313,8 +318,28 @@
       const conversionFile = document.getElementById("conversionFile");
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
+      const sectionSize = 0;
+      let sceneCenterArray = document.getElementById("sceneCenter").value;
       const blockSize = parseFloat(document.getElementById("blockSize").value);
       const bucketSize = parseInt(document.getElementById("bucketSize").value);
+
+      sceneCenterArray = sceneCenterArray.split(',');
+  
+      if (sceneCenterArray.length !== 3) {
+        setViewError("Scene center must contain 3 elements.");
+        return;
+      }
+
+      for (let i = 0; i < 3; i++) {
+        sceneCenterArray[i] = parseFloat(sceneCenterArray[i]);
+
+        if (isNaN(sceneCenterArray[i])) {
+          setViewError("Invalid scene center.");
+          return;
+        }
+      }
+  
+      const sceneCenter = new THREE.Vector3().fromArray(sceneCenterArray);
 
       if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
         setConversionError("Invalid compression level.");
@@ -356,14 +381,14 @@
           setConversionStatus("Parsing file...");
           setConversionLoadingIconVisibility(true);
           setConversionCheckIconVisibility(false);
-          const conversionFileName = conversionFile.files[0].name;
-          const isPly = isPlyFile(conversionFileName);
-          const isStandardSplat = GaussianSplats3D.SplatLoader.isStandardSplatFormat(conversionFileName);
+          const conversionFileName = conversionFile.files[0].name.trim();
+          const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(conversionFileName);
+          const fileData = {data: fileReader.result};
           window.setTimeout(() => {
             try {
-              const splatBuffer = fileBufferToSplatBuffer(fileReader.result, isPly, isStandardSplat, compressionLevel,
-                                                          alphaRemovalThreshold, blockSize, bucketSize);
-              new GaussianSplats3D.SplatLoader(splatBuffer).downloadFile('converted_file.ksplat');
+              const splatBuffer = fileBufferToSplatBuffer(fileData, format, compressionLevel,
+                                                          alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
+              GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
               conversionDone();
             } catch (e) {
               conversionDone(e);
@@ -456,9 +481,8 @@
         }
       }
 
-      const viewFileName = viewFile.files[0].name;
-      const isPly = isPlyFile(viewFileName);
-      const isStandardSplat = GaussianSplats3D.SplatLoader.isStandardSplatFormat(viewFileName);
+      const viewFileName = viewFile.files[0].name.trim();
+      const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(viewFileName);
 
       currentAlphaRemovalThreshold = alphaRemovalThreshold;
       currentCameraUpArray = cameraUpArray;
@@ -468,8 +492,9 @@
         const fileReader = new FileReader();
         fileReader.onload = function(){
           try {
-           runViewer(fileReader.result, isPly, isStandardSplat, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
           } catch (e) {
+            console.error(e);
             setViewError("Could not view scene.");
           }
         }
@@ -505,7 +530,7 @@
       }
     });
 
-    function runViewer(splatBufferData, isPly, isStandardSplat, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
+    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
       const viewerOptions = {
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
@@ -516,7 +541,7 @@
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
 
-      const splatBuffer = fileBufferToSplatBuffer(splatBufferData, isPly, isStandardSplat, 0, alphaRemovalThreshold);
+      const splatBuffer = fileBufferToSplatBuffer({data: splatBufferData}, format, 0, alphaRemovalThreshold);
       document.getElementById("demo-content").style.display = 'none';
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
@@ -575,6 +600,10 @@
                 <img src="assets/images/stump.png" class="demo-scene-panel-image">
                 <span class="small-title">Stump</span>
             </div>
+            <div class="demo-scene-panel" onclick="openDemo('bonsai')">
+              <img src="assets/images/bonsai.png" class="demo-scene-panel-image">
+              <span class="small-title">Bonsai</span>
+          </div>
             <div class="demo-scene-panel" onclick="openDemo('dynamic_scenes')">
               <img src="assets/images/dynamic_scenes.png" class="demo-scene-panel-image">
               <span class="small-title">Dynamic scenes</span>
@@ -656,7 +685,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:360px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:380px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -682,7 +711,15 @@
                           <input id="alphaRemovalThreshold" type="text" class="text-input" style="width: 50px" value="1"></input>
                           <span style="color:#888888">(1 - 255)</span>
                       </td>
-                      </tr>
+                    </tr>
+                    <tr>
+                      <td>
+                          Scene center:&nbsp;
+                      </td>
+                      <td>
+                          <input id="sceneCenter" type="text" class="text-input" style="width: 50px" value="0, 0, 0"></input>
+                      </td>
+                    </tr>
                     <tr>
                     <td>
                         Compression level:
@@ -739,7 +776,7 @@
                 <span id="conversionError" style="color: #ff0000"></span>
             </div>
 
-            <div id ="controls-panel" class="splat-panel" style="height:360px;">
+            <div id ="controls-panel" class="splat-panel" style="height:380px;">
 
                 <br>
                 <span class="small-title">Mouse input</span>

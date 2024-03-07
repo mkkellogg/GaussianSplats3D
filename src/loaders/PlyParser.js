@@ -1,17 +1,19 @@
-import { SplatCompressor } from './SplatCompressor.js';
+import { UncompressedSplatArray } from './UncompressedSplatArray.js';
 
 export class PlyParser {
+
+    static HeaderEndToken = 'end_header';
 
     constructor(plyBuffer) {
         this.plyBuffer = plyBuffer;
     }
 
-    decodeHeader(plyBuffer) {
+    static decodeHeader(plyBuffer) {
         const decoder = new TextDecoder();
         let headerOffset = 0;
         let headerText = '';
 
-        console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
+        // console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
 
         const readChunkSize = 100;
 
@@ -54,7 +56,7 @@ export class PlyParser {
             }
         }
 
-        const vertexByteOffset = headerText.indexOf('end_header') + 'end_header'.length + 1;
+        const vertexByteOffset = headerText.indexOf('end_header') + PlyParser.HeaderEndToken.length + 1;
         const vertexData = new DataView(plyBuffer, vertexByteOffset);
 
         return {
@@ -65,7 +67,7 @@ export class PlyParser {
         };
     }
 
-    readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, outVertex) {
+    static readRawVertexFast(vertexData, offset, fieldOffsets, propertiesToRead, propertyTypes, outVertex) {
         let rawVertex = outVertex || {};
         for (let property of propertiesToRead) {
             const propertyType = propertyTypes[property];
@@ -77,13 +79,13 @@ export class PlyParser {
         }
     }
 
-    parseToSplatBuffer(compressionLevel, minimumAlpha, blockSize, bucketSize) {
+    parseToUncompressedSplatArray() {
 
-        const startTime = performance.now();
+        // const startTime = performance.now();
 
-        console.log('Parsing PLY to SPLAT...');
+        // console.log('Parsing PLY to SPLAT...');
 
-        const {splatCount, propertyTypes, vertexData} = this.decodeHeader(this.plyBuffer);
+        const {splatCount, propertyTypes, vertexData} = PlyParser.decodeHeader(this.plyBuffer);
 
         // figure out the SH degree from the number of coefficients
         let nRestCoeffs = 0;
@@ -96,9 +98,8 @@ export class PlyParser {
 
         // TODO: Eventually properly support multiple degree spherical harmonics
         // const sphericalHarmonicsDegree = Math.sqrt(nCoeffsPerColor + 1) - 1;
-        const sphericalHarmonicsDegree = 0;
-
-        console.log('Detected degree', sphericalHarmonicsDegree, 'with ', nCoeffsPerColor, 'coefficients per color');
+        // const sphericalHarmonicsDegree = 0;
+        // console.log('Detected degree', sphericalHarmonicsDegree, 'with ', nCoeffsPerColor, 'coefficients per color');
 
         // figure out the order in which spherical harmonics should be read
         const shFeatureOrder = [];
@@ -135,56 +136,53 @@ export class PlyParser {
         const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
                                   'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
 
-        const splatArray = SplatCompressor.createEmptyUncompressedSplatArray();
+        const splatArray = new UncompressedSplatArray();
 
         for (let row = 0; row < splatCount; row++) {
-            this.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
+            PlyParser.readRawVertexFast(vertexData, row * plyRowSize, fieldOffsets, propertiesToRead, propertyTypes, rawVertex);
+            const newSplat = splatArray.addDefaultSplat();
             if (rawVertex['scale_0'] !== undefined) {
-                splatArray['scale_0'][row] = Math.exp(rawVertex['scale_0']);
-                splatArray['scale_1'][row] = Math.exp(rawVertex['scale_1']);
-                splatArray['scale_2'][row] = Math.exp(rawVertex['scale_2']);
+                newSplat[UncompressedSplatArray.OFFSET.SCALE0] = Math.exp(rawVertex['scale_0']);
+                newSplat[UncompressedSplatArray.OFFSET.SCALE1] = Math.exp(rawVertex['scale_1']);
+                newSplat[UncompressedSplatArray.OFFSET.SCALE2] = Math.exp(rawVertex['scale_2']);
             } else {
-                splatArray['scale_0'][row] = 0.01;
-                splatArray['scale_1'][row] = 0.01;
-                splatArray['scale_2'][row] = 0.01;
+                newSplat[UncompressedSplatArray.OFFSET.SCALE0] = 0.01;
+                newSplat[UncompressedSplatArray.OFFSET.SCALE1] = 0.01;
+                newSplat[UncompressedSplatArray.OFFSET.SCALE2] = 0.01;
             }
 
             if (rawVertex['f_dc_0'] !== undefined) {
                 const SH_C0 = 0.28209479177387814;
-                splatArray['f_dc_0'][row] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
-                splatArray['f_dc_1'][row] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
-                splatArray['f_dc_2'][row] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.FDC0] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.FDC1] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.FDC2] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
             } else {
-                splatArray['f_dc_0'][row] = 0;
-                splatArray['f_dc_1'][row] = 0;
-                splatArray['f_dc_2'][row] = 0;
+                newSplat[UncompressedSplatArray.OFFSET.FDC0] = 0;
+                newSplat[UncompressedSplatArray.OFFSET.FDC1] = 0;
+                newSplat[UncompressedSplatArray.OFFSET.FDC2] = 0;
             }
             if (rawVertex['opacity'] !== undefined) {
-                splatArray['opacity'][row] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
+                newSplat[UncompressedSplatArray.OFFSET.OPACITY] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
             }
 
-            splatArray['rot_0'][row] = rawVertex['rot_0'];
-            splatArray['rot_1'][row] = rawVertex['rot_1'];
-            splatArray['rot_2'][row] = rawVertex['rot_2'];
-            splatArray['rot_3'][row] = rawVertex['rot_3'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION0] = rawVertex['rot_0'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION1] = rawVertex['rot_1'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION2] = rawVertex['rot_2'];
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION3] = rawVertex['rot_3'];
 
-            splatArray['x'][row] = rawVertex['x'];
-            splatArray['y'][row] = rawVertex['y'];
-            splatArray['z'][row] = rawVertex['z'];
-            splatArray.splatCount++;
+            newSplat[UncompressedSplatArray.OFFSET.X] = rawVertex['x'];
+            newSplat[UncompressedSplatArray.OFFSET.Y] = rawVertex['y'];
+            newSplat[UncompressedSplatArray.OFFSET.Z] = rawVertex['z'];
         }
 
-        const splatCompressor = new SplatCompressor(compressionLevel, minimumAlpha, blockSize, bucketSize);
-        const splatBuffer = splatCompressor.uncompressedSplatArrayToSplatBuffer(splatArray);
+        return splatArray;
 
-        console.log('Total valid splats: ', splatBuffer.getSplatCount(), 'out of', splatCount);
+        // console.log('Total valid splats: ', splatBuffer.getSplatCount(), 'out of', splatCount);
 
-        const endTime = performance.now();
+        // const endTime = performance.now();
 
-        console.log('Parsing PLY to SPLAT complete!');
-        console.log('Total time: ', (endTime - startTime).toFixed(2) + ' ms');
-
-        return splatBuffer;
+        // console.log('Parsing PLY to SPLAT complete!');
+        // console.log('Total time: ', (endTime - startTime).toFixed(2) + ' ms');
     }
 
 }
