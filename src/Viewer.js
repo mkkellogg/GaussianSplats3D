@@ -473,6 +473,8 @@ export class Viewer {
         let loadingTaskId = null;
         if (showLoadingUI) loadingTaskId = this.loadingSpinner.addTask('Downloading...');
 
+        let downloadDone = false;
+
         let loadedPercent = 0;
         const onProgress = (percent, percentLabel, loaderStatus) => {
             loadedPercent = percent;
@@ -506,12 +508,16 @@ export class Viewer {
                     if (firstBuild && streamBuildSections || finalBuild && !streamBuildSections) {
                         this.runAfterFirstSort.push(() => {
                             this.loadingSpinner.removeTask(loadingTaskId);
-                            if (!finalBuild) this.loadingProgressBar.show();
+                            if (!finalBuild && !downloadDone) this.loadingProgressBar.show();
                         });
                     }
                     if (streamBuildSections) {
-                        if (finalBuild) this.loadingProgressBar.hide();
-                        else this.loadingProgressBar.setProgress(loadedPercent);
+                        if (finalBuild) {
+                            downloadDone = true;
+                            this.loadingProgressBar.hide();
+                        } else {
+                            this.loadingProgressBar.setProgress(loadedPercent);
+                        }
                     }
                 }
             });
