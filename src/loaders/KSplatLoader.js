@@ -65,6 +65,9 @@ export class KSplatLoader {
                     headerLoading = false;
                     headerLoaded = true;
                     header = SplatBuffer.parseHeader(headerBuffer);
+                    window.setTimeout(() => {
+                        checkAndLoadSectionHeaders();
+                    }, 1);
                 });
             }
         };

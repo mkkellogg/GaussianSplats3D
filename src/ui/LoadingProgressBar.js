@@ -64,11 +64,10 @@ export class LoadingProgressBar {
             }
 
             .progressBar {
-                height: 23px;
+                height: 25px;
                 width: 0px;
                 border-radius:10px;
                 background-color: rgba(0, 200, 0, 0.75);
-                border: #003300 1px solid;
                 box-shadow: inset 0 0 10px #003300;
             }
 
