@@ -720,8 +720,9 @@ export class Viewer {
         let fullDownloadPromise = this.loadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold,
                                                                    onProgress, true, onStreamedSectionProgress, format);
 
-        const firstStreamedSectionBuildPromise = new AbortablePromise((resolver) => {
+        const firstStreamedSectionBuildPromise = new AbortablePromise((resolver, rejecter) => {
             firstStreamedSectionBuildResolver = resolver;
+            firstStreamedSectionBuildRejecter = rejecter;
             const clearDownloadPromise = () => {
                 delete this.downloadPromisesToAbort[fullDownloadPromise.id];
             };
