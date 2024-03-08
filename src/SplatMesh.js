@@ -452,13 +452,13 @@ export class SplatMesh extends THREE.Mesh {
             const position = new THREE.Vector3().fromArray(positionArray);
             const rotation = new THREE.Quaternion().fromArray(rotationArray);
             const scale = new THREE.Vector3().fromArray(scaleArray);
-            scenes[i] = SplatMesh.createScene(splatBuffer, position, rotation, scale);
+            scenes[i] = SplatMesh.createScene(splatBuffer, position, rotation, scale, options.splatAlphaRemovalThreshold || 1);
         }
         return scenes;
     }
 
-    static createScene(splatBuffer, position, rotation, scale) {
-        return new SplatScene(splatBuffer, position, rotation, scale);
+    static createScene(splatBuffer, position, rotation, scale, minimumAlpha) {
+        return new SplatScene(splatBuffer, position, rotation, scale, minimumAlpha);
     }
 
     /**
@@ -1516,7 +1516,7 @@ export class SplatMesh extends THREE.Mesh {
                                                      srcFrom, srcTo, localDestFrom, this.halfPrecisionCovariancesOnGPU ? 1 : 0);
             }
             if (centers) splatBuffer.fillSplatCenterArray(centers, sceneTransform, srcFrom, srcTo, localDestFrom);
-            if (colors) splatBuffer.fillSplatColorArray(colors, sceneTransform, srcFrom, srcTo, localDestFrom);
+            if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, sceneTransform, srcFrom, srcTo, localDestFrom);
             destfrom += splatBuffer.getSplatCount();
         }
     }

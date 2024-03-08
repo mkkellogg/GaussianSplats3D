@@ -279,7 +279,7 @@ export class SplatBuffer {
         }
     }
 
-    fillSplatColorArray(outColorArray, transform, srcFrom, srcTo, destFrom) {
+    fillSplatColorArray(outColorArray, minimumAlpha, transform, srcFrom, srcTo, destFrom) {
         const splatCount = this.splatCount;
 
         srcFrom = srcFrom || 0;
@@ -296,10 +296,13 @@ export class SplatBuffer {
             const colorSrcBase = this.bytesPerSplat * localSplatIndex + splatColorOffset;
             const colorDestBase = (i - srcFrom + destFrom) * SplatBuffer.ColorComponentCount;
 
+            let alpha = section.dataArrayUint8[colorSrcBase + 3];
+            alpha = (alpha >= minimumAlpha) ? alpha : 0;
+
             outColorArray[colorDestBase] = section.dataArrayUint8[colorSrcBase];
             outColorArray[colorDestBase + 1] = section.dataArrayUint8[colorSrcBase + 1];
             outColorArray[colorDestBase + 2] = section.dataArrayUint8[colorSrcBase + 2];
-            outColorArray[colorDestBase + 3] = section.dataArrayUint8[colorSrcBase + 3];
+            outColorArray[colorDestBase + 3] = alpha;
 
             // TODO: implement application of transform for spherical harmonics
         }

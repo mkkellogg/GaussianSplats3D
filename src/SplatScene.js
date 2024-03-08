@@ -5,12 +5,14 @@ import * as THREE from 'three';
  */
 export class SplatScene {
 
-    constructor(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3(1, 1, 1)) {
+    constructor(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
+                scale = new THREE.Vector3(1, 1, 1), minimumAlpha = 1) {
         this.splatBuffer = splatBuffer;
         this.position = position.clone();
         this.quaternion = quaternion.clone();
         this.scale = scale.clone();
         this.transform = new THREE.Matrix4();
+        this.minimumAlpha = minimumAlpha;
         this.updateTransform();
     }
 
