@@ -262,7 +262,7 @@
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
-    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, sectionSize, blockSize, bucketSize){
+    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize){
       const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
       const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
