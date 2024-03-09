@@ -475,11 +475,11 @@ export class Viewer {
 
         let downloadDone = false;
 
-        let loadedPercent = 0;
+        let downloadedPercentage = 0;
         const onProgress = (percent, percentLabel, loaderStatus) => {
-            loadedPercent = percent;
             if (showLoadingUI) {
                 if (loaderStatus === LoaderStatus.Downloading) {
+                    downloadedPercentage = percent;
                     if (percent == 100) {
                         this.loadingSpinner.setMessageForTask(loadingTaskId, 'Download complete!');
                     } else {
@@ -516,7 +516,7 @@ export class Viewer {
                             downloadDone = true;
                             this.loadingProgressBar.hide();
                         } else {
-                            this.loadingProgressBar.setProgress(loadedPercent);
+                            this.loadingProgressBar.setProgress(downloadedPercentage);
                         }
                     }
                 }
