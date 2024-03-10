@@ -27,6 +27,7 @@ const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 const MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER = 1500000;
 const FOCUS_MARKER_FADE_IN_SPEED = 10.0;
 const FOCUS_MARKER_FADE_OUT_SPEED = 2.5;
+const CONSECUTIVE_RENDERED_FRAMES_FOR_FPS_CALCULATION = 60;
 
 /**
  * Viewer: Manages the rendering of splat scenes. Manages an instance of SplatMesh as well as a web worker
@@ -944,7 +945,7 @@ export class Viewer {
                     this.sortPromiseResolver();
                     this.sortPromise = null;
                     this.sortPromiseResolver = null;
-                    this.setRenderNextFrame();
+                    this.forceRenderNextFrame();
                     if (sortCount === 0) {
                         this.runAfterFirstSort.forEach((func) => {
                             func();
@@ -1098,11 +1099,11 @@ export class Viewer {
         } else {
             this.consecutiveRenderFrames = 0;
         }
-        this.needsRender = false;
+        this.renderNextFrame = false;
     }
 
-    setRenderNextFrame() {
-        this.needsRender = true;
+    forceRenderNextFrame() {
+        this.renderNextFrame = true;
     }
 
     shouldRender = function() {
@@ -1128,7 +1129,7 @@ export class Viewer {
             }
 
             shouldRender = this.renderMode !== RenderMode.Never && (renderCount === 0 || this.splatMesh.visibleRegionChanging ||
-                           cameraChanged || this.renderMode === RenderMode.Always || this.dynamicMode === true || this.needsRender);
+                           cameraChanged || this.renderMode === RenderMode.Always || this.dynamicMode === true || this.renderNextFrame);
 
             if (this.camera) {
                 lastCameraPosition.copy(this.camera.position);
@@ -1192,7 +1193,7 @@ export class Viewer {
         let frameCount = 0;
 
         return function() {
-            if (this.consecutiveRenderFrames > 120) {
+            if (this.consecutiveRenderFrames > CONSECUTIVE_RENDERED_FRAMES_FOR_FPS_CALCULATION) {
                 const currentTime = getCurrentTime();
                 const calcDelta = currentTime - lastCalcTime;
                 if (calcDelta >= 1.0) {
@@ -1282,7 +1283,7 @@ export class Viewer {
                 this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
                 this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
                 wasTransitioning = true;
-                this.setRenderNextFrame();
+                this.forceRenderNextFrame();
             } else {
                 let currentFocusMarkerOpacity;
                 if (wasTransitioning) currentFocusMarkerOpacity = 1.0;
@@ -1293,7 +1294,7 @@ export class Viewer {
                     this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
                     if (newFocusMarkerOpacity === 0.0) this.sceneHelper.setFocusMarkerVisibility(false);
                 }
-                if (currentFocusMarkerOpacity > 0.0) this.setRenderNextFrame();
+                if (currentFocusMarkerOpacity > 0.0) this.forceRenderNextFrame();
                 wasTransitioning = false;
             }
         };
@@ -1307,7 +1308,7 @@ export class Viewer {
 
         return function() {
             if (this.showMeshCursor) {
-                this.setRenderNextFrame();
+                this.forceRenderNextFrame();
                 this.getRenderDimensions(renderDimensions);
                 outHits.length = 0;
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
@@ -1319,7 +1320,7 @@ export class Viewer {
                     this.sceneHelper.setMeshCursorVisibility(false);
                 }
             } else {
-                if (this.sceneHelper.getMeschCursorVisibility()) this.setRenderNextFrame();
+                if (this.sceneHelper.getMeschCursorVisibility()) this.forceRenderNextFrame();
                 this.sceneHelper.setMeshCursorVisibility(false);
             }
         };
