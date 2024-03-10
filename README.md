@@ -259,7 +259,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'sharedMemoryForWorkers': true,
     'integerBasedSort': true,
     'dynamicScene': false,
-    'webXRMode': GaussianSplats3D.WebXRMode.None
+    'webXRMode': GaussianSplats3D.WebXRMode.None,
+    'renderMode': GaussianSplats3D.RenderMode.OnChange
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -289,6 +290,7 @@ Advanced `Viewer` parameters
 | `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
 | `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static. Additionally all splat data retrieved from the viewer's splat mesh will not have their respective scene transform applied to them by default.
 | `webXRMode` | Tells the viewer whether or not to enable built-in Web VR or Web AR. Valid values are defined in the `WebXRMode` enum: `None`, `VR`, and `AR`. Defaults to `None`.
+| `renderMode` | Controls when the viewer renders the scene. Valid values are defined in the `RenderMode` enum: `Always`, `OnChange`, and `Never`. Defaults to `Always`.
 <br>
 
 ### Creating KSPLAT files

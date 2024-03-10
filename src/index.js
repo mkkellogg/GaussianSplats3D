@@ -13,6 +13,7 @@ import { OrbitControls } from './OrbitControls.js';
 import { AbortablePromise } from './AbortablePromise.js';
 import { SceneFormat } from './loaders/SceneFormat.js';
 import { WebXRMode } from './webxr/WebXRMode.js';
+import { RenderMode } from './RenderMode.js';
 
 export {
     PlyParser,
@@ -29,5 +30,6 @@ export {
     OrbitControls,
     AbortablePromise,
     SceneFormat,
-    WebXRMode
+    WebXRMode,
+    RenderMode
 };

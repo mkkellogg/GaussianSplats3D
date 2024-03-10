@@ -72,6 +72,7 @@ export class SplatMesh extends THREE.Mesh {
         this.maxRadius = 0;
         this.visibleRegionRadius = 0;
         this.visibleRegionFadeStartRadius = 0;
+        this.visibleRegionChanging = false;
 
         this.disposed = false;
     }
@@ -921,6 +922,7 @@ export class SplatMesh extends THREE.Mesh {
         this.material.uniforms.currentTime.value = performance.now();
         this.material.uniforms.fadeInComplete.value = fadeInComplete;
         this.material.uniformsNeedUpdate = true;
+        this.visibleRegionChanging = !fadeInComplete;
     }
 
     /**

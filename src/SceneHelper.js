@@ -129,6 +129,10 @@ export class SceneHelper {
         this.meshCursor.visible = visible;
     }
 
+    getMeschCursorVisibility() {
+        return this.meshCursor.visible;
+    }
+
     setMeshCursorPosition(position) {
         this.meshCursor.position.copy(position);
     }
