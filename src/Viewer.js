@@ -20,7 +20,7 @@ import { VRButton } from './webxr/VRButton.js';
 import { ARButton } from './webxr/ARButton.js';
 import { delayedExecute } from './Util.js';
 import { LoaderStatus } from './loaders/LoaderStatus.js';
-
+import { RenderMode } from './RenderMode.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -121,6 +121,8 @@ export class Viewer {
             this.gpuAcceleratedSort = false;
         }
 
+        this.renderMode = options.renderMode || RenderMode.Always;
+
         this.controls = null;
 
         this.showMeshCursor = false;
@@ -147,6 +149,7 @@ export class Viewer {
 
         this.currentFPS = 0;
         this.lastSortTime = 0;
+        this.consecutiveRenderFrames = 0;
 
         this.previousCameraTarget = new THREE.Vector3();
         this.nextCameraTarget = new THREE.Vector3();
@@ -941,6 +944,7 @@ export class Viewer {
                     this.sortPromiseResolver();
                     this.sortPromise = null;
                     this.sortPromiseResolver = null;
+                    this.setRenderNextFrame();
                     if (sortCount === 0) {
                         this.runAfterFirstSort.forEach((func) => {
                             func();
@@ -1088,13 +1092,60 @@ export class Viewer {
             this.requestFrameId = requestAnimationFrame(this.selfDrivenUpdateFunc);
         }
         this.update();
-        this.render();
+        if (this.shouldRender()) {
+            this.render();
+            this.consecutiveRenderFrames++;
+        } else {
+            this.consecutiveRenderFrames = 0;
+        }
+        this.needsRender = false;
     }
+
+    setRenderNextFrame() {
+        this.needsRender = true;
+    }
+
+    shouldRender = function() {
+
+        let renderCount = 0;
+        const lastCameraPosition = new THREE.Vector3();
+        const lastCameraOrientation = new THREE.Quaternion();
+        const changeEpsilon = 0.0001;
+
+        return function() {
+            let shouldRender = false;
+            let cameraChanged = false;
+            if (this.camera) {
+                const cp = this.camera.position;
+                const co = this.camera.quaternion;
+                cameraChanged = Math.abs(cp.x - lastCameraPosition.x) > changeEpsilon ||
+                                Math.abs(cp.y - lastCameraPosition.y) > changeEpsilon ||
+                                Math.abs(cp.z - lastCameraPosition.z) > changeEpsilon ||
+                                Math.abs(co.x - lastCameraOrientation.x) > changeEpsilon ||
+                                Math.abs(co.y - lastCameraOrientation.y) > changeEpsilon ||
+                                Math.abs(co.z - lastCameraOrientation.z) > changeEpsilon ||
+                                Math.abs(co.w - lastCameraOrientation.w) > changeEpsilon;
+            }
+
+            shouldRender = this.renderMode !== RenderMode.Never && (renderCount === 0 || this.splatMesh.visibleRegionChanging ||
+                           cameraChanged || this.renderMode === RenderMode.Always || this.dynamicMode === true || this.needsRender);
+
+            if (this.camera) {
+                lastCameraPosition.copy(this.camera.position);
+                lastCameraOrientation.copy(this.camera.quaternion);
+            }
+
+            renderCount++;
+            return shouldRender;
+        };
+
+    }();
 
     render = function() {
 
         return function() {
             if (!this.initialized || !this.splatRenderingInitialized) return;
+
             const hasRenderables = (threeScene) => {
                 for (let child of threeScene.children) {
                     if (child.visible) return true;
@@ -1141,14 +1192,18 @@ export class Viewer {
         let frameCount = 0;
 
         return function() {
-            const currentTime = getCurrentTime();
-            const calcDelta = currentTime - lastCalcTime;
-            if (calcDelta >= 1.0) {
-                this.currentFPS = frameCount;
-                frameCount = 0;
-                lastCalcTime = currentTime;
+            if (this.consecutiveRenderFrames > 120) {
+                const currentTime = getCurrentTime();
+                const calcDelta = currentTime - lastCalcTime;
+                if (calcDelta >= 1.0) {
+                    this.currentFPS = frameCount;
+                    frameCount = 0;
+                    lastCalcTime = currentTime;
+                } else {
+                    frameCount++;
+                }
             } else {
-                frameCount++;
+                this.currentFPS = null;
             }
         };
 
@@ -1227,6 +1282,7 @@ export class Viewer {
                 this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
                 this.sceneHelper.updateFocusMarker(this.nextCameraTarget, this.camera, renderDimensions);
                 wasTransitioning = true;
+                this.setRenderNextFrame();
             } else {
                 let currentFocusMarkerOpacity;
                 if (wasTransitioning) currentFocusMarkerOpacity = 1.0;
@@ -1237,6 +1293,7 @@ export class Viewer {
                     this.sceneHelper.setFocusMarkerOpacity(newFocusMarkerOpacity);
                     if (newFocusMarkerOpacity === 0.0) this.sceneHelper.setFocusMarkerVisibility(false);
                 }
+                if (currentFocusMarkerOpacity > 0.0) this.setRenderNextFrame();
                 wasTransitioning = false;
             }
         };
@@ -1250,6 +1307,7 @@ export class Viewer {
 
         return function() {
             if (this.showMeshCursor) {
+                this.setRenderNextFrame();
                 this.getRenderDimensions(renderDimensions);
                 outHits.length = 0;
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
@@ -1261,6 +1319,7 @@ export class Viewer {
                     this.sceneHelper.setMeshCursorVisibility(false);
                 }
             } else {
+                if (this.sceneHelper.getMeschCursorVisibility()) this.setRenderNextFrame();
                 this.sceneHelper.setMeshCursorVisibility(false);
             }
         };
@@ -1279,7 +1338,7 @@ export class Viewer {
             const meshCursorPosition = this.showMeshCursor ? this.sceneHelper.meshCursor.position : null;
             const splatRenderCountPct = this.splatRenderCount / splatCount * 100;
             this.infoPanel.update(renderDimensions, this.camera.position, cameraLookAtPosition,
-                                  this.camera.up, meshCursorPosition, this.currentFPS, splatCount,
+                                  this.camera.up, meshCursorPosition, this.currentFPS || 'N/A', splatCount,
                                   this.splatRenderCount, splatRenderCountPct, this.lastSortTime);
         };
 
