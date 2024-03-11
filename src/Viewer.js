@@ -118,6 +118,9 @@ export class Viewer {
 
         this.webXRMode = options.webXRMode || WebXRMode.None;
 
+        // Maximum splat rendering distance w.r.t. the camera.
+        this.maximumDistanceToRender = options.maximumDistanceToRender || 125;
+
         if (this.webXRMode !== WebXRMode.None) {
             this.gpuAcceleratedSort = false;
         }
@@ -1403,7 +1406,7 @@ export class Viewer {
             }
 
             this.sortRunning = true;
-            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
+            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort(this.maximumDistanceToRender);
             this.splatRenderCount = splatRenderCount;
             this.sortPromise = new Promise((resolve) => {
                 this.sortPromiseResolver = resolve;
@@ -1472,7 +1475,7 @@ export class Viewer {
     /**
      * Determine which splats to render by checking which are inside or close to the view frustum
      */
-    gatherSceneNodesForSort = function() {
+    gatherSceneNodesForSort = function(maximumDistanceToRender) {
 
         const nodeRenderList = [];
         let allSplatsSortBuffer = null;
@@ -1489,8 +1492,6 @@ export class Viewer {
         const nodeSize = (node) => {
             return tempMax.copy(node.max).sub(node.min).length();
         };
-
-        const MaximumDistanceToRender = 125;
 
         return function(gatherAllNodes = false) {
 
@@ -1536,7 +1537,7 @@ export class Viewer {
                         const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
                         const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
                         if (!gatherAllNodes && ((outOfFovX || outOfFovY ||
-                             distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
+                             distanceToNode > maximumDistanceToRender) && distanceToNode > ns)) {
                             continue;
                         }
                         splatRenderCount += node.data.indexes.length;
