@@ -1,4 +1,3 @@
-// import { CompressedPlyParser } from "./CompressedPlyParser.js";
 import { PlyParser } from "./PlyParser.js";
 import { PlyLoader } from "./PlyLoader.js";
 import { SplatLoader } from "./SplatLoader.js";

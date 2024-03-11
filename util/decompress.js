@@ -20,7 +20,6 @@ const inputBuffer = fs.readFileSync(inputFile);
 const parser = new CompressedPlyParser.PlyParserDecompress();
 await parser.readPly(inputBuffer);
 parser.decompress(0, 1, 5.0, 256);
-console.log(parser.splatData);
 const modelMatArray = [
   1, 0, 0, 0, // First column
   0, 1, 0, 0, // Second column

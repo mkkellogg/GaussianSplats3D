@@ -246,7 +246,6 @@
 
     function convertPLYToSplatBuffer(plyBuffer, compressionLevel, alphaRemovalThreshold, blockSize, bucketSize) {
       const plyParser = new GaussianSplats3D.PlyParser(plyBuffer);
-      console.log(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize)
       return plyParser.parseToSplatBuffer(compressionLevel, alphaRemovalThreshold, blockSize, bucketSize);
     }
 
@@ -465,7 +464,6 @@
         fileReader.onload = async function(){
           let isCompressedPly = false;
 
-          console.log(alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray)
           try {            
             if(isCompressedPly ){
               decompressThenRunViewer(fileReader.result, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);

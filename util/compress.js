@@ -21,7 +21,6 @@ const parser = new CompressedPlyParser.PlyParserCompress();
 await parser.readPly(inputBuffer);
 parser.convertFileToSplatData();
 const compressedFile = parser.compress();
-console.log(parser.splatData);
 
 
 // write the compressed file
