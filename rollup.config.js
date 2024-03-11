@@ -75,4 +75,21 @@ export default [
             resolve(),
         ]
     },
+    {
+        input: './src/index.decompress.js',
+        treeshake: false,
+        output: [
+            {
+                name: 'Gaussian Splats 3D',
+                extend: true,
+                format: 'esm',
+                file: './build/gaussian-splats-3d.decompress.js',
+                sourcemap: true,
+            },
+
+        ],
+        plugins: [
+            resolve(),
+        ]
+    }
 ];

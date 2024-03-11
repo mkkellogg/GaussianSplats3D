@@ -356,10 +356,3 @@ export class PlyParserCodecBase {
   };
 }
 
-
-
-
-
-
-
-

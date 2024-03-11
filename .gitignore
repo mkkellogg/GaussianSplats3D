@@ -3,3 +3,8 @@ build
 node_modules
 
 *lemon*
+*cacao*
+.DS_Store
+._.DS_Store
+**/.DS_Store
+**/._.DS_Store

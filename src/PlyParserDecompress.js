@@ -1,11 +1,13 @@
 import { PlyParserCodecBase } from "./PlyParserCoDecBase";
+import { SplatCompressor } from "./SplatCompressor";
+import * as THREE from "three";
 
 export class PlyParserDecompress extends PlyParserCodecBase {
   constructor() {
     super();
   }
-  decompress(compressionLevel, minimumAlpha, blockSize, bucketSize) {
 
+  decompress(compressionLevel, minimumAlpha, blockSize, bucketSize) {
     const chunks = this.plyElements.find((e) => e.name === "chunk");
     const vertices = this.vertexElement;
 
@@ -117,7 +119,7 @@ export class PlyParserDecompress extends PlyParserCodecBase {
       data.opacity[i] = -Math.log(1 / c.w - 1);
     }
 
-    const splatArray = {
+    const splatData = {
       f_dc_0: data.f_dc_0,
       f_dc_1: data.f_dc_1,
       f_dc_2: data.f_dc_2,
@@ -137,8 +139,66 @@ export class PlyParserDecompress extends PlyParserCodecBase {
 
     const mat = new THREE.Matrix4();
     mat.identity();
-    const ply = this.convertSplat(splatArray, mat);
 
-    return ply;
+    this.splatData = splatData;
+    return;
   }
+
+  convertPlyWithThreeJS = (data, vertices, modelMatArray) => {
+    const deletedOpacity = 0; // Assuming deletedOpacity is defined elsewhere
+    const opacity = data.opacity;
+    let numSplats = 0;
+    for (let i = 0; i < vertices.count; ++i) {
+      numSplats += opacity[i] !== deletedOpacity ? 1 : 0;
+    }
+
+    const internalProps = ['selection', 'opacityOrig'];
+    const props = Object.keys(data).filter(p => !internalProps.includes(p) && p !== 'numSplats');
+    const headerStr = `ply\nformat binary_little_endian 1.0\nelement vertex ${numSplats}\n` +
+      props.map(p => `property float ${p}`).join('\n') + `\nend_header\n`;
+    const header = new TextEncoder().encode(headerStr);
+    const result = new Uint8Array(header.length + numSplats * props.length * 4);
+    result.set(header);
+
+    const dataView = new DataView(result.buffer);
+    let offset = header.length;
+
+    for (let i = 0; i < vertices.count; ++i) {
+      if (opacity[i] !== deletedOpacity) {
+        props.forEach(prop => {
+          dataView.setFloat32(offset, data[prop][i], true);
+          offset += 4;
+        });
+      }
+    }
+
+    const modelMatrix = new THREE.Matrix4();
+    modelMatrix.fromArray(modelMatArray);
+
+    const inverseModelMatrix = new THREE.Matrix4().copy(modelMatrix).invert();
+    const scale = new THREE.Vector3();
+    scale.setFromMatrixScale(modelMatrix);
+
+    const vec3 = new THREE.Vector3();
+    const quat = new THREE.Quaternion().setFromRotationMatrix(modelMatrix);
+
+    for (let i = 0; i < numSplats; ++i) {
+      const baseOffset = header.length + i * props.length * 4;
+
+      vec3.x = dataView.getFloat32(baseOffset + props.indexOf('x') * 4, true);
+      vec3.y = dataView.getFloat32(baseOffset + props.indexOf('y') * 4, true);
+      vec3.z = dataView.getFloat32(baseOffset + props.indexOf('z') * 4, true);
+
+      vec3.applyMatrix4(inverseModelMatrix);
+
+      dataView.setFloat32(baseOffset + props.indexOf('x') * 4, vec3.x, true);
+      dataView.setFloat32(baseOffset + props.indexOf('y') * 4, vec3.y, true);
+      dataView.setFloat32(baseOffset + props.indexOf('z') * 4, vec3.z, true);
+    }
+
+    return result;
+  };
+
+
 }
+
