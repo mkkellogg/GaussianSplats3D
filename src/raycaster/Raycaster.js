@@ -47,8 +47,10 @@ export class Raycaster {
                 const subTree = splatTree.subTrees[s];
 
                 fromLocal.copy(splatMesh.matrixWorld);
-                splatMesh.getSceneTransform(s, sceneTransform);
-                fromLocal.multiply(sceneTransform);
+                if (splatMesh.dynamicMode) {
+                    splatMesh.getSceneTransform(s, sceneTransform);
+                    fromLocal.multiply(sceneTransform);
+                }
                 toLocal.copy(fromLocal).invert();
 
                 localRay.origin.copy(this.ray.origin).applyMatrix4(toLocal);
@@ -103,9 +105,9 @@ export class Raycaster {
             if (node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
                     const splatGlobalIndex = node.data.indexes[i];
-                    splatTree.splatMesh.getSplatColor(splatGlobalIndex, tempColor, false);
-                    splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter, false);
-                    splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation, false);
+                    splatTree.splatMesh.getSplatColor(splatGlobalIndex, tempColor);
+                    splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter);
+                    splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation);
 
                     if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
                         continue;
