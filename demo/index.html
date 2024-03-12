@@ -266,13 +266,8 @@
     import * as GaussianSplats3D from 'gaussian-splats-3d';
     import * as THREE from 'three';
 
-    function convertPLYToSplatBuffer(plyBufferData, isSourceCompressed, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
-      let splatArray;
-      if (isSourceCompressed) {
-        splatArray = GaussianSplats3D.CompressedPlyParser.parseToUncompressedSplatArray(plyBufferData.data);
-      } else {
-        splatArray = GaussianSplats3D.PlyParser.parseToUncompressedSplatArray(plyBufferData.data);
-      }
+    function convertPLYToSplatBuffer(plyBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
+      let splatArray = GaussianSplats3D.PlyParser.parseToUncompressedSplatArray(plyBufferData.data);
       plyBufferData.data = null;
       const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
@@ -284,10 +279,10 @@
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     }
 
-    function fileBufferToSplatBuffer(fileBufferData, format, isSrcCompressed, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
+    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
       let splatBuffer;
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, isSrcCompressed, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
+        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
           splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData.data, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
@@ -322,14 +317,6 @@
       let lastBackwardSlash = url.lastIndexOf('\\');
       const lastSlash = Math.max(lastForwardSlash, lastBackwardSlash);
       fileNameLabel.innerHTML = url.substring(lastSlash + 1);
-
-      const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(url);
-      if (format === GaussianSplats3D.SceneFormat.Ply) {
-        document.getElementById(compressedRowID).style.display = 'table-row';
-      } else {
-        document.getElementById(compressedRowID).style.display = 'none';
-      }
-
     }
 
     let conversionInProgress = false;
@@ -406,8 +393,7 @@
           const fileData = {data: fileReader.result};
           window.setTimeout(() => {
             try {
-              const isSrcCompressed = document.getElementById('srcIsCompressed').checked && format === GaussianSplats3D.SceneFormat.Ply;
-              const splatBuffer = fileBufferToSplatBuffer(fileData, format, isSrcCompressed, compressionLevel,
+              const splatBuffer = fileBufferToSplatBuffer(fileData, format, compressionLevel,
                                                           alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
               GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
               conversionDone();
@@ -561,8 +547,7 @@
       const splatBufferOptions = {
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
-      const isSrcCompressed = document.getElementById('srcIsCompressedView').checked && format === GaussianSplats3D.SceneFormat.Ply;
-      const splatBuffer = fileBufferToSplatBuffer({data: splatBufferData}, format, isSrcCompressed, 0, alphaRemovalThreshold);
+      const splatBuffer = fileBufferToSplatBuffer({data: splatBufferData}, format, 0, alphaRemovalThreshold);
       document.getElementById("demo-content").style.display = 'none';
       document.body.style.backgroundColor = "#000000";
       history.pushState("ViewSplat", null);
@@ -648,7 +633,7 @@
                     <td colspan="2">
                         <label for="viewFile">
                         <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
-                        <input type="file" id="viewFile" style="display:none" onchange="window.onFileChange(this, 'viewFileName', 'srcIsCompressedRowView')">
+                        <input type="file" id="viewFile" style="display:none" onchange="window.onFileChange(this, 'viewFileName')">
                         </label>
                         <span id="viewFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
                     </td>
@@ -656,15 +641,6 @@
                     <tr>
                     <td colspan="2" style="height: 10px;"></td>
                     </tr>
-                    <tr id="srcIsCompressedRowView" style="display:none">
-                      <td>
-                          Source is compressed:&nbsp;
-                      </td>
-                      <td>
-                          <input id="srcIsCompressedView" type="checkbox" class="checkbox-input"></input>
-                      </td>
-                    </tr>
-                    <tr>
                     <td>
                         Minimum alpha:&nbsp;
                     </td>
@@ -724,21 +700,13 @@
                     <td colspan="2">
                         <label for="conversionFile">
                         <span class="glyphicon glyphicon-folder-open" aria-hidden="true"><span class="button">Choose file</span></span>
-                        <input type="file" id="conversionFile" style="display:none" onchange="window.onFileChange(this, 'conversionFileName', 'srcIsCompressedRow')">
+                        <input type="file" id="conversionFile" style="display:none" onchange="window.onFileChange(this, 'conversionFileName')">
                         </label>
                         <span id="conversionFileName" style="padding-left:15px; color: #333333">(No file chosen)</span>
                     </td>
                     </tr>
                     <tr>
                     <td colspan="2" style="height: 10px;"></td>
-                    </tr>
-                    <tr id="srcIsCompressedRow" style="display:none">
-                      <td>
-                          Source is compressed:&nbsp;
-                      </td>
-                      <td>
-                          <input id="srcIsCompressed" type="checkbox" class="checkbox-input"></input>
-                      </td>
                     </tr>
                     <tr>
                       <td>

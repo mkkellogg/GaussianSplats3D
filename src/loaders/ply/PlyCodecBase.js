@@ -193,16 +193,4 @@ export class PlyCodecBase {
     };
   }
 
-  static isCompressed(plyElements, vertexElement) {
-    return (
-      plyElements.some((e) => e.name === 'chunk') &&
-      [
-        'packed_position',
-        'packed_rotation',
-        'packed_scale',
-        'packed_color',
-      ].every((name) => PlyCodecBase.getProp(vertexElement, name))
-    );
-  }
-
 }
