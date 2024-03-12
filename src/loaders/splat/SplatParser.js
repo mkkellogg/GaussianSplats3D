@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SplatBuffer } from './SplatBuffer.js';
-import { UncompressedSplatArray } from './UncompressedSplatArray.js';
+import { SplatBuffer } from '../SplatBuffer.js';
+import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 
 export class SplatParser {
 

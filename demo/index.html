@@ -254,9 +254,13 @@
     import * as GaussianSplats3D from 'gaussian-splats-3d';
     import * as THREE from 'three';
 
-    function convertPLYToSplatBuffer(plyBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
-      const plyParser = new GaussianSplats3D.PlyParser(plyBufferData.data);
-      const splatArray = plyParser.parseToUncompressedSplatArray();
+    function convertPLYToSplatBuffer(plyBufferData, isSourceCompressed, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
+      let splatArray;
+      if (isSourceCompressed) {
+        splatArray = GaussianSplats3D.CompressedPlyParser.parseToUncompressedSplatArray(plyBufferData.data);
+      } else {
+        splatArray = GaussianSplats3D.PlyParser.parseToUncompressedSplatArray(plyBufferData.data);
+      }
       plyBufferData.data = null;
       const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
       return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
@@ -275,7 +279,7 @@
     function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
       let splatBuffer;
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
+        splatBuffer = convertPLYToSplatBuffer(fileBufferData, true, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
           splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData.data, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);

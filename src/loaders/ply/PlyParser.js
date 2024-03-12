@@ -1,12 +1,8 @@
-import { UncompressedSplatArray } from './UncompressedSplatArray.js';
+import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 
 export class PlyParser {
 
     static HeaderEndToken = 'end_header';
-
-    constructor(plyBuffer) {
-        this.plyBuffer = plyBuffer;
-    }
 
     static decodeHeader(plyBuffer) {
         const decoder = new TextDecoder();
@@ -79,13 +75,13 @@ export class PlyParser {
         }
     }
 
-    parseToUncompressedSplatArray() {
+    static parseToUncompressedSplatArray(plyBuffer) {
 
         // const startTime = performance.now();
 
         // console.log('Parsing PLY to SPLAT...');
 
-        const {splatCount, propertyTypes, vertexData} = PlyParser.decodeHeader(this.plyBuffer);
+        const {splatCount, propertyTypes, vertexData} = PlyParser.decodeHeader(plyBuffer);
 
         // figure out the SH degree from the number of coefficients
         let nRestCoeffs = 0;

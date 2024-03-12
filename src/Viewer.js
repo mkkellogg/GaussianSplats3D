@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from './OrbitControls.js';
-import { PlyLoader } from './loaders/PlyLoader.js';
-import { SplatLoader } from './loaders/SplatLoader.js';
-import { KSplatLoader } from './loaders/KSplatLoader.js';
+import { PlyLoader } from './loaders/ply/PlyLoader.js';
+import { SplatLoader } from './loaders/splat/SplatLoader.js';
+import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
 import { sceneFormatFromPath } from './loaders/Utils.js';
 import { LoadingSpinner } from './ui/LoadingSpinner.js';
 import { LoadingProgressBar } from './ui/LoadingProgressBar.js';

@@ -1,7 +1,7 @@
-import { SplatBuffer } from './SplatBuffer.js';
-import { fetchWithProgress, delayedExecute } from '../Util.js';
-import { LoaderStatus } from './LoaderStatus.js';
-import { Constants } from '../Constants.js';
+import { SplatBuffer } from '../SplatBuffer.js';
+import { fetchWithProgress, delayedExecute } from '../../Util.js';
+import { LoaderStatus } from '../LoaderStatus.js';
+import { Constants } from '../../Constants.js';
 
 const MINIMUM_REQUIRED_MAJOR_VERSION = 0;
 const MINIMUM_REQUIRED_MINOR_VERSION = 1;

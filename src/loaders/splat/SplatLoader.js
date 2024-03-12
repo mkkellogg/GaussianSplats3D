@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { SplatBuffer } from './SplatBuffer.js';
-import { SplatBufferGenerator } from './SplatBufferGenerator.js';
+import { SplatBuffer } from '../SplatBuffer.js';
+import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { SplatParser } from './SplatParser.js';
-import { fetchWithProgress, delayedExecute } from '../Util.js';
-import { LoaderStatus } from './LoaderStatus.js';
-import { Constants } from '../Constants.js';
+import { fetchWithProgress, delayedExecute } from '../../Util.js';
+import { LoaderStatus } from '../LoaderStatus.js';
+import { Constants } from '../../Constants.js';
 
 export class SplatLoader {
 
