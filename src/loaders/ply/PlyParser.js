@@ -154,7 +154,7 @@ export class PlyParser {
             let rawVertex = {};
 
             const propertiesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
-                                    'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity'];
+                                      'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'red', 'green', 'blue', 'opacity'];
 
             const splatArray = new UncompressedSplatArray();
 
@@ -176,6 +176,10 @@ export class PlyParser {
                     newSplat[UncompressedSplatArray.OFFSET.FDC0] = (0.5 + SH_C0 * rawVertex['f_dc_0']) * 255;
                     newSplat[UncompressedSplatArray.OFFSET.FDC1] = (0.5 + SH_C0 * rawVertex['f_dc_1']) * 255;
                     newSplat[UncompressedSplatArray.OFFSET.FDC2] = (0.5 + SH_C0 * rawVertex['f_dc_2']) * 255;
+                } else if (rawVertex['red'] !== undefined) {
+                    newSplat[UncompressedSplatArray.OFFSET.FDC0] = rawVertex['red'] * 255;
+                    newSplat[UncompressedSplatArray.OFFSET.FDC1] = rawVertex['green'] * 255;
+                    newSplat[UncompressedSplatArray.OFFSET.FDC2] = rawVertex['blue'] * 255;
                 } else {
                     newSplat[UncompressedSplatArray.OFFSET.FDC0] = 0;
                     newSplat[UncompressedSplatArray.OFFSET.FDC1] = 0;
