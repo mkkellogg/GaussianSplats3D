@@ -65,8 +65,8 @@ export class SplatLoader {
                         const bytesToUpdate = loadComplete ? bytesLoadedSinceLastSection : streamSectionSizeBytes;
                         const addedSplatCount = bytesToUpdate / SplatParser.RowSizeBytes;
                         const newSplatCount = splatCount + addedSplatCount;
-                        SplatParser.parseToUncompressedBufferSection(splatCount, newSplatCount, streamBufferIn, 0,
-                                                                     streamBufferOut, splatDataOffsetBytes);
+                        SplatParser.parseToUncompressedSplatBufferSection(splatCount, newSplatCount - 1, streamBufferIn, 0,
+                                                                          streamBufferOut, splatDataOffsetBytes);
                         splatCount = newSplatCount;
                         if (!streamSplatBuffer) {
                             SplatBuffer.writeSectionHeaderToBuffer({

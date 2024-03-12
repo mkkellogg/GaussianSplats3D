@@ -23,6 +23,10 @@ export class UncompressedSplatArray {
         this.splatCount = 0;
     }
 
+    static createSplat() {
+        return [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+    }
+
     addSplat(splat) {
         this.splats.push(splat);
         this.splatCount++;
@@ -33,7 +37,7 @@ export class UncompressedSplatArray {
     }
 
     addDefaultSplat() {
-        const newSplat = [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+        const newSplat = UncompressedSplatArray.createSplat();
         this.addSplat(newSplat);
         return newSplat;
     }

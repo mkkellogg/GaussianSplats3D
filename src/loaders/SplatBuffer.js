@@ -814,4 +814,5 @@ export class SplatBuffer {
             'partiallyFullBuckets': partiallyFullBucketArray,
         };
     }
+
 }

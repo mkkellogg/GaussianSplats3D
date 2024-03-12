@@ -784,14 +784,14 @@ export class Viewer {
             return new KSplatLoader().loadFromURL(path, onProgress, streamBuiltSections,
                                                   onSectionBuilt, 0, splatAlphaRemovalThreshold);
         } else if (format === SceneFormat.Ply) {
-            return new PlyLoader().loadFromURL(path, onProgress, 0, splatAlphaRemovalThreshold);
+            return new PlyLoader().loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, 0, splatAlphaRemovalThreshold);
         }
 
         return AbortablePromise.reject(new Error(`Viewer::loadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
     }
 
     static isStreamable(format) {
-        return format === SceneFormat.Splat || format === SceneFormat.KSplat;
+        return format === SceneFormat.Splat || format === SceneFormat.KSplat || format === SceneFormat.Ply;
     }
 
     /**
