@@ -1,34 +1,84 @@
+const dataTypeMap = new Map([
+  ['char', Int8Array],
+  ['uchar', Uint8Array],
+  ['short', Int16Array],
+  ['ushort', Uint16Array],
+  ['int', Int32Array],
+  ['uint', Uint32Array],
+  ['float', Float32Array],
+  ['double', Float64Array],
+]);
+
 export class PlyCodecBase {
 
-  vertexElement = {
-    properties: [],
-  };
+  static HeaderEndTokenBytes = new Uint8Array([10, 101, 110, 100, 95, 104, 101, 97, 100, 101, 114, 10]);
+  static HeaderEndToken = 'end_header';
 
-  deletedOpacity = -1000;
+  static decodeHeadertext(headerText) {
 
-  static getProp(vertexElement, name) {
-    return vertexElement.properties.find(
-      (property) => property.name === name && property.storage
-    )?.storage;
+    let element;
+    let chunkElement;
+    let vertexElement;
+
+    // Process header (this logic remains unchanged)
+    const headerLines = headerText.split('\n').filter((line) => !line.startsWith('comment '));
+
+    let bytesPerSplat = 0;
+    for (let i = 1; i < headerLines.length; ++i) {
+      const words = headerLines[i].split(' ');
+
+      switch (words[0]) {
+        case 'format':
+          if (words[1] !== 'binary_little_endian') {
+            throw new Error('Unsupported ply format');
+          }
+          break;
+        case 'element':
+          element = {
+            name: words[1],
+            count: parseInt(words[2], 10),
+            properties: [],
+            storageSizeBytes: 0
+          };
+          if (element.name === 'chunk') chunkElement = element;
+          else if (element.name === 'vertex') vertexElement = element;
+          break;
+        case 'property': {
+          if (!dataTypeMap.has(words[1])) {
+            throw new Error(
+              `Unrecognized property data type '${words[1]}' in ply header`
+            );
+          }
+          const StorageType = dataTypeMap.get(words[1]);
+          const storageSizeByes = StorageType.BYTES_PER_ELEMENT * element.count;
+          bytesPerSplat += StorageType.BYTES_PER_ELEMENT;
+          element.properties.push({
+            type: words[1],
+            name: words[2],
+            storage: null,
+            byteSize: StorageType.BYTES_PER_ELEMENT,
+            storageSizeByes: storageSizeByes
+          });
+          element.storageSizeBytes += storageSizeByes;
+          break;
+        }
+        default:
+          throw new Error(
+            `Unrecognized header value '${words[0]}' in ply header`
+          );
+      }
+    }
+
+    return {
+      'chunkElement': chunkElement,
+      'vertexElement': vertexElement,
+      'bytesPerSplat': bytesPerSplat,
+      'headerSizeBytes': headerText.indexOf(PlyCodecBase.HeaderEndToken) + PlyCodecBase.HeaderEndToken.length + 1,
+    }
   }
 
-  static readPly(plyBuffer, propertyFilter = null) {
-
+  static decodeHeader(plyBuffer) {
     const magicBytes = new Uint8Array([112, 108, 121, 10]); // ply\n
-    const endHeaderBytes = new Uint8Array([
-      10, 101, 110, 100, 95, 104, 101, 97, 100, 101, 114, 10,
-    ]); // \nend_header\n
-
-    const dataTypeMap = new Map([
-      ['char', Int8Array],
-      ['uchar', Uint8Array],
-      ['short', Int16Array],
-      ['ushort', Uint16Array],
-      ['int', Int32Array],
-      ['uint', Uint32Array],
-      ['float', Float32Array],
-      ['double', Float64Array],
-    ]);
 
     /**
      * Searches for the first occurrence of a sequence within a buffer.
@@ -79,117 +129,97 @@ export class PlyCodecBase {
 
     // Start processing the ArrayBuffer directly
     let buf = new Uint8Array(plyBuffer);
-    let endHeaderIndex;
+    let endHeaderTokenOffset;
 
     // Check magic bytes (assuming magicBytes is defined)
     if (buf.length >= magicBytes.length && !startsWith(buf, magicBytes)) {
       throw new Error('Invalid PLY header');
     }
 
-    // Find the end-of-header marker (assuming endHeaderBytes is defined)
-    endHeaderIndex = find(buf, endHeaderBytes);
-    if (endHeaderIndex === -1) {
+    // Find the end-of-header marker
+    endHeaderTokenOffset = find(buf, PlyCodecBase.HeaderEndTokenBytes);
+    if (endHeaderTokenOffset === -1) {
       throw new Error('End of PLY header not found');
     }
 
     // Decode buffer header text
     const headerText = new TextDecoder('ascii').decode(
-      buf.slice(0, endHeaderIndex)
-    );
+      buf.slice(0, endHeaderTokenOffset)
+    );    
 
-    // Process header (this logic remains unchanged)
-    const headerLines = headerText
-      .split('\n')
-      .filter((line) => !line.startsWith('comment '));
-    const elements = [];
-    for (let i = 1; i < headerLines.length; ++i) {
-      const words = headerLines[i].split(' ');
-
-      switch (words[0]) {
-        case 'format':
-          if (words[1] !== 'binary_little_endian') {
-            throw new Error('Unsupported ply format');
-          }
-          break;
-        case 'element':
-          elements.push({
-            name: words[1],
-            count: parseInt(words[2], 10),
-            properties: [],
-          });
-          break;
-        case 'property': {
-          if (!dataTypeMap.has(words[1])) {
-            throw new Error(
-              `Unrecognized property data type '${words[1]}' in ply header`
-            );
-          }
-          const element = elements[elements.length - 1];
-          const StorageType = dataTypeMap.get(words[1]);
-          const storage = (!propertyFilter || propertyFilter(words[2])) ? new StorageType(element.count) : null;
-          element.properties.push({
-            type: words[1],
-            name: words[2],
-            storage: storage,
-            byteSize: StorageType.BYTES_PER_ELEMENT,
-          });
-          break;
-        }
-        default:
-          throw new Error(
-            `Unrecognized header value '${words[0]}' in ply header`
-          );
-      }
-    }
-
-    // read data
-    let readIndex = endHeaderIndex + endHeaderBytes.length;
-    let dataView = new DataView(buf.buffer);
-
-    for (let i = 0; i < elements.length; ++i) {
-      const element = elements[i];
-
-      for (let e = 0; e < element.count; ++e) {
-        for (let j = 0; j < element.properties.length; ++j) {
-          const property = element.properties[j];
-
-          if (property.storage) {
-            switch (property.type) {
-              case 'char':
-                property.storage[e] = dataView.getInt8(readIndex);
-                break;
-              case 'uchar':
-                property.storage[e] = dataView.getUint8(readIndex);
-                break;
-              case 'short':
-                property.storage[e] = dataView.getInt16(readIndex, true);
-                break;
-              case 'ushort':
-                property.storage[e] = dataView.getUint16(readIndex, true);
-                break;
-              case 'int':
-                property.storage[e] = dataView.getInt32(readIndex, true);
-                break;
-              case 'uint':
-                property.storage[e] = dataView.getUint32(readIndex, true);
-                break;
-              case 'float':
-                property.storage[e] = dataView.getFloat32(readIndex, true);
-                break;
-              case 'double':
-                property.storage[e] = dataView.getFloat64(readIndex, true);
-                break;
-            }
-          }
-
-          readIndex += property.byteSize;
-        }
-      }
-    }
+    const {chunkElement, vertexElement, bytesPerSplat} = PlyCodecBase.decodeHeadertext(headerText);
 
     return {
-      'plyElements': elements,
-      'vertexElement': elements.find((element) => element.name === 'vertex')
+      'headerSizeBytes': endHeaderTokenOffset + PlyCodecBase.HeaderEndTokenBytes.length,
+      'bytesPerSplat': bytesPerSplat,
+      'chunkElement': chunkElement,
+      'vertexElement': vertexElement
+    };
+  }
+
+  static readElementData(element, readBuffer, readOffset, fromIndex, toIndex, propertyFilter = null) {
+
+    let dataView = new DataView(readBuffer);
+
+    fromIndex = fromIndex || 0;
+    toIndex = toIndex || element.count - 1;
+    for (let e = fromIndex; e <= toIndex; ++e) {
+      for (let j = 0; j < element.properties.length; ++j) {
+        const property = element.properties[j];
+
+        const StorageType = dataTypeMap.get(property.type);
+        const requiredStorageSizeBytes = StorageType.BYTES_PER_ELEMENT * element.count;
+        if ((!property.storage || property.storage.byteLength < requiredStorageSizeBytes) &&
+            (!propertyFilter || propertyFilter(property.name))) {
+          property.storage = new StorageType(element.count);
+        }
+
+        if (property.storage) {
+          switch (property.type) {
+            case 'char':
+              property.storage[e] = dataView.getInt8(readOffset);
+              break;
+            case 'uchar':
+              property.storage[e] = dataView.getUint8(readOffset);
+              break;
+            case 'short':
+              property.storage[e] = dataView.getInt16(readOffset, true);
+              break;
+            case 'ushort':
+              property.storage[e] = dataView.getUint16(readOffset, true);
+              break;
+            case 'int':
+              property.storage[e] = dataView.getInt32(readOffset, true);
+              break;
+            case 'uint':
+              property.storage[e] = dataView.getUint32(readOffset, true);
+              break;
+            case 'float':
+              property.storage[e] = dataView.getFloat32(readOffset, true);
+              break;
+            case 'double':
+              property.storage[e] = dataView.getFloat64(readOffset, true);
+              break;
+          }
+        }
+
+        readOffset += property.byteSize;
+      }
+    }
+
+    return readOffset;
+  }
+
+  static readPly(plyBuffer, propertyFilter = null) {
+
+    const header = PlyCodecBase.decodeHeader(plyBuffer);
+
+    let readIndex = PlyCodecBase.readElementData(header.chunkElement, plyBuffer, header.headerSizeBytes, null, null, propertyFilter);
+    PlyCodecBase.readElementData(header.vertexElement, plyBuffer, readIndex, null, null, propertyFilter);
+
+    return {
+      'chunkElement': header.chunkElement,
+      'vertexElement': header.vertexElement
     };
   }
 

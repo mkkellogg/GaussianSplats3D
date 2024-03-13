@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { PlyParser } from './PlyParser.js';
+import { CompressedPlyParser } from './CompressedPlyParser.js';
 import { fetchWithProgress, delayedExecute } from '../../Util.js';
 import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
+import { PlyCodecBase } from './PlyCodecBase.js';
 
 export class PlyLoader {
 
@@ -19,12 +21,14 @@ export class PlyLoader {
         let streamBufferOut;
         let streamSplatBuffer;
         let lastStreamSectionBytes = 0;
-        let streamSectionSizeBytes = 128000; //Constants.StreamingSectionSize;
-        let streamedSections = 0;
+        let streamSectionSizeBytes = Constants.StreamingSectionSize;
         let sectionCount = 1;
         let maxSplatCount = 0;
         let splatCount = 0;
+
         let headerLoaded = false;
+        let readyToLoadSplatData = false;
+        let compressed = false;
 
         let streamLoadCompleteResolver;
         let streamLoadPromise = new Promise((resolve) => {
@@ -62,10 +66,19 @@ export class PlyLoader {
                         headerText += decoder.decode(chunk.data);
                     }
                     lastChunkCheckedForHeader = chunks.length;
-    
+
                     if (PlyParser.checkTextForEndHeader(headerText)) {
                         header = PlyParser.decodeHeaderText(headerText);
-                        maxSplatCount = header.splatCount;
+                        compressed = header.compressed;
+
+                        if (compressed) {
+                            header = PlyCodecBase.decodeHeaderText(headerText);
+                            maxSplatCount = header.vertexElement.count;
+                        } else {
+                            maxSplatCount = header.splatCount;
+                            readyToLoadSplatData = true;
+                        }
+
                         const splatBufferSizeBytes = splatDataOffsetBytes + SplatBuffer.CompressionLevels[0].BytesPerSplat * maxSplatCount;
                         streamBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                         SplatBuffer.writeHeaderToBuffer({
@@ -84,11 +97,13 @@ export class PlyLoader {
                         headerLoaded = true;
                     }
 
+                } else if (compressed) {
+
                 }
 
-                if (headerLoaded) {
+                if (headerLoaded && readyToLoadSplatData) {
 
-                    if (loadComplete && chunks.length > 0) {
+                    if (chunks.length > 0) {
 
                         let inBytes = 0;
                         for (let chunk of chunks) inBytes += chunk.sizeBytes;
@@ -106,14 +121,18 @@ export class PlyLoader {
                         const bytesLoadedSinceLastSection = bytesLoaded - lastStreamSectionBytes;
                         if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
                             const bytesToProcess = bytesLoaded - lastParsedOffsetBytes;
-                            const addedSplatCount = Math.floor(bytesToProcess / header.rowSizeBytes);
-                            const bytesToParse = addedSplatCount * header.rowSizeBytes;
+                            const addedSplatCount = Math.floor(bytesToProcess / header.bytesPerSplat);
+                            const bytesToParse = addedSplatCount * header.bytesPerSplat;
                             const leftOverBytes = bytesToProcess - bytesToParse;
                             const newSplatCount = splatCount + addedSplatCount;
                             const parseDataView = new DataView(streamBufferIn, lastParsedOffsetBytes - chunks[0].startBytes, bytesToParse);
 
                             const outOffset = splatCount * SplatBuffer.CompressionLevels[0].BytesPerSplat + splatDataOffsetBytes;
-                            PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1, parseDataView, 0, streamBufferOut, outOffset);
+                            PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1,
+                                                                            parseDataView, 0, streamBufferOut, outOffset);
+
+                            //CompressedPlyParser.readVertexDataToUncompressedSplatBufferSection(chunkElement, vertexElement, vertexDataBuffer, veretxReadOffset,
+                            //                                                                   fromIndex, toIndex, outBuffer, outOffset, propertyFilter = null);
 
                             splatCount = newSplatCount;
                             if (!streamSplatBuffer) {
@@ -143,15 +162,13 @@ export class PlyLoader {
                                 for (let i = chunks.length - 1; i >= 0; i--) {
                                     const chunk = chunks[i];
                                     keepSize += chunk.sizeBytes;
-
                                     keepChunks.unshift(chunk);
                                     if (keepSize >= leftOverBytes) break;
                                 }
                                 chunks = keepChunks;
                             }
-                            streamedSections++;
                         }
-                    } 
+                    }
 
                     if (loadComplete) {
                         streamLoadCompleteResolver();

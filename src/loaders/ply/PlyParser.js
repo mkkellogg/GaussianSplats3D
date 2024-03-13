@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { CompressedPlyParser } from './CompressedPlyParser.js';
 import { SplatBuffer } from '../SplatBuffer.js';
+import { clamp } from '../../Util.js';
 
 export class PlyParser {
 
@@ -54,7 +55,7 @@ export class PlyParser {
             }
         }
 
-        let plyRowSize = 0;
+        let bytesPerSplat = 0;
         let fieldOffsets = {};
         const fieldSize = {
             'double': 8,
@@ -69,8 +70,8 @@ export class PlyParser {
         for (let fieldName in propertyTypes) {
             if (propertyTypes.hasOwnProperty(fieldName)) {
                 const type = propertyTypes[fieldName];
-                fieldOffsets[fieldName] = plyRowSize;
-                plyRowSize += fieldSize[type];
+                fieldOffsets[fieldName] = bytesPerSplat;
+                bytesPerSplat += fieldSize[type];
             }
         }
 
@@ -81,7 +82,7 @@ export class PlyParser {
             'headerText': headerText,
             'headerLines': prunedLines,
             'headerSizeBytes': headerText.indexOf(PlyParser.HeaderEndToken) + PlyParser.HeaderEndToken.length + 1,
-            'rowSizeBytes': plyRowSize,
+            'bytesPerSplat': bytesPerSplat,
             'fieldOffsets': fieldOffsets
         };
     }
@@ -134,8 +135,6 @@ export class PlyParser {
         const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
         const outBytesPerSplat = SplatBuffer.CompressionLevels[0].BytesPerSplat;
 
-        const tempRotation = new THREE.Quaternion();
-
         for (let i = fromSplat; i <= toSplat; i++) {
 
             const parsedSplat = PlyParser.parseToUncompressedSplat(vertexData, i, header, vertexDataOffset);
@@ -154,30 +153,25 @@ export class PlyParser {
             outScale[1] = parsedSplat[UncompressedSplatArray.OFFSET.SCALE1];
             outScale[2] = parsedSplat[UncompressedSplatArray.OFFSET.SCALE2];
 
-            tempRotation.set(parsedSplat[UncompressedSplatArray.OFFSET.ROTATION1],
-                             parsedSplat[UncompressedSplatArray.OFFSET.ROTATION2],
-                             parsedSplat[UncompressedSplatArray.OFFSET.ROTATION3],
-                             parsedSplat[UncompressedSplatArray.OFFSET.ROTATION0]);
-            tempRotation.normalize();
+            outRotation[0] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION0];
+            outRotation[1] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION1];
+            outRotation[2] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION2];
+            outRotation[3] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION3];
 
-            outRotation[0] = tempRotation.w;
-            outRotation[1] = tempRotation.x;
-            outRotation[2] = tempRotation.y;
-            outRotation[3] = tempRotation.z;
-
-            outColor[0] = Math.floor(parsedSplat[UncompressedSplatArray.OFFSET.FDC0]);
-            outColor[1] = Math.floor(parsedSplat[UncompressedSplatArray.OFFSET.FDC1]);
-            outColor[2] = Math.floor(parsedSplat[UncompressedSplatArray.OFFSET.FDC2]);
-            outColor[3] = Math.floor(parsedSplat[UncompressedSplatArray.OFFSET.OPACITY]);
+            outColor[0] = parsedSplat[UncompressedSplatArray.OFFSET.FDC0];
+            outColor[1] = parsedSplat[UncompressedSplatArray.OFFSET.FDC1];
+            outColor[2] = parsedSplat[UncompressedSplatArray.OFFSET.FDC2];
+            outColor[3] = parsedSplat[UncompressedSplatArray.OFFSET.OPACITY];
         }
     }
 
-    static parseToUncompressedSplat = function () {
-       
-        let rawVertex = {};
+    static parseToUncompressedSplat = function() {
 
-        return function (vertexData, row, header, vertexDataOffset = 0) {
-            PlyParser.readRawVertexFast(vertexData, row * header.rowSizeBytes + vertexDataOffset, header.fieldOffsets,
+        let rawVertex = {};
+        const tempRotation = new THREE.Quaternion();
+
+        return function(vertexData, row, header, vertexDataOffset = 0) {
+            PlyParser.readRawVertexFast(vertexData, row * header.bytesPerSplat + vertexDataOffset, header.fieldOffsets,
                                         PlyParser.Fields, header.propertyTypes, rawVertex);
             const newSplat = UncompressedSplatArray.createSplat();
             if (rawVertex['scale_0'] !== undefined) {
@@ -208,10 +202,18 @@ export class PlyParser {
                 newSplat[UncompressedSplatArray.OFFSET.OPACITY] = (1 / (1 + Math.exp(-rawVertex['opacity']))) * 255;
             }
 
-            newSplat[UncompressedSplatArray.OFFSET.ROTATION0] = rawVertex['rot_0'];
-            newSplat[UncompressedSplatArray.OFFSET.ROTATION1] = rawVertex['rot_1'];
-            newSplat[UncompressedSplatArray.OFFSET.ROTATION2] = rawVertex['rot_2'];
-            newSplat[UncompressedSplatArray.OFFSET.ROTATION3] = rawVertex['rot_3'];
+            newSplat[UncompressedSplatArray.OFFSET.FDC0] = clamp(Math.floor(newSplat[UncompressedSplatArray.OFFSET.FDC0]), 0, 255);
+            newSplat[UncompressedSplatArray.OFFSET.FDC1] = clamp(Math.floor(newSplat[UncompressedSplatArray.OFFSET.FDC1]), 0, 255);
+            newSplat[UncompressedSplatArray.OFFSET.FDC2] = clamp(Math.floor(newSplat[UncompressedSplatArray.OFFSET.FDC2]), 0, 255);
+            newSplat[UncompressedSplatArray.OFFSET.OPACITY] = clamp(Math.floor(newSplat[UncompressedSplatArray.OFFSET.OPACITY]), 0, 255);
+
+            tempRotation.set(rawVertex['rot_0'], rawVertex['rot_1'], rawVertex['rot_2'], rawVertex['rot_3']);
+            tempRotation.normalize();
+
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION0] = tempRotation.x;
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION1] = tempRotation.y;
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION2] = tempRotation.z;
+            newSplat[UncompressedSplatArray.OFFSET.ROTATION3] = tempRotation.w;
 
             newSplat[UncompressedSplatArray.OFFSET.X] = rawVertex['x'];
             newSplat[UncompressedSplatArray.OFFSET.Y] = rawVertex['y'];
@@ -255,7 +257,7 @@ export class PlyParser {
             // console.log('Detected degree', sphericalHarmonicsDegree, 'with ', nCoeffsPerColor, 'coefficients per color');
 
             // figure out the order in which spherical harmonics should be read
-            /*const shFeatureOrder = [];
+            /* const shFeatureOrder = [];
             for (let rgb = 0; rgb < 3; ++rgb) {
                 shFeatureOrder.push(`f_dc_${rgb}`);
             }
