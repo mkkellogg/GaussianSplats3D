@@ -21,6 +21,7 @@ import { ARButton } from './webxr/ARButton.js';
 import { delayedExecute } from './Util.js';
 import { LoaderStatus } from './loaders/LoaderStatus.js';
 import { RenderMode } from './RenderMode.js';
+import { XRButton } from './webxr/XRButton.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -235,7 +236,10 @@ export class Viewer {
                 this.rootElement.appendChild(VRButton.createButton(this.renderer));
             } else if (this.webXRMode === WebXRMode.AR) {
                 this.rootElement.appendChild(ARButton.createButton(this.renderer));
+            } else if (this.webXRMode === WebXRMode.XR) {
+                this.rootElement.appendChild(XRButton.createButton(this.renderer));
             }
+            
             this.renderer.xr.enabled = true;
             this.camera.position.copy(this.initialCameraPosition);
             this.camera.up.copy(this.cameraUp).normalize();
