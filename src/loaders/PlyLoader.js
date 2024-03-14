@@ -1,4 +1,5 @@
 import { PlyParser } from './PlyParser.js';
+import { SplatBufferGenerator } from './SplatBufferGenerator.js';
 import { fetchWithProgress, delayedExecute } from '../Util.js';
 import { LoaderStatus } from './LoaderStatus.js';
 
@@ -19,7 +20,7 @@ export class PlyLoader {
             });
         })
         .then((splatArray) => {
-            const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(minimumAlpha,
+            const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha,
                                                                                                     compressionLevel, sectionSize,
                                                                                                     sceneCenter, blockSize, bucketSize);
             const splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
