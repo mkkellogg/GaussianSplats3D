@@ -6,23 +6,38 @@ import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
-import { PlyCodecBase } from './PlyCodecBase.js';
+
+function storeChunksInBuffer(chunks, buffer) {
+    let inBytes = 0;
+    for (let chunk of chunks) inBytes += chunk.sizeBytes;
+
+    if (!buffer || buffer.byteLength < inBytes) {
+        buffer = new ArrayBuffer(inBytes);
+    }
+
+    let offset = 0;
+    for (let chunk of chunks) {
+        new Uint8Array(buffer, offset, chunk.sizeBytes).set(chunk.data);
+        offset += chunk.sizeBytes;
+    }
+
+    return buffer;
+}
 
 export class PlyLoader {
 
-    constructor() {
-        this.splatBuffer = null;
-    }
+    static loadFromURL(fileName, onProgress, stream, onStreamedSectionProgress, minimumAlpha, compressionLevel,
+                       sectionSize, sceneCenter, blockSize, bucketSize) {
 
-    loadFromURL(fileName, onProgress, stream, onStreamedSectionProgress, compressionLevel, minimumAlpha,
-                sectionSize, sceneCenter, blockSize, bucketSize) {
+        const streamSectionSizeBytes = Constants.StreamingSectionSize;
+        const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
+        const sectionCount = 1;
 
         let streamBufferIn;
         let streamBufferOut;
         let streamSplatBuffer;
+        let compressedPlyHeaderChunksBuffer;
         let lastStreamSectionBytes = 0;
-        let streamSectionSizeBytes = Constants.StreamingSectionSize;
-        let sectionCount = 1;
         let maxSplatCount = 0;
         let splatCount = 0;
 
@@ -39,14 +54,13 @@ export class PlyLoader {
         let headerText = '';
         let header = null;
         let chunks = [];
-        let lastChunkCheckedForHeader = 0;
         let lastParsedOffsetBytes = 0;
+
+        const textDecoder = new TextDecoder();
 
         const localOnProgress = (percent, percentLabel, chunk) => {
             const loadComplete = percent >= 100;
             if (stream) {
-
-                const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
 
                 if (chunk) {
                     chunks.push({
@@ -59,20 +73,13 @@ export class PlyLoader {
                 }
 
                 if (!headerLoaded) {
-
-                    const decoder = new TextDecoder();
-                    for (let i = lastChunkCheckedForHeader; i < chunks.length; i++) {
-                        const chunk = chunks[i];
-                        headerText += decoder.decode(chunk.data);
-                    }
-                    lastChunkCheckedForHeader = chunks.length;
-
+                    headerText += textDecoder.decode(chunk);
                     if (PlyParser.checkTextForEndHeader(headerText)) {
                         header = PlyParser.decodeHeaderText(headerText);
                         compressed = header.compressed;
 
                         if (compressed) {
-                            header = PlyCodecBase.decodeHeaderText(headerText);
+                            header = CompressedPlyParser.decodeHeaderText(headerText);
                             maxSplatCount = header.vertexElement.count;
                         } else {
                             maxSplatCount = header.splatCount;
@@ -96,27 +103,22 @@ export class PlyLoader {
                         lastParsedOffsetBytes = header.headerSizeBytes;
                         headerLoaded = true;
                     }
-
-                } else if (compressed) {
-
+                } else if (compressed && !readyToLoadSplatData) {
+                    const sizeRequiredForHeaderAndChunks = header.headerSizeBytes + header.chunkElement.storageSizeBytes;
+                    compressedPlyHeaderChunksBuffer = storeChunksInBuffer(chunks, compressedPlyHeaderChunksBuffer);
+                    if (compressedPlyHeaderChunksBuffer.byteLength >= sizeRequiredForHeaderAndChunks) {
+                        CompressedPlyParser.readElementData(header.chunkElement, compressedPlyHeaderChunksBuffer, header.headerSizeBytes);
+                        lastStreamSectionBytes = sizeRequiredForHeaderAndChunks;
+                        lastParsedOffsetBytes = sizeRequiredForHeaderAndChunks;
+                        readyToLoadSplatData = true;
+                    }
                 }
 
                 if (headerLoaded && readyToLoadSplatData) {
 
                     if (chunks.length > 0) {
 
-                        let inBytes = 0;
-                        for (let chunk of chunks) inBytes += chunk.sizeBytes;
-
-                        if (!streamBufferIn || streamBufferIn.byteLength < inBytes) {
-                            streamBufferIn = new ArrayBuffer(inBytes);
-                        }
-
-                        let offset = 0;
-                        for (let chunk of chunks) {
-                            new Uint8Array(streamBufferIn, offset, chunk.sizeBytes).set(chunk.data);
-                            offset += chunk.sizeBytes;
-                        }
+                        streamBufferIn = storeChunksInBuffer(chunks, streamBufferIn);
 
                         const bytesLoadedSinceLastSection = bytesLoaded - lastStreamSectionBytes;
                         if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
@@ -128,11 +130,17 @@ export class PlyLoader {
                             const parseDataView = new DataView(streamBufferIn, lastParsedOffsetBytes - chunks[0].startBytes, bytesToParse);
 
                             const outOffset = splatCount * SplatBuffer.CompressionLevels[0].BytesPerSplat + splatDataOffsetBytes;
-                            PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1,
-                                                                            parseDataView, 0, streamBufferOut, outOffset);
 
-                            //CompressedPlyParser.readVertexDataToUncompressedSplatBufferSection(chunkElement, vertexElement, vertexDataBuffer, veretxReadOffset,
-                            //                                                                   fromIndex, toIndex, outBuffer, outOffset, propertyFilter = null);
+                            if (compressed) {
+                                CompressedPlyParser.readVertexDataToUncompressedSplatBufferSection(header.chunkElement,
+                                                                                                   header.vertexElement, 0,
+                                                                                                   addedSplatCount - 1, splatCount,
+                                                                                                   parseDataView, 0, streamBufferOut,
+                                                                                                   outOffset);
+                            } else {
+                                PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1,
+                                                                                parseDataView, 0, streamBufferOut, outOffset);
+                            }
 
                             splatCount = newSplatCount;
                             if (!streamSplatBuffer) {
@@ -171,7 +179,7 @@ export class PlyLoader {
                     }
 
                     if (loadComplete) {
-                        streamLoadCompleteResolver();
+                        streamLoadCompleteResolver(streamSplatBuffer);
                     }
                 }
 
@@ -181,24 +189,23 @@ export class PlyLoader {
 
         return fetchWithProgress(fileName, localOnProgress, !stream).then((plyFileData) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            if (stream) {
-                return streamLoadPromise.then(() => {
-                    if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                    return streamSplatBuffer;
-                });
-            } else {
-                return delayedExecute(() => {
-                    return PlyParser.parseToUncompressedSplatArray(plyFileData);
-                })
-                .then((splatArray) => {
-                    const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel, sectionSize,
-                                                                                           sceneCenter, blockSize, bucketSize);
-                    const splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-                    if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                    return splatBuffer;
-                });
-            }
+            const loadPromise = stream ? streamLoadPromise : PlyLoader.loadFromFileData(plyFileData, minimumAlpha, compressionLevel,
+                                                                                        sectionSize, sceneCenter, blockSize, bucketSize);
+            return loadPromise.then((splatBuffer) => {
+                if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
+                return splatBuffer;
+            });
         });
     }
 
+    static loadFromFileData(plyFileData, minimumAlpha, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
+        return delayedExecute(() => {
+            return PlyParser.parseToUncompressedSplatArray(plyFileData);
+        })
+        .then((splatArray) => {
+            const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel, sectionSize,
+                                                                                   sceneCenter, blockSize, bucketSize);
+            return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
+        });
+    }
 }

@@ -778,13 +778,11 @@ export class Viewer {
     loadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
                                 streamBuiltSections = false, onSectionBuilt = undefined, format) {
         if (format === SceneFormat.Splat) {
-            return new SplatLoader().loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt,
-                                                 0, splatAlphaRemovalThreshold, false);
+            return SplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, splatAlphaRemovalThreshold, 0, false);
         } else if (format === SceneFormat.KSplat) {
-            return new KSplatLoader().loadFromURL(path, onProgress, streamBuiltSections,
-                                                  onSectionBuilt, 0, splatAlphaRemovalThreshold);
+            return KSplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt);
         } else if (format === SceneFormat.Ply) {
-            return new PlyLoader().loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, 0, splatAlphaRemovalThreshold);
+            return PlyLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, splatAlphaRemovalThreshold, 0);
         }
 
         return AbortablePromise.reject(new Error(`Viewer::loadSplatSceneToSplatBuffer -> File format not supported: ${path}`));

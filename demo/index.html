@@ -266,32 +266,16 @@
     import * as GaussianSplats3D from 'gaussian-splats-3d';
     import * as THREE from 'three';
 
-    function convertPLYToSplatBuffer(plyBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
-      let splatArray = GaussianSplats3D.PlyParser.parseToUncompressedSplatArray(plyBufferData.data);
-      plyBufferData.data = null;
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
-      return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-    }
-
-    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize){
-      const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
-      return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-    }
-
-    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
-      let splatBuffer;
+    function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
+        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
-          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData.data, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
+          return GaussianSplats3D.SplatLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
         } else {
-          GaussianSplats3D.KSplatLoader.checkVersion(fileBufferData.data);
-          splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData.data);
+          return GaussianSplats3D.KSplatLoader.loadFromFileData(fileBufferData.data);
         }
       }
-      return splatBuffer;
     }
 
     window.onCompressionLevelChange = function(arg) {
@@ -393,10 +377,12 @@
           const fileData = {data: fileReader.result};
           window.setTimeout(() => {
             try {
-              const splatBuffer = fileBufferToSplatBuffer(fileData, format, compressionLevel,
-                                                          alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
-              GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
-              conversionDone();
+              const splatBufferPromise = fileBufferToSplatBuffer(fileData, format, alphaRemovalThreshold, compressionLevel,
+                                                                 sectionSize, sceneCenter, blockSize, bucketSize);
+              splatBufferPromise.then((splatBuffer) => {
+                GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
+                conversionDone();
+              });
             } catch (e) {
               conversionDone(e);
             }
@@ -547,14 +533,16 @@
       const splatBufferOptions = {
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
-      const splatBuffer = fileBufferToSplatBuffer({data: splatBufferData}, format, 0, alphaRemovalThreshold);
-      document.getElementById("demo-content").style.display = 'none';
-      document.body.style.backgroundColor = "#000000";
-      history.pushState("ViewSplat", null);
-      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
-      viewer.addSplatBuffers([splatBuffer], [splatBufferOptions])
-      .then(() => {
-          viewer.start();
+      const splatBufferPromise = fileBufferToSplatBuffer({data: splatBufferData}, format, alphaRemovalThreshold, 0);
+      splatBufferPromise.then((splatBuffer) => {
+        document.getElementById("demo-content").style.display = 'none';
+        document.body.style.backgroundColor = "#000000";
+        history.pushState("ViewSplat", null);
+        const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+        viewer.addSplatBuffers([splatBuffer], [splatBufferOptions])
+        .then(() => {
+            viewer.start();
+        });
       });
     }
 

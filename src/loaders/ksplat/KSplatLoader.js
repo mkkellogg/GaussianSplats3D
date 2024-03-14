@@ -8,11 +8,6 @@ const MINIMUM_REQUIRED_MINOR_VERSION = 1;
 
 export class KSplatLoader {
 
-    constructor(splatBuffer = null) {
-        this.splatBuffer = splatBuffer;
-        this.downLoadLink = null;
-    }
-
    static checkVersion(buffer) {
         const header = SplatBuffer.parseHeader(buffer);
         if (header.versionMajor === MINIMUM_REQUIRED_MAJOR_VERSION && header.versionMinor >= MINIMUM_REQUIRED_MINOR_VERSION ||
@@ -24,7 +19,7 @@ export class KSplatLoader {
         }
     };
 
-    loadFromURL(fileName, onProgress, streamBuiltSections, onSectionBuilt) {
+    static loadFromURL(fileName, onProgress, streamBuiltSections, onSectionBuilt) {
         let bytesLoaded = 0;
         let totalStorageSizeBytes = 0;
 
@@ -166,14 +161,13 @@ export class KSplatLoader {
                     onSectionBuilt(streamSplatBuffer, loadComplete);
 
                     if (loadComplete) {
-                        streamLoadCompleteResolver();
+                        streamLoadCompleteResolver(streamSplatBuffer);
                     }
                 }
             }
         };
 
         const localOnProgress = (percent, percentStr, chunk) => {
-
             if (chunk) {
                 chunks.push(chunk);
                 if (streamBuffer) {
@@ -191,28 +185,19 @@ export class KSplatLoader {
 
         return fetchWithProgress(fileName, localOnProgress, !streamBuiltSections).then((fullBuffer) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            return delayedExecute(() => {
-                function finish(buffer) {
-                    if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                    if (buffer instanceof SplatBuffer) return buffer;
-                    else {
-                        KSplatLoader.checkVersion(buffer);
-                        return new SplatBuffer(buffer);
-                    }
-                }
-                if (streamBuiltSections) {
-                    return streamLoadPromise.then(() => {
-                        return finish(streamSplatBuffer);
-                    });
-                } else {
-                    return finish(fullBuffer);
-                }
+            const loadPromise = streamBuiltSections ? streamLoadPromise : KSplatLoader.loadFromFileData(fullBuffer);
+            return loadPromise.then((splatBuffer) => {
+                if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
+                return splatBuffer;
             });
         });
     }
 
-    setFromBuffer(splatBuffer) {
-        this.splatBuffer = splatBuffer;
+    static loadFromFileData(fileData) {
+        return delayedExecute(() => {
+            KSplatLoader.checkVersion(fileData);
+            return new SplatBuffer(fileData);
+        });
     }
 
     static downloadFile = function() {
