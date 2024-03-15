@@ -361,9 +361,8 @@ export class CompressedPlyParser {
 
   }();
 
-  static readVertexDataToUncompressedSplatBufferSection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
-                                                        vertexDataBuffer, veretxReadOffset, outBuffer, outOffset,
-                                                        propertyFilter = null) {
+  static parseToUncompressedSplatBufferSection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
+                                               vertexDataBuffer, veretxReadOffset, outBuffer, outOffset, propertyFilter = null) {
 
     CompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, veretxReadOffset, fromIndex, toIndex, propertyFilter);
 

@@ -8,7 +8,7 @@ import { Constants } from '../../Constants.js';
 
 export class SplatLoader {
 
-    static loadFromURL(fileName, onProgress, stream, onStreamedSectionProgress, minimumAlpha, compressionLevel,
+    static loadFromURL(fileName, onProgress, streamLoadData, onStreamedSectionProgress, minimumAlpha, compressionLevel,
                        optimizeSplatData, sectionSize, sceneCenter, blockSize, bucketSize) {
 
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
@@ -32,8 +32,8 @@ export class SplatLoader {
 
         const localOnProgress = (percent, percentStr, chunk, fileSize) => {
             const loadComplete = percent >= 100;
-            if (!fileSize) stream = false;
-            if (stream) {
+            if (!fileSize) streamLoadData = false;
+            if (streamLoadData) {
                 if (!streamBufferIn) {
                     maxSplatCount = fileSize / SplatParser.RowSizeBytes;
                     streamBufferIn = new ArrayBuffer(fileSize);
@@ -88,14 +88,14 @@ export class SplatLoader {
                 }
             }
             if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
-            return stream;
+            return streamLoadData;
         };
 
         return fetchWithProgress(fileName, localOnProgress, true).then((fullBuffer) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = stream ? streamLoadPromise : SplatLoader.loadFromFileData(fullBuffer, minimumAlpha, compressionLevel,
-                                                                                          optimizeSplatData, sectionSize, sceneCenter,
-                                                                                          blockSize, bucketSize);
+            const loadPromise = streamLoadData ? streamLoadPromise :
+                SplatLoader.loadFromFileData(fullBuffer, minimumAlpha, compressionLevel, optimizeSplatData,
+                                             sectionSize, sceneCenter, blockSize, bucketSize);
             return loadPromise.then((splatBuffer) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
                 return splatBuffer;

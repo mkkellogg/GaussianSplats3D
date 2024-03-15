@@ -19,7 +19,7 @@ export class KSplatLoader {
         }
     };
 
-    static loadFromURL(fileName, onProgress, streamBuiltSections, onSectionBuilt) {
+    static loadFromURL(fileName, onProgress, streamLoadData, onSectionBuilt) {
         let bytesLoaded = 0;
         let totalStorageSizeBytes = 0;
 
@@ -175,7 +175,7 @@ export class KSplatLoader {
                 }
                 bytesLoaded += chunk.byteLength;
             }
-            if (streamBuiltSections) {
+            if (streamLoadData) {
                 checkAndLoadHeader();
                 checkAndLoadSectionHeaders();
                 checkAndLoadSections();
@@ -183,9 +183,9 @@ export class KSplatLoader {
             if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
         };
 
-        return fetchWithProgress(fileName, localOnProgress, !streamBuiltSections).then((fullBuffer) => {
+        return fetchWithProgress(fileName, localOnProgress, !streamLoadData).then((fullBuffer) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = streamBuiltSections ? streamLoadPromise : KSplatLoader.loadFromFileData(fullBuffer);
+            const loadPromise = streamLoadData ? streamLoadPromise : KSplatLoader.loadFromFileData(fullBuffer);
             return loadPromise.then((splatBuffer) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
                 return splatBuffer;

@@ -26,18 +26,19 @@ function storeChunksInBuffer(chunks, buffer) {
 
 export class PlyLoader {
 
-    static loadFromURL(fileName, onProgress, stream, onStreamedSectionProgress, minimumAlpha, compressionLevel,
+    static loadFromURL(fileName, onProgress, streamLoadData, onStreamedSectionProgress, minimumAlpha, compressionLevel,
                        sectionSize, sceneCenter, blockSize, bucketSize) {
 
-        const streamSectionSizeBytes = Constants.StreamingSectionSize;
+        const streamedSectionSizeBytes = Constants.StreamingSectionSize;
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
         const sectionCount = 1;
 
         let streamBufferIn;
         let streamBufferOut;
-        let streamSplatBuffer;
+        let streamedSplatBuffer;
         let compressedPlyHeaderChunksBuffer;
-        let lastStreamSectionBytes = 0;
+        let lastStreamedSectionEndBytes = 0;
+        let lastParsedSectionEndBytes = 0;
         let maxSplatCount = 0;
         let splatCount = 0;
 
@@ -54,26 +55,25 @@ export class PlyLoader {
         let headerText = '';
         let header = null;
         let chunks = [];
-        let lastParsedOffsetBytes = 0;
 
         const textDecoder = new TextDecoder();
 
-        const localOnProgress = (percent, percentLabel, chunk) => {
+        const localOnProgress = (percent, percentLabel, chunkData) => {
             const loadComplete = percent >= 100;
-            if (stream) {
+            if (streamLoadData) {
 
-                if (chunk) {
+                if (chunkData) {
                     chunks.push({
-                        'data': chunk,
-                        'sizeBytes': chunk.byteLength,
+                        'data': chunkData,
+                        'sizeBytes': chunkData.byteLength,
                         'startBytes': bytesLoaded,
-                        'endBytes': bytesLoaded + chunk.byteLength
+                        'endBytes': bytesLoaded + chunkData.byteLength
                     });
-                    bytesLoaded += chunk.byteLength;
+                    bytesLoaded += chunkData.byteLength;
                 }
 
                 if (!headerLoaded) {
-                    headerText += textDecoder.decode(chunk);
+                    headerText += textDecoder.decode(chunkData);
                     if (PlyParser.checkTextForEndHeader(headerText)) {
                         header = PlyParser.decodeHeaderText(headerText);
                         compressed = header.compressed;
@@ -99,8 +99,8 @@ export class PlyLoader {
                             sceneCenter: new THREE.Vector3()
                         }, streamBufferOut);
 
-                        lastStreamSectionBytes = header.headerSizeBytes;
-                        lastParsedOffsetBytes = header.headerSizeBytes;
+                        lastStreamedSectionEndBytes = header.headerSizeBytes;
+                        lastParsedSectionEndBytes = header.headerSizeBytes;
                         headerLoaded = true;
                     }
                 } else if (compressed && !readyToLoadSplatData) {
@@ -108,8 +108,8 @@ export class PlyLoader {
                     compressedPlyHeaderChunksBuffer = storeChunksInBuffer(chunks, compressedPlyHeaderChunksBuffer);
                     if (compressedPlyHeaderChunksBuffer.byteLength >= sizeRequiredForHeaderAndChunks) {
                         CompressedPlyParser.readElementData(header.chunkElement, compressedPlyHeaderChunksBuffer, header.headerSizeBytes);
-                        lastStreamSectionBytes = sizeRequiredForHeaderAndChunks;
-                        lastParsedOffsetBytes = sizeRequiredForHeaderAndChunks;
+                        lastStreamedSectionEndBytes = sizeRequiredForHeaderAndChunks;
+                        lastParsedSectionEndBytes = sizeRequiredForHeaderAndChunks;
                         readyToLoadSplatData = true;
                     }
                 }
@@ -120,30 +120,29 @@ export class PlyLoader {
 
                         streamBufferIn = storeChunksInBuffer(chunks, streamBufferIn);
 
-                        const bytesLoadedSinceLastSection = bytesLoaded - lastStreamSectionBytes;
-                        if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
-                            const bytesToProcess = bytesLoaded - lastParsedOffsetBytes;
+                        const bytesLoadedSinceLastStreamedSection = bytesLoaded - lastStreamedSectionEndBytes;
+                        if (bytesLoadedSinceLastStreamedSection > streamedSectionSizeBytes || loadComplete) {
+                            const bytesToProcess = bytesLoaded - lastParsedSectionEndBytes;
                             const addedSplatCount = Math.floor(bytesToProcess / header.bytesPerSplat);
                             const bytesToParse = addedSplatCount * header.bytesPerSplat;
                             const leftOverBytes = bytesToProcess - bytesToParse;
                             const newSplatCount = splatCount + addedSplatCount;
-                            const parseDataView = new DataView(streamBufferIn, lastParsedOffsetBytes - chunks[0].startBytes, bytesToParse);
+                            const parsedDataViewOffset = lastParsedSectionEndBytes - chunks[0].startBytes;
+                            const parseDataView = new DataView(streamBufferIn, parsedDataViewOffset, bytesToParse);
 
                             const outOffset = splatCount * SplatBuffer.CompressionLevels[0].BytesPerSplat + splatDataOffsetBytes;
 
                             if (compressed) {
-                                CompressedPlyParser.readVertexDataToUncompressedSplatBufferSection(header.chunkElement,
-                                                                                                   header.vertexElement, 0,
-                                                                                                   addedSplatCount - 1, splatCount,
-                                                                                                   parseDataView, 0, streamBufferOut,
-                                                                                                   outOffset);
+                                CompressedPlyParser.parseToUncompressedSplatBufferSection(header.chunkElement, header.vertexElement, 0,
+                                                                                          addedSplatCount - 1, splatCount,
+                                                                                          parseDataView, 0, streamBufferOut, outOffset);
                             } else {
                                 PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1,
                                                                                 parseDataView, 0, streamBufferOut, outOffset);
                             }
 
                             splatCount = newSplatCount;
-                            if (!streamSplatBuffer) {
+                            if (!streamedSplatBuffer) {
                                 SplatBuffer.writeSectionHeaderToBuffer({
                                     maxSplatCount: maxSplatCount,
                                     splatCount: splatCount,
@@ -155,12 +154,12 @@ export class PlyLoader {
                                     fullBucketCount: 0,
                                     partiallyFilledBucketCount: 0
                                 }, 0, streamBufferOut, SplatBuffer.HeaderSizeBytes);
-                                streamSplatBuffer = new SplatBuffer(streamBufferOut, false);
+                                streamedSplatBuffer = new SplatBuffer(streamBufferOut, false);
                             }
-                            streamSplatBuffer.updateLoadedCounts(1, splatCount);
-                            onStreamedSectionProgress(streamSplatBuffer, loadComplete);
-                            lastStreamSectionBytes += streamSectionSizeBytes;
-                            lastParsedOffsetBytes += bytesToParse;
+                            streamedSplatBuffer.updateLoadedCounts(1, splatCount);
+                            onStreamedSectionProgress(streamedSplatBuffer, loadComplete);
+                            lastStreamedSectionEndBytes += streamedSectionSizeBytes;
+                            lastParsedSectionEndBytes += bytesToParse;
 
                             if (leftOverBytes === 0) {
                                 chunks = [];
@@ -179,7 +178,7 @@ export class PlyLoader {
                     }
 
                     if (loadComplete) {
-                        streamLoadCompleteResolver(streamSplatBuffer);
+                        streamLoadCompleteResolver(streamedSplatBuffer);
                     }
                 }
 
@@ -187,9 +186,9 @@ export class PlyLoader {
             if (onProgress) onProgress(percent, percentLabel, LoaderStatus.Downloading);
         };
 
-        return fetchWithProgress(fileName, localOnProgress, !stream).then((plyFileData) => {
+        return fetchWithProgress(fileName, localOnProgress, !streamLoadData).then((plyFileData) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = stream ? streamLoadPromise : PlyLoader.loadFromFileData(plyFileData, minimumAlpha, compressionLevel,
+            const loadPromise = streamLoadData ? streamLoadPromise : PlyLoader.loadFromFileData(plyFileData, minimumAlpha, compressionLevel,
                                                                                         sectionSize, sceneCenter, blockSize, bucketSize);
             return loadPromise.then((splatBuffer) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
