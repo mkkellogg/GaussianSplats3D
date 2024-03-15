@@ -837,8 +837,8 @@ export class SplatMesh extends THREE.Mesh {
                 const covariance = this.splatDataTextures.baseData.covariances[i];
                 paddedCovariances[i] = covariance;
             }
-            const covariancesTextureProps = this.renderer.properties.get(covariancesTexture);
-            if (!covariancesTextureProps.__webglTexture) {
+            const covariancesTextureProps = this.renderer ? this.renderer.properties.get(covariancesTexture) : null;
+            if (!covariancesTextureProps || !covariancesTextureProps.__webglTexture) {
                 covariancesTexture.needsUpdate = true;
             } else {
                 const covaranceBytesPerElement = this.halfPrecisionCovariancesOnGPU ? 2 : 4;
@@ -851,8 +851,8 @@ export class SplatMesh extends THREE.Mesh {
             const centerColorsTexture = centerColorsTextureDescriptor.texture;
             updateCenterColorsPaddedData(this.lastBuildSplatCount, splatCount, this.splatDataTextures.baseData.centers,
                                          this.splatDataTextures.baseData.colors, paddedCenterColors);
-            const centerColorsTextureProps = this.renderer.properties.get(centerColorsTexture);
-            if (!centerColorsTextureProps.__webglTexture) {
+            const centerColorsTextureProps = this.renderer ? this.renderer.properties.get(centerColorsTexture) : null;
+            if (!centerColorsTextureProps || !centerColorsTextureProps.__webglTexture) {
                 centerColorsTexture.needsUpdate = true;
             } else {
                 this.updateDataTexture(paddedCenterColors, centerColorsTextureDescriptor, centerColorsTextureProps,
@@ -867,8 +867,8 @@ export class SplatMesh extends THREE.Mesh {
                 }
 
                 const paddedTransformIndexesTexture = transformIndexesTexDesc.texture;
-                const transformIndexesTextureProps = this.renderer.properties.get(paddedTransformIndexesTexture);
-                if (!transformIndexesTextureProps.__webglTexture) {
+                const transformIndexesTextureProps = this.renderer ? this.renderer.properties.get(paddedTransformIndexesTexture) : null;
+                if (!transformIndexesTextureProps || !transformIndexesTextureProps.__webglTexture) {
                     paddedTransformIndexesTexture.needsUpdate = true;
                 } else {
                     this.updateDataTexture(paddedTransformIndexes, transformIndexesTexDesc, transformIndexesTextureProps, 1, 1, 1);
