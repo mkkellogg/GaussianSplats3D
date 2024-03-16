@@ -349,3 +349,26 @@ RewriteEngine On
 RewriteCond %{HTTPS} off
 RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [R,L]
 ```
+
+#### Handling CORS with Vite
+When working with Vite you may require special CORS configuration to be able to read SharedBufferArray. One way of configuring vite is to install the [vite-plugin-cross-origin-isolation](https://github.com/chaosprint/vite-plugin-cross-origin-isolation) plugin via `npm` and then add the following to your `vite.config.js` file. 
+
+```javascript
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [
+    {
+      name: "configure-response-headers",
+      configureServer: (server) => {
+        server.middlewares.use((_req, res, next) => {
+          res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+          res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+          next();
+        });
+      },
+    },
+  ],
+});
+```
+There are other ways to configure vite to handle this referenced in issue #41.
