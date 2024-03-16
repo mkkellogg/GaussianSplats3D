@@ -371,4 +371,4 @@ export default defineConfig({
   ],
 });
 ```
-There are other ways to configure vite to handle this referenced in issue #41.
+There are other ways to configure vite to handle this referenced in issue [#41].
