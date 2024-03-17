@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from './OrbitControls.js';
-import { PlyLoader } from './loaders/PlyLoader.js';
-import { SplatLoader } from './loaders/SplatLoader.js';
-import { KSplatLoader } from './loaders/KSplatLoader.js';
+import { PlyLoader } from './loaders/ply/PlyLoader.js';
+import { SplatLoader } from './loaders/splat/SplatLoader.js';
+import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
 import { sceneFormatFromPath } from './loaders/Utils.js';
 import { LoadingSpinner } from './ui/LoadingSpinner.js';
 import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
@@ -778,20 +778,18 @@ export class Viewer {
     loadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
                                 streamBuiltSections = false, onSectionBuilt = undefined, format) {
         if (format === SceneFormat.Splat) {
-            return new SplatLoader().loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt,
-                                                 0, splatAlphaRemovalThreshold, false);
+            return SplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, splatAlphaRemovalThreshold, 0, false);
         } else if (format === SceneFormat.KSplat) {
-            return new KSplatLoader().loadFromURL(path, onProgress, streamBuiltSections,
-                                                  onSectionBuilt, 0, splatAlphaRemovalThreshold);
+            return KSplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt);
         } else if (format === SceneFormat.Ply) {
-            return new PlyLoader().loadFromURL(path, onProgress, 0, splatAlphaRemovalThreshold);
+            return PlyLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, splatAlphaRemovalThreshold, 0);
         }
 
         return AbortablePromise.reject(new Error(`Viewer::loadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
     }
 
     static isStreamable(format) {
-        return format === SceneFormat.Splat || format === SceneFormat.KSplat;
+        return format === SceneFormat.Splat || format === SceneFormat.KSplat || format === SceneFormat.Ply;
     }
 
     /**

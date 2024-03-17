@@ -23,14 +23,12 @@ const splatBuffer = fileBufferToSplatBuffer(fileData.buffer, format, compression
 
 fs.writeFileSync(outputFile, splatBuffer.bufferData);
 
-
 function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold) {
     let splatBuffer;
     if (format === GaussianSplats3D.SceneFormat.Ply || format === GaussianSplats3D.SceneFormat.Splat) {
         let splatArray;
         if (format === GaussianSplats3D.SceneFormat.Ply) {
-            const plyParser = new GaussianSplats3D.PlyParser(fileBufferData);
-            splatArray = plyParser.parseToUncompressedSplatArray();
+            splatArray = GaussianSplats3D.PlyParser.parseToUncompressedSplatArray(fileBufferData);
         } else {
             splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(fileBufferData);
         }

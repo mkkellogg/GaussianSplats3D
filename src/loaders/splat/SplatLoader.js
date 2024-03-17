@@ -1,27 +1,23 @@
 import * as THREE from 'three';
-import { SplatBuffer } from './SplatBuffer.js';
-import { SplatBufferGenerator } from './SplatBufferGenerator.js';
+import { SplatBuffer } from '../SplatBuffer.js';
+import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { SplatParser } from './SplatParser.js';
-import { fetchWithProgress, delayedExecute } from '../Util.js';
-import { LoaderStatus } from './LoaderStatus.js';
-import { Constants } from '../Constants.js';
+import { fetchWithProgress, delayedExecute } from '../../Util.js';
+import { LoaderStatus } from '../LoaderStatus.js';
+import { Constants } from '../../Constants.js';
 
 export class SplatLoader {
 
-    constructor(splatBuffer = null) {
-        this.splatBuffer = splatBuffer;
-        this.downLoadLink = null;
-    }
+    static loadFromURL(fileName, onProgress, streamLoadData, onStreamedSectionProgress, minimumAlpha, compressionLevel,
+                       optimizeSplatData, sectionSize, sceneCenter, blockSize, bucketSize) {
 
-    loadFromURL(fileName, onProgress, stream, onStreamedSectionProgress, compressionLevel,
-                minimumAlpha, optimizeSplatData, sectionSize, sceneCenter, blockSize, bucketSize) {
+        const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
+        const streamSectionSizeBytes = Constants.StreamingSectionSize;
+        const sectionCount = 1;
 
         let streamBufferIn;
         let streamBufferOut;
         let streamSplatBuffer;
-        let lastSectionBytes = 0;
-        let streamSectionSizeBytes = Constants.StreamingSectionSize;
-        let sectionCount = 1;
         let maxSplatCount = 0;
         let splatCount = 0;
 
@@ -30,22 +26,22 @@ export class SplatLoader {
             streamLoadCompleteResolver = resolve;
         });
 
-        let bytesLoaded = 0;
+        let numBytesStreamed = 0;
+        let numBytesLoaded = 0;
         let chunks = [];
 
         const localOnProgress = (percent, percentStr, chunk, fileSize) => {
             const loadComplete = percent >= 100;
-            if (!fileSize) stream = false;
-            if (stream) {
-                const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
+            if (!fileSize) streamLoadData = false;
+            if (streamLoadData) {
                 if (!streamBufferIn) {
                     maxSplatCount = fileSize / SplatParser.RowSizeBytes;
                     streamBufferIn = new ArrayBuffer(fileSize);
                     const splatBufferSizeBytes = splatDataOffsetBytes + SplatBuffer.CompressionLevels[0].BytesPerSplat * maxSplatCount;
                     streamBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                     SplatBuffer.writeHeaderToBuffer({
-                        versionMajor: 0,
-                        versionMinor: 1,
+                        versionMajor: SplatBuffer.CurrentMajorVersion,
+                        versionMinor: SplatBuffer.CurrentMinorVersion,
                         maxSectionCount: sectionCount,
                         sectionCount: sectionCount,
                         maxSplatCount: maxSplatCount,
@@ -57,16 +53,16 @@ export class SplatLoader {
 
                 if (chunk) {
                     chunks.push(chunk);
-                    new Uint8Array(streamBufferIn, bytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
-                    bytesLoaded += chunk.byteLength;
+                    new Uint8Array(streamBufferIn, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
+                    numBytesLoaded += chunk.byteLength;
 
-                    const bytesLoadedSinceLastSection = bytesLoaded - lastSectionBytes;
+                    const bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
                     if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
                         const bytesToUpdate = loadComplete ? bytesLoadedSinceLastSection : streamSectionSizeBytes;
                         const addedSplatCount = bytesToUpdate / SplatParser.RowSizeBytes;
                         const newSplatCount = splatCount + addedSplatCount;
-                        SplatParser.parseToUncompressedBufferSection(splatCount, newSplatCount, streamBufferIn, 0,
-                                                                     streamBufferOut, splatDataOffsetBytes);
+                        SplatParser.parseToUncompressedSplatBufferSection(splatCount, newSplatCount - 1, streamBufferIn, 0,
+                                                                          streamBufferOut, splatDataOffsetBytes);
                         splatCount = newSplatCount;
                         if (!streamSplatBuffer) {
                             SplatBuffer.writeSectionHeaderToBuffer({
@@ -84,46 +80,42 @@ export class SplatLoader {
                         }
                         streamSplatBuffer.updateLoadedCounts(1, splatCount);
                         onStreamedSectionProgress(streamSplatBuffer, loadComplete);
-                        lastSectionBytes += streamSectionSizeBytes;
+                        numBytesStreamed += streamSectionSizeBytes;
                     }
                 }
                 if (loadComplete) {
-                    streamLoadCompleteResolver();
+                    streamLoadCompleteResolver(streamSplatBuffer);
                 }
             }
             if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
-            return stream;
+            return streamLoadData;
         };
 
         return fetchWithProgress(fileName, localOnProgress, true).then((fullBuffer) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            if (stream) {
-                return streamLoadPromise.then(() => {
-                    if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                    return streamSplatBuffer;
-                });
-            } else {
-                return delayedExecute(() => {
-                    const splatArray = SplatParser.parseStandardSplatToUncompressedSplatArray(fullBuffer);
-                    let splatBuffer;
-                    if (optimizeSplatData) {
-                        const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
-                                                                                               sectionSize, sceneCenter, blockSize,
-                                                                                               bucketSize);
-                        splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-                    } else {
-                        splatBuffer = SplatBuffer.generateFromUncompressedSplatArrays([splatArray], minimumAlpha, 0,
-                                                                                       new THREE.Vector3());
-                    }
-                    if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                    return splatBuffer;
-                });
-            }
+            const loadPromise = streamLoadData ? streamLoadPromise :
+                SplatLoader.loadFromFileData(fullBuffer, minimumAlpha, compressionLevel, optimizeSplatData,
+                                             sectionSize, sceneCenter, blockSize, bucketSize);
+            return loadPromise.then((splatBuffer) => {
+                if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
+                return splatBuffer;
+            });
         });
     }
 
-    setFromBuffer(splatBuffer) {
-        this.splatBuffer = splatBuffer;
+    static loadFromFileData(splatFileData, minimumAlpha, compressionLevel, optimizeSplatData,
+                            sectionSize, sceneCenter, blockSize, bucketSize) {
+        return delayedExecute(() => {
+            const splatArray = SplatParser.parseStandardSplatToUncompressedSplatArray(splatFileData);
+            if (optimizeSplatData) {
+                const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
+                                                                                       sectionSize, sceneCenter, blockSize,
+                                                                                       bucketSize);
+                return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
+            } else {
+                return SplatBuffer.generateFromUncompressedSplatArrays([splatArray], minimumAlpha, 0, new THREE.Vector3());
+            }
+        });
     }
 
 }

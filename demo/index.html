@@ -118,10 +118,17 @@
     }
 
     .text-input {
-      border: #aaaaaa 1px solid;
+      border: hsl(0, 0%, 67%) 1px solid;
       background-color: #ffffff;
       padding: 4px;
       border-radius: 3px;
+    }
+
+    .checkbox-input {
+      width: 17px;
+      height: 17px;
+      padding: 0px;
+      margin: 0;
     }
 
     .splat-panel {
@@ -193,6 +200,11 @@
         margin-right: 3px;
     }
 
+    .valid-value-label {
+      color:#888888;
+      font-size: 10pt;
+    }
+
     @keyframes ply-load {
         to{transform: rotate(1turn)}
     }
@@ -254,37 +266,16 @@
     import * as GaussianSplats3D from 'gaussian-splats-3d';
     import * as THREE from 'three';
 
-    function convertPLYToSplatBuffer(plyBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
-      const plyParser = new GaussianSplats3D.PlyParser(plyBufferData.data);
-      const splatArray = plyParser.parseToUncompressedSplatArray();
-      plyBufferData.data = null;
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
-      return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-    }
-
-    function convertStandardSplatToSplatBuffer(bufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize){
-      const splatArray = GaussianSplats3D.SplatParser.parseStandardSplatToUncompressedSplatArray(bufferData);
-      const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
-      return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-    }
-
-    function isPlyFile(fileName) {
-      return fileName.toLowerCase().trim().endsWith('.ply');
-    }
-
-    function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize) {
-      let splatBuffer;
+    function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        splatBuffer = convertPLYToSplatBuffer(fileBufferData, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
+        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
-          splatBuffer = convertStandardSplatToSplatBuffer(fileBufferData.data, compressionLevel, alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
+          return GaussianSplats3D.SplatLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
         } else {
-          GaussianSplats3D.KSplatLoader.checkVersion(fileBufferData.data);
-          splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData.data);
+          return GaussianSplats3D.KSplatLoader.loadFromFileData(fileBufferData.data);
         }
       }
-      return splatBuffer;
     }
 
     window.onCompressionLevelChange = function(arg) {
@@ -386,10 +377,12 @@
           const fileData = {data: fileReader.result};
           window.setTimeout(() => {
             try {
-              const splatBuffer = fileBufferToSplatBuffer(fileData, format, compressionLevel,
-                                                          alphaRemovalThreshold, sectionSize, sceneCenter, blockSize, bucketSize);
-              GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
-              conversionDone();
+              const splatBufferPromise = fileBufferToSplatBuffer(fileData, format, alphaRemovalThreshold, compressionLevel,
+                                                                 sectionSize, sceneCenter, blockSize, bucketSize);
+              splatBufferPromise.then((splatBuffer) => {
+                GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
+                conversionDone();
+              });
             } catch (e) {
               conversionDone(e);
             }
@@ -540,15 +533,16 @@
       const splatBufferOptions = {
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
-
-      const splatBuffer = fileBufferToSplatBuffer({data: splatBufferData}, format, 0, alphaRemovalThreshold);
-      document.getElementById("demo-content").style.display = 'none';
-      document.body.style.backgroundColor = "#000000";
-      history.pushState("ViewSplat", null);
-      const viewer = new GaussianSplats3D.Viewer(viewerOptions);
-      viewer.addSplatBuffers([splatBuffer], [splatBufferOptions])
-      .then(() => {
-          viewer.start();
+      const splatBufferPromise = fileBufferToSplatBuffer({data: splatBufferData}, format, alphaRemovalThreshold, 0);
+      splatBufferPromise.then((splatBuffer) => {
+        document.getElementById("demo-content").style.display = 'none';
+        document.body.style.backgroundColor = "#000000";
+        history.pushState("ViewSplat", null);
+        const viewer = new GaussianSplats3D.Viewer(viewerOptions);
+        viewer.addSplatBuffers([splatBuffer], [splatBufferOptions])
+        .then(() => {
+            viewer.start();
+        });
       });
     }
 
@@ -618,7 +612,7 @@
     <br>
     <div class="header-content-container">
         <div class="content-row">
-            <div id ="view-panel" class="splat-panel" style="height:300px;">
+            <div id ="view-panel" class="splat-panel" style="height:310px;">
                 <br>
                 <div class="small-title">View a <span class="file-ext">.ply</span>, <span class="file-ext">.ksplat</span>, or <span class="file-ext-small">.splat</span> file</div>
                 <br>
@@ -635,13 +629,12 @@
                     <tr>
                     <td colspan="2" style="height: 10px;"></td>
                     </tr>
-                    <tr>
                     <td>
                         Minimum alpha:&nbsp;
                     </td>
                     <td>
                         <input id="alphaRemovalThresholdView" type="text" class="text-input" style="width: 50px" value="1"></input>
-                        <span style="color:#888888">(1 - 255)</span>
+                        <span class="valid-value-label">(1 - 255)</span>
                     </td>
                     </tr>
                     <tr>
@@ -685,7 +678,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:380px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:390px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -709,7 +702,7 @@
                       </td>
                       <td>
                           <input id="alphaRemovalThreshold" type="text" class="text-input" style="width: 50px" value="1"></input>
-                          <span style="color:#888888">(1 - 255)</span>
+                          <span class="valid-value-label">(1 - 255)</span>
                       </td>
                     </tr>
                     <tr>
@@ -726,7 +719,7 @@
                     </td>
                     <td>
                         <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1" onChange="window.onCompressionLevelChange(this);"></input>
-                        <span style="color:#888888">(0 or 1)</span>
+                        <span class="valid-value-label">(0 or 1)</span>
                     </td>
                     </tr>
                     <tr id="advancedCompressionRow1">
@@ -740,7 +733,7 @@
                       </td>
                       <td>
                         <input id="blockSize" type="text" class="text-input" style="width: 50px" value="5.0"></input>
-                        <span style="color:#888888">( >= 0.1 )</span>
+                        <span class="valid-value-label">( >= 0.1 )</span>
                       </td>
                     </tr>
                     <tr id="advancedCompressionRow3">
@@ -749,7 +742,7 @@
                       </td>
                       <td>
                           <input id="bucketSize" type="text" class="text-input" style="width: 50px" value="256"></input>
-                          <span style="color:#888888">(2 - 65536)</span>
+                          <span class="valid-value-label">(2 - 65536)</span>
                       </td>
                     </tr>
                 </table>
