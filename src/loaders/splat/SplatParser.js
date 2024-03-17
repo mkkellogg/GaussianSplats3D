@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SplatBuffer } from './SplatBuffer.js';
-import { UncompressedSplatArray } from './UncompressedSplatArray.js';
+import { SplatBuffer } from '../SplatBuffer.js';
+import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 
 export class SplatParser {
 
@@ -10,14 +10,14 @@ export class SplatParser {
     static RotationSizeBytes = 4;
     static ColorSizeBytes = 4;
 
-    static parseToUncompressedBufferSection(fromSplat, toSplat, fromBuffer, fromOffset, toBuffer, toOffset) {
+    static parseToUncompressedSplatBufferSection(fromSplat, toSplat, fromBuffer, fromOffset, toBuffer, toOffset) {
 
         const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
         const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
         const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
         const outBytesPerSplat = SplatBuffer.CompressionLevels[0].BytesPerSplat;
 
-        for (let i = fromSplat; i < toSplat; i++) {
+        for (let i = fromSplat; i <= toSplat; i++) {
             const inBase = i * SplatParser.RowSizeBytes + fromOffset;
             const inCenter = new Float32Array(fromBuffer, inBase, 3);
             const inScale = new Float32Array(fromBuffer, inBase + SplatParser.CenterSizeBytes, 3);

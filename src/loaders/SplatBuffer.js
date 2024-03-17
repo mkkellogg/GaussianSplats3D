@@ -7,6 +7,9 @@ import { clamp } from '../Util.js';
  */
 export class SplatBuffer {
 
+    static CurrentMajorVersion = 0;
+    static CurrentMinorVersion = 1;
+
     static CenterComponentCount = 3;
     static ScaleComponentCount = 3;
     static RotationComponentCount = 4;
@@ -610,12 +613,12 @@ export class SplatBuffer {
                         const rot = new Float32Array(sectionBuffer, rotationBase, SplatBuffer.RotationComponentCount);
                         const scale = new Float32Array(sectionBuffer, scaleBase, SplatBuffer.ScaleComponentCount);
                         if (targetSplat[UncompressedSplatArray.OFFSET.SCALE0] !== undefined) {
-                            tempRotation.set(targetSplat[UncompressedSplatArray.OFFSET.ROTATION1],
+                            tempRotation.set(targetSplat[UncompressedSplatArray.OFFSET.ROTATION0],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION1],
                                              targetSplat[UncompressedSplatArray.OFFSET.ROTATION2],
-                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION3],
-                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION0]);
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION3]);
                             tempRotation.normalize();
-                            rot.set([tempRotation.w, tempRotation.x, tempRotation.y, tempRotation.z]);
+                            rot.set([tempRotation.x, tempRotation.y, tempRotation.z, tempRotation.w]);
                             scale.set([targetSplat[UncompressedSplatArray.OFFSET.SCALE0],
                                        targetSplat[UncompressedSplatArray.OFFSET.SCALE1],
                                        targetSplat[UncompressedSplatArray.OFFSET.SCALE2]]);
@@ -632,12 +635,12 @@ export class SplatBuffer {
                         const scale = new Uint16Array(sectionBuffer, scaleBase, SplatBuffer.ScaleComponentCount);
 
                         if (targetSplat[UncompressedSplatArray.OFFSET.SCALE0] !== undefined) {
-                            tempRotation.set(targetSplat[UncompressedSplatArray.OFFSET.ROTATION1],
+                            tempRotation.set(targetSplat[UncompressedSplatArray.OFFSET.ROTATION0],
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION1],
                                              targetSplat[UncompressedSplatArray.OFFSET.ROTATION2],
-                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION3],
-                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION0]);
+                                             targetSplat[UncompressedSplatArray.OFFSET.ROTATION3]);
                             tempRotation.normalize();
-                            rot.set([thf(tempRotation.w), thf(tempRotation.x), thf(tempRotation.y), thf(tempRotation.z)]);
+                            rot.set([thf(tempRotation.x), thf(tempRotation.y), thf(tempRotation.z), thf(tempRotation.w)]);
                             scale.set([thf(targetSplat[UncompressedSplatArray.OFFSET.SCALE0]),
                                        thf(targetSplat[UncompressedSplatArray.OFFSET.SCALE1]),
                                        thf(targetSplat[UncompressedSplatArray.OFFSET.SCALE2])]);
@@ -814,4 +817,5 @@ export class SplatBuffer {
             'partiallyFullBuckets': partiallyFullBucketArray,
         };
     }
+
 }

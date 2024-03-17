@@ -1,10 +1,11 @@
-import { PlyParser } from './loaders/PlyParser.js';
-import { PlyLoader } from './loaders/PlyLoader.js';
-import { SplatLoader } from './loaders/SplatLoader.js';
-import { KSplatLoader } from './loaders/KSplatLoader.js';
+import { PlyParser } from './loaders/ply/PlyParser.js';
+import { CompressedPlyParser } from './loaders/ply/CompressedPlyParser.js';
+import { PlyLoader } from './loaders/ply/PlyLoader.js';
+import { SplatLoader } from './loaders/splat/SplatLoader.js';
+import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
 import * as LoaderUtils from './loaders/Utils.js';
 import { SplatBuffer } from './loaders/SplatBuffer.js';
-import { SplatParser } from './loaders/SplatParser.js';
+import { SplatParser } from './loaders/splat/SplatParser.js';
 import { SplatPartitioner } from './loaders/SplatPartitioner.js';
 import { SplatBufferGenerator } from './loaders/SplatBufferGenerator.js';
 import { Viewer } from './Viewer.js';
@@ -17,6 +18,7 @@ import { RenderMode } from './RenderMode.js';
 
 export {
     PlyParser,
+    CompressedPlyParser,
     PlyLoader,
     SplatLoader,
     KSplatLoader,
