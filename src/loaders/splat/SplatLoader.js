@@ -18,7 +18,6 @@ export class SplatLoader {
         let streamBufferIn;
         let streamBufferOut;
         let streamSplatBuffer;
-        let lastSectionBytes = 0;
         let maxSplatCount = 0;
         let splatCount = 0;
 
@@ -27,7 +26,8 @@ export class SplatLoader {
             streamLoadCompleteResolver = resolve;
         });
 
-        let bytesLoaded = 0;
+        let numBytesStreamed = 0;
+        let numBytesLoaded = 0;
         let chunks = [];
 
         const localOnProgress = (percent, percentStr, chunk, fileSize) => {
@@ -40,8 +40,8 @@ export class SplatLoader {
                     const splatBufferSizeBytes = splatDataOffsetBytes + SplatBuffer.CompressionLevels[0].BytesPerSplat * maxSplatCount;
                     streamBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                     SplatBuffer.writeHeaderToBuffer({
-                        versionMajor: 0,
-                        versionMinor: 1,
+                        versionMajor: SplatBuffer.CurrentMajorVersion,
+                        versionMinor: SplatBuffer.CurrentMinorVersion,
                         maxSectionCount: sectionCount,
                         sectionCount: sectionCount,
                         maxSplatCount: maxSplatCount,
@@ -53,10 +53,10 @@ export class SplatLoader {
 
                 if (chunk) {
                     chunks.push(chunk);
-                    new Uint8Array(streamBufferIn, bytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
-                    bytesLoaded += chunk.byteLength;
+                    new Uint8Array(streamBufferIn, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
+                    numBytesLoaded += chunk.byteLength;
 
-                    const bytesLoadedSinceLastSection = bytesLoaded - lastSectionBytes;
+                    const bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
                     if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
                         const bytesToUpdate = loadComplete ? bytesLoadedSinceLastSection : streamSectionSizeBytes;
                         const addedSplatCount = bytesToUpdate / SplatParser.RowSizeBytes;
@@ -80,7 +80,7 @@ export class SplatLoader {
                         }
                         streamSplatBuffer.updateLoadedCounts(1, splatCount);
                         onStreamedSectionProgress(streamSplatBuffer, loadComplete);
-                        lastSectionBytes += streamSectionSizeBytes;
+                        numBytesStreamed += streamSectionSizeBytes;
                     }
                 }
                 if (loadComplete) {

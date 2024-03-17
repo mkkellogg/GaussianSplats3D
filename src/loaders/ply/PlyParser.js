@@ -91,9 +91,6 @@ export class PlyParser {
         const decoder = new TextDecoder();
         let headerOffset = 0;
         let headerText = '';
-
-        // console.log('.PLY size: ' + plyBuffer.byteLength + ' bytes');
-
         const readChunkSize = 100;
 
         while (true) {
@@ -226,10 +223,6 @@ export class PlyParser {
 
     static parseToUncompressedSplatArray(plyBuffer) {
 
-        // const startTime = performance.now();
-
-        // console.log('Parsing PLY to SPLAT...');
-
         const header = PlyParser.decodeHeadeFromBuffer(plyBuffer);
 
         if (header.compressed) {
@@ -275,13 +268,6 @@ export class PlyParser {
             }
 
             return splatArray;
-
-            // console.log('Total valid splats: ', splatBuffer.getSplatCount(), 'out of', splatCount);
-
-            // const endTime = performance.now();
-
-            // console.log('Parsing PLY to SPLAT complete!');
-            // console.log('Total time: ', (endTime - startTime).toFixed(2) + ' ms');
         }
     }
 

@@ -77,7 +77,6 @@ export class CompressedPlyParser {
     let chunkElement;
     let vertexElement;
 
-    // Process header (this logic remains unchanged)
     const headerLines = headerText.split('\n').filter((line) => !line.startsWith('comment '));
 
     let bytesPerSplat = 0;
@@ -188,22 +187,18 @@ export class CompressedPlyParser {
       return true;
     };
 
-    // Start processing the ArrayBuffer directly
     let buf = new Uint8Array(plyBuffer);
     let endHeaderTokenOffset;
 
-    // Check magic bytes
     if (buf.length >= HeaderMagicBytes.length && !startsWith(buf, HeaderMagicBytes)) {
       throw new Error('Invalid PLY header');
     }
 
-    // Find the end-of-header marker
     endHeaderTokenOffset = find(buf, HeaderEndTokenBytes);
     if (endHeaderTokenOffset === -1) {
       throw new Error('End of PLY header not found');
     }
 
-    // Decode buffer header text
     const headerText = new TextDecoder('ascii').decode(
       buf.slice(0, endHeaderTokenOffset)
     );
@@ -411,7 +406,6 @@ export class CompressedPlyParser {
   static parseToUncompressedSplatArray(plyBuffer) {
     const { chunkElement, vertexElement } = CompressedPlyParser.readPly(plyBuffer);
 
-    // allocate uncompressed data
     const splatArray = new UncompressedSplatArray();
 
     const { positionExtremes, scaleExtremes, position, rotation, scale, color } =

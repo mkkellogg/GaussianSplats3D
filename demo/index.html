@@ -294,7 +294,7 @@
       }
     }
 
-    window.onFileChange = function(arg, fileNameLabelID, compressedRowID) {
+    window.onFileChange = function(arg, fileNameLabelID) {
       const fileNameLabel = document.getElementById(fileNameLabelID);
       const url = arg.value;
       let lastForwardSlash = url.lastIndexOf('/');

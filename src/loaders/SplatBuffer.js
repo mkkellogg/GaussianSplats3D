@@ -7,6 +7,9 @@ import { clamp } from '../Util.js';
  */
 export class SplatBuffer {
 
+    static CurrentMajorVersion = 0;
+    static CurrentMinorVersion = 1;
+
     static CenterComponentCount = 3;
     static ScaleComponentCount = 3;
     static RotationComponentCount = 4;

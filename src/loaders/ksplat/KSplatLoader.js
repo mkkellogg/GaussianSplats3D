@@ -3,26 +3,23 @@ import { fetchWithProgress, delayedExecute } from '../../Util.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
 
-const MINIMUM_REQUIRED_MAJOR_VERSION = 0;
-const MINIMUM_REQUIRED_MINOR_VERSION = 1;
-
 export class KSplatLoader {
 
    static checkVersion(buffer) {
+        const minVersionMajor = SplatBuffer.CurrentMajorVersion;
+        const minVersionMinor = SplatBuffer.CurrentMinorVersion;
         const header = SplatBuffer.parseHeader(buffer);
-        if (header.versionMajor === MINIMUM_REQUIRED_MAJOR_VERSION && header.versionMinor >= MINIMUM_REQUIRED_MINOR_VERSION ||
-            header.versionMajor > MINIMUM_REQUIRED_MAJOR_VERSION) {
+        if (header.versionMajor === minVersionMajor &&
+            header.versionMinor >= minVersionMinor ||
+            header.versionMajor > minVersionMajor) {
            return true;
         } else {
             throw new Error(`KSplat version not supported: v${header.versionMajor}.${header.versionMinor}. ` +
-                            `Minimum required: v${MINIMUM_REQUIRED_MAJOR_VERSION}.${MINIMUM_REQUIRED_MINOR_VERSION}`);
+                            `Minimum required: v${minVersionMajor}.${minVersionMinor}`);
         }
     };
 
     static loadFromURL(fileName, onProgress, streamLoadData, onSectionBuilt) {
-        let bytesLoaded = 0;
-        let totalStorageSizeBytes = 0;
-
         let streamBuffer;
         let streamSplatBuffer;
 
@@ -36,7 +33,8 @@ export class KSplatLoader {
         let sectionHeadersLoaded = false;
         let sectionHeadersLoading = false;
 
-        let lastStreamUpdateBytes = 0;
+        let numBytesLoaded = 0;
+        let numBytesStreamed = 0;
         let streamSectionSizeBytes = Constants.StreamingSectionSize;
         let totalBytesToDownload = 0;
 
@@ -50,7 +48,7 @@ export class KSplatLoader {
         });
 
         const checkAndLoadHeader = () => {
-            if (!headerLoaded && !headerLoading && bytesLoaded >= SplatBuffer.HeaderSizeBytes) {
+            if (!headerLoaded && !headerLoading && numBytesLoaded >= SplatBuffer.HeaderSizeBytes) {
                 headerLoading = true;
                 const headerAssemblyPromise = new Blob(chunks).arrayBuffer();
                 headerAssemblyPromise.then((bufferData) => {
@@ -93,8 +91,8 @@ export class KSplatLoader {
                     for (let i = 0; i < header.maxSectionCount; i++) {
                         totalSectionStorageStorageByes += sectionHeaders[i].storageSizeBytes;
                     }
-                    totalStorageSizeBytes = SplatBuffer.HeaderSizeBytes + header.maxSectionCount *
-                                            SplatBuffer.SectionHeaderSizeBytes + totalSectionStorageStorageByes;
+                    const totalStorageSizeBytes = SplatBuffer.HeaderSizeBytes + header.maxSectionCount *
+                                                  SplatBuffer.SectionHeaderSizeBytes + totalSectionStorageStorageByes;
                     if (!streamBuffer) {
                         streamBuffer = new ArrayBuffer(totalStorageSizeBytes);
                         let offset = 0;
@@ -115,7 +113,7 @@ export class KSplatLoader {
             };
 
             if (!sectionHeadersLoading && !sectionHeadersLoaded && headerLoaded &&
-                bytesLoaded >= SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount) {
+                numBytesLoaded >= SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount) {
                 performLoad();
             }
         };
@@ -125,12 +123,12 @@ export class KSplatLoader {
 
                 if (loadComplete) return;
 
-                loadComplete = bytesLoaded >= totalBytesToDownload;
+                loadComplete = numBytesLoaded >= totalBytesToDownload;
 
-                const bytesLoadedSinceLastSection = bytesLoaded - lastStreamUpdateBytes;
+                const bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
                 if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
 
-                    lastStreamUpdateBytes = bytesLoaded;
+                    numBytesStreamed = numBytesLoaded;
 
                     if (!streamSplatBuffer) streamSplatBuffer = new SplatBuffer(streamBuffer, false);
 
@@ -143,9 +141,9 @@ export class KSplatLoader {
                         const bucketsDataOffset = sectionBase + sectionHeader.partiallyFilledBucketCount * 4 +
                                                   sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
                         const bytesRequiredToReachSectionSplatData = baseDataOffset + bucketsDataOffset;
-                        if (bytesLoaded >= bytesRequiredToReachSectionSplatData) {
+                        if (numBytesLoaded >= bytesRequiredToReachSectionSplatData) {
                             reachedSections++;
-                            const bytesPastSSectionSplatDataStart = bytesLoaded - bytesRequiredToReachSectionSplatData;
+                            const bytesPastSSectionSplatDataStart = numBytesLoaded - bytesRequiredToReachSectionSplatData;
                             const bytesPerSplat = SplatBuffer.CompressionLevels[header.compressionLevel].BytesPerSplat;
                             let loadedSplatsForSection = Math.floor(bytesPastSSectionSplatDataStart / bytesPerSplat);
                             loadedSplatsForSection = Math.min(loadedSplatsForSection, sectionHeader.maxSplatCount);
@@ -171,9 +169,9 @@ export class KSplatLoader {
             if (chunk) {
                 chunks.push(chunk);
                 if (streamBuffer) {
-                    new Uint8Array(streamBuffer, bytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
+                    new Uint8Array(streamBuffer, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
                 }
-                bytesLoaded += chunk.byteLength;
+                numBytesLoaded += chunk.byteLength;
             }
             if (streamLoadData) {
                 checkAndLoadHeader();
