@@ -81,6 +81,8 @@ class SplatSubTree {
 let splatTreeWorker;
 function createSplatTreeWorker(self) {
 
+    let WorkerSplatTreeNodeIDGen = 0;
+
     class WorkerBox3 {
 
         constructor(min, max) {
@@ -112,7 +114,7 @@ function createSplatTreeWorker(self) {
     }
 
     class WorkerSplatTreeNode {
-        static idGen = 0;
+
         constructor(min, max, depth, id) {
             this.min = [min[0], min[1], min[2]];
             this.max = [max[0], max[1], max[2]];
@@ -122,7 +124,7 @@ function createSplatTreeWorker(self) {
             this.depth = depth;
             this.children = [];
             this.data = null;
-            this.id = id || WorkerSplatTreeNode.idGen++;
+            this.id = id || WorkerSplatTreeNodeIDGen++;
         }
 
     }
