@@ -31,7 +31,7 @@ class SplatSubTree {
         this.splatMesh = null;
     }
 
-    static convertWorkerSubTreeNode(workerSubTreeNode) {
+    static convertWorkerSubTreeNode(workerSubTreeNode, splatPriorityLevels) {
         const minVector = new THREE.Vector3().fromArray(workerSubTreeNode.min);
         const maxVector = new THREE.Vector3().fromArray(workerSubTreeNode.max);
         const convertedNode = new SplatTreeNode(minVector, maxVector, workerSubTreeNode.depth, workerSubTreeNode.id);
@@ -45,19 +45,19 @@ class SplatSubTree {
         }
         if (workerSubTreeNode.children) {
             for (let child of workerSubTreeNode.children) {
-                convertedNode.children.push(SplatSubTree.convertWorkerSubTreeNode(child));
+                convertedNode.children.push(SplatSubTree.convertWorkerSubTreeNode(child, splatPriorityLevels));
             }
         }
         return convertedNode;
     }
 
-    static convertWorkerSubTree(workerSubTree, splatMesh) {
+    static convertWorkerSubTree(workerSubTree, splatMesh, splatPriorityLevels) {
         const convertedSubTree = new SplatSubTree(workerSubTree.maxDepth, workerSubTree.maxCentersPerNode);
         convertedSubTree.sceneMin = new THREE.Vector3().fromArray(workerSubTree.sceneMin);
         convertedSubTree.sceneMax = new THREE.Vector3().fromArray(workerSubTree.sceneMax);
 
         convertedSubTree.splatMesh = splatMesh;
-        convertedSubTree.rootNode = SplatSubTree.convertWorkerSubTreeNode(workerSubTree.rootNode);
+        convertedSubTree.rootNode = SplatSubTree.convertWorkerSubTreeNode(workerSubTree.rootNode, splatPriorityLevels);
 
 
         const visitLeavesFromNode = (node, visitFunc) => {
@@ -328,7 +328,7 @@ export class SplatTree {
         this.splatMesh = splatMesh;
         this.subTrees = [];
         const center = new THREE.Vector3();
-        const splatPrioityLevels = [];
+        const splatPriorityLevels = Array(this.splatMesh.getSplatCount());
 
         const addCentersForScene = (splatOffset, splatCount) => {
             const sceneCenters = new Float32Array(splatCount * 4);
@@ -337,7 +337,7 @@ export class SplatTree {
                 const globalSplatIndex = i + splatOffset;
                 const priorityLevel = priorityFunc(globalSplatIndex);
                 if (priorityLevel > 0) {
-                    splatPrioityLevels[globalSplatIndex] = priorityLevel;
+                    splatPriorityLevels[globalSplatIndex] = priorityLevel;
                     splatMesh.getSplatCenter(globalSplatIndex, center);
                     const addBase = addedCount * 4;
                     sceneCenters[addBase] = center.x;
@@ -400,7 +400,7 @@ export class SplatTree {
                             if (checkForEarlyExit(resolve)) return;
 
                             for (let workerSubTree of e.data.subTrees) {
-                                const convertedSubTree = SplatSubTree.convertWorkerSubTree(workerSubTree, splatMesh);
+                                const convertedSubTree = SplatSubTree.convertWorkerSubTree(workerSubTree, splatMesh, splatPriorityLevels);
                                 this.subTrees.push(convertedSubTree);
                             }
                             diposeSplatTreeWorker();
