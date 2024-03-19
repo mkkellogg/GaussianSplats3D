@@ -1378,15 +1378,18 @@ export class Viewer {
         const partialSorts = [
             {
                 'angleThreshold': 0.55,
-                'sortFractions': [0.125, 0.33333, 0.75]
+                'sortFractions': [0.125, 0.33333, 0.75],
+                'priorityLevels': [1, 0, 0]
             },
             {
                 'angleThreshold': 0.65,
-                'sortFractions': [0.33333, 0.66667]
+                'sortFractions': [0.33333, 0.66667],
+                'priorityLevels': [1, 0]
             },
             {
                 'angleThreshold': 0.8,
-                'sortFractions': [0.5]
+                'sortFractions': [0.5],
+                'priorityLevels': [1]
             }
         ];
 
@@ -1410,10 +1413,42 @@ export class Viewer {
             }
 
             this.sortRunning = true;
-            const needsFullSort = this.splatMesh.dynamicMode || queuedSorts.length === 1;
-            const filterLowAlpha = needsFullSort ? false : true;
-            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort(false, filterLowAlpha);
+
+            if (queuedSorts.length === 0) {
+                for (let partialSort of partialSorts) {
+                    if (angleDiff < partialSort.angleThreshold) {
+                        for (let i = 0; i <  partialSort.sortFractions.length; i++) {
+                            const sortFraction = partialSort.sortFractions[i];
+                            const priorityLevel = partialSort.priorityLevels[i];
+                            queuedSorts.push({
+                                'sortCount': Math.floor(this.splatRenderCount * sortFraction),
+                                'priorityLevel': priorityLevel
+                            });
+                        }
+                        break;
+                    }
+                }
+                queuedSorts.push({
+                    'sortCount':  this.splatRenderCount,
+                    'priorityLevel': 0
+                });
+            }
+
+            const needsFullSort = this.splatMesh.dynamicMode;
+            const sortPriorityLevel = needsFullSort ? 0 : 0; //queuedSorts[0].priorityLevel;
+            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort(false, sortPriorityLevel);
             this.splatRenderCount = splatRenderCount;
+
+            let sortCount = 0;
+            if (needsFullSort || shouldSortAll) {
+                sortCount = this.splatRenderCount;
+                queuedSorts.length = 0;
+            } else {
+                const queuedSortCount = queuedSorts.shift().sortCount;
+                sortCount = Math.min(queuedSortCount, this.splatRenderCount);
+                console.log(sortCount)
+            }
+
             this.sortPromise = new Promise((resolve) => {
                 this.sortPromiseResolver = resolve;
             });
@@ -1425,23 +1460,6 @@ export class Viewer {
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
-
-            if (this.splatMesh.dynamicMode || shouldSortAll) {
-                queuedSorts.push(this.splatRenderCount);
-            } else {
-                if (queuedSorts.length === 0) {
-                    for (let partialSort of partialSorts) {
-                        if (angleDiff < partialSort.angleThreshold) {
-                            for (let sortFraction of partialSort.sortFractions) {
-                                queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
-                            }
-                            break;
-                        }
-                    }
-                    queuedSorts.push(this.splatRenderCount);
-                }
-            }
-            let sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
 
             cameraPositionArray[0] = this.camera.position.x;
             cameraPositionArray[1] = this.camera.position.y;
@@ -1499,7 +1517,7 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
-        return function(gatherAllNodes = false, filterLowAlpha = false) {
+        return function(gatherAllNodes = false, priorityLevel = 0) {
 
             this.getRenderDimensions(renderDimensions);
             const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
@@ -1527,7 +1545,7 @@ export class Viewer {
                     const nodeCount = subTree.nodesWithIndexes.length;
                     for (let i = 0; i < nodeCount; i++) {
                         const node = subTree.nodesWithIndexes[i];
-                        if (!node.data || !node.data.indexes || node.data.indexes.length === 0) continue;
+                        if (!node.data || !node.data.indexes || !node.data.indexes[priorityLevel] || !node.data.indexes[priorityLevel].length === 0) continue;
                         tempVector.copy(node.center).applyMatrix4(modelView);
 
                         const distanceToNode = tempVector.length();
@@ -1545,7 +1563,7 @@ export class Viewer {
                         if (!gatherAllNodes && ((outOfFovX || outOfFovY) && distanceToNode > ns)) {
                             continue;
                         }
-                        splatRenderCount += node.data.indexes.length;
+                        splatRenderCount += node.data.indexes[priorityLevel].length;
                         nodeRenderList[nodeRenderCount] = node;
                         node.data.distanceToNode = distanceToNode;
                         nodeRenderCount++;
@@ -1561,11 +1579,11 @@ export class Viewer {
                 let currentByteOffset = splatRenderCount * Constants.BytesPerInt;
                 for (let i = 0; i < nodeRenderCount; i++) {
                     const node = nodeRenderList[i];
-                    const windowSizeInts = node.data.indexes.length;
+                    const windowSizeInts = node.data.indexes[priorityLevel].length;
                     const windowSizeBytes = windowSizeInts * Constants.BytesPerInt;
                     let destView = new Uint32Array(this.sortWorkerIndexesToSort.buffer,
                                                    currentByteOffset - windowSizeBytes, windowSizeInts);
-                    destView.set(node.data.indexes);
+                    destView.set(node.data.indexes[priorityLevel]);
                     currentByteOffset -= windowSizeBytes;
                 }
 

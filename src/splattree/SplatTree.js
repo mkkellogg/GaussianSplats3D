@@ -37,10 +37,19 @@ class SplatSubTree {
         const convertedNode = new SplatTreeNode(minVector, maxVector, workerSubTreeNode.depth, workerSubTreeNode.id);
         if (workerSubTreeNode.data.indexes) {
             convertedNode.data = {
-                'indexes': []
+                'indexes': {},
             };
             for (let index of workerSubTreeNode.data.indexes) {
-                convertedNode.data.indexes.push(index);
+                const priorityLevel = splatPriorityLevels[index] || 1;
+                if (priorityLevel) {
+                    for (let i = 1; i <= priorityLevel; i++) {
+                        let priorityLevelIndexes = convertedNode.data.indexes[i - 1];
+                        if (!priorityLevelIndexes) {
+                            convertedNode.data.indexes[i - 1] = priorityLevelIndexes = [];
+                        }
+                        priorityLevelIndexes.push(index);
+                    }
+                }
             }
         }
         if (workerSubTreeNode.children) {
@@ -69,7 +78,7 @@ class SplatSubTree {
 
         convertedSubTree.nodesWithIndexes = [];
         visitLeavesFromNode(convertedSubTree.rootNode, (node) => {
-            if (node.data && node.data.indexes && node.data.indexes.length > 0) {
+            if (node.data && node.data.indexes && node.data.indexes[0] && node.data.indexes[0].length > 0) {
                 convertedSubTree.nodesWithIndexes.push(node);
             }
         });

@@ -104,9 +104,10 @@ export class Raycaster {
             if (!ray.intersectBox(node.boundingBox)) {
                 return;
             }
-            if (node.data && node.data.indexes && node.data.indexes.length > 0) {
-                for (let i = 0; i < node.data.indexes.length; i++) {
-                    const splatGlobalIndex = node.data.indexes[i];
+            if (node.data && node.data.indexes && node.data.indexes[0]) {
+                const indexes = node.data.indexes[0];
+                for (let i = 0; i < indexes.length; i++) {
+                    const splatGlobalIndex = indexes[i];
                     splatTree.splatMesh.getSplatColor(splatGlobalIndex, tempColor);
                     splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter);
                     splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation);
