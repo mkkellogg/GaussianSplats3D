@@ -5,12 +5,16 @@ import { WebGLExtensions } from './three-shim/WebGLExtensions.js';
 import { WebGLCapabilities } from './three-shim/WebGLCapabilities.js';
 import { uintEncodedFloat, rgbaArrayToInteger } from './Util.js';
 import { Constants } from './Constants.js';
+import { SceneRevealMode } from './SceneRevealMode.js';
 
 const dummyGeometry = new THREE.BufferGeometry();
 const dummyMaterial = new THREE.MeshBasicMaterial();
 
 const COVARIANCES_ELEMENTS_PER_SPLAT = 6;
 const CENTER_COLORS_ELEMENTS_PER_SPLAT = 4;
+
+const SCENE_FADEIN_RATE_FAST = 0.012;
+const SCENE_FADEIN_RATE_GRADUAL = 0.003;
 
 /**
  * SplatMesh: Container for one or more splat scenes, abstracting them into a single unified container for
@@ -910,16 +914,22 @@ export class SplatMesh extends THREE.Mesh {
         this.updateVisibleRegionFadeDistance();
     }
 
-    updateVisibleRegionFadeDistance() {
-        const fadeInRate = this.finalBuild ? 0.01 : 0.003;
+    updateVisibleRegionFadeDistance(sceneRevealMode = SceneRevealMode.Default) {
+        const fastFadeRate = SCENE_FADEIN_RATE_FAST;
+        const gradualFadeRate = SCENE_FADEIN_RATE_GRADUAL;
+        const defaultFadeInRate = this.finalBuild ? fastFadeRate : gradualFadeRate;
+        const fadeInRate = sceneRevealMode === SceneRevealMode.Default ? defaultFadeInRate : gradualFadeRate;
         this.visibleRegionFadeStartRadius = (this.visibleRegionRadius - this.visibleRegionFadeStartRadius) *
-                                        fadeInRate + this.visibleRegionFadeStartRadius;
-        const fadeInComplete = (this.visibleRegionFadeStartRadius / this.maxRadius) > 0.99 ? 1 : 0;
+                                             fadeInRate + this.visibleRegionFadeStartRadius;
+        const fadeInPercentage = (this.visibleRegionFadeStartRadius / this.maxRadius);
+        const fadeInComplete = fadeInPercentage > 0.99;
+        const shaderFadeInComplete = (fadeInComplete || sceneRevealMode === SceneRevealMode.Instant) ? 1 : 0;
+
         this.material.uniforms.visibleRegionFadeStartRadius.value = this.visibleRegionFadeStartRadius;
         this.material.uniforms.visibleRegionRadius.value = this.visibleRegionRadius;
         this.material.uniforms.firstRenderTime.value = this.firstRenderTime;
         this.material.uniforms.currentTime.value = performance.now();
-        this.material.uniforms.fadeInComplete.value = fadeInComplete;
+        this.material.uniforms.fadeInComplete.value = shaderFadeInComplete;
         this.material.uniformsNeedUpdate = true;
         this.visibleRegionChanging = !fadeInComplete;
     }

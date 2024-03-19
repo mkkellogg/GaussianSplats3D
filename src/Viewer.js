@@ -21,6 +21,7 @@ import { ARButton } from './webxr/ARButton.js';
 import { delayedExecute } from './Util.js';
 import { LoaderStatus } from './loaders/LoaderStatus.js';
 import { RenderMode } from './RenderMode.js';
+import { SceneRevealMode } from './SceneRevealMode.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -122,7 +123,15 @@ export class Viewer {
             this.gpuAcceleratedSort = false;
         }
 
+        // if 'renderMode' is RenderMode.Always, then the viewer will rrender the scene on every update. If it is RenderMode.OnChange,
+        // it will only render when something in the scene has changed.
         this.renderMode = options.renderMode || RenderMode.Always;
+
+        // SceneRevealMode.Default results in a nice, slow fade-in effect for progressively loaded scenes,
+        // and fast fade-in for fully loaded, non-streamed scenes.
+        // SceneRevealMode.Gradual will force the slow fade-in even for fully loaded, non streamed scenes.
+        // SceneRevealMode.Instant will force all loaded scene data to be immediately visible;
+        this.sceneRevealMode = options.sceneRevealMode || SceneRevealMode.Default;
 
         this.controls = null;
 
@@ -1170,7 +1179,7 @@ export class Viewer {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
         if (!this.initialized || !this.splatRenderingInitialized) return;
         if (this.controls) this.controls.update();
-        this.splatMesh.updateVisibleRegionFadeDistance();
+        this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
         this.updateSplatSort();
         this.updateForRendererSizeChanges();
         this.updateSplatMesh();

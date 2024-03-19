@@ -15,6 +15,7 @@ import { AbortablePromise } from './AbortablePromise.js';
 import { SceneFormat } from './loaders/SceneFormat.js';
 import { WebXRMode } from './webxr/WebXRMode.js';
 import { RenderMode } from './RenderMode.js';
+import { SceneRevealMode } from './SceneRevealMode.js';
 
 export {
     PlyParser,
@@ -33,5 +34,6 @@ export {
     AbortablePromise,
     SceneFormat,
     WebXRMode,
-    RenderMode
+    RenderMode,
+    SceneRevealMode
 };
