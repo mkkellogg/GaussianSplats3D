@@ -128,9 +128,9 @@ export class Viewer {
         this.renderMode = options.renderMode || RenderMode.Always;
 
         // SceneRevealMode.Default results in a nice, slow fade-in effect for progressively loaded scenes,
-        // and fast fade-in for fully loaded, non-streamed scenes.
-        // SceneRevealMode.Gradual will force the slow fade-in even for fully loaded, non streamed scenes.
-        // SceneRevealMode.Instant will force all loaded scene data to be immediately visible;
+        // and a fast fade-in for non progressively loaded scenes.
+        // SceneRevealMode.Gradual will force a slow fade-in for all scenes.
+        // SceneRevealMode.Instant will force all loaded scene data to be immediately visible.
         this.sceneRevealMode = options.sceneRevealMode || SceneRevealMode.Default;
 
         this.controls = null;
