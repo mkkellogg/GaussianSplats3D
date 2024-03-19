@@ -512,8 +512,12 @@ export class SplatMesh extends THREE.Mesh {
                 splatMesh.getSplatColor(splatIndex, splatColor);
                 const sceneIndex = splatMesh.getSceneIndexForSplat(splatIndex);
                 const minAlpha = minAlphas[sceneIndex] || 1;
-                return splatColor.w >= minAlpha;
-            }, onSplatTreeIndexesUpload, onSplatTreeConstruction)
+                let filterLevel = 0;
+                if (splatColor.w >= minAlpha) filterLevel = 1;
+                if (splatColor.w >= 50) filterLevel= 2;
+                return filterLevel;
+            },
+            onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
                 console.timeEnd('SplatTree build');
 

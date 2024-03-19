@@ -317,24 +317,27 @@ export class SplatTree {
      * @param {SplatMesh} splatMesh The instance of SplatMesh from which to construct this splat tree.
      * @param {function} filterFunc Optional function to filter out unwanted splats.
      * @param {function} onIndexesUpload Function to be called when the upload of splat centers to the splat tree
-     *                            builder worker starts and finishes.
+     *                                   builder worker starts and finishes.
      * @param {function} onSplatTreeConstruction Function to be called when the conversion of the local splat tree from
-     *                                    the format produced by the splat tree builder worker starts and ends.
+     *                                           the format produced by the splat tree builder worker starts and ends.
      * @return {undefined}
      */
-    processSplatMesh = function(splatMesh, filterFunc = () => true, onIndexesUpload, onSplatTreeConstruction) {
+    processSplatMesh = function(splatMesh, priorityFunc = () => 2, onIndexesUpload, onSplatTreeConstruction) {
         checkAndCreateWorker();
 
         this.splatMesh = splatMesh;
         this.subTrees = [];
         const center = new THREE.Vector3();
+        const splatPrioityLevels = [];
 
         const addCentersForScene = (splatOffset, splatCount) => {
             const sceneCenters = new Float32Array(splatCount * 4);
             let addedCount = 0;
             for (let i = 0; i < splatCount; i++) {
                 const globalSplatIndex = i + splatOffset;
-                if (filterFunc(globalSplatIndex)) {
+                const priorityLevel = priorityFunc(globalSplatIndex);
+                if (priorityLevel > 0) {
+                    splatPrioityLevels[globalSplatIndex] = priorityLevel;
                     splatMesh.getSplatCenter(globalSplatIndex, center);
                     const addBase = addedCount * 4;
                     sceneCenters[addBase] = center.x;

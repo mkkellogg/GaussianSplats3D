@@ -1410,7 +1410,9 @@ export class Viewer {
             }
 
             this.sortRunning = true;
-            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
+            const needsFullSort = this.splatMesh.dynamicMode || queuedSorts.length === 1;
+            const filterLowAlpha = needsFullSort ? false : true;
+            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort(false, filterLowAlpha);
             this.splatRenderCount = splatRenderCount;
             this.sortPromise = new Promise((resolve) => {
                 this.sortPromiseResolver = resolve;
@@ -1497,7 +1499,7 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
-        return function(gatherAllNodes = false) {
+        return function(gatherAllNodes = false, filterLowAlpha = false) {
 
             this.getRenderDimensions(renderDimensions);
             const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
