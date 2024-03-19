@@ -1497,8 +1497,6 @@ export class Viewer {
             return tempMax.copy(node.max).sub(node.min).length();
         };
 
-        const MaximumDistanceToRender = 125;
-
         return function(gatherAllNodes = false) {
 
             this.getRenderDimensions(renderDimensions);
@@ -1542,8 +1540,7 @@ export class Viewer {
                         const ns = nodeSize(node);
                         const outOfFovY = cameraAngleYZDot < (cosFovYOver2 - .6);
                         const outOfFovX = cameraAngleXZDot < (cosFovXOver2 - .6);
-                        if (!gatherAllNodes && ((outOfFovX || outOfFovY ||
-                             distanceToNode > MaximumDistanceToRender) && distanceToNode > ns)) {
+                        if (!gatherAllNodes && ((outOfFovX || outOfFovY) && distanceToNode > ns)) {
                             continue;
                         }
                         splatRenderCount += node.data.indexes.length;
