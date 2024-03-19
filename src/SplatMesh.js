@@ -591,7 +591,6 @@ export class SplatMesh extends THREE.Mesh {
             this.visibleRegionRadius = 0;
             this.visibleRegionFadeStartRadius = 0;
             this.firstRenderTime = -1;
-            this.finalBuild = false;
             this.lastBuildScenes = [];
             this.lastBuildSplatCount = 0;
             this.lastBuildMaxSplatCount = 0;
