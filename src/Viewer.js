@@ -1421,7 +1421,7 @@ export class Viewer {
                             const sortFraction = partialSort.sortFractions[i];
                             const priorityLevel = partialSort.priorityLevels[i];
                             queuedSorts.push({
-                                'sortCount': Math.floor(this.splatRenderCount * sortFraction),
+                                'sortFraction': sortFraction,
                                 'priorityLevel': priorityLevel
                             });
                         }
@@ -1429,13 +1429,13 @@ export class Viewer {
                     }
                 }
                 queuedSorts.push({
-                    'sortCount':  this.splatRenderCount,
+                    'sortFraction': 1.0,
                     'priorityLevel': 0
                 });
             }
 
             const needsFullSort = this.splatMesh.dynamicMode;
-            const sortPriorityLevel = needsFullSort ? 0 : 0; //queuedSorts[0].priorityLevel;
+            const sortPriorityLevel = needsFullSort ? 0 : queuedSorts[0].priorityLevel;
             const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort(false, sortPriorityLevel);
             this.splatRenderCount = splatRenderCount;
 
@@ -1444,9 +1444,8 @@ export class Viewer {
                 sortCount = this.splatRenderCount;
                 queuedSorts.length = 0;
             } else {
-                const queuedSortCount = queuedSorts.shift().sortCount;
+                const queuedSortCount = Math.floor(this.splatRenderCount * queuedSorts.shift().sortFraction);
                 sortCount = Math.min(queuedSortCount, this.splatRenderCount);
-                console.log(sortCount)
             }
 
             this.sortPromise = new Promise((resolve) => {
