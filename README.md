@@ -260,7 +260,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'integerBasedSort': true,
     'dynamicScene': false,
     'webXRMode': GaussianSplats3D.WebXRMode.None,
-    'renderMode': GaussianSplats3D.RenderMode.OnChange
+    'renderMode': GaussianSplats3D.RenderMode.OnChange,
+    'sceneRevealMode': GaussianSplats3D.SceneRevealMode.Instant
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -291,6 +292,7 @@ Advanced `Viewer` parameters
 | `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static. Additionally all splat data retrieved from the viewer's splat mesh will not have their respective scene transform applied to them by default.
 | `webXRMode` | Tells the viewer whether or not to enable built-in Web VR or Web AR. Valid values are defined in the `WebXRMode` enum: `None`, `VR`, and `AR`. Defaults to `None`.
 | `renderMode` | Controls when the viewer renders the scene. Valid values are defined in the `RenderMode` enum: `Always`, `OnChange`, and `Never`. Defaults to `Always`.
+| `sceneRevealMode` | Controls the fade-in effect used when the scene is loaded. Valid values are defined in the `SceneRevealMode` enum: `Default`, `Gradual`, and `Instant`. `Default` results in a nice, slow fade-in effect for progressively loaded scenes, and a fast fade-in for non progressively loaded scenes. `Gradual` will force a slow fade-in for all scenes. `Instant` will force all loaded scene data to be immediately visible.
 <br>
 
 ### Creating KSPLAT files
@@ -301,8 +303,7 @@ import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 
 const compressionLevel = 1;
 const splatAlphaRemovalThreshold = 5; // out of 255
-const plyLoader = new GaussianSplats3D.PlyLoader();
-plyLoader.loadFromURL('<path to .ply or .splat file>', compressionLevel, splatAlphaRemovalThreshold)
+GaussianSplats3D.PlyLoader.loadFromURL('<path to .ply or .splat file>', compressionLevel, splatAlphaRemovalThreshold)
 .then((splatBuffer) => {
     GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
 });
@@ -333,14 +334,14 @@ response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
 response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
 ```
 
-If you're using Apache, you can edit the `.htaccess` file to do that by adding the lines:
+#### CORS with Apache
+
+For Apache, you can edit the `.htaccess` file to allow CORS by adding the lines:
 
 ```
 Header add Cross-Origin-Opener-Policy "same-origin"
 Header add Cross-Origin-Embedder-Policy "require-corp"
 ```
-
-For other web servers, these headers most likely can be set in a similar fashion.
 
 Additionally you may need to require a secure connection to your server by redirecting all access via `http://` to `https://`. In Apache this can be done by updating the `.htaccess` file with the following lines:
 
@@ -349,3 +350,27 @@ RewriteEngine On
 RewriteCond %{HTTPS} off
 RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [R,L]
 ```
+
+#### CORS with Vite
+
+For Vite, one popular option is to install the [vite-plugin-cross-origin-isolation](https://github.com/chaosprint/vite-plugin-cross-origin-isolation) plugin via `npm` and then add the following to your `vite.config.js` file. 
+
+```javascript
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [
+    {
+      name: "configure-response-headers",
+      configureServer: (server) => {
+        server.middlewares.use((_req, res, next) => {
+          res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+          res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+          next();
+        });
+      },
+    },
+  ],
+});
+```
+There are other ways to configure Vite to handle this referenced in issue [#41](https://github.com/mkkellogg/GaussianSplats3D/issues/41).
