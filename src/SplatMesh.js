@@ -622,6 +622,7 @@ export class SplatMesh extends THREE.Mesh {
                                      onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then((splatTree) => {
                 this.splatTree = splatTree;
+                if (this.onSplatTreeReadyCallback) this.onSplatTreeReadyCallback(this.splatTree);
             });
         }
     }
@@ -674,6 +675,9 @@ export class SplatMesh extends THREE.Mesh {
         return this.splatTree;
     }
 
+    onSplatTreeReady(callback) {
+        this.onSplatTreeReadyCallback = callback;
+    }
     /**
      * Refresh data textures and GPU buffers for splat distance pre-computation with data from the splat buffers for this mesh.
      * @param {boolean} isUpdateBuild Specify whether or not to only update for splats that have been added since the last build.
