@@ -72,10 +72,7 @@ export class Viewer {
         this.devicePixelRatio = this.ignoreDevicePixelRatio ? 1 : window.devicePixelRatio;
 
         // Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit
-        if (options.halfPrecisionCovariancesOnGPU === undefined || options.halfPrecisionCovariancesOnGPU === null) {
-            options.halfPrecisionCovariancesOnGPU = true;
-        }
-        this.halfPrecisionCovariancesOnGPU = options.halfPrecisionCovariancesOnGPU;
+        this.halfPrecisionCovariancesOnGPU = options.halfPrecisionCovariancesOnGPU || false;
 
         // If 'threeScene' is valid, it will be rendered by the viewer along with the splat mesh
         this.threeScene = options.threeScene;
@@ -113,8 +110,16 @@ export class Viewer {
         // true it tells the splat mesh to not apply scene tranforms to splat data that is returned by functions like
         // SplatMesh.getSplatCenter() by default.
         const dynamicScene = !!options.dynamicScene;
+
+        // When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at a
+        // substantially different resolution than that at which they were rendered during training. This will only work correctly
+        // for models that were trained using a process that utilizes this compensation calculation. For more details:
+        // https://github.com/nerfstudio-project/gsplat/pull/117
+        // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
+        const antialiased = options.antialiased || false;
+
         this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort);
+                                       this.gpuAcceleratedSort, this.integerBasedSort, antialiased);
 
 
         this.webXRMode = options.webXRMode || WebXRMode.None;
@@ -132,6 +137,10 @@ export class Viewer {
         // SceneRevealMode.Gradual will force a slow fade-in for all scenes.
         // SceneRevealMode.Instant will force all loaded scene data to be immediately visible.
         this.sceneRevealMode = options.sceneRevealMode || SceneRevealMode.Default;
+
+        // Hacky, non-scientific parameter for tweaking focal length related calculations. For scenes with very small gaussians & small
+        // details, increasing this value can help improve visual quality.
+        this.focalAdjustment = options.focalAdjustment || 1.0;
 
         this.controls = null;
 
@@ -234,6 +243,7 @@ export class Viewer {
             this.resizeObserver = new ResizeObserver(() => {
                 this.getRenderDimensions(renderDimensions);
                 this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+                this.forceRenderNextFrame();
             });
             this.resizeObserver.observe(this.rootElement);
             this.rootElement.appendChild(this.renderer.domElement);
@@ -312,6 +322,14 @@ export class Viewer {
             tempMatrixLeft.makeRotationAxis(forward, Math.PI / 128);
             tempMatrixRight.makeRotationAxis(forward, -Math.PI / 128);
             switch (e.code) {
+                case 'KeyG':
+                    this.focalAdjustment += 0.02;
+                    this.forceRenderNextFrame();
+                break;
+                case 'KeyF':
+                    this.focalAdjustment -= 0.02;
+                    this.forceRenderNextFrame();
+                break;
                 case 'ArrowLeft':
                     this.camera.up.transformDirection(tempMatrixLeft);
                 break;
@@ -413,11 +431,16 @@ export class Viewer {
             if (splatCount > 0) {
                 this.splatMesh.updateTransforms();
                 this.getRenderDimensions(renderDimensions);
-                this.cameraFocalLengthX = this.camera.projectionMatrix.elements[0] *
-                                          this.devicePixelRatio * renderDimensions.x * 0.45;
-                                          this.cameraFocalLengthY = this.camera.projectionMatrix.elements[5] *
-                                          this.devicePixelRatio * renderDimensions.y * 0.45;
-                this.splatMesh.updateUniforms(renderDimensions, this.cameraFocalLengthX, this.cameraFocalLengthY);
+                const focalLengthX = this.camera.projectionMatrix.elements[0] * 0.5 *
+                                     this.devicePixelRatio * renderDimensions.x;
+                const focalLengthY = this.camera.projectionMatrix.elements[5] * 0.5 *
+                                     this.devicePixelRatio * renderDimensions.y;
+
+                const focalAdjustment = this.focalAdjustment;
+                const inverseFocalAdjustment = 1.0 / focalAdjustment;
+
+                this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment,
+                                              focalLengthY * focalAdjustment, inverseFocalAdjustment);
             }
         };
 
@@ -1351,7 +1374,7 @@ export class Viewer {
             const splatRenderCountPct = this.splatRenderCount / splatCount * 100;
             this.infoPanel.update(renderDimensions, this.camera.position, cameraLookAtPosition,
                                   this.camera.up, meshCursorPosition, this.currentFPS || 'N/A', splatCount,
-                                  this.splatRenderCount, splatRenderCountPct, this.lastSortTime);
+                                  this.splatRenderCount, splatRenderCountPct, this.lastSortTime, this.focalAdjustment);
         };
 
     }();

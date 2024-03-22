@@ -261,6 +261,7 @@
     let currentCameraUpArray;
     let currentCameraPositionArray;
     let currentCameraLookAtArray;
+    let currentAntialiased;
   </script>
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
@@ -425,6 +426,7 @@
       let cameraUpArray = document.getElementById("cameraUp").value;
       let cameraPositionArray = document.getElementById("cameraPosition").value;
       let cameraLookAtArray = document.getElementById("cameraLookAt").value;
+      let antialiased = document.getElementById("antialiased").checked;
 
       cameraUpArray = cameraUpArray.split(',');
       cameraPositionArray = cameraPositionArray.split(',');
@@ -481,11 +483,13 @@
       currentCameraUpArray = cameraUpArray;
       currentCameraPositionArray = cameraPositionArray;
       currentCameraLookAtArray = cameraLookAtArray;
+      currentAntialiased = antialiased;
+
       try {
         const fileReader = new FileReader();
         fileReader.onload = function(){
           try {
-           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray);
+           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased);
           } catch (e) {
             console.error(e);
             setViewError("Could not view scene.");
@@ -517,18 +521,19 @@
   
     window.addEventListener("popstate", (event) => {
       if (currentAlphaRemovalThreshold !== undefined) {
-        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray;
+        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray + "&aa=" + currentAntialiased;
       } else {
         window.location = 'index.html';
       }
     });
 
-    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray) {
+    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased) {
       const viewerOptions = {
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
         'initialCameraLookAt': cameraLookAtArray,
-        'halfPrecisionCovariancesOnGPU': true,
+        'halfPrecisionCovariancesOnGPU': false,
+        'antialiased': antialiased || false
       };
       const splatBufferOptions = {
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
@@ -636,6 +641,14 @@
                         <input id="alphaRemovalThresholdView" type="text" class="text-input" style="width: 50px" value="1"></input>
                         <span class="valid-value-label">(1 - 255)</span>
                     </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Anti-aliased
+                      </td>
+                      <td style="text-align:lefts;">
+                        <input type="checkbox" id="antialiased" class="checkbox-input"/>
+                      </td>
                     </tr>
                     <tr>
                     <td>
@@ -845,6 +858,9 @@
         } else if (varName == "cla") {
           currentCameraLookAtArray = component[1];
           document.getElementById('cameraLookAt').value = currentCameraLookAtArray;
+        } else if (varName == "aa") {
+          currentAntialiased = component[1];
+          document.getElementById('antialiased').checked = currentAntialiased;
         }
       }
     }

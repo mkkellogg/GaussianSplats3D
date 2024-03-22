@@ -23,7 +23,7 @@ const SCENE_FADEIN_RATE_GRADUAL = 0.003;
 export class SplatMesh extends THREE.Mesh {
 
     constructor(dynamicMode = true, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
-                enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false) {
+                enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false, antialiased = false) {
         super(dummyGeometry, dummyMaterial);
         // Reference to a Three.js renderer
         this.renderer = undefined;
@@ -40,6 +40,12 @@ export class SplatMesh extends THREE.Mesh {
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
         // Use a faster integer-based approach for calculating splat distances from the camera
         this.integerBasedDistancesComputation = integerBasedDistancesComputation;
+        // When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at a
+        // substantially different resolution than that at which they were rendered during training. This will only work correctly
+        // for models that were trained using a process that utilizes this compensation calculation. For more details:
+        // https://github.com/nerfstudio-project/gsplat/pull/117
+        // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
+        this.antialiased = antialiased;
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -85,9 +91,11 @@ export class SplatMesh extends THREE.Mesh {
      * Build the Three.js material that is used to render the splats.
      * @param {number} dynamicMode If true, it means the scene geometry represented by this splat mesh is not stationary or
      *                             that the splat count might change
+     * @param {boolean} antialiased If true, calculate compensation factor to deal with gaussians being rendered at a significantly
+     *                              different resolution than that of their training
      * @return {THREE.ShaderMaterial}
      */
-    static buildMaterial(dynamicMode = false) {
+    static buildMaterial(dynamicMode = false, antialiased = false) {
 
         // Contains the code to project 3D covariance to 2D and from there calculate the quad (using the eigen vectors of the
         // 2D covariance) that is ultimately rasterized
@@ -110,6 +118,7 @@ export class SplatMesh extends THREE.Mesh {
 
         vertexShaderSource += `
             uniform vec2 focal;
+            uniform float inverseFocalAdjustment;
             uniform vec2 viewport;
             uniform vec2 basisViewport;
             uniform vec2 covariancesTextureSize;
@@ -193,6 +202,7 @@ export class SplatMesh extends THREE.Mesh {
                 // 3D covariance matrix instead of using the actual projection matrix because that transformation would
                 // require a non-linear component (perspective division) which would yield a non-gaussian result. (This assumes
                 // the current projection is a perspective projection).
+
                 float s = 1.0 / (viewCenter.z * viewCenter.z);
                 mat3 J = mat3(
                     focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
@@ -206,9 +216,27 @@ export class SplatMesh extends THREE.Mesh {
 
                 // Transform the 3D covariance matrix (Vrk) to compute the 2D covariance matrix
                 mat3 cov2Dm = transpose(T) * Vrk * T;
+                `;
 
-                cov2Dm[0][0] += 0.3;
-                cov2Dm[1][1] += 0.3;
+            if (antialiased) {
+                vertexShaderSource += `
+                    float detOrig = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
+                    cov2Dm[0][0] += 0.3;
+                    cov2Dm[1][1] += 0.3;
+                    float detBlur = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
+                    float compensation = sqrt(max(detOrig / detBlur, 0.0));
+                `;
+            } else {
+                vertexShaderSource += `
+                    cov2Dm[0][0] += 0.3;
+                    cov2Dm[1][1] += 0.3;
+                    float compensation = 1.0;
+                `;
+            }
+
+            vertexShaderSource += `
+
+                vColor.a *= compensation;
 
                 // We are interested in the upper-left 2x2 portion of the projected 3D covariance matrix because
                 // we only care about the X and Y values. We want the X-diagonal, cov2Dm[0][0],
@@ -252,11 +280,6 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 basisVector1 = eigenVector1 * sqrt8 * sqrt(eigenValue1);
                 vec2 basisVector2 = eigenVector2 * sqrt8 * sqrt(eigenValue2);
 
-                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) * basisViewport * 2.0;
-
-                // Similarly scale the position data we send to the fragment shader
-                vPosition *= sqrt8;
-
                 if (fadeInComplete == 0) {
                     float opacityAdjust = 1.0;
                     float centerDist = length(splatCenter - sceneCenter);
@@ -271,8 +294,12 @@ export class SplatMesh extends THREE.Mesh {
                     vColor.a *= opacityAdjust;
                 }
 
-                gl_Position = vec4(ndcCenter.xy  + ndcOffset, ndcCenter.z, 1.0);
+                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) *
+                                 basisViewport * 2.0 * inverseFocalAdjustment;
+                gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
 
+                // Scale the position data we send to the fragment shader
+                vPosition *= sqrt8;
             }`;
 
         const fragmentShaderSource = `
@@ -340,6 +367,10 @@ export class SplatMesh extends THREE.Mesh {
             'focal': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
+            },
+            'inverseFocalAdjustment': {
+                'type': 'f',
+                'value': 1.0
             },
             'viewport': {
                 'type': 'v2',
@@ -600,7 +631,7 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildMaxSplatCount = 0;
             this.disposeMeshData();
             this.geometry = SplatMesh.buildGeomtery(maxSplatCount);
-            this.material = SplatMesh.buildMaterial(this.dynamicMode);
+            this.material = SplatMesh.buildMaterial(this.dynamicMode, this.antialiased);
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
@@ -967,7 +998,7 @@ export class SplatMesh extends THREE.Mesh {
 
         const viewport = new THREE.Vector2();
 
-        return function(renderDimensions, cameraFocalLengthX, cameraFocalLengthY) {
+        return function(renderDimensions, cameraFocalLengthX, cameraFocalLengthY, inverseFocalAdjustment) {
             const splatCount = this.getSplatCount();
             if (splatCount > 0) {
                 viewport.set(renderDimensions.x * this.devicePixelRatio,
@@ -975,6 +1006,7 @@ export class SplatMesh extends THREE.Mesh {
                 this.material.uniforms.viewport.value.copy(viewport);
                 this.material.uniforms.basisViewport.value.set(1.0 / viewport.x, 1.0 / viewport.y);
                 this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
+                this.material.uniforms.inverseFocalAdjustment.value = inverseFocalAdjustment;
                 if (this.dynamicMode) {
                     for (let i = 0; i < this.scenes.length; i++) {
                         this.material.uniforms.transforms.value[i].copy(this.getScene(i).transform);
