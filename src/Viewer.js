@@ -23,7 +23,7 @@ import { LoaderStatus } from './loaders/LoaderStatus.js';
 import { RenderMode } from './RenderMode.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
 
-const THREE_CAMERA_FOV = 50;
+const THREE_CAMERA_FOV = 60;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 const MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER = 1500000;
 const FOCUS_MARKER_FADE_IN_SPEED = 10.0;
@@ -239,6 +239,7 @@ export class Viewer {
             this.renderer.autoClear = true;
             this.renderer.setClearColor(new THREE.Color( 0x000000 ), 0.0);
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
+            this.renderer.setClearColor(new THREE.Color(0xffffff), 1.0);
 
             this.resizeObserver = new ResizeObserver(() => {
                 this.getRenderDimensions(renderDimensions);
@@ -1188,7 +1189,7 @@ export class Viewer {
                 return false;
             };
             const savedAuoClear = this.renderer.autoClear;
-            this.renderer.autoClear = false;
+           // this.renderer.autoClear = false;
             if (hasRenderables(this.threeScene)) this.renderer.render(this.threeScene, this.camera);
             this.renderer.render(this.splatMesh, this.camera);
             if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
@@ -1427,13 +1428,14 @@ export class Viewer {
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
             if (!this.forceSort && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
-                if (angleDiff <= 0.95) needsRefreshForRotation = true;
+                if (angleDiff <= 0.98) needsRefreshForRotation = true;
                 if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
 
             this.sortRunning = true;
-            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
+            let { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
+            shouldSortAll = true;
             this.splatRenderCount = splatRenderCount;
             this.sortPromise = new Promise((resolve) => {
                 this.sortPromiseResolver = resolve;

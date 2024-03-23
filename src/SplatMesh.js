@@ -203,12 +203,32 @@ export class SplatMesh extends THREE.Mesh {
                 // require a non-linear component (perspective division) which would yield a non-gaussian result. (This assumes
                 // the current projection is a perspective projection).
 
-                float s = 1.0 / (viewCenter.z * viewCenter.z);
+              /*  float s = 1.0 / (viewCenter.z * viewCenter.z);
                 mat3 J = mat3(
                     focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
                     0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) * s,
                     0., 0., 0.
-                );
+                );*/
+
+                float fovY = 1.0472;
+                float aspect = viewport.x / viewport.y;
+
+                float tan_fovy = tan(fovY / 2.0);
+                float fovx = 2.0 * atan(tan(fovY * 0.5) * aspect);
+                float tan_fovx = tan(fovx / 2.0);
+
+                float limx = 1.3f * tan_fovx;
+                float limy = 1.3f * tan_fovy;
+                vec3 t = viewCenter.xyz;
+                float txtz = t.x / t.z;
+                float tytz = t.y / t.z;
+                t.x = min(limx, max(-limx, txtz)) * t.z;
+                t.y = min(limy, max(-limy, tytz)) * t.z;
+
+                mat3 J = mat3(
+                    focal.x / t.z, 0.0, -(focal.x * t.x) / (t.z * t.z),
+                    0.0, focal.y / t.z, -(focal.y * t.y) / (t.z * t.z),
+                    0.0, 0.0, 0.0);
 
                 // Concatenate the projection approximation with the model-view transformation
                 mat3 W = transpose(mat3(transformModelViewMatrix));
@@ -259,7 +279,7 @@ export class SplatMesh extends THREE.Mesh {
                 // times the maximum eigen-value, or 3 standard deviations. They then use the inverse 2D covariance
                 // matrix (called 'conic') in the CUDA rendering thread to determine fragment opacity by calculating the
                 // full gaussian: exp(-0.5 * (X - mean) * conic * (X - mean)) * splat opacity
-                float a = cov2Dv.x;
+                /*float a = cov2Dv.x;
                 float d = cov2Dv.z;
                 float b = cov2Dv.y;
                 float D = a * d - b * b;
@@ -278,7 +298,19 @@ export class SplatMesh extends THREE.Mesh {
 
                 // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
                 vec2 basisVector1 = eigenVector1 * sqrt8 * sqrt(eigenValue1);
-                vec2 basisVector2 = eigenVector2 * sqrt8 * sqrt(eigenValue2);
+                vec2 basisVector2 = eigenVector2 * sqrt8 * sqrt(eigenValue2);*/
+
+                float diagonal1 = cov2Dm[0][0];
+                float offDiagonal = cov2Dm[0][1];
+                float diagonal2 = cov2Dm[1][1];
+        
+                float mid = 0.5 * (diagonal1 + diagonal2);
+                float radius = length(vec2((diagonal1 - diagonal2) / 2.0, offDiagonal));
+                float lambda1 = mid + radius;
+                float lambda2 = max(mid - radius, 0.1);
+                vec2 diagonalVector = normalize(vec2(offDiagonal, lambda1 - diagonal1));
+                vec2 v1 = min(sqrt(2.0 * lambda1), 1024.0) * diagonalVector;
+                vec2 v2 = min(sqrt(2.0 * lambda2), 1024.0) * vec2(diagonalVector.y, -diagonalVector.x);
 
                 if (fadeInComplete == 0) {
                     float opacityAdjust = 1.0;
@@ -294,12 +326,21 @@ export class SplatMesh extends THREE.Mesh {
                     vColor.a *= opacityAdjust;
                 }
 
-                vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) *
+                /*vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) *
                                  basisViewport * 2.0 * inverseFocalAdjustment;
                 gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
 
                 // Scale the position data we send to the fragment shader
-                vPosition *= sqrt8;
+                vPosition *= sqrt8;*/
+
+                if (dot(v1, v1) < 4.0 && dot(v2, v2) < 4.0) {
+                    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+                    return;
+                }
+
+                vPosition *= 2.0;
+                vec2 ndcOffset = vec2(v1 * vPosition.x + v2 * vPosition.y) * basisViewport * 2.0 * inverseFocalAdjustment;
+                gl_Position = vec4(ndcCenter.xy + ndcOffset, 0.0, 1.0);
             }`;
 
         const fragmentShaderSource = `
@@ -320,13 +361,15 @@ export class SplatMesh extends THREE.Mesh {
                 // scaled by a factor of 8. If the squared result is larger than 8, it means it is outside the ellipse
                 // defined by the rectangle formed by vPosition. It also means it's farther
                 // away than sqrt(8) standard deviations from the mean.
-                if (A > 8.0) discard;
+                //if (A > 8.0) discard;
+                if (A > 4.0) discard;
                 vec3 color = vColor.rgb;
 
                 // Since the rendered splat is scaled by sqrt(8), the inverse covariance matrix that is part of
                 // the gaussian formula becomes the identity matrix. We're then left with (X - mean) * (X - mean),
                 // and since 'mean' is zero, we have X * X, which is the same as A:
-                float opacity = exp(-0.5 * A) * vColor.a;
+                //float opacity = exp(-0.5 * A) * vColor.a;
+                float opacity = exp(-A) * vColor.a;
 
                 gl_FragColor = vec4(color.rgb, opacity);
             }`;
