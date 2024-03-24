@@ -1329,7 +1329,8 @@ export class SplatMesh extends THREE.Mesh {
         gl.bindVertexArray(this.distancesTransformFeedback.vao);
 
         const ArrayType = this.integerBasedDistancesComputation ? Uint32Array : Float32Array;
-        const subBufferOffset = isUpdateBuild ? this.lastBuildSplatCount * 16 : 0;
+        const attributeBytesPerCenter = this.integerBasedDistancesComputation ? 16 : 12;
+        const subBufferOffset = isUpdateBuild ? this.lastBuildSplatCount * attributeBytesPerCenter : 0;
         const srcCenters = this.integerBasedDistancesComputation ?
                            this.getIntegerCenters(true, isUpdateBuild) :
                            this.getFloatCenters(false, isUpdateBuild);
@@ -1618,7 +1619,7 @@ export class SplatMesh extends THREE.Mesh {
             for (let t = 0; t < 3; t++) {
                 paddedFloatCenters[i * 4 + t] = floatCenters[i * 3 + t];
             }
-            paddedFloatCenters[i * 4 + 3] = 1;
+            paddedFloatCenters[i * 4 + 3] = 1.0;
         }
         return paddedFloatCenters;
     }
