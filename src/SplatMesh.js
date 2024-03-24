@@ -26,7 +26,7 @@ export class SplatMesh extends THREE.Mesh {
 
     constructor(dynamicMode = true, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
                 enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false,
-                antialiased = false, maxClipSpaceSplatSize = 2048) {
+                antialiased = false, maxScreenSpaceSplatSize = 2048) {
         super(dummyGeometry, dummyMaterial);
         // Reference to a Three.js renderer
         this.renderer = undefined;
@@ -50,7 +50,7 @@ export class SplatMesh extends THREE.Mesh {
         // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
         this.antialiased = antialiased;
         // Specify the maximum clip space splat size, can help deal with large splats that get too unwieldy
-        this.maxClipSpaceSplatSize = maxClipSpaceSplatSize;
+        this.maxScreenSpaceSplatSize = maxScreenSpaceSplatSize;
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -98,10 +98,10 @@ export class SplatMesh extends THREE.Mesh {
      *                             that the splat count might change
      * @param {boolean} antialiased If true, calculate compensation factor to deal with gaussians being rendered at a significantly
      *                              different resolution than that of their training
-     * @param {number} maxClipSpaceSplatSize The maximum clip space splat size
+     * @param {number} maxScreenSpaceSplatSize The maximum clip space splat size
      * @return {THREE.ShaderMaterial}
      */
-    static buildMaterial(dynamicMode = false, antialiased = false, maxClipSpaceSplatSize = 2048) {
+    static buildMaterial(dynamicMode = false, antialiased = false, maxScreenSpaceSplatSize = 2048) {
 
         // Contains the code to project 3D covariance to 2D and from there calculate the quad (using the eigen vectors of the
         // 2D covariance) that is ultimately rasterized
@@ -285,8 +285,8 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
 
                 // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
-                vec2 basisVector1 = eigenVector1 * min(sqrt8 * sqrt(eigenValue1), ${parseInt(maxClipSpaceSplatSize)}.0);
-                vec2 basisVector2 = eigenVector2 * min(sqrt8 * sqrt(eigenValue2), ${parseInt(maxClipSpaceSplatSize)}.0);
+                vec2 basisVector1 = eigenVector1 * min(sqrt8 * sqrt(eigenValue1), ${parseInt(maxScreenSpaceSplatSize)}.0);
+                vec2 basisVector2 = eigenVector2 * min(sqrt8 * sqrt(eigenValue2), ${parseInt(maxScreenSpaceSplatSize)}.0);
 
                 if (fadeInComplete == 0) {
                     float opacityAdjust = 1.0;
@@ -639,7 +639,7 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildMaxSplatCount = 0;
             this.disposeMeshData();
             this.geometry = SplatMesh.buildGeomtery(maxSplatCount);
-            this.material = SplatMesh.buildMaterial(this.dynamicMode, this.antialiased, this.maxClipSpaceSplatSize);
+            this.material = SplatMesh.buildMaterial(this.dynamicMode, this.antialiased, this.maxScreenSpaceSplatSize);
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;

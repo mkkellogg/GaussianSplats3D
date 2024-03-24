@@ -138,11 +138,11 @@ export class Viewer {
         // small gaussians, small details, and small dimensions -- increasing this value can help improve visual quality.
         this.focalAdjustment = options.focalAdjustment || 1.0;
 
-        // Specify the maximum clip space splat size, can help deal with large splats that get too unwieldy
-        this.maxClipSpaceSplatSize = options.maxClipSpaceSplatSize || 2048;
+        // Specify the maximum screen-space splat size, can help deal with large splats that get too unwieldy
+        this.maxScreenSpaceSplatSize = options.maxScreenSpaceSplatSize || 2048;
 
         this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort, antialiased, this.maxClipSpaceSplatSize);
+                                       this.gpuAcceleratedSort, this.integerBasedSort, antialiased, this.maxScreenSpaceSplatSize);
 
         this.controls = null;
 
