@@ -947,7 +947,7 @@ export class SplatMesh extends THREE.Mesh {
             this.maxRadius = maxRadius;
             this.visibleRegionRadius = Math.max(this.maxRadius - visibleAreaEpansionRadius, 0.0);
         }
-        if (this.finalBuild) this.visibleRegionRadius = this.maxRadius;
+        if (this.finalBuild) this.visibleRegionRadius = this.maxRadius = maxDistFromSceneCenter;
         this.updateVisibleRegionFadeDistance();
     }
 
