@@ -118,10 +118,6 @@ export class Viewer {
         // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
         const antialiased = options.antialiased || false;
 
-        this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort, antialiased);
-
-
         this.webXRMode = options.webXRMode || WebXRMode.None;
 
         if (this.webXRMode !== WebXRMode.None) {
@@ -138,9 +134,15 @@ export class Viewer {
         // SceneRevealMode.Instant will force all loaded scene data to be immediately visible.
         this.sceneRevealMode = options.sceneRevealMode || SceneRevealMode.Default;
 
-        // Hacky, non-scientific parameter for tweaking focal length related calculations. For scenes with very small gaussians & small
-        // details, increasing this value can help improve visual quality.
+        // Hacky, experimental, non-scientific parameter for tweaking focal length related calculations. For scenes with very
+        // small gaussians, small details, and small dimensions -- increasing this value can help improve visual quality.
         this.focalAdjustment = options.focalAdjustment || 1.0;
+
+        // Specify the maximum clip space splat size, can help deal with large splats that get too unwieldy
+        this.maxClipSpaceSplatSize = options.maxClipSpaceSplatSize || 2048;
+
+        this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
+                                       this.gpuAcceleratedSort, this.integerBasedSort, antialiased, this.maxClipSpaceSplatSize);
 
         this.controls = null;
 

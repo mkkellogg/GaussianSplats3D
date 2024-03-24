@@ -16,6 +16,8 @@ const CENTER_COLORS_ELEMENTS_PER_SPLAT = 4;
 const SCENE_FADEIN_RATE_FAST = 0.012;
 const SCENE_FADEIN_RATE_GRADUAL = 0.003;
 
+const VISIBLE_AREA_EXPANSION_RADIUS = 1;
+
 /**
  * SplatMesh: Container for one or more splat scenes, abstracting them into a single unified container for
  * splat data. Additionally contains data structures and code to make the splat data renderable as a Three.js mesh.
@@ -23,7 +25,8 @@ const SCENE_FADEIN_RATE_GRADUAL = 0.003;
 export class SplatMesh extends THREE.Mesh {
 
     constructor(dynamicMode = true, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
-                enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false, antialiased = false) {
+                enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false,
+                antialiased = false, maxClipSpaceSplatSize = 2048) {
         super(dummyGeometry, dummyMaterial);
         // Reference to a Three.js renderer
         this.renderer = undefined;
@@ -46,6 +49,8 @@ export class SplatMesh extends THREE.Mesh {
         // https://github.com/nerfstudio-project/gsplat/pull/117
         // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
         this.antialiased = antialiased;
+        // Specify the maximum clip space splat size, can help deal with large splats that get too unwieldy
+        this.maxClipSpaceSplatSize = maxClipSpaceSplatSize;
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -93,9 +98,10 @@ export class SplatMesh extends THREE.Mesh {
      *                             that the splat count might change
      * @param {boolean} antialiased If true, calculate compensation factor to deal with gaussians being rendered at a significantly
      *                              different resolution than that of their training
+     * @param {number} maxClipSpaceSplatSize The maximum clip space splat size
      * @return {THREE.ShaderMaterial}
      */
-    static buildMaterial(dynamicMode = false, antialiased = false) {
+    static buildMaterial(dynamicMode = false, antialiased = false, maxClipSpaceSplatSize = 2048) {
 
         // Contains the code to project 3D covariance to 2D and from there calculate the quad (using the eigen vectors of the
         // 2D covariance) that is ultimately rasterized
@@ -279,8 +285,8 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
 
                 // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
-                vec2 basisVector1 = eigenVector1 * min(sqrt8 * sqrt(eigenValue1), 1024.0);
-                vec2 basisVector2 = eigenVector2 * min(sqrt8 * sqrt(eigenValue2), 1024.0);
+                vec2 basisVector1 = eigenVector1 * min(sqrt8 * sqrt(eigenValue1), ${parseInt(maxClipSpaceSplatSize)}.0);
+                vec2 basisVector2 = eigenVector2 * min(sqrt8 * sqrt(eigenValue2), ${parseInt(maxClipSpaceSplatSize)}.0);
 
                 if (fadeInComplete == 0) {
                     float opacityAdjust = 1.0;
@@ -633,7 +639,7 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildMaxSplatCount = 0;
             this.disposeMeshData();
             this.geometry = SplatMesh.buildGeomtery(maxSplatCount);
-            this.material = SplatMesh.buildMaterial(this.dynamicMode, this.antialiased);
+            this.material = SplatMesh.buildMaterial(this.dynamicMode, this.antialiased, this.maxClipSpaceSplatSize);
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
@@ -941,11 +947,10 @@ export class SplatMesh extends THREE.Mesh {
             if (distFromCSceneCenter > maxDistFromSceneCenter) maxDistFromSceneCenter = distFromCSceneCenter;
         }
 
-        const visibleAreaEpansionRadius = 1;
         const maxRadius = maxDistFromSceneCenter;
-        if (maxRadius - this.maxRadius > visibleAreaEpansionRadius) {
+        if (maxRadius - this.maxRadius > VISIBLE_AREA_EXPANSION_RADIUS) {
             this.maxRadius = maxRadius;
-            this.visibleRegionRadius = Math.max(this.maxRadius - visibleAreaEpansionRadius, 0.0);
+            this.visibleRegionRadius = Math.max(this.maxRadius - VISIBLE_AREA_EXPANSION_RADIUS, 0.0);
         }
         if (this.finalBuild) this.visibleRegionRadius = this.maxRadius = maxDistFromSceneCenter;
         this.updateVisibleRegionFadeDistance();
@@ -958,7 +963,7 @@ export class SplatMesh extends THREE.Mesh {
         const fadeInRate = sceneRevealMode === SceneRevealMode.Default ? defaultFadeInRate : gradualFadeRate;
         this.visibleRegionFadeStartRadius = (this.visibleRegionRadius - this.visibleRegionFadeStartRadius) *
                                              fadeInRate + this.visibleRegionFadeStartRadius;
-        const fadeInPercentage = (this.visibleRegionFadeStartRadius / this.maxRadius);
+        const fadeInPercentage = (this.maxRadius > 0) ? (this.visibleRegionFadeStartRadius / this.maxRadius) : 0;
         const fadeInComplete = fadeInPercentage > 0.99;
         const shaderFadeInComplete = (fadeInComplete || sceneRevealMode === SceneRevealMode.Instant) ? 1 : 0;
 
