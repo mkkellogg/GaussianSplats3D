@@ -136,6 +136,7 @@ export class SplatMesh extends THREE.Mesh {
             varying vec2 vPosition;
 
             const float sqrt8 = sqrt(8.0);
+            const float minAlpha = 1.0 / 255.0;
 
             const vec4 encodeNorm4 = vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0);
             const uvec4 mask4 = uvec4(uint(0x000000FF), uint(0x0000FF00), uint(0x00FF0000), uint(0xFF000000));
@@ -238,6 +239,8 @@ export class SplatMesh extends THREE.Mesh {
 
                 vColor.a *= compensation;
 
+                if (vColor.a < minAlpha) return;
+
                 // We are interested in the upper-left 2x2 portion of the projected 3D covariance matrix because
                 // we only care about the X and Y values. We want the X-diagonal, cov2Dm[0][0],
                 // the Y-diagonal, cov2Dm[1][1], and the correlation between the two cov2Dm[0][1]. We don't
@@ -269,16 +272,15 @@ export class SplatMesh extends THREE.Mesh {
                 float eigenValue1 = traceOver2 + term2;
                 float eigenValue2 = traceOver2 - term2;
 
-                float transparentAdjust = step(1.0 / 255.0, vColor.a);
-                eigenValue2 = eigenValue2 * transparentAdjust; // hide splat if alpha is zero
+                if (eigenValue2 <= 0.0) return;
 
                 vec2 eigenVector1 = normalize(vec2(b, eigenValue1 - a));
                 // since the eigen vectors are orthogonal, we derive the second one from the first
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
 
                 // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
-                vec2 basisVector1 = eigenVector1 * sqrt8 * sqrt(eigenValue1);
-                vec2 basisVector2 = eigenVector2 * sqrt8 * sqrt(eigenValue2);
+                vec2 basisVector1 = eigenVector1 * min(sqrt8 * sqrt(eigenValue1), 1024.0);
+                vec2 basisVector2 = eigenVector2 * min(sqrt8 * sqrt(eigenValue2), 1024.0);
 
                 if (fadeInComplete == 0) {
                     float opacityAdjust = 1.0;
