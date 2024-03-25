@@ -125,6 +125,8 @@ export class SplatMesh extends THREE.Mesh {
 
         vertexShaderSource += `
             uniform vec2 focal;
+            uniform float orthoZoom;
+            uniform int orthographicMode;
             uniform float inverseFocalAdjustment;
             uniform vec2 viewport;
             uniform vec2 basisViewport;
@@ -211,12 +213,19 @@ export class SplatMesh extends THREE.Mesh {
                 // require a non-linear component (perspective division) which would yield a non-gaussian result. (This assumes
                 // the current projection is a perspective projection).
 
-                float s = 1.0 / (viewCenter.z * viewCenter.z);
-                mat3 J = mat3(
-                    focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
-                    0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) * s,
-                    0., 0., 0.
-                );
+                mat3 J;
+                if (orthographicMode == 1) {
+                    J = transpose(mat3(orthoZoom, 0.0, 0.0,
+                                       0.0, orthoZoom, 0.0,
+                                       0.0, 0.0, 0.0));
+                } else {
+                    float s = 1.0 / (viewCenter.z * viewCenter.z);
+                    J = mat3(
+                        focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,
+                        0., focal.y / viewCenter.z, -(focal.y * viewCenter.y) * s,
+                        0., 0., 0.
+                    );
+                }
 
                 // Concatenate the projection approximation with the model-view transformation
                 mat3 W = transpose(mat3(transformModelViewMatrix));
@@ -305,7 +314,9 @@ export class SplatMesh extends THREE.Mesh {
 
                 vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) *
                                  basisViewport * 2.0 * inverseFocalAdjustment;
-                gl_Position = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+
+                vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                gl_Position = quadPos;
 
                 // Scale the position data we send to the fragment shader
                 vPosition *= sqrt8;
@@ -349,6 +360,10 @@ export class SplatMesh extends THREE.Mesh {
                 'type': 'i',
                 'value': 0
             },
+            'orthographicMode': {
+                'type': 'i',
+                'value': 0
+            },
             'visibleRegionFadeStartRadius': {
                 'type': 'f',
                 'value': 0.0
@@ -376,6 +391,10 @@ export class SplatMesh extends THREE.Mesh {
             'focal': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
+            },
+            'orthoZoom': {
+                'type': 'f',
+                'value': 1.0
             },
             'inverseFocalAdjustment': {
                 'type': 'f',
@@ -1006,7 +1025,8 @@ export class SplatMesh extends THREE.Mesh {
 
         const viewport = new THREE.Vector2();
 
-        return function(renderDimensions, cameraFocalLengthX, cameraFocalLengthY, inverseFocalAdjustment) {
+        return function(renderDimensions, cameraFocalLengthX, cameraFocalLengthY,
+                        orthographicMode, orthographicZoom, inverseFocalAdjustment) {
             const splatCount = this.getSplatCount();
             if (splatCount > 0) {
                 viewport.set(renderDimensions.x * this.devicePixelRatio,
@@ -1014,6 +1034,8 @@ export class SplatMesh extends THREE.Mesh {
                 this.material.uniforms.viewport.value.copy(viewport);
                 this.material.uniforms.basisViewport.value.set(1.0 / viewport.x, 1.0 / viewport.y);
                 this.material.uniforms.focal.value.set(cameraFocalLengthX, cameraFocalLengthY);
+                this.material.uniforms.orthographicMode.value = orthographicMode ? 1 : 0;
+                this.material.uniforms.orthoZoom.value = orthographicZoom;
                 this.material.uniforms.inverseFocalAdjustment.value = inverseFocalAdjustment;
                 if (this.dynamicMode) {
                     for (let i = 0; i < this.scenes.length; i++) {
