@@ -12,9 +12,10 @@ export class InfoPanel {
             ['Camera up', 'cameraUp'],
             ['Cursor position', 'cursorPosition'],
             ['FPS', 'fps'],
-            ['Render window', 'renderWindow'],
             ['Rendering:', 'renderSplatCount'],
-            ['Sort time', 'sortTime']
+            ['Sort time', 'sortTime'],
+            ['Render window', 'renderWindow'],
+            ['Focal adjustment', 'focalAdjustment']
         ];
 
         this.infoPanelContainer = document.createElement('div');
@@ -98,7 +99,7 @@ export class InfoPanel {
     }
 
     update = function(renderDimensions, cameraPosition, cameraLookAtPosition, cameraUp,
-                      meshCursorPosition, currentFPS, splatCount, splatRenderCount, splatRenderCountPct, lastSortTime) {
+                      meshCursorPosition, currentFPS, splatCount, splatRenderCount, splatRenderCountPct, lastSortTime, focalAdjustment) {
 
         const cameraPosString = `${cameraPosition.x.toFixed(5)}, ${cameraPosition.y.toFixed(5)}, ${cameraPosition.z.toFixed(5)}`;
         if (this.infoCells.cameraPosition.innerHTML !== cameraPosString) {
@@ -134,6 +135,7 @@ export class InfoPanel {
 
         this.infoCells.sortTime.innerHTML = `${lastSortTime.toFixed(3)} ms`;
 
+        this.infoCells.focalAdjustment.innerHTML = `${focalAdjustment.toFixed(3)}`;
     };
 
     setContainer(container) {
