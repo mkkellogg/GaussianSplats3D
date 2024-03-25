@@ -1429,7 +1429,7 @@ export class Viewer {
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
             if (!this.forceSort && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
-                if (angleDiff <= 0.95) needsRefreshForRotation = true;
+                if (angleDiff <= 0.99) needsRefreshForRotation = true;
                 if (positionDiff >= 1.0) needsRefreshForPosition = true;
                 if (!needsRefreshForRotation && !needsRefreshForPosition) return;
             }
