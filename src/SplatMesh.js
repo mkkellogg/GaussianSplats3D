@@ -16,7 +16,7 @@ const CENTER_COLORS_ELEMENTS_PER_SPLAT = 4;
 const SCENE_FADEIN_RATE_FAST = 0.012;
 const SCENE_FADEIN_RATE_GRADUAL = 0.003;
 
-const VISIBLE_AREA_EXPANSION_RADIUS = 1;
+const VISIBLE_REGION_EXPANSION_DELTA = 1;
 
 /**
  * SplatMesh: Container for one or more splat scenes, abstracting them into a single unified container for
@@ -84,7 +84,8 @@ export class SplatMesh extends THREE.Mesh {
 
         this.boundingBox = new THREE.Box3();
         this.calculatedSceneCenter = new THREE.Vector3();
-        this.maxRadius = 0;
+        this.maxSplatDistanceFromSceneCenter = 0;
+        this.visibleRegionBufferRadius = 0;
         this.visibleRegionRadius = 0;
         this.visibleRegionFadeStartRadius = 0;
         this.visibleRegionChanging = false;
@@ -630,7 +631,8 @@ export class SplatMesh extends THREE.Mesh {
        if (!isUpdateBuild) {
             isUpdateBuild = false;
             this.boundingBox = new THREE.Box3();
-            this.maxRadius = 0;
+            this.maxSplatDistanceFromSceneCenter = 0;
+            this.visibleRegionBufferRadius = 0;
             this.visibleRegionRadius = 0;
             this.visibleRegionFadeStartRadius = 0;
             this.firstRenderTime = -1;
@@ -940,19 +942,17 @@ export class SplatMesh extends THREE.Mesh {
         }
 
         const startSplatFormMaxDistanceCalc = isUpdateBuild ? this.lastBuildSplatCount : 0;
-        let maxDistFromSceneCenter = 0;
         for (let i = startSplatFormMaxDistanceCalc; i < splatCount; i++) {
             this.getSplatCenter(i, tempCenter, false);
             const distFromCSceneCenter = tempCenter.sub(this.calculatedSceneCenter).length();
-            if (distFromCSceneCenter > maxDistFromSceneCenter) maxDistFromSceneCenter = distFromCSceneCenter;
+            if (distFromCSceneCenter > this.maxSplatDistanceFromSceneCenter) this.maxSplatDistanceFromSceneCenter = distFromCSceneCenter;
         }
 
-        const maxRadius = maxDistFromSceneCenter;
-        if (maxRadius - this.maxRadius > VISIBLE_AREA_EXPANSION_RADIUS) {
-            this.maxRadius = maxRadius;
-            this.visibleRegionRadius = Math.max(this.maxRadius - VISIBLE_AREA_EXPANSION_RADIUS, 0.0);
+        if (this.maxSplatDistanceFromSceneCenter - this.visibleRegionBufferRadius > VISIBLE_REGION_EXPANSION_DELTA) {
+            this.visibleRegionBufferRadius = this.maxSplatDistanceFromSceneCenter;
+            this.visibleRegionRadius = Math.max(this.visibleRegionBufferRadius - VISIBLE_REGION_EXPANSION_DELTA, 0.0);
         }
-        if (this.finalBuild) this.visibleRegionRadius = this.maxRadius = maxDistFromSceneCenter;
+        if (this.finalBuild) this.visibleRegionRadius = this.visibleRegionBufferRadius = this.maxSplatDistanceFromSceneCenter;
         this.updateVisibleRegionFadeDistance();
     }
 
@@ -963,7 +963,8 @@ export class SplatMesh extends THREE.Mesh {
         const fadeInRate = sceneRevealMode === SceneRevealMode.Default ? defaultFadeInRate : gradualFadeRate;
         this.visibleRegionFadeStartRadius = (this.visibleRegionRadius - this.visibleRegionFadeStartRadius) *
                                              fadeInRate + this.visibleRegionFadeStartRadius;
-        const fadeInPercentage = (this.maxRadius > 0) ? (this.visibleRegionFadeStartRadius / this.maxRadius) : 0;
+        const fadeInPercentage = (this.visibleRegionBufferRadius > 0) ?
+                                 (this.visibleRegionFadeStartRadius / this.visibleRegionBufferRadius) : 0;
         const fadeInComplete = fadeInPercentage > 0.99;
         const shaderFadeInComplete = (fadeInComplete || sceneRevealMode === SceneRevealMode.Instant) ? 1 : 0;
 
