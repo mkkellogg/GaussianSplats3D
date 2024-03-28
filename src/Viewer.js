@@ -1440,8 +1440,9 @@ export class Viewer {
             const meshCursorPosition = this.showMeshCursor ? this.sceneHelper.meshCursor.position : null;
             const splatRenderCountPct = this.splatRenderCount / splatCount * 100;
             this.infoPanel.update(renderDimensions, this.camera.position, cameraLookAtPosition,
-                                  this.camera.up, meshCursorPosition, this.currentFPS || 'N/A', splatCount,
-                                  this.splatRenderCount, splatRenderCountPct, this.lastSortTime, this.focalAdjustment);
+                                  this.camera.up, this.camera.isOrthographicCamera, meshCursorPosition,
+                                  this.currentFPS || 'N/A', splatCount, this.splatRenderCount, splatRenderCountPct,
+                                  this.lastSortTime, this.focalAdjustment);
         };
 
     }();

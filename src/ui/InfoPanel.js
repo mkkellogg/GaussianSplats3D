@@ -10,6 +10,7 @@ export class InfoPanel {
             ['Camera position', 'cameraPosition'],
             ['Camera look-at', 'cameraLookAt'],
             ['Camera up', 'cameraUp'],
+            ['Camera mode', 'orthographicCamera'],
             ['Cursor position', 'cursorPosition'],
             ['FPS', 'fps'],
             ['Rendering:', 'renderSplatCount'],
@@ -98,8 +99,9 @@ export class InfoPanel {
         this.visible = false;
     }
 
-    update = function(renderDimensions, cameraPosition, cameraLookAtPosition, cameraUp,
-                      meshCursorPosition, currentFPS, splatCount, splatRenderCount, splatRenderCountPct, lastSortTime, focalAdjustment) {
+    update = function(renderDimensions, cameraPosition, cameraLookAtPosition, cameraUp, orthographicCamera,
+                      meshCursorPosition, currentFPS, splatCount, splatRenderCount,
+                      splatRenderCountPct, lastSortTime, focalAdjustment) {
 
         const cameraPosString = `${cameraPosition.x.toFixed(5)}, ${cameraPosition.y.toFixed(5)}, ${cameraPosition.z.toFixed(5)}`;
         if (this.infoCells.cameraPosition.innerHTML !== cameraPosString) {
@@ -118,6 +120,8 @@ export class InfoPanel {
         if (this.infoCells.cameraUp.innerHTML !== cameraUpString) {
             this.infoCells.cameraUp.innerHTML = cameraUpString;
         }
+
+        this.infoCells.orthographicCamera.innerHTML = orthographicCamera ? 'Orthographic' : 'Perspective';
 
         if (meshCursorPosition) {
             const cursPos = meshCursorPosition;
