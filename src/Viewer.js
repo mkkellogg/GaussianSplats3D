@@ -168,6 +168,8 @@ export class Viewer {
 
         this.infoPanel = null;
 
+        this.orthographicMode = false;
+
         this.currentFPS = 0;
         this.lastSortTime = 0;
         this.consecutiveRenderFrames = 0;
@@ -226,7 +228,10 @@ export class Viewer {
         this.getRenderDimensions(renderDimensions);
 
         if (!this.usingExternalCamera) {
-            this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
+            this.perspectiveCamera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 1000);
+            this.orthographicCamera = new THREE.OrthographicCamera(renderDimensions.x / -2, renderDimensions.x / 2,
+                                                                   renderDimensions.y / 2, renderDimensions.y / -2, 0.1, 1000 );
+            this.camera = this.orthographicMode ? this.orthographicCamera : this.perspectiveCamera;
             this.camera.position.copy(this.initialCameraPosition);
             this.camera.up.copy(this.cameraUp).normalize();
             this.camera.lookAt(this.initialCameraLookAt);
@@ -270,14 +275,18 @@ export class Viewer {
         this.sceneHelper.setupControlPlane();
 
         if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
-            this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-            this.controls.listenToKeyEvents(window);
-            this.controls.rotateSpeed = 0.5;
-            this.controls.maxPolarAngle = Math.PI * .75;
-            this.controls.minPolarAngle = 0.1;
-            this.controls.enableDamping = true;
-            this.controls.dampingFactor = 0.05;
-            this.controls.target.copy(this.initialCameraLookAt);
+            this.perspectiveControls = new OrbitControls(this.perspectiveCamera, this.renderer.domElement);
+            this.orthographicControls = new OrbitControls(this.orthographicCamera, this.renderer.domElement);
+            for (let controls of [this.perspectiveControls, this.orthographicControls]) {
+                controls.listenToKeyEvents(window);
+                controls.rotateSpeed = 0.5;
+                controls.maxPolarAngle = Math.PI * .75;
+                controls.minPolarAngle = 0.1;
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.target.copy(this.initialCameraLookAt);
+            }
+            this.controls = this.orthographicMode ? this.orthographicControls : this.perspectiveControls;
             this.mouseMoveListener = this.onMouseMove.bind(this);
             this.renderer.domElement.addEventListener('pointermove', this.mouseMoveListener, false);
             this.mouseDownListener = this.onMouseDown.bind(this);
@@ -352,6 +361,9 @@ export class Viewer {
                         this.infoPanel.hide();
                     }
                 break;
+                case 'KeyO':
+                    this.setOrthographicMode(!this.orthographicMode);
+                break;
             }
         };
 
@@ -423,6 +435,46 @@ export class Viewer {
         }
     }
 
+    setOrthographicMode(orthographicMode) {
+        if (orthographicMode === this.orthographicMode) return;
+        this.orthographicMode = orthographicMode;
+        const fromCamera = this.camera;
+        const toCamera = this.orthographicMode ? this.orthographicCamera : this.perspectiveCamera;
+        toCamera.position.copy(fromCamera.position);
+        toCamera.up.copy(fromCamera.up);
+        toCamera.rotation.copy(fromCamera.rotation);
+        toCamera.quaternion.copy(fromCamera.quaternion);
+        toCamera.matrix.copy(fromCamera.matrix);
+        this.camera = toCamera;
+
+        if (this.controls) {
+            const fromControls = this.controls;
+            const toControls = this.orthographicMode ? this.orthographicControls : this.perspectiveControls;
+            toControls.target.copy(fromControls.target);
+            const tempVector = new THREE.Vector3();
+            if (this.orthographicMode) {
+                const toLookAtDistance = tempVector.copy(fromControls.target).sub(fromCamera.position).length();
+                toCamera.zoom = 1 / (toLookAtDistance * .001);
+            } else {
+                Viewer.setCameraPositionFromZoom(toCamera, fromCamera, toControls);
+            }
+            this.controls = toControls;
+            this.camera.lookAt(this.controls.target);
+        }
+    }
+
+    static setCameraPositionFromZoom = function() {
+
+        const tempVector = new THREE.Vector3();
+
+        return function(targetCamera, zoomedCamera, controls) {
+            const toLookAtDistance = 1 / (zoomedCamera.zoom * 0.001);
+            tempVector.copy(controls.target).sub(targetCamera.position).normalize().multiplyScalar(toLookAtDistance).negate();
+            targetCamera.position.copy(controls.target).add(tempVector);
+        };
+
+    }();
+
     updateSplatMesh = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -441,8 +493,8 @@ export class Viewer {
                 const focalAdjustment = this.focalAdjustment;
                 const inverseFocalAdjustment = 1.0 / focalAdjustment;
 
-                this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment,
-                                              focalLengthY * focalAdjustment, inverseFocalAdjustment);
+                this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment, focalLengthY * focalAdjustment,
+                                              this.orthographicMode, this.camera.zoom, inverseFocalAdjustment);
             }
         };
 
@@ -1203,7 +1255,12 @@ export class Viewer {
     update(renderer, camera) {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
         if (!this.initialized || !this.splatRenderingInitialized) return;
-        if (this.controls) this.controls.update();
+        if (this.controls) {
+            this.controls.update();
+            if (this.orthographicMode && !this.usingExternalCamera) {
+                Viewer.setCameraPositionFromZoom(this.camera, this.camera, this.controls);
+            }
+        }
         this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
         this.updateSplatSort();
         this.updateForRendererSizeChanges();
@@ -1255,7 +1312,14 @@ export class Viewer {
             this.renderer.getSize(currentRendererSize);
             if (currentRendererSize.x !== lastRendererSize.x || currentRendererSize.y !== lastRendererSize.y) {
                 if (!this.usingExternalCamera) {
-                    this.camera.aspect = currentRendererSize.x / currentRendererSize.y;
+                    if (this.orthographicMode) {
+                        this.camera.left = -currentRendererSize.x / 2.0;
+                        this.camera.right = currentRendererSize.x / 2.0;
+                        this.camera.top = currentRendererSize.y / 2.0;
+                        this.camera.bottom = -currentRendererSize.y / 2.0;
+                    } else {
+                        this.camera.aspect = currentRendererSize.x / currentRendererSize.y;
+                    }
                     this.camera.updateProjectionMatrix();
                 }
                 lastRendererSize.copy(currentRendererSize);
