@@ -168,7 +168,7 @@ export class Viewer {
 
         this.infoPanel = null;
 
-        this.orthographicMode = false;
+        this.startInOrthographicMode = false;
 
         this.currentFPS = 0;
         this.lastSortTime = 0;
@@ -231,7 +231,7 @@ export class Viewer {
             this.perspectiveCamera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 1000);
             this.orthographicCamera = new THREE.OrthographicCamera(renderDimensions.x / -2, renderDimensions.x / 2,
                                                                    renderDimensions.y / 2, renderDimensions.y / -2, 0.1, 1000 );
-            this.camera = this.orthographicMode ? this.orthographicCamera : this.perspectiveCamera;
+            this.camera = this.startInOrthographicMode ? this.orthographicCamera : this.perspectiveCamera;
             this.camera.position.copy(this.initialCameraPosition);
             this.camera.up.copy(this.cameraUp).normalize();
             this.camera.lookAt(this.initialCameraLookAt);
@@ -286,7 +286,7 @@ export class Viewer {
                 controls.dampingFactor = 0.05;
                 controls.target.copy(this.initialCameraLookAt);
             }
-            this.controls = this.orthographicMode ? this.orthographicControls : this.perspectiveControls;
+            this.controls = this.camera.isOrthographicCamera ? this.orthographicControls : this.perspectiveControls;
             this.mouseMoveListener = this.onMouseMove.bind(this);
             this.renderer.domElement.addEventListener('pointermove', this.mouseMoveListener, false);
             this.mouseDownListener = this.onMouseDown.bind(this);
@@ -362,7 +362,9 @@ export class Viewer {
                     }
                 break;
                 case 'KeyO':
-                    this.setOrthographicMode(!this.orthographicMode);
+                    if (!this.usingExternalCamera) {
+                        this.setOrthographicMode(!this.camera.isOrthographicCamera);
+                    }
                 break;
             }
         };
@@ -436,10 +438,9 @@ export class Viewer {
     }
 
     setOrthographicMode(orthographicMode) {
-        if (orthographicMode === this.orthographicMode) return;
-        this.orthographicMode = orthographicMode;
+        if (orthographicMode === this.camera.isOrthographicCamera) return;
         const fromCamera = this.camera;
-        const toCamera = this.orthographicMode ? this.orthographicCamera : this.perspectiveCamera;
+        const toCamera = orthographicMode ? this.orthographicCamera : this.perspectiveCamera;
         toCamera.position.copy(fromCamera.position);
         toCamera.up.copy(fromCamera.up);
         toCamera.rotation.copy(fromCamera.rotation);
@@ -449,10 +450,10 @@ export class Viewer {
 
         if (this.controls) {
             const fromControls = this.controls;
-            const toControls = this.orthographicMode ? this.orthographicControls : this.perspectiveControls;
+            const toControls = orthographicMode ? this.orthographicControls : this.perspectiveControls;
             toControls.target.copy(fromControls.target);
             const tempVector = new THREE.Vector3();
-            if (this.orthographicMode) {
+            if (orthographicMode) {
                 const toLookAtDistance = tempVector.copy(fromControls.target).sub(fromCamera.position).length();
                 toCamera.zoom = 1 / (toLookAtDistance * .001);
             } else {
@@ -494,7 +495,7 @@ export class Viewer {
                 const inverseFocalAdjustment = 1.0 / focalAdjustment;
 
                 this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment, focalLengthY * focalAdjustment,
-                                              this.orthographicMode, this.camera.zoom, inverseFocalAdjustment);
+                                              this.camera.isOrthographicCamera, this.camera.zoom || 1.0, inverseFocalAdjustment);
             }
         };
 
@@ -1257,7 +1258,7 @@ export class Viewer {
         if (!this.initialized || !this.splatRenderingInitialized) return;
         if (this.controls) {
             this.controls.update();
-            if (this.orthographicMode && !this.usingExternalCamera) {
+            if (this.camera.isOrthographicCamera && !this.usingExternalCamera) {
                 Viewer.setCameraPositionFromZoom(this.camera, this.camera, this.controls);
             }
         }
@@ -1312,7 +1313,7 @@ export class Viewer {
             this.renderer.getSize(currentRendererSize);
             if (currentRendererSize.x !== lastRendererSize.x || currentRendererSize.y !== lastRendererSize.y) {
                 if (!this.usingExternalCamera) {
-                    if (this.orthographicMode) {
+                    if (this.camera.isOrthographicCamera) {
                         this.camera.left = -currentRendererSize.x / 2.0;
                         this.camera.right = currentRendererSize.x / 2.0;
                         this.camera.top = currentRendererSize.y / 2.0;

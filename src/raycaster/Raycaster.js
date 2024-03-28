@@ -21,7 +21,7 @@ export class Raycaster {
                 this.ray.direction.set(ndcCoords.x, ndcCoords.y, 0.5 ).unproject(camera).sub(this.ray.origin).normalize();
                 this.camera = camera;
             } else if (camera.isOrthographicCamera) {
-                this.ray.origin.set(screenPosition.x, screenPosition.y,
+                this.ray.origin.set(ndcCoords.x, ndcCoords.y,
                                    (camera.near + camera.far) / (camera.near - camera.far)).unproject(camera);
                 this.ray.direction.set(0, 0, -1).transformDirection(camera.matrixWorld);
                 this.camera = camera;

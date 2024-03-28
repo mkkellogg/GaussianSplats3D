@@ -165,13 +165,17 @@ export class SceneHelper {
 
         const tempPosition = new THREE.Vector3();
         const tempMatrix = new THREE.Matrix4();
+        const toCamera = new THREE.Vector3();
 
         return function(position, camera, viewport) {
             tempMatrix.copy(camera.matrixWorld).invert();
             tempPosition.copy(position).applyMatrix4(tempMatrix);
             tempPosition.normalize().multiplyScalar(10);
             tempPosition.applyMatrix4(camera.matrixWorld);
-            this.focusMarker.position.copy(tempPosition);
+            toCamera.copy(camera.position).sub(position);
+            const toCameraDistance = toCamera.length();
+            this.focusMarker.position.copy(position);
+            this.focusMarker.scale.set(toCameraDistance, toCameraDistance, toCameraDistance);
             this.focusMarker.material.uniforms.realFocusPosition.value.copy(position);
             this.focusMarker.material.uniforms.viewport.value.copy(viewport);
             this.focusMarker.material.uniformsNeedUpdate = true;
