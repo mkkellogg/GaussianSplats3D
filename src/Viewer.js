@@ -145,6 +145,11 @@ export class Viewer {
                                        this.gpuAcceleratedSort, this.integerBasedSort, antialiased, this.maxScreenSpaceSplatSize);
 
         this.controls = null;
+        this.perspectiveControls = null;
+        this.orthographicControls = null;
+
+        this.orthographicCamera = null;
+        this.perspectiveCamera = null;
 
         this.showMeshCursor = false;
         this.showControlPlane = false;
@@ -275,16 +280,26 @@ export class Viewer {
         this.sceneHelper.setupControlPlane();
 
         if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
-            this.perspectiveControls = new OrbitControls(this.perspectiveCamera, this.renderer.domElement);
-            this.orthographicControls = new OrbitControls(this.orthographicCamera, this.renderer.domElement);
+            if (!this.usingExternalCamera) {
+                this.perspectiveControls = new OrbitControls(this.perspectiveCamera, this.renderer.domElement);
+                this.orthographicControls = new OrbitControls(this.orthographicCamera, this.renderer.domElement);
+            } else {
+                if (this.camera.isOrthographicCamera) {
+                    this.orthographicControls = new OrbitControls(this.camera, this.renderer.domElement);
+                } else {
+                    this.perspectiveControls = new OrbitControls(this.camera, this.renderer.domElement);
+                }
+            }
             for (let controls of [this.perspectiveControls, this.orthographicControls]) {
-                controls.listenToKeyEvents(window);
-                controls.rotateSpeed = 0.5;
-                controls.maxPolarAngle = Math.PI * .75;
-                controls.minPolarAngle = 0.1;
-                controls.enableDamping = true;
-                controls.dampingFactor = 0.05;
-                controls.target.copy(this.initialCameraLookAt);
+                if (controls) {
+                    controls.listenToKeyEvents(window);
+                    controls.rotateSpeed = 0.5;
+                    controls.maxPolarAngle = Math.PI * .75;
+                    controls.minPolarAngle = 0.1;
+                    controls.enableDamping = true;
+                    controls.dampingFactor = 0.05;
+                    controls.target.copy(this.initialCameraLookAt);
+                }
             }
             this.controls = this.camera.isOrthographicCamera ? this.orthographicControls : this.perspectiveControls;
             this.mouseMoveListener = this.onMouseMove.bind(this);

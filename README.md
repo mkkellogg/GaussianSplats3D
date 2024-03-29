@@ -262,8 +262,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'webXRMode': GaussianSplats3D.WebXRMode.None,
     'renderMode': GaussianSplats3D.RenderMode.OnChange,
     'sceneRevealMode': GaussianSplats3D.SceneRevealMode.Instant,
-    `antialiased`: false,
-    `focalAdjustment`: 1.0
+    'antialiased': false,
+    'focalAdjustment': 1.0
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
