@@ -437,6 +437,11 @@ class OrbitControls extends EventDispatcher {
 
         };
 
+        this.clearDampedRotation = function() {
+            sphericalDelta.theta = 0.0;
+            sphericalDelta.phi = 0.0;
+        };
+
         //
         // internals
         //

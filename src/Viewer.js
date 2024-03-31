@@ -467,10 +467,10 @@ export class Viewer {
             const fromControls = this.controls;
             const toControls = orthographicMode ? this.orthographicControls : this.perspectiveControls;
             toControls.target.copy(fromControls.target);
-            const tempVector = new THREE.Vector3();
+            toControls.clearDampedRotation();
+            fromControls.clearDampedRotation();
             if (orthographicMode) {
-                const toLookAtDistance = tempVector.copy(fromControls.target).sub(fromCamera.position).length();
-                toCamera.zoom = 1 / (toLookAtDistance * .001);
+                Viewer.setCameraZoomFromPosition(toCamera, fromCamera, fromControls);
             } else {
                 Viewer.setCameraPositionFromZoom(toCamera, fromCamera, toControls);
             }
@@ -483,10 +483,22 @@ export class Viewer {
 
         const tempVector = new THREE.Vector3();
 
-        return function(targetCamera, zoomedCamera, controls) {
+        return function(positionCamera, zoomedCamera, controls) {
             const toLookAtDistance = 1 / (zoomedCamera.zoom * 0.001);
-            tempVector.copy(controls.target).sub(targetCamera.position).normalize().multiplyScalar(toLookAtDistance).negate();
-            targetCamera.position.copy(controls.target).add(tempVector);
+            tempVector.copy(controls.target).sub(positionCamera.position).normalize().multiplyScalar(toLookAtDistance).negate();
+            positionCamera.position.copy(controls.target).add(tempVector);
+        };
+
+    }();
+
+
+    static setCameraZoomFromPosition = function() {
+
+        const tempVector = new THREE.Vector3();
+
+        return function(zoomCamera, positionZamera, controls) {
+            const toLookAtDistance = tempVector.copy(controls.target).sub(positionZamera.position).length();
+            zoomCamera.zoom = 1 / (toLookAtDistance * .001);
         };
 
     }();
@@ -1323,11 +1335,13 @@ export class Viewer {
 
         const lastRendererSize = new THREE.Vector2();
         const currentRendererSize = new THREE.Vector2();
+        let lastCameraOrthographic;
 
         return function() {
-            this.renderer.getSize(currentRendererSize);
-            if (currentRendererSize.x !== lastRendererSize.x || currentRendererSize.y !== lastRendererSize.y) {
-                if (!this.usingExternalCamera) {
+            if (!this.usingExternalCamera) {
+                this.renderer.getSize(currentRendererSize);
+                if (lastCameraOrthographic === undefined || lastCameraOrthographic !== this.camera.isOrthographicCamera ||
+                    currentRendererSize.x !== lastRendererSize.x || currentRendererSize.y !== lastRendererSize.y) {
                     if (this.camera.isOrthographicCamera) {
                         this.camera.left = -currentRendererSize.x / 2.0;
                         this.camera.right = currentRendererSize.x / 2.0;
@@ -1337,8 +1351,9 @@ export class Viewer {
                         this.camera.aspect = currentRendererSize.x / currentRendererSize.y;
                     }
                     this.camera.updateProjectionMatrix();
+                    lastRendererSize.copy(currentRendererSize);
+                    lastCameraOrthographic = this.camera.isOrthographicCamera;
                 }
-                lastRendererSize.copy(currentRendererSize);
             }
         };
 
