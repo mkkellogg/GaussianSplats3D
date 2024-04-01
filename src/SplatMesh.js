@@ -138,6 +138,7 @@ export class SplatMesh extends THREE.Mesh {
             uniform float currentTime;
             uniform int fadeInComplete;
             uniform vec3 sceneCenter;
+            uniform float splatScale;
 
             varying vec4 vColor;
             varying vec2 vUv;
@@ -295,8 +296,8 @@ export class SplatMesh extends THREE.Mesh {
                 vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
 
                 // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
-                vec2 basisVector1 = eigenVector1 * min(sqrt8 * sqrt(eigenValue1), ${parseInt(maxScreenSpaceSplatSize)}.0);
-                vec2 basisVector2 = eigenVector2 * min(sqrt8 * sqrt(eigenValue2), ${parseInt(maxScreenSpaceSplatSize)}.0);
+                vec2 basisVector1 = eigenVector1 * splatScale * min(sqrt8 * sqrt(eigenValue1), ${parseInt(maxScreenSpaceSplatSize)}.0);
+                vec2 basisVector2 = eigenVector2 * splatScale * min(sqrt8 * sqrt(eigenValue2), ${parseInt(maxScreenSpaceSplatSize)}.0);
 
                 if (fadeInComplete == 0) {
                     float opacityAdjust = 1.0;
@@ -419,6 +420,10 @@ export class SplatMesh extends THREE.Mesh {
             'centersColorsTextureSize': {
                 'type': 'v2',
                 'value': new THREE.Vector2(1024, 1024)
+            },
+            'splatScale': {
+                'type': 'f',
+                'value': 1.0
             }
         };
 
@@ -1047,6 +1052,11 @@ export class SplatMesh extends THREE.Mesh {
         };
 
     }();
+
+    setSplatScale(scale = 1) {
+        this.material.uniforms.splatScale.value = scale;
+        this.material.uniformsNeedUpdate = true;
+    }
 
     getSplatDataTextures() {
         return this.splatDataTextures;
