@@ -1269,10 +1269,14 @@ export class Viewer {
                 }
                 return false;
             };
+
             const savedAuoClear = this.renderer.autoClear;
-            this.renderer.autoClear = false;
-            if (hasRenderables(this.threeScene)) this.renderer.render(this.threeScene, this.camera);
+            if (hasRenderables(this.threeScene)) {
+                this.renderer.render(this.threeScene, this.camera);
+                this.renderer.autoClear = false;
+            }
             this.renderer.render(this.splatMesh, this.camera);
+            this.renderer.autoClear = false;
             if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
             if (this.showControlPlane) this.renderer.render(this.sceneHelper.controlPlane, this.camera);
             this.renderer.autoClear = savedAuoClear;
