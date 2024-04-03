@@ -518,7 +518,8 @@ export class Viewer {
                 const focalLengthY = this.camera.projectionMatrix.elements[5] * 0.5 *
                                      this.devicePixelRatio * renderDimensions.y;
 
-                const focalAdjustment = this.focalAdjustment;
+                const focalMultiplier = this.camera.isOrthographicCamera ? (1.0 / this.devicePixelRatio) : 1.0;
+                const focalAdjustment = this.focalAdjustment * focalMultiplier;
                 const inverseFocalAdjustment = 1.0 / focalAdjustment;
 
                 this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment, focalLengthY * focalAdjustment,
