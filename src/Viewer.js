@@ -365,7 +365,7 @@ export class Viewer {
                 case 'KeyC':
                     this.showMeshCursor = !this.showMeshCursor;
                 break;
-                case 'KeyP':
+                case 'KeyU':
                     this.showControlPlane = !this.showControlPlane;
                 break;
                 case 'KeyI':
@@ -379,6 +379,21 @@ export class Viewer {
                 case 'KeyO':
                     if (!this.usingExternalCamera) {
                         this.setOrthographicMode(!this.camera.isOrthographicCamera);
+                    }
+                break;
+                case 'KeyP':
+                    if (!this.usingExternalCamera) {
+                        this.splatMesh.setPointCloudMode(!this.splatMesh.getPointCloudMode());
+                    }
+                break;
+                case 'Equal':
+                    if (!this.usingExternalCamera) {
+                        this.splatMesh.setSplatScale(this.splatMesh.getSplatScale() + 0.05);
+                    }
+                break;
+                case 'Minus':
+                    if (!this.usingExternalCamera) {
+                        this.splatMesh.setSplatScale(Math.max(this.splatMesh.getSplatScale() - 0.05, 0.0));
                     }
                 break;
             }
@@ -1477,7 +1492,8 @@ export class Viewer {
             this.infoPanel.update(renderDimensions, this.camera.position, cameraLookAtPosition,
                                   this.camera.up, this.camera.isOrthographicCamera, meshCursorPosition,
                                   this.currentFPS || 'N/A', splatCount, this.splatRenderCount, splatRenderCountPct,
-                                  this.lastSortTime, this.focalAdjustment);
+                                  this.lastSortTime, this.focalAdjustment, this.splatMesh.getSplatScale(),
+                                  this.splatMesh.getPointCloudMode());
         };
 
     }();
