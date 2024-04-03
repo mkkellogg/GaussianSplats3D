@@ -383,7 +383,7 @@ export class Viewer {
                 break;
                 case 'KeyP':
                     if (!this.usingExternalCamera) {
-                        this.splatMesh.setPointCloudMode(!this.splatMesh.getPointCloudMode());
+                        this.splatMesh.setPointCloudModeEnabled(!this.splatMesh.getPointCloudModeEnabled());
                     }
                 break;
                 case 'Equal':

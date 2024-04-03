@@ -91,7 +91,7 @@ export class SplatMesh extends THREE.Mesh {
         this.visibleRegionChanging = false;
 
         this.splatScale = 1.0;
-        this.pointCloudMode = false;
+        this.pointCloudModeEnabled = false;
 
         this.disposed = false;
     }
@@ -104,11 +104,11 @@ export class SplatMesh extends THREE.Mesh {
      *                              different resolution than that of their training
      * @param {number} maxScreenSpaceSplatSize The maximum clip space splat size
      * @param {number} splatScale Value by which all splats are scaled in screen-space (default is 1.0)
-     * @param {number} pointCloudMode Render all splats as screen-space circles
+     * @param {number} pointCloudModeEnabled Render all splats as screen-space circles
      * @return {THREE.ShaderMaterial}
      */
     static buildMaterial(dynamicMode = false, antialiased = false,
-                         maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudMode = false) {
+                         maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudModeEnabled = false) {
 
         // Contains the code to project 3D covariance to 2D and from there calculate the quad (using the eigen vectors of the
         // 2D covariance) that is ultimately rasterized
@@ -133,7 +133,7 @@ export class SplatMesh extends THREE.Mesh {
             uniform vec2 focal;
             uniform float orthoZoom;
             uniform int orthographicMode;
-            uniform int pointCloudMode;
+            uniform int pointCloudModeEnabled;
             uniform float inverseFocalAdjustment;
             uniform vec2 viewport;
             uniform vec2 basisViewport;
@@ -296,7 +296,7 @@ export class SplatMesh extends THREE.Mesh {
                 float eigenValue1 = traceOver2 + term2;
                 float eigenValue2 = traceOver2 - term2;
 
-                if (pointCloudMode == 1) {
+                if (pointCloudModeEnabled == 1) {
                     eigenValue1 = eigenValue2 = 0.2;
                 }
 
@@ -436,9 +436,9 @@ export class SplatMesh extends THREE.Mesh {
                 'type': 'f',
                 'value': splatScale
             },
-            'pointCloudMode': {
+            'pointCloudModeEnabled': {
                 'type': 'i',
-                'value': pointCloudMode ? 1 : 0
+                'value': pointCloudModeEnabled ? 1 : 0
             }
         };
 
@@ -681,7 +681,7 @@ export class SplatMesh extends THREE.Mesh {
             this.disposeMeshData();
             this.geometry = SplatMesh.buildGeomtery(maxSplatCount);
             this.material = SplatMesh.buildMaterial(this.dynamicMode, this.antialiased,
-                                                    this.maxScreenSpaceSplatSize, this.splatScale, this.pointCloudMode);
+                                                    this.maxScreenSpaceSplatSize, this.splatScale, this.pointCloudModeEnabled);
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
@@ -1079,14 +1079,14 @@ export class SplatMesh extends THREE.Mesh {
         return this.splatScale;
     }
 
-    setPointCloudMode(pointCloudMode) {
-        this.pointCloudMode = pointCloudMode;
-        this.material.uniforms.pointCloudMode.value = pointCloudMode ? 1 : 0;
+    setPointCloudModeEnabled(enabled) {
+        this.pointCloudModeEnabled = enabled;
+        this.material.uniforms.pointCloudModeEnabled.value = enabled ? 1 : 0;
         this.material.uniformsNeedUpdate = true;
     }
 
-    getPointCloudMode() {
-        return this.pointCloudMode;
+    getPointCloudModeEnabled() {
+        return this.pointCloudModeEnabled;
     }
 
     getSplatDataTextures() {
