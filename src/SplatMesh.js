@@ -55,6 +55,7 @@ export class SplatMesh extends THREE.Mesh {
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
         this.splatTree = null;
+        this.baseSplatTree = null;
         // Textures in which splat data will be stored for rendering
         this.splatDataTextures = {};
         this.distancesTransformFeedback = {
@@ -577,7 +578,6 @@ export class SplatMesh extends THREE.Mesh {
 
     /**
      * Build an instance of SplatTree (a specialized octree) for the given splat mesh.
-     * @param {SplatMesh} splatMesh SplatMesh instance for which the splat tree will be built
      * @param {Array<number>} minAlphas Array of minimum splat slphas for each scene
      * @param {function} onSplatTreeIndexesUpload Function to be called when the upload of splat centers to the splat tree
      *                                            builder worker starts and finishes.
@@ -585,28 +585,32 @@ export class SplatMesh extends THREE.Mesh {
      *                                           the format produced by the splat tree builder worker starts and ends.
      * @return {SplatTree}
      */
-    static buildSplatTree = function(splatMesh, minAlphas = [], onSplatTreeIndexesUpload, onSplatTreeConstruction) {
+     buildSplatTree = function(minAlphas = [], onSplatTreeIndexesUpload, onSplatTreeConstruction) {
         return new Promise((resolve) => {
+            this.disposeSplatTree();
             // TODO: expose SplatTree constructor parameters (maximumDepth and maxCentersPerNode) so that they can
             // be configured on a per-scene basis
-            const splatTree = new SplatTree(8, 1000);
+            this.baseSplatTree = new SplatTree(8, 1000);
             console.time('SplatTree build');
             const splatColor = new THREE.Vector4();
-            splatTree.processSplatMesh(splatMesh, (splatIndex) => {
-                splatMesh.getSplatColor(splatIndex, splatColor);
-                const sceneIndex = splatMesh.getSceneIndexForSplat(splatIndex);
+            this.baseSplatTree.processSplatMesh(this, (splatIndex) => {
+                this.getSplatColor(splatIndex, splatColor);
+                const sceneIndex = this.getSceneIndexForSplat(splatIndex);
                 const minAlpha = minAlphas[sceneIndex] || 1;
                 return splatColor.w >= minAlpha;
             }, onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
                 console.timeEnd('SplatTree build');
 
+                this.splatTree = this.baseSplatTree;
+                this.baseSplatTree = null;
+
                 let leavesWithVertices = 0;
                 let avgSplatCount = 0;
                 let maxSplatCount = 0;
                 let nodeCount = 0;
 
-                splatTree.visitLeaves((node) => {
+                this.splatTree.visitLeaves((node) => {
                     const nodeSplatCount = node.data.indexes.length;
                     if (nodeSplatCount > 0) {
                         avgSplatCount += nodeSplatCount;
@@ -615,12 +619,12 @@ export class SplatMesh extends THREE.Mesh {
                         leavesWithVertices++;
                     }
                 });
-                console.log(`SplatTree leaves: ${splatTree.countLeaves()}`);
+                console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
                 console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
                 avgSplatCount = avgSplatCount / nodeCount;
                 console.log(`Avg splat count per node: ${avgSplatCount}`);
-                console.log(`Total splat count: ${splatMesh.getSplatCount()}`);
-                resolve(splatTree);
+                console.log(`Total splat count: ${this.getSplatCount()}`);
+                resolve();
             });
         });
     };
@@ -711,11 +715,9 @@ export class SplatMesh extends THREE.Mesh {
         this.lastBuildSceneCount = this.scenes.length;
 
         if (finalBuild) {
-            this.disposeSplatTree();
-            SplatMesh.buildSplatTree(this, sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1),
-                                     onSplatTreeIndexesUpload, onSplatTreeConstruction)
-            .then((splatTree) => {
-                this.splatTree = splatTree;
+            this.buildSplatTree(sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1),
+                                onSplatTreeIndexesUpload, onSplatTreeConstruction)
+            .then(() => {
                 if (this.onSplatTreeReadyCallback) this.onSplatTreeReadyCallback(this.splatTree);
             });
         }
@@ -782,12 +784,13 @@ export class SplatMesh extends THREE.Mesh {
 
     disposeSplatTree() {
         this.splatTree = null;
+        this.baseSplatTree = null;
     }
 
     removeScene(index) {
         this.lastRenderer = null;
         const newSplatBuffers = [];
-        const newSceneOptions = []
+        const newSceneOptions = [];
         for (let i = 0; i < this.scenes.length; i++) {
             if (i !== index) {
                 newSplatBuffers.push(this.scenes[i].splatBuffer);
