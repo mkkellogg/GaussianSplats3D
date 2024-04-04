@@ -1127,6 +1127,7 @@ export class Viewer {
 
     removeSplatScene(index, showLoadingUI = true) {
         return new Promise((resolve, reject) => {
+            if (this.splatMeshUpdating || this.isDisposingOrDisposed()) return;
             this.splatMeshUpdating = true;
             let revmovalTaskId;
             if (showLoadingUI) {
@@ -1135,6 +1136,16 @@ export class Viewer {
             }
 
             delayedExecute(() => {
+                const checkAndHideLoadingUI = () => {
+                    if (showLoadingUI) {
+                        this.loadingSpinner.hide();
+                        this.loadingSpinner.removeTask(revmovalTaskId);
+                    }
+                };
+                if (this.isDisposingOrDisposed()) {
+                    checkAndHideLoadingUI();
+                    return;
+                }
                 const newSplatBuffers = [];
                 const newSceneOptions = [];
                 const newSceneTransformComponents = [];
@@ -1156,15 +1167,13 @@ export class Viewer {
                 this.addSplatBuffers(newSplatBuffers, newSceneOptions, true, false, true)
                 .then(() => {
                     this.splatMesh.visibleRegionFadeStartRadius = newVisibleRegionFadeStartRadius;
-                    if (showLoadingUI) {
-                        this.loadingSpinner.hide();
-                        this.loadingSpinner.removeTask(revmovalTaskId);
-                        this.splatMesh.scenes.forEach((scene, index) => {
-                            scene.position.copy(newSceneTransformComponents[index].position);
-                            scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
-                            scene.scale.copy(newSceneTransformComponents[index].scale);
-                        });
-                    }
+                    checkAndHideLoadingUI();
+                    this.splatMesh.scenes.forEach((scene, index) => {
+                        scene.position.copy(newSceneTransformComponents[index].position);
+                        scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
+                        scene.scale.copy(newSceneTransformComponents[index].scale);
+                    });
+                    this.splatMesh.updateTransforms();
                     this.updateSplatSort(true);
                     this.runAfterNextSort.push(() => {
                         this.splatMeshUpdating = false;
