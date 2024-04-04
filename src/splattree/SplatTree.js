@@ -317,9 +317,9 @@ export class SplatTree {
      * @param {SplatMesh} splatMesh The instance of SplatMesh from which to construct this splat tree.
      * @param {function} filterFunc Optional function to filter out unwanted splats.
      * @param {function} onIndexesUpload Function to be called when the upload of splat centers to the splat tree
-     *                            builder worker starts and finishes.
+     *                                   builder worker starts and finishes.
      * @param {function} onSplatTreeConstruction Function to be called when the conversion of the local splat tree from
-     *                                    the format produced by the splat tree builder worker starts and ends.
+     *                                           the format produced by the splat tree builder worker starts and ends.
      * @return {undefined}
      */
     processSplatMesh = function(splatMesh, filterFunc = () => true, onIndexesUpload, onSplatTreeConstruction) {

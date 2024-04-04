@@ -167,7 +167,7 @@ export class Viewer {
         this.runAfterFirstSort = [];
 
         this.selfDrivenModeRunning = false;
-        this.splatRenderingInitialized = false;
+        this.splatRenderReady = false;
 
         this.raycaster = new Raycaster();
 
@@ -936,7 +936,7 @@ export class Viewer {
 
             if (this.isDisposingOrDisposed()) return Promise.resolve();
 
-            this.splatRenderingInitialized = false;
+            this.splatRenderReady = false;
             loadCount++;
 
             const finish = (resolver) => {
@@ -948,7 +948,7 @@ export class Viewer {
                         this.loadingSpinner.removeTask(splatProcessingTaskId);
                         splatProcessingTaskId = null;
                     }
-                    this.splatRenderingInitialized = true;
+                    this.splatRenderReady = true;
                 }
 
                 // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs splat centers and
@@ -995,12 +995,6 @@ export class Viewer {
         };
 
     }();
-
-    disposeSortWorker() {
-        if (this.sortWorker) this.sortWorker.terminate();
-        this.sortWorker = null;
-        this.sortRunning = false;
-    }
 
     /**
      * Add one or more instances of SplatBuffer to the SplatMesh instance managed by the viewer. This function is additive; all splat
@@ -1119,6 +1113,28 @@ export class Viewer {
         });
     }
 
+    disposeSortWorker() {
+        if (this.sortWorker) this.sortWorker.terminate();
+        this.sortWorker = null;
+        this.sortRunning = false;
+    }
+
+    removeSplatScene(index) {
+        this.splatRenderReady = false;
+        this.splatMesh.removeScene(index);
+        const maxSplatCount = this.splatMesh.getMaxSplatCount();
+        if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
+            this.disposeSortWorker();
+        }
+        if (!this.sortWorker) {
+            this.setupSortWorker(this.splatMesh).then(() => {
+                this.splatRenderReady = true;
+            });
+        } else {
+            this.splatRenderReady = true;
+        }
+    }
+
     /**
      * Start self-driven mode
      */
@@ -1193,7 +1209,7 @@ export class Viewer {
 
             this.camera = null;
             this.threeScene = null;
-            this.splatRenderingInitialized = false;
+            this.splatRenderReady = false;
             this.initialized = false;
             if (this.renderer) {
                 if (!this.usingExternalRenderer) {
@@ -1277,7 +1293,7 @@ export class Viewer {
     render = function() {
 
         return function() {
-            if (!this.initialized || !this.splatRenderingInitialized) return;
+            if (!this.initialized || !this.splatRenderReady) return;
 
             const hasRenderables = (threeScene) => {
                 for (let child of threeScene.children) {
@@ -1302,7 +1318,7 @@ export class Viewer {
 
     update(renderer, camera) {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
-        if (!this.initialized || !this.splatRenderingInitialized) return;
+        if (!this.initialized || !this.splatRenderReady) return;
         if (this.controls) {
             this.controls.update();
             if (this.camera.isOrthographicCamera && !this.usingExternalCamera) {
@@ -1493,7 +1509,7 @@ export class Viewer {
                                   this.camera.up, this.camera.isOrthographicCamera, meshCursorPosition,
                                   this.currentFPS || 'N/A', splatCount, this.splatRenderCount, splatRenderCountPct,
                                   this.lastSortTime, this.focalAdjustment, this.splatMesh.getSplatScale(),
-                                  this.splatMesh.getPointCloudMode());
+                                  this.splatMesh.getPointCloudModeEnabled());
         };
 
     }();
@@ -1534,7 +1550,7 @@ export class Viewer {
 
         return async function() {
             if (this.sortRunning) return;
-            if (!this.initialized || !this.splatRenderingInitialized) return;
+            if (!this.initialized || !this.splatRenderReady) return;
 
             let angleDiff = 0;
             let positionDiff = 0;
@@ -1565,6 +1581,8 @@ export class Viewer {
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
+
+            if (!this.initialized || !this.splatRenderReady) return;
 
             if (this.splatMesh.dynamicMode || shouldSortAll) {
                 queuedSorts.push(this.splatRenderCount);

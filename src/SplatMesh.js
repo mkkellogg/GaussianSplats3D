@@ -94,6 +94,11 @@ export class SplatMesh extends THREE.Mesh {
         this.pointCloudModeEnabled = false;
 
         this.disposed = false;
+
+        this.lastRenderer = null;
+        this.lastBuildSavedParameters = {
+
+        };
     }
 
     /**
@@ -646,6 +651,14 @@ export class SplatMesh extends THREE.Mesh {
     build(splatBuffers, sceneOptions, keepSceneTransforms = true, finalBuild = false,
           onSplatTreeIndexesUpload, onSplatTreeConstruction) {
 
+        this.lastBuildSavedParameters = {
+            'sceneOptions': sceneOptions,
+            'keepSceneTransforms': keepSceneTransforms,
+            'finalBuild': finalBuild,
+            'onSplatTreeIndexesUpload': onSplatTreeIndexesUpload,
+            'onSplatTreeConstruction': onSplatTreeConstruction
+        };
+
         this.finalBuild = finalBuild;
 
         const maxSplatCount = SplatMesh.getTotalMaxSplatCountForSplatBuffers(splatBuffers);
@@ -716,8 +729,27 @@ export class SplatMesh extends THREE.Mesh {
         this.disposeTextures();
         this.disposeSplatTree();
         if (this.enableDistancesComputationOnGPU) {
+            if (this.computeDistancesOnGPUSyncTimeout) {
+                clearTimeout(this.computeDistancesOnGPUSyncTimeout);
+                this.computeDistancesOnGPUSyncTimeout = null;
+            }
             this.disposeDistancesComputationGPUResources();
         }
+        this.scenes = [];
+        this.distancesTransformFeedback = {
+            'id': null,
+            'vertexShader': null,
+            'fragmentShader': null,
+            'program': null,
+            'centersBuffer': null,
+            'transformIndexesBuffer': null,
+            'outDistancesBuffer': null,
+            'centersLoc': -1,
+            'modelViewProjLoc': -1,
+            'transformIndexesLoc': -1,
+            'transformsLocs': []
+        };
+        this.renderer = null;
         this.disposed = true;
     }
 
@@ -750,6 +782,23 @@ export class SplatMesh extends THREE.Mesh {
 
     disposeSplatTree() {
         this.splatTree = null;
+    }
+
+    removeScene(index) {
+        this.lastRenderer = null;
+        const newSplatBuffers = [];
+        const newSceneOptions = []
+        for (let i = 0; i < this.scenes.length; i++) {
+            if (i !== index) {
+                newSplatBuffers.push(this.scenes[i].splatBuffer);
+                newSceneOptions.push(this.lastBuildSavedParameters.sceneOptions[i]);
+            }
+        }
+        this.dispose();
+        this.disposed = false;
+        this.build(newSplatBuffers, newSceneOptions, this.lastBuildSavedParameters.keepSceneTransforms,
+                   this.lastBuildSavedParameters.finalBuild, this.lastBuildSavedParameters.onSplatTreeIndexesUpload,
+                   this.lastBuildSavedParameters.onSplatTreeConstruction);
     }
 
     getSplatTree() {
@@ -1192,7 +1241,6 @@ export class SplatMesh extends THREE.Mesh {
 
     setupDistancesComputationTransformFeedback = function() {
 
-        let currentRenderer;
         let currentMaxSplatCount;
 
         return function() {
@@ -1200,7 +1248,7 @@ export class SplatMesh extends THREE.Mesh {
 
             if (!this.renderer) return;
 
-            const rebuildGPUObjects = (currentRenderer !== this.renderer);
+            const rebuildGPUObjects = (this.lastRenderer !== this.renderer);
             const rebuildBuffers = currentMaxSplatCount !== maxSplatCount;
 
             if (!rebuildGPUObjects && !rebuildBuffers) return;
@@ -1376,7 +1424,7 @@ export class SplatMesh extends THREE.Mesh {
             if (currentProgram) gl.useProgram(currentProgram);
             if (currentVao) gl.bindVertexArray(currentVao);
 
-            currentRenderer = this.renderer;
+            this.lastRenderer = this.renderer;
             currentMaxSplatCount = maxSplatCount;
         };
 
@@ -1549,10 +1597,12 @@ export class SplatMesh extends THREE.Mesh {
                     const status = gl.clientWaitSync(sync, bitflags, timeout);
                     switch (status) {
                         case gl.TIMEOUT_EXPIRED:
-                            return setTimeout(checkSync);
+                            this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
+                            return this.computeDistancesOnGPUSyncTimeout;
                         case gl.WAIT_FAILED:
                             throw new Error('should never get here');
                         default:
+                            this.computeDistancesOnGPUSyncTimeout = null;
                             gl.deleteSync(sync);
                             const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
                             gl.bindVertexArray(this.distancesTransformFeedback.vao);
@@ -1567,7 +1617,7 @@ export class SplatMesh extends THREE.Mesh {
                             resolve();
                     }
                 };
-                setTimeout(checkSync);
+                this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
             });
 
             if (currentProgram) gl.useProgram(currentProgram);
