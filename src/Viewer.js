@@ -165,7 +165,6 @@ export class Viewer {
         this.sortWorkerPrecomputedDistances = null;
         this.sortWorkerTransforms = null;
         this.runAfterFirstSort = [];
-        this.runAfterNextSort = [];
 
         this.selfDrivenModeRunning = false;
         this.splatRenderReady = false;
@@ -1071,7 +1070,6 @@ export class Viewer {
                     }
                     this.lastSortTime = e.data.sortTime;
                     this.sortPromiseResolver();
-                    this.sortPromise = null;
                     this.sortPromiseResolver = null;
                     this.forceRenderNextFrame();
                     if (sortCount === 0) {
@@ -1080,10 +1078,6 @@ export class Viewer {
                         });
                         this.runAfterFirstSort.length = 0;
                     }
-                    this.runAfterNextSort.forEach((func) => {
-                        func();
-                    });
-                    this.runAfterNextSort.length = 0;
                     sortCount++;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
@@ -1126,63 +1120,80 @@ export class Viewer {
     }
 
     removeSplatScene(index, showLoadingUI = true) {
+        if (this.splatMeshUpdating || this.isDisposingOrDisposed()) return Promise.resolve();
         return new Promise((resolve, reject) => {
-            if (this.splatMeshUpdating || this.isDisposingOrDisposed()) return;
             this.splatMeshUpdating = true;
             let revmovalTaskId;
+
             if (showLoadingUI) {
                 this.loadingSpinner.show();
                 revmovalTaskId = this.loadingSpinner.addTask('Removing splat scene...');
             }
 
-            delayedExecute(() => {
-                const checkAndHideLoadingUI = () => {
-                    if (showLoadingUI) {
-                        this.loadingSpinner.hide();
-                        this.loadingSpinner.removeTask(revmovalTaskId);
-                    }
-                };
-                if (this.isDisposingOrDisposed()) {
-                    checkAndHideLoadingUI();
-                    return;
+            const checkAndHideLoadingUI = () => {
+                if (showLoadingUI) {
+                    this.loadingSpinner.hide();
+                    this.loadingSpinner.removeTask(revmovalTaskId);
                 }
-                const newSplatBuffers = [];
-                const newSceneOptions = [];
-                const newSceneTransformComponents = [];
-                const newVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
-                for (let i = 0; i < this.splatMesh.scenes.length; i++) {
-                    if (i !== index) {
-                        const scene = this.splatMesh.scenes[i];
-                        newSplatBuffers.push(scene.splatBuffer);
-                        newSceneOptions.push(this.splatMesh.sceneOptions[i]);
-                        newSceneTransformComponents.push({
-                            'position': scene.position.clone(),
-                            'quaternion': scene.quaternion.clone(),
-                            'scale': scene.scale.clone()
-                        });
-                    }
-                }
-                this.splatMesh.dispose();
+            };
 
-                this.addSplatBuffers(newSplatBuffers, newSceneOptions, true, false, true)
-                .then(() => {
-                    this.splatMesh.visibleRegionFadeStartRadius = newVisibleRegionFadeStartRadius;
-                    checkAndHideLoadingUI();
-                    this.splatMesh.scenes.forEach((scene, index) => {
-                        scene.position.copy(newSceneTransformComponents[index].position);
-                        scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
-                        scene.scale.copy(newSceneTransformComponents[index].scale);
+            const onDone = () => {
+                checkAndHideLoadingUI();
+                this.splatMeshUpdating = false;
+                resolve();
+            };
+
+            delayedExecute(() => {
+                if (this.isDisposingOrDisposed()) {
+                    onDone();
+                } else {
+                    const newSplatBuffers = [];
+                    const newSceneOptions = [];
+                    const newSceneTransformComponents = [];
+                    const newVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
+                    for (let i = 0; i < this.splatMesh.scenes.length; i++) {
+                        if (i !== index) {
+                            const scene = this.splatMesh.scenes[i];
+                            newSplatBuffers.push(scene.splatBuffer);
+                            newSceneOptions.push(this.splatMesh.sceneOptions[i]);
+                            newSceneTransformComponents.push({
+                                'position': scene.position.clone(),
+                                'quaternion': scene.quaternion.clone(),
+                                'scale': scene.scale.clone()
+                            });
+                        }
+                    }
+                    this.splatMesh.dispose();
+
+                    this.addSplatBuffers(newSplatBuffers, newSceneOptions, true, false, true)
+                    .then(() => {
+                        if (this.isDisposingOrDisposed()) {
+                            onDone();
+                        } else {
+                            checkAndHideLoadingUI();
+                            this.splatMesh.visibleRegionFadeStartRadius = newVisibleRegionFadeStartRadius;
+                            this.splatMesh.scenes.forEach((scene, index) => {
+                                scene.position.copy(newSceneTransformComponents[index].position);
+                                scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
+                                scene.scale.copy(newSceneTransformComponents[index].scale);
+                            });
+                            this.splatMesh.updateTransforms();
+                            this.updateSplatSort(true)
+                            .then(() => {
+                                if (this.isDisposingOrDisposed()) {
+                                    onDone();
+                                } else {
+                                    this.sortPromise.then(() => {
+                                        onDone();
+                                    });
+                                }
+                            });
+                        }
+                    })
+                    .catch((e) => {
+                        reject(e);
                     });
-                    this.splatMesh.updateTransforms();
-                    this.updateSplatSort(true);
-                    this.runAfterNextSort.push(() => {
-                        this.splatMeshUpdating = false;
-                        resolve();
-                    });
-                })
-                .catch((e) => {
-                    reject(e);
-                });
+                }
             });
         });
     }
