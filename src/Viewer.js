@@ -165,9 +165,11 @@ export class Viewer {
         this.sortWorkerPrecomputedDistances = null;
         this.sortWorkerTransforms = null;
         this.runAfterFirstSort = [];
+        this.runAfterNextSort = [];
 
         this.selfDrivenModeRunning = false;
         this.splatRenderReady = false;
+        this.splatMeshUpdating = false;
 
         this.raycaster = new Raycaster();
 
@@ -961,7 +963,7 @@ export class Viewer {
                         'transformIndexes': transformIndexes.buffer
                     });
                 }
-                this.forceSort = true;
+                this.sortNeededForSceneChange = true;
                 resolver();
             };
 
@@ -1078,6 +1080,10 @@ export class Viewer {
                         });
                         this.runAfterFirstSort.length = 0;
                     }
+                    this.runAfterNextSort.forEach((func) => {
+                        func();
+                    });
+                    this.runAfterNextSort.length = 0;
                     sortCount++;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
@@ -1119,20 +1125,57 @@ export class Viewer {
         this.sortRunning = false;
     }
 
-    removeSplatScene(index) {
-        this.splatRenderReady = false;
-        this.splatMesh.removeScene(index);
-        const maxSplatCount = this.splatMesh.getMaxSplatCount();
-        if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
-            this.disposeSortWorker();
-        }
-        if (!this.sortWorker) {
-            this.setupSortWorker(this.splatMesh).then(() => {
-                this.splatRenderReady = true;
+    removeSplatScene(index, showLoadingUI = true) {
+        return new Promise((resolve, reject) => {
+            this.splatMeshUpdating = true;
+            let revmovalTaskId;
+            if (showLoadingUI) {
+                this.loadingSpinner.show();
+                revmovalTaskId = this.loadingSpinner.addTask('Removing splat scene...');
+            }
+
+            delayedExecute(() => {
+                const newSplatBuffers = [];
+                const newSceneOptions = [];
+                const newSceneTransformComponents = [];
+                const newVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
+                for (let i = 0; i < this.splatMesh.scenes.length; i++) {
+                    if (i !== index) {
+                        const scene = this.splatMesh.scenes[i];
+                        newSplatBuffers.push(scene.splatBuffer);
+                        newSceneOptions.push(this.splatMesh.sceneOptions[i]);
+                        newSceneTransformComponents.push({
+                            'position': scene.position.clone(),
+                            'quaternion': scene.quaternion.clone(),
+                            'scale': scene.scale.clone()
+                        });
+                    }
+                }
+                this.splatMesh.dispose();
+
+                this.addSplatBuffers(newSplatBuffers, newSceneOptions, true, false, true)
+                .then(() => {
+                    this.splatMesh.visibleRegionFadeStartRadius = newVisibleRegionFadeStartRadius;
+                    if (showLoadingUI) {
+                        this.loadingSpinner.hide();
+                        this.loadingSpinner.removeTask(revmovalTaskId);
+                        this.splatMesh.scenes.forEach((scene, index) => {
+                            scene.position.copy(newSceneTransformComponents[index].position);
+                            scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
+                            scene.scale.copy(newSceneTransformComponents[index].scale);
+                        });
+                    }
+                    this.updateSplatSort(true);
+                    this.runAfterNextSort.push(() => {
+                        this.splatMeshUpdating = false;
+                        resolve();
+                    });
+                })
+                .catch((e) => {
+                    reject(e);
+                });
             });
-        } else {
-            this.splatRenderReady = true;
-        }
+        });
     }
 
     /**
@@ -1293,7 +1336,7 @@ export class Viewer {
     render = function() {
 
         return function() {
-            if (!this.initialized || !this.splatRenderReady) return;
+            if (!this.initialized || !this.splatRenderReady || this.splatMeshUpdating) return;
 
             const hasRenderables = (threeScene) => {
                 for (let child of threeScene.children) {
@@ -1318,7 +1361,7 @@ export class Viewer {
 
     update(renderer, camera) {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
-        if (!this.initialized || !this.splatRenderReady) return;
+        if (!this.initialized || !this.splatRenderReady || this.splatMeshUpdating) return;
         if (this.controls) {
             this.controls.update();
             if (this.camera.isOrthographicCamera && !this.usingExternalCamera) {
@@ -1548,9 +1591,8 @@ export class Viewer {
             }
         ];
 
-        return async function() {
+        return async function(force = false) {
             if (this.sortRunning) return;
-            if (!this.initialized || !this.splatRenderReady) return;
 
             let angleDiff = 0;
             let positionDiff = 0;
@@ -1561,10 +1603,13 @@ export class Viewer {
             angleDiff = sortViewDir.dot(lastSortViewDir);
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
-            if (!this.forceSort && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
-                if (angleDiff <= 0.99) needsRefreshForRotation = true;
-                if (positionDiff >= 1.0) needsRefreshForPosition = true;
-                if (!needsRefreshForRotation && !needsRefreshForPosition) return;
+            if (!force) {
+                if (!this.initialized || !this.splatRenderReady || this.splatMeshUpdating) return;
+                if (!this.sortNeededForSceneChange && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
+                    if (angleDiff <= 0.99) needsRefreshForRotation = true;
+                    if (positionDiff >= 1.0) needsRefreshForPosition = true;
+                    if (!needsRefreshForRotation && !needsRefreshForPosition) return;
+                }
             }
 
             this.sortRunning = true;
@@ -1582,7 +1627,9 @@ export class Viewer {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
 
-            if (!this.initialized || !this.splatRenderReady) return;
+            if (!force) {
+                if (!this.initialized || !this.splatRenderReady || this.splatMeshUpdating) return;
+            }
 
             if (this.splatMesh.dynamicMode || shouldSortAll) {
                 queuedSorts.push(this.splatRenderCount);
@@ -1631,7 +1678,7 @@ export class Viewer {
                 lastSortViewDir.copy(sortViewDir);
             }
 
-            this.forceSort = false;
+            this.sortNeededForSceneChange = false;
         };
 
     }();

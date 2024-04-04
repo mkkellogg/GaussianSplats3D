@@ -311,6 +311,16 @@ export class SplatTree {
         this.splatMesh = null;
     }
 
+
+    dispose() {
+        this.diposeSplatTreeWorker();
+    }
+
+    diposeSplatTreeWorker() {
+        if (splatTreeWorker) splatTreeWorker.terminate();
+        splatTreeWorker = null;
+    };
+
     /**
      * Construct this instance of SplatTree from an instance of SplatMesh.
      *
@@ -347,14 +357,9 @@ export class SplatTree {
             return sceneCenters;
         };
 
-        const diposeSplatTreeWorker = () => {
-            splatTreeWorker.terminate();
-            splatTreeWorker = null;
-        };
-
         const checkForEarlyExit = (resolve) => {
             if (splatMesh.disposed) {
-                diposeSplatTreeWorker();
+                this.diposeSplatTreeWorker();
                 resolve();
                 return true;
             }
@@ -400,7 +405,7 @@ export class SplatTree {
                                 const convertedSubTree = SplatSubTree.convertWorkerSubTree(workerSubTree, splatMesh);
                                 this.subTrees.push(convertedSubTree);
                             }
-                            diposeSplatTreeWorker();
+                            this.diposeSplatTreeWorker();
 
                             if (onSplatTreeConstruction) onSplatTreeConstruction(true);
 

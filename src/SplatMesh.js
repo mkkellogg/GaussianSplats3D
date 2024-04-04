@@ -94,12 +94,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatScale = 1.0;
         this.pointCloudModeEnabled = false;
 
-        this.disposed = false;
-
         this.lastRenderer = null;
-        this.lastBuildSavedParameters = {
-
-        };
     }
 
     /**
@@ -655,14 +650,7 @@ export class SplatMesh extends THREE.Mesh {
     build(splatBuffers, sceneOptions, keepSceneTransforms = true, finalBuild = false,
           onSplatTreeIndexesUpload, onSplatTreeConstruction) {
 
-        this.lastBuildSavedParameters = {
-            'sceneOptions': sceneOptions,
-            'keepSceneTransforms': keepSceneTransforms,
-            'finalBuild': finalBuild,
-            'onSplatTreeIndexesUpload': onSplatTreeIndexesUpload,
-            'onSplatTreeConstruction': onSplatTreeConstruction
-        };
-
+        this.sceneOptions = sceneOptions;
         this.finalBuild = finalBuild;
 
         const maxSplatCount = SplatMesh.getTotalMaxSplatCountForSplatBuffers(splatBuffers);
@@ -752,7 +740,31 @@ export class SplatMesh extends THREE.Mesh {
             'transformsLocs': []
         };
         this.renderer = null;
-        this.disposed = true;
+
+        this.globalSplatIndexToLocalSplatIndexMap = [];
+        this.globalSplatIndexToSceneIndexMap = [];
+
+        this.lastBuildSplatCount = 0;
+        this.lastBuildScenes = [];
+        this.lastBuildMaxSplatCount = 0;
+        this.lastBuildSceneCount = 0;
+        this.firstRenderTime = -1;
+        this.finalBuild = false;
+
+        this.webGLUtils = null;
+
+        this.boundingBox = new THREE.Box3();
+        this.calculatedSceneCenter = new THREE.Vector3();
+        this.maxSplatDistanceFromSceneCenter = 0;
+        this.visibleRegionBufferRadius = 0;
+        this.visibleRegionRadius = 0;
+        this.visibleRegionFadeStartRadius = 0;
+        this.visibleRegionChanging = false;
+
+        this.splatScale = 1.0;
+        this.pointCloudModeEnabled = false;
+
+        this.lastRenderer = null;
     }
 
     /**
@@ -783,25 +795,10 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     disposeSplatTree() {
+        if (this.splatTree) this.splatTree.dispose();
         this.splatTree = null;
+        if (this.baseSplatTree) this.baseSplatTree.dispose();
         this.baseSplatTree = null;
-    }
-
-    removeScene(index) {
-        this.lastRenderer = null;
-        const newSplatBuffers = [];
-        const newSceneOptions = [];
-        for (let i = 0; i < this.scenes.length; i++) {
-            if (i !== index) {
-                newSplatBuffers.push(this.scenes[i].splatBuffer);
-                newSceneOptions.push(this.lastBuildSavedParameters.sceneOptions[i]);
-            }
-        }
-        this.dispose();
-        this.disposed = false;
-        this.build(newSplatBuffers, newSceneOptions, this.lastBuildSavedParameters.keepSceneTransforms,
-                   this.lastBuildSavedParameters.finalBuild, this.lastBuildSavedParameters.onSplatTreeIndexesUpload,
-                   this.lastBuildSavedParameters.onSplatTreeConstruction);
     }
 
     getSplatTree() {
@@ -1344,6 +1341,7 @@ export class SplatMesh extends THREE.Mesh {
 
             const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
             const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
+            const currentProgramDeleted = currentProgram ? gl.getProgramParameter(currentProgram, gl.DELETE_STATUS) : false;
 
             if (rebuildGPUObjects) {
                 this.distancesTransformFeedback.vao = gl.createVertexArray();
@@ -1424,7 +1422,7 @@ export class SplatMesh extends THREE.Mesh {
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
             gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.distancesTransformFeedback.outDistancesBuffer);
 
-            if (currentProgram) gl.useProgram(currentProgram);
+            if (currentProgram && currentProgramDeleted !== true) gl.useProgram(currentProgram);
             if (currentVao) gl.bindVertexArray(currentVao);
 
             this.lastRenderer = this.renderer;
@@ -1533,6 +1531,7 @@ export class SplatMesh extends THREE.Mesh {
 
             const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
             const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
+            const currentProgramDeleted = currentProgram ? gl.getProgramParameter(currentProgram, gl.DELETE_STATUS) : false;
 
             gl.bindVertexArray(this.distancesTransformFeedback.vao);
             gl.useProgram(this.distancesTransformFeedback.program);
@@ -1623,7 +1622,7 @@ export class SplatMesh extends THREE.Mesh {
                 this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
             });
 
-            if (currentProgram) gl.useProgram(currentProgram);
+            if (currentProgram && currentProgramDeleted !== true) gl.useProgram(currentProgram);
             if (currentVao) gl.bindVertexArray(currentVao);
 
             return promise;

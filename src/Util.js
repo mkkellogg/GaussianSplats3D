@@ -142,6 +142,6 @@ export const delayedExecute = (func) => {
     return new Promise((resolve) => {
         window.setTimeout(() => {
             resolve(func());
-        }, 1);
+        }, 50);
     });
 };
