@@ -109,6 +109,7 @@ function createSplatTreeWorker(self) {
             this.addedIndexes = {};
             this.nodesWithIndexes = [];
             this.splatMesh = null;
+            this.disposed = false;
         }
 
     }
@@ -314,6 +315,7 @@ export class SplatTree {
 
     dispose() {
         this.diposeSplatTreeWorker();
+        this.disposed = true;
     }
 
     diposeSplatTreeWorker() {
@@ -357,22 +359,22 @@ export class SplatTree {
             return sceneCenters;
         };
 
-        const checkForEarlyExit = (resolve) => {
-            if (splatMesh.disposed) {
-                this.diposeSplatTreeWorker();
-                resolve();
-                return true;
-            }
-            return false;
-        };
-
         return new Promise((resolve) => {
+
+            const checkForEarlyExit = () => {
+                if (this.disposed) {
+                    this.diposeSplatTreeWorker();
+                    resolve();
+                    return true;
+                }
+                return false;
+            };
 
             if (onIndexesUpload) onIndexesUpload(false);
 
             delayedExecute(() => {
 
-                if (checkForEarlyExit(resolve)) return;
+                if (checkForEarlyExit()) return;
 
                 const allCenters = [];
                 if (splatMesh.dynamicMode) {
@@ -391,7 +393,7 @@ export class SplatTree {
 
                 splatTreeWorker.onmessage = (e) => {
 
-                    if (checkForEarlyExit(resolve)) return;
+                    if (checkForEarlyExit()) return;
 
                     if (e.data.subTrees) {
 
@@ -399,7 +401,7 @@ export class SplatTree {
 
                         delayedExecute(() => {
 
-                            if (checkForEarlyExit(resolve)) return;
+                            if (checkForEarlyExit()) return;
 
                             for (let workerSubTree of e.data.subTrees) {
                                 const convertedSubTree = SplatSubTree.convertWorkerSubTree(workerSubTree, splatMesh);
@@ -418,7 +420,7 @@ export class SplatTree {
                 };
 
                 delayedExecute(() => {
-                    if (checkForEarlyExit(resolve)) return;
+                    if (checkForEarlyExit()) return;
                     if (onIndexesUpload) onIndexesUpload(true);
                     const transferBuffers = allCenters.map((array) => array.buffer);
                     workerProcessCenters(allCenters, transferBuffers, this.maxDepth, this.maxCentersPerNode);

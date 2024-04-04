@@ -672,6 +672,7 @@ export class SplatMesh extends THREE.Mesh {
             this.scenes[0].splatBuffer !== this.lastBuildScenes[0].splatBuffer) {
                 isUpdateBuild = false;
        }
+
        if (!isUpdateBuild) {
             isUpdateBuild = false;
             this.boundingBox = new THREE.Box3();

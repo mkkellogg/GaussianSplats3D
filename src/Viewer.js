@@ -1143,57 +1143,56 @@ export class Viewer {
                 resolve();
             };
 
-            delayedExecute(() => {
-                if (this.isDisposingOrDisposed()) {
+            const checkForEarlyExit = () => {
+                if(this.isDisposingOrDisposed()) {
                     onDone();
-                } else {
-                    const newSplatBuffers = [];
-                    const newSceneOptions = [];
-                    const newSceneTransformComponents = [];
-                    const newVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
-                    for (let i = 0; i < this.splatMesh.scenes.length; i++) {
-                        if (i !== index) {
-                            const scene = this.splatMesh.scenes[i];
-                            newSplatBuffers.push(scene.splatBuffer);
-                            newSceneOptions.push(this.splatMesh.sceneOptions[i]);
-                            newSceneTransformComponents.push({
-                                'position': scene.position.clone(),
-                                'quaternion': scene.quaternion.clone(),
-                                'scale': scene.scale.clone()
-                            });
-                        }
-                    }
-                    this.splatMesh.dispose();
-
-                    this.addSplatBuffers(newSplatBuffers, newSceneOptions, true, false, true)
-                    .then(() => {
-                        if (this.isDisposingOrDisposed()) {
-                            onDone();
-                        } else {
-                            checkAndHideLoadingUI();
-                            this.splatMesh.visibleRegionFadeStartRadius = newVisibleRegionFadeStartRadius;
-                            this.splatMesh.scenes.forEach((scene, index) => {
-                                scene.position.copy(newSceneTransformComponents[index].position);
-                                scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
-                                scene.scale.copy(newSceneTransformComponents[index].scale);
-                            });
-                            this.splatMesh.updateTransforms();
-                            this.updateSplatSort(true)
-                            .then(() => {
-                                if (this.isDisposingOrDisposed()) {
-                                    onDone();
-                                } else {
-                                    this.sortPromise.then(() => {
-                                        onDone();
-                                    });
-                                }
-                            });
-                        }
-                    })
-                    .catch((e) => {
-                        reject(e);
-                    });
+                    return true;
                 }
+                return false;
+            };
+
+            delayedExecute(() => {
+                if (checkForEarlyExit()) return;
+                const newSplatBuffers = [];
+                const newSceneOptions = [];
+                const newSceneTransformComponents = [];
+                const newVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
+                for (let i = 0; i < this.splatMesh.scenes.length; i++) {
+                    if (i !== index) {
+                        const scene = this.splatMesh.scenes[i];
+                        newSplatBuffers.push(scene.splatBuffer);
+                        newSceneOptions.push(this.splatMesh.sceneOptions[i]);
+                        newSceneTransformComponents.push({
+                            'position': scene.position.clone(),
+                            'quaternion': scene.quaternion.clone(),
+                            'scale': scene.scale.clone()
+                        });
+                    }
+                }
+                this.splatMesh.dispose();
+
+                this.addSplatBuffers(newSplatBuffers, newSceneOptions, true, false, true)
+                .then(() => {
+                    if (checkForEarlyExit()) return;
+                    checkAndHideLoadingUI();
+                    this.splatMesh.visibleRegionFadeStartRadius = newVisibleRegionFadeStartRadius;
+                    this.splatMesh.scenes.forEach((scene, index) => {
+                        scene.position.copy(newSceneTransformComponents[index].position);
+                        scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
+                        scene.scale.copy(newSceneTransformComponents[index].scale);
+                    });
+                    this.splatMesh.updateTransforms();
+                    this.updateSplatSort(true)
+                    .then(() => {
+                        if (checkForEarlyExit()) return;
+                        this.sortPromise.then(() => {
+                            onDone();
+                        });
+                    });
+                })
+                .catch((e) => {
+                    reject(e);
+                });
             });
         });
     }
