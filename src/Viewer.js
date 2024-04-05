@@ -215,7 +215,7 @@ export class Viewer {
     createSplatMesh() {
         this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
                                        this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize);
-
+        this.splatMesh.frustumCulled = false;
     }
 
     init() {
@@ -941,7 +941,7 @@ export class Viewer {
             this.splatRenderReady = false;
             let splatProcessingTaskId = null;
 
-            const finish = (updateInfo, resolver) => {
+            const finish = (buildResults, resolver) => {
                 if (this.isDisposingOrDisposed()) return;
 
                 if (splatProcessingTaskId !== null) {
@@ -953,9 +953,13 @@ export class Viewer {
                 // transform indexes so that it can calculate those distance values.
                 if (!this.gpuAcceleratedSort) {
                     this.sortWorker.postMessage({
-                        'centers': updateInfo.centers.buffer,
-                        'transformIndexes': updateInfo.transformIndexes.buffer,
-                        'updateInfo': updateInfo
+                        'centers': buildResults.centers.buffer,
+                        'transformIndexes': buildResults.transformIndexes.buffer,
+                        'range': {
+                            'from': buildResults.from,
+                            'to': buildResults.to,
+                            'count': buildResults.count
+                        }
                     });
                 }
 
@@ -973,18 +977,18 @@ export class Viewer {
                         if (this.isDisposingOrDisposed()) {
                             resolve();
                         } else {
-                            const updateInfo = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
-                                                                          finalBuild, showLoadingSpinnerForSplatTreeBuild);
+                            const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
+                                                                            finalBuild, showLoadingSpinnerForSplatTreeBuild);
                             const maxSplatCount = this.splatMesh.getMaxSplatCount();
                             if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
                                 this.disposeSortWorker();
                             }
                             if (!this.sortWorker) {
                                 this.setupSortWorker(this.splatMesh).then(() => {
-                                    finish(updateInfo, resolve);
+                                    finish(buildResults, resolve);
                                 });
                             } else {
-                                finish(updateInfo, resolve);
+                                finish(buildResults, resolve);
                             }
                         }
                     }, true);
@@ -1034,16 +1038,13 @@ export class Viewer {
                 }
             }
         };
-        const onSplatTreeConstructed = (finished) => {
+        const onSplatTreeReady = (finished) => {
             if (this.isDisposingOrDisposed()) return;
             if (finished && splatOptimizingTaskId) {
                 this.loadingSpinner.removeTask(splatOptimizingTaskId);
             }
         };
-        const updateInfo = this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
-                                                onSplatTreeIndexesUpload, onSplatTreeConstructed);
-        this.splatMesh.frustumCulled = false;
-        return updateInfo;
+        return this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild, onSplatTreeIndexesUpload, onSplatTreeReady);
     }
 
     /**

@@ -587,7 +587,7 @@ export class SplatMesh extends THREE.Mesh {
             // TODO: expose SplatTree constructor parameters (maximumDepth and maxCentersPerNode) so that they can
             // be configured on a per-scene basis
             this.baseSplatTree = new SplatTree(8, 1000);
-            console.time('SplatTree build');
+            const buildStartTime = performance.now();
             const splatColor = new THREE.Vector4();
             this.baseSplatTree.processSplatMesh(this, (splatIndex) => {
                 this.getSplatColor(splatIndex, splatColor);
@@ -596,7 +596,8 @@ export class SplatMesh extends THREE.Mesh {
                 return splatColor.w >= minAlpha;
             }, onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
-                console.timeEnd('SplatTree build');
+                const buildTime = performance.now() - buildStartTime;
+                console.log('SplatTree build: ' + buildTime + ' ms');
                 if (this.disposed) {
                     resolve();
                 } else {
@@ -706,16 +707,16 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildScenes[i] = this.scenes[i];
         }
 
-        const updateInfo = {
+        const buildResults = {
             'from': this.lastBuildSplatCount,
             'to': this.getSplatCount() - 1,
-            'updateCount': this.getSplatCount() - this.lastBuildSplatCount
+            'count': this.getSplatCount() - this.lastBuildSplatCount
         };
         if (!this.enableDistancesComputationOnGPU) {
-            updateInfo.centers = this.integerBasedDistancesComputation ?
+            buildResults.centers = this.integerBasedDistancesComputation ?
                                  this.getIntegerCenters(true, isUpdateBuild) :
-                                 this.getFloatCenters(false, isUpdateBuild);
-            updateInfo.transformIndexes = this.getTransformIndexes(isUpdateBuild);
+                                 this.getFloatCenters(true, isUpdateBuild);
+            buildResults.transformIndexes = this.getTransformIndexes(isUpdateBuild);
         }
 
         this.lastBuildSplatCount = this.getSplatCount();
@@ -730,7 +731,7 @@ export class SplatMesh extends THREE.Mesh {
             });
         }
 
-        return updateInfo;
+        return buildResults;
     }
 
     /**
@@ -1512,7 +1513,9 @@ export class SplatMesh extends THREE.Mesh {
         if (isUpdateBuild) {
             gl.bufferSubData(gl.ARRAY_BUFFER, subBufferOffset, transformIndexes);
         } else {
-            gl.bufferData(gl.ARRAY_BUFFER, transformIndexes, gl.STATIC_DRAW);
+            const maxArray = new Uint32Array(this.getMaxSplatCount() * 4);
+            maxArray.set(transformIndexes);
+            gl.bufferData(gl.ARRAY_BUFFER, maxArray, gl.STATIC_DRAW);
         }
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
