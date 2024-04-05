@@ -88,7 +88,7 @@ function sortWorker(self) {
                 new Uint32Array(wasmMemory, transformIndexesOffset, splatCount).set(new Uint32Array(transformIndexes));
             }
             self.postMessage({
-                'sortSetupComplete': true,
+                'centerDataSet': true,
             });
         } else if (e.data.sort) {
             const renderCount = e.data.sort.splatRenderCount || 0;
