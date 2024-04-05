@@ -80,12 +80,15 @@ function sortWorker(self) {
             centers = e.data.centers;
             transformIndexes = e.data.transformIndexes;
             if (integerBasedSort) {
-                new Int32Array(wasmMemory, centersOffset, splatCount * 4).set(new Int32Array(centers));
+                new Int32Array(wasmMemory, centersOffset + e.data.range.from * Constants.BytesPerInt * 4,
+                               e.data.range.count * 4).set(new Int32Array(centers));
             } else {
-                new Float32Array(wasmMemory, centersOffset, splatCount * 4).set(new Float32Array(centers));
+                new Float32Array(wasmMemory, centersOffset + e.data.range.from * Constants.BytesPerFloat * 4,
+                                 e.data.range.count * 4).set(new Float32Array(centers));
             }
             if (dynamicMode) {
-                new Uint32Array(wasmMemory, transformIndexesOffset, splatCount).set(new Uint32Array(transformIndexes));
+                new Uint32Array(wasmMemory, transformIndexesOffset + e.data.range.from * 4,
+                                e.data.range.count).set(new Uint32Array(transformIndexes));
             }
             self.postMessage({
                 'centerDataSet': true,

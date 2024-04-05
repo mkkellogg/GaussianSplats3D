@@ -215,7 +215,7 @@ export class Viewer {
     createSplatMesh() {
         this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
                                        this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize);
-
+        this.splatMesh.frustumCulled = false;
     }
 
     init() {
@@ -941,7 +941,7 @@ export class Viewer {
             this.splatRenderReady = false;
             let splatProcessingTaskId = null;
 
-            const finish = (resolver) => {
+            const finish = (buildResults, resolver) => {
                 if (this.isDisposingOrDisposed()) return;
 
                 if (splatProcessingTaskId !== null) {
@@ -952,11 +952,14 @@ export class Viewer {
                 // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs splat centers and
                 // transform indexes so that it can calculate those distance values.
                 if (!this.gpuAcceleratedSort) {
-                    const centers = this.integerBasedSort ? this.splatMesh.getIntegerCenters(true) : this.splatMesh.getFloatCenters(true);
-                    const transformIndexes = this.splatMesh.getTransformIndexes();
                     this.sortWorker.postMessage({
-                        'centers': centers.buffer,
-                        'transformIndexes': transformIndexes.buffer
+                        'centers': buildResults.centers.buffer,
+                        'transformIndexes': buildResults.transformIndexes.buffer,
+                        'range': {
+                            'from': buildResults.from,
+                            'to': buildResults.to,
+                            'count': buildResults.count
+                        }
                     });
                 }
 
@@ -974,17 +977,18 @@ export class Viewer {
                         if (this.isDisposingOrDisposed()) {
                             resolve();
                         } else {
-                            this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild, showLoadingSpinnerForSplatTreeBuild);
+                            const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
+                                                                            finalBuild, showLoadingSpinnerForSplatTreeBuild);
                             const maxSplatCount = this.splatMesh.getMaxSplatCount();
                             if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
                                 this.disposeSortWorker();
                             }
                             if (!this.sortWorker) {
                                 this.setupSortWorker(this.splatMesh).then(() => {
-                                    finish(resolve);
+                                    finish(buildResults, resolve);
                                 });
                             } else {
-                                finish(resolve);
+                                finish(buildResults, resolve);
                             }
                         }
                     }, true);
@@ -1014,6 +1018,7 @@ export class Viewer {
      * @param {boolean} finalBuild Will the splat mesh be in its final state after this build?
      * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whether or not to show the loading spinner during
      *                                                      construction of the splat tree.
+     * @return {object} Object containing info about the splats that are updated
      */
     addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingSpinnerForSplatTreeBuild = false) {
         if (this.isDisposingOrDisposed()) return;
@@ -1033,15 +1038,13 @@ export class Viewer {
                 }
             }
         };
-        const onSplatTreeConstructed = (finished) => {
+        const onSplatTreeReady = (finished) => {
             if (this.isDisposingOrDisposed()) return;
             if (finished && splatOptimizingTaskId) {
                 this.loadingSpinner.removeTask(splatOptimizingTaskId);
             }
         };
-        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
-                             onSplatTreeIndexesUpload, onSplatTreeConstructed);
-        this.splatMesh.frustumCulled = false;
+        return this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild, onSplatTreeIndexesUpload, onSplatTreeReady);
     }
 
     /**
@@ -1152,16 +1155,16 @@ export class Viewer {
             delayedExecute(() => {
                 this.sortPromise.then(() => {
                     if (checkForEarlyExit()) return;
-                    const newSplatBuffers = [];
-                    const newSceneOptions = [];
-                    const newSceneTransformComponents = [];
-                    const newVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
+                    const savedSplatBuffers = [];
+                    const savedSceneOptions = [];
+                    const savedSceneTransformComponents = [];
+                    const savedVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
                     for (let i = 0; i < this.splatMesh.scenes.length; i++) {
                         if (i !== index) {
                             const scene = this.splatMesh.scenes[i];
-                            newSplatBuffers.push(scene.splatBuffer);
-                            newSceneOptions.push(this.splatMesh.sceneOptions[i]);
-                            newSceneTransformComponents.push({
+                            savedSplatBuffers.push(scene.splatBuffer);
+                            savedSceneOptions.push(this.splatMesh.sceneOptions[i]);
+                            savedSceneTransformComponents.push({
                                 'position': scene.position.clone(),
                                 'quaternion': scene.quaternion.clone(),
                                 'scale': scene.scale.clone()
@@ -1171,15 +1174,15 @@ export class Viewer {
                     this.splatMesh.dispose();
                     this.createSplatMesh();
 
-                    this.addSplatBuffers(newSplatBuffers, newSceneOptions, true, false, true)
+                    this.addSplatBuffers(savedSplatBuffers, savedSceneOptions, true, false, true)
                     .then(() => {
                         if (checkForEarlyExit()) return;
                         checkAndHideLoadingUI();
-                        this.splatMesh.visibleRegionFadeStartRadius = newVisibleRegionFadeStartRadius;
+                        this.splatMesh.visibleRegionFadeStartRadius = savedVisibleRegionFadeStartRadius;
                         this.splatMesh.scenes.forEach((scene, index) => {
-                            scene.position.copy(newSceneTransformComponents[index].position);
-                            scene.quaternion.copy(newSceneTransformComponents[index].quaternion);
-                            scene.scale.copy(newSceneTransformComponents[index].scale);
+                            scene.position.copy(savedSceneTransformComponents[index].position);
+                            scene.quaternion.copy(savedSceneTransformComponents[index].quaternion);
+                            scene.scale.copy(savedSceneTransformComponents[index].scale);
                         });
                         this.splatMesh.updateTransforms();
 
