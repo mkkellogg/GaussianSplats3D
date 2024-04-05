@@ -109,6 +109,7 @@ function createSplatTreeWorker(self) {
             this.addedIndexes = {};
             this.nodesWithIndexes = [];
             this.splatMesh = null;
+            this.disposed = false;
         }
 
     }
@@ -311,15 +312,26 @@ export class SplatTree {
         this.splatMesh = null;
     }
 
+
+    dispose() {
+        this.diposeSplatTreeWorker();
+        this.disposed = true;
+    }
+
+    diposeSplatTreeWorker() {
+        if (splatTreeWorker) splatTreeWorker.terminate();
+        splatTreeWorker = null;
+    };
+
     /**
      * Construct this instance of SplatTree from an instance of SplatMesh.
      *
      * @param {SplatMesh} splatMesh The instance of SplatMesh from which to construct this splat tree.
      * @param {function} filterFunc Optional function to filter out unwanted splats.
      * @param {function} onIndexesUpload Function to be called when the upload of splat centers to the splat tree
-     *                            builder worker starts and finishes.
+     *                                   builder worker starts and finishes.
      * @param {function} onSplatTreeConstruction Function to be called when the conversion of the local splat tree from
-     *                                    the format produced by the splat tree builder worker starts and ends.
+     *                                           the format produced by the splat tree builder worker starts and ends.
      * @return {undefined}
      */
     processSplatMesh = function(splatMesh, filterFunc = () => true, onIndexesUpload, onSplatTreeConstruction) {
@@ -347,27 +359,22 @@ export class SplatTree {
             return sceneCenters;
         };
 
-        const diposeSplatTreeWorker = () => {
-            splatTreeWorker.terminate();
-            splatTreeWorker = null;
-        };
-
-        const checkForEarlyExit = (resolve) => {
-            if (splatMesh.disposed) {
-                diposeSplatTreeWorker();
-                resolve();
-                return true;
-            }
-            return false;
-        };
-
         return new Promise((resolve) => {
+
+            const checkForEarlyExit = () => {
+                if (this.disposed) {
+                    this.diposeSplatTreeWorker();
+                    resolve();
+                    return true;
+                }
+                return false;
+            };
 
             if (onIndexesUpload) onIndexesUpload(false);
 
             delayedExecute(() => {
 
-                if (checkForEarlyExit(resolve)) return;
+                if (checkForEarlyExit()) return;
 
                 const allCenters = [];
                 if (splatMesh.dynamicMode) {
@@ -386,7 +393,7 @@ export class SplatTree {
 
                 splatTreeWorker.onmessage = (e) => {
 
-                    if (checkForEarlyExit(resolve)) return;
+                    if (checkForEarlyExit()) return;
 
                     if (e.data.subTrees) {
 
@@ -394,13 +401,13 @@ export class SplatTree {
 
                         delayedExecute(() => {
 
-                            if (checkForEarlyExit(resolve)) return;
+                            if (checkForEarlyExit()) return;
 
                             for (let workerSubTree of e.data.subTrees) {
                                 const convertedSubTree = SplatSubTree.convertWorkerSubTree(workerSubTree, splatMesh);
                                 this.subTrees.push(convertedSubTree);
                             }
-                            diposeSplatTreeWorker();
+                            this.diposeSplatTreeWorker();
 
                             if (onSplatTreeConstruction) onSplatTreeConstruction(true);
 
@@ -413,7 +420,7 @@ export class SplatTree {
                 };
 
                 delayedExecute(() => {
-                    if (checkForEarlyExit(resolve)) return;
+                    if (checkForEarlyExit()) return;
                     if (onIndexesUpload) onIndexesUpload(true);
                     const transferBuffers = allCenters.map((array) => array.buffer);
                     workerProcessCenters(allCenters, transferBuffers, this.maxDepth, this.maxCentersPerNode);

@@ -10,12 +10,15 @@ export class InfoPanel {
             ['Camera position', 'cameraPosition'],
             ['Camera look-at', 'cameraLookAt'],
             ['Camera up', 'cameraUp'],
+            ['Camera mode', 'orthographicCamera'],
             ['Cursor position', 'cursorPosition'],
             ['FPS', 'fps'],
             ['Rendering:', 'renderSplatCount'],
             ['Sort time', 'sortTime'],
             ['Render window', 'renderWindow'],
-            ['Focal adjustment', 'focalAdjustment']
+            ['Focal adjustment', 'focalAdjustment'],
+            ['Splat scale', 'splatScale'],
+            ['Point cloud mode', 'pointCloudMode']
         ];
 
         this.infoPanelContainer = document.createElement('div');
@@ -98,8 +101,9 @@ export class InfoPanel {
         this.visible = false;
     }
 
-    update = function(renderDimensions, cameraPosition, cameraLookAtPosition, cameraUp,
-                      meshCursorPosition, currentFPS, splatCount, splatRenderCount, splatRenderCountPct, lastSortTime, focalAdjustment) {
+    update = function(renderDimensions, cameraPosition, cameraLookAtPosition, cameraUp, orthographicCamera,
+                      meshCursorPosition, currentFPS, splatCount, splatRenderCount,
+                      splatRenderCountPct, lastSortTime, focalAdjustment, splatScale, pointCloudMode) {
 
         const cameraPosString = `${cameraPosition.x.toFixed(5)}, ${cameraPosition.y.toFixed(5)}, ${cameraPosition.z.toFixed(5)}`;
         if (this.infoCells.cameraPosition.innerHTML !== cameraPosString) {
@@ -119,6 +123,8 @@ export class InfoPanel {
             this.infoCells.cameraUp.innerHTML = cameraUpString;
         }
 
+        this.infoCells.orthographicCamera.innerHTML = orthographicCamera ? 'Orthographic' : 'Perspective';
+
         if (meshCursorPosition) {
             const cursPos = meshCursorPosition;
             const cursorPosString = `${cursPos.x.toFixed(5)}, ${cursPos.y.toFixed(5)}, ${cursPos.z.toFixed(5)}`;
@@ -134,8 +140,9 @@ export class InfoPanel {
             `${splatRenderCount} splats out of ${splatCount} (${splatRenderCountPct.toFixed(2)}%)`;
 
         this.infoCells.sortTime.innerHTML = `${lastSortTime.toFixed(3)} ms`;
-
         this.infoCells.focalAdjustment.innerHTML = `${focalAdjustment.toFixed(3)}`;
+        this.infoCells.splatScale.innerHTML = `${splatScale.toFixed(3)}`;
+        this.infoCells.pointCloudMode.innerHTML = `${pointCloudMode}`;
     };
 
     setContainer(container) {
