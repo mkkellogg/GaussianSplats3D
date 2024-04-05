@@ -94,6 +94,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatScale = 1.0;
         this.pointCloudModeEnabled = false;
 
+        this.disposed = false;
         this.lastRenderer = null;
     }
 
@@ -596,30 +597,34 @@ export class SplatMesh extends THREE.Mesh {
             }, onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
                 console.timeEnd('SplatTree build');
+                if (this.disposed) {
+                    resolve();
+                } else {
 
-                this.splatTree = this.baseSplatTree;
-                this.baseSplatTree = null;
+                    this.splatTree = this.baseSplatTree;
+                    this.baseSplatTree = null;
 
-                let leavesWithVertices = 0;
-                let avgSplatCount = 0;
-                let maxSplatCount = 0;
-                let nodeCount = 0;
+                    let leavesWithVertices = 0;
+                    let avgSplatCount = 0;
+                    let maxSplatCount = 0;
+                    let nodeCount = 0;
 
-                this.splatTree.visitLeaves((node) => {
-                    const nodeSplatCount = node.data.indexes.length;
-                    if (nodeSplatCount > 0) {
-                        avgSplatCount += nodeSplatCount;
-                        maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
-                        nodeCount++;
-                        leavesWithVertices++;
-                    }
-                });
-                console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
-                console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
-                avgSplatCount = avgSplatCount / nodeCount;
-                console.log(`Avg splat count per node: ${avgSplatCount}`);
-                console.log(`Total splat count: ${this.getSplatCount()}`);
-                resolve();
+                    this.splatTree.visitLeaves((node) => {
+                        const nodeSplatCount = node.data.indexes.length;
+                        if (nodeSplatCount > 0) {
+                            avgSplatCount += nodeSplatCount;
+                            maxSplatCount = Math.max(maxSplatCount, nodeSplatCount);
+                            nodeCount++;
+                            leavesWithVertices++;
+                        }
+                    });
+                    console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
+                    console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
+                    avgSplatCount = avgSplatCount / nodeCount;
+                    console.log(`Avg splat count per node: ${avgSplatCount}`);
+                    console.log(`Total splat count: ${this.getSplatCount()}`);
+                    resolve();
+                }
             });
         });
     };
@@ -765,6 +770,7 @@ export class SplatMesh extends THREE.Mesh {
         this.splatScale = 1.0;
         this.pointCloudModeEnabled = false;
 
+        this.disposed = true;
         this.lastRenderer = null;
     }
 
@@ -1595,29 +1601,33 @@ export class SplatMesh extends THREE.Mesh {
 
             const promise = new Promise((resolve) => {
                 const checkSync = () => {
-                    const timeout = 0;
-                    const bitflags = 0;
-                    const status = gl.clientWaitSync(sync, bitflags, timeout);
-                    switch (status) {
-                        case gl.TIMEOUT_EXPIRED:
-                            this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
-                            return this.computeDistancesOnGPUSyncTimeout;
-                        case gl.WAIT_FAILED:
-                            throw new Error('should never get here');
-                        default:
-                            this.computeDistancesOnGPUSyncTimeout = null;
-                            gl.deleteSync(sync);
-                            const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
-                            gl.bindVertexArray(this.distancesTransformFeedback.vao);
-                            gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
-                            gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
-                            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                    if (this.disposed) {
+                        resolve();
+                    } else {
+                        const timeout = 0;
+                        const bitflags = 0;
+                        const status = gl.clientWaitSync(sync, bitflags, timeout);
+                        switch (status) {
+                            case gl.TIMEOUT_EXPIRED:
+                                this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
+                                return this.computeDistancesOnGPUSyncTimeout;
+                            case gl.WAIT_FAILED:
+                                throw new Error('should never get here');
+                            default:
+                                this.computeDistancesOnGPUSyncTimeout = null;
+                                gl.deleteSync(sync);
+                                const currentVao = gl.getParameter(gl.VERTEX_ARRAY_BINDING);
+                                gl.bindVertexArray(this.distancesTransformFeedback.vao);
+                                gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
+                                gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
+                                gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-                            if (currentVao) gl.bindVertexArray(currentVao);
+                                if (currentVao) gl.bindVertexArray(currentVao);
 
-                            // console.timeEnd("gpu_compute_distances");
+                                // console.timeEnd("gpu_compute_distances");
 
-                            resolve();
+                                resolve();
+                        }
                     }
                 };
                 this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
