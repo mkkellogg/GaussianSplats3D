@@ -138,10 +138,10 @@ export const disposeAllMeshes = (object3D) => {
     }
 };
 
-export const delayedExecute = (func) => {
+export const delayedExecute = (func, fast) => {
     return new Promise((resolve) => {
         window.setTimeout(() => {
             resolve(func());
-        }, 50);
+        }, fast ? 1 : 50);
     });
 };
