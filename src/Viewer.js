@@ -987,7 +987,7 @@ export class Viewer {
                                 finish(resolve);
                             }
                         }
-                    });
+                    }, true);
                 });
             };
 
@@ -1099,14 +1099,15 @@ export class Viewer {
                     }
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                     this.sortWorker.maxSplatCount = maxSplatCount;
-                    resolve();
-                } else if (e.data.sortSetupComplete) {
+
                     console.log('Sorting web worker ready.');
                     const splatDataTextures = this.splatMesh.getSplatDataTextures();
                     const covariancesTextureSize = splatDataTextures.covariances.size;
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
                     console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
                     console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
+
+                    resolve();
                 }
             };
         });
@@ -1181,10 +1182,16 @@ export class Viewer {
                             scene.scale.copy(newSceneTransformComponents[index].scale);
                         });
                         this.splatMesh.updateTransforms();
+
+                        this.splatRenderReady = false;
                         this.updateSplatSort(true)
                         .then(() => {
-                            if (checkForEarlyExit()) return;
+                            if (checkForEarlyExit()) {
+                                this.splatRenderReady = true;
+                                return;
+                            }
                             this.sortPromise.then(() => {
+                                this.splatRenderReady = true;
                                 onDone();
                             });
                         });
@@ -1623,7 +1630,6 @@ export class Viewer {
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
             if (!force) {
-                if (!this.initialized || !this.splatRenderReady) return;
                 if (!this.sortNeededForSceneChange && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
                     if (angleDiff <= 0.99) needsRefreshForRotation = true;
                     if (positionDiff >= 1.0) needsRefreshForPosition = true;
@@ -1644,10 +1650,6 @@ export class Viewer {
 
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
-            }
-
-            if (!force) {
-                if (!this.initialized || !this.splatRenderReady) return;
             }
 
             if (this.splatMesh.dynamicMode || shouldSortAll) {
