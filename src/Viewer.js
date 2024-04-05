@@ -941,7 +941,7 @@ export class Viewer {
             this.splatRenderReady = false;
             let splatProcessingTaskId = null;
 
-            const finish = (resolver) => {
+            const finish = (updateInfo, resolver) => {
                 if (this.isDisposingOrDisposed()) return;
 
                 if (splatProcessingTaskId !== null) {
@@ -952,11 +952,10 @@ export class Viewer {
                 // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs splat centers and
                 // transform indexes so that it can calculate those distance values.
                 if (!this.gpuAcceleratedSort) {
-                    const centers = this.integerBasedSort ? this.splatMesh.getIntegerCenters(true) : this.splatMesh.getFloatCenters(true);
-                    const transformIndexes = this.splatMesh.getTransformIndexes();
                     this.sortWorker.postMessage({
-                        'centers': centers.buffer,
-                        'transformIndexes': transformIndexes.buffer
+                        'centers': updateInfo.centers.buffer,
+                        'transformIndexes': updateInfo.transformIndexes.buffer,
+                        'updateInfo': updateInfo
                     });
                 }
 
@@ -974,17 +973,18 @@ export class Viewer {
                         if (this.isDisposingOrDisposed()) {
                             resolve();
                         } else {
-                            this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild, showLoadingSpinnerForSplatTreeBuild);
+                            const updateInfo = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
+                                                                          finalBuild, showLoadingSpinnerForSplatTreeBuild);
                             const maxSplatCount = this.splatMesh.getMaxSplatCount();
                             if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
                                 this.disposeSortWorker();
                             }
                             if (!this.sortWorker) {
                                 this.setupSortWorker(this.splatMesh).then(() => {
-                                    finish(resolve);
+                                    finish(updateInfo, resolve);
                                 });
                             } else {
-                                finish(resolve);
+                                finish(updateInfo, resolve);
                             }
                         }
                     }, true);
@@ -1014,6 +1014,7 @@ export class Viewer {
      * @param {boolean} finalBuild Will the splat mesh be in its final state after this build?
      * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whether or not to show the loading spinner during
      *                                                      construction of the splat tree.
+     * @return {object} Object containing info about the splats that are updated
      */
     addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingSpinnerForSplatTreeBuild = false) {
         if (this.isDisposingOrDisposed()) return;
@@ -1039,9 +1040,10 @@ export class Viewer {
                 this.loadingSpinner.removeTask(splatOptimizingTaskId);
             }
         };
-        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
-                             onSplatTreeIndexesUpload, onSplatTreeConstructed);
+        const updateInfo = this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
+                                                onSplatTreeIndexesUpload, onSplatTreeConstructed);
         this.splatMesh.frustumCulled = false;
+        return updateInfo;
     }
 
     /**
