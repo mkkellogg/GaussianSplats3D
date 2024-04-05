@@ -109,14 +109,14 @@ export class Viewer {
         // scene may change. This prevents optimizations that depend on a static scene from being made. Additionally, if 'dynamicScene' is
         // true it tells the splat mesh to not apply scene tranforms to splat data that is returned by functions like
         // SplatMesh.getSplatCenter() by default.
-        const dynamicScene = !!options.dynamicScene;
+        this.dynamicScene = !!options.dynamicScene;
 
         // When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at a
         // substantially different resolution than that at which they were rendered during training. This will only work correctly
         // for models that were trained using a process that utilizes this compensation calculation. For more details:
         // https://github.com/nerfstudio-project/gsplat/pull/117
         // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
-        const antialiased = options.antialiased || false;
+        this.antialiased = options.antialiased || false;
 
         this.webXRMode = options.webXRMode || WebXRMode.None;
 
@@ -141,10 +141,14 @@ export class Viewer {
         // Specify the maximum screen-space splat size, can help deal with large splats that get too unwieldy
         this.maxScreenSpaceSplatSize = options.maxScreenSpaceSplatSize || 2048;
 
-        this.splatMesh = new SplatMesh(dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort, antialiased, this.maxScreenSpaceSplatSize);
+        this.createSplatMesh();
 
         this.controls = null;
+        this.perspectiveControls = null;
+        this.orthographicControls = null;
+
+        this.orthographicCamera = null;
+        this.perspectiveCamera = null;
 
         this.showMeshCursor = false;
         this.showControlPlane = false;
@@ -162,11 +166,13 @@ export class Viewer {
         this.runAfterFirstSort = [];
 
         this.selfDrivenModeRunning = false;
-        this.splatRenderingInitialized = false;
+        this.splatRenderReady = false;
 
         this.raycaster = new Raycaster();
 
         this.infoPanel = null;
+
+        this.startInOrthographicMode = false;
 
         this.currentFPS = 0;
         this.lastSortTime = 0;
@@ -206,6 +212,12 @@ export class Viewer {
         if (!this.dropInMode) this.init();
     }
 
+    createSplatMesh() {
+        this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
+                                       this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize);
+        this.splatMesh.frustumCulled = false;
+    }
+
     init() {
 
         if (this.initialized) return;
@@ -226,7 +238,10 @@ export class Viewer {
         this.getRenderDimensions(renderDimensions);
 
         if (!this.usingExternalCamera) {
-            this.camera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 500);
+            this.perspectiveCamera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 1000);
+            this.orthographicCamera = new THREE.OrthographicCamera(renderDimensions.x / -2, renderDimensions.x / 2,
+                                                                   renderDimensions.y / 2, renderDimensions.y / -2, 0.1, 1000 );
+            this.camera = this.startInOrthographicMode ? this.orthographicCamera : this.perspectiveCamera;
             this.camera.position.copy(this.initialCameraPosition);
             this.camera.up.copy(this.cameraUp).normalize();
             this.camera.lookAt(this.initialCameraLookAt);
@@ -270,14 +285,28 @@ export class Viewer {
         this.sceneHelper.setupControlPlane();
 
         if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
-            this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-            this.controls.listenToKeyEvents(window);
-            this.controls.rotateSpeed = 0.5;
-            this.controls.maxPolarAngle = Math.PI * .75;
-            this.controls.minPolarAngle = 0.1;
-            this.controls.enableDamping = true;
-            this.controls.dampingFactor = 0.05;
-            this.controls.target.copy(this.initialCameraLookAt);
+            if (!this.usingExternalCamera) {
+                this.perspectiveControls = new OrbitControls(this.perspectiveCamera, this.renderer.domElement);
+                this.orthographicControls = new OrbitControls(this.orthographicCamera, this.renderer.domElement);
+            } else {
+                if (this.camera.isOrthographicCamera) {
+                    this.orthographicControls = new OrbitControls(this.camera, this.renderer.domElement);
+                } else {
+                    this.perspectiveControls = new OrbitControls(this.camera, this.renderer.domElement);
+                }
+            }
+            for (let controls of [this.perspectiveControls, this.orthographicControls]) {
+                if (controls) {
+                    controls.listenToKeyEvents(window);
+                    controls.rotateSpeed = 0.5;
+                    controls.maxPolarAngle = Math.PI * .75;
+                    controls.minPolarAngle = 0.1;
+                    controls.enableDamping = true;
+                    controls.dampingFactor = 0.05;
+                    controls.target.copy(this.initialCameraLookAt);
+                }
+            }
+            this.controls = this.camera.isOrthographicCamera ? this.orthographicControls : this.perspectiveControls;
             this.mouseMoveListener = this.onMouseMove.bind(this);
             this.renderer.domElement.addEventListener('pointermove', this.mouseMoveListener, false);
             this.mouseDownListener = this.onMouseDown.bind(this);
@@ -341,7 +370,7 @@ export class Viewer {
                 case 'KeyC':
                     this.showMeshCursor = !this.showMeshCursor;
                 break;
-                case 'KeyP':
+                case 'KeyU':
                     this.showControlPlane = !this.showControlPlane;
                 break;
                 case 'KeyI':
@@ -350,6 +379,26 @@ export class Viewer {
                         this.infoPanel.show();
                     } else {
                         this.infoPanel.hide();
+                    }
+                break;
+                case 'KeyO':
+                    if (!this.usingExternalCamera) {
+                        this.setOrthographicMode(!this.camera.isOrthographicCamera);
+                    }
+                break;
+                case 'KeyP':
+                    if (!this.usingExternalCamera) {
+                        this.splatMesh.setPointCloudModeEnabled(!this.splatMesh.getPointCloudModeEnabled());
+                    }
+                break;
+                case 'Equal':
+                    if (!this.usingExternalCamera) {
+                        this.splatMesh.setSplatScale(this.splatMesh.getSplatScale() + 0.05);
+                    }
+                break;
+                case 'Minus':
+                    if (!this.usingExternalCamera) {
+                        this.splatMesh.setSplatScale(Math.max(this.splatMesh.getSplatScale() - 0.05, 0.0));
                     }
                 break;
             }
@@ -423,6 +472,57 @@ export class Viewer {
         }
     }
 
+    setOrthographicMode(orthographicMode) {
+        if (orthographicMode === this.camera.isOrthographicCamera) return;
+        const fromCamera = this.camera;
+        const toCamera = orthographicMode ? this.orthographicCamera : this.perspectiveCamera;
+        toCamera.position.copy(fromCamera.position);
+        toCamera.up.copy(fromCamera.up);
+        toCamera.rotation.copy(fromCamera.rotation);
+        toCamera.quaternion.copy(fromCamera.quaternion);
+        toCamera.matrix.copy(fromCamera.matrix);
+        this.camera = toCamera;
+
+        if (this.controls) {
+            const fromControls = this.controls;
+            const toControls = orthographicMode ? this.orthographicControls : this.perspectiveControls;
+            toControls.target.copy(fromControls.target);
+            toControls.clearDampedRotation();
+            fromControls.clearDampedRotation();
+            if (orthographicMode) {
+                Viewer.setCameraZoomFromPosition(toCamera, fromCamera, fromControls);
+            } else {
+                Viewer.setCameraPositionFromZoom(toCamera, fromCamera, toControls);
+            }
+            this.controls = toControls;
+            this.camera.lookAt(this.controls.target);
+        }
+    }
+
+    static setCameraPositionFromZoom = function() {
+
+        const tempVector = new THREE.Vector3();
+
+        return function(positionCamera, zoomedCamera, controls) {
+            const toLookAtDistance = 1 / (zoomedCamera.zoom * 0.001);
+            tempVector.copy(controls.target).sub(positionCamera.position).normalize().multiplyScalar(toLookAtDistance).negate();
+            positionCamera.position.copy(controls.target).add(tempVector);
+        };
+
+    }();
+
+
+    static setCameraZoomFromPosition = function() {
+
+        const tempVector = new THREE.Vector3();
+
+        return function(zoomCamera, positionZamera, controls) {
+            const toLookAtDistance = tempVector.copy(controls.target).sub(positionZamera.position).length();
+            zoomCamera.zoom = 1 / (toLookAtDistance * .001);
+        };
+
+    }();
+
     updateSplatMesh = function() {
 
         const renderDimensions = new THREE.Vector2();
@@ -438,11 +538,12 @@ export class Viewer {
                 const focalLengthY = this.camera.projectionMatrix.elements[5] * 0.5 *
                                      this.devicePixelRatio * renderDimensions.y;
 
-                const focalAdjustment = this.focalAdjustment;
+                const focalMultiplier = this.camera.isOrthographicCamera ? (1.0 / this.devicePixelRatio) : 1.0;
+                const focalAdjustment = this.focalAdjustment * focalMultiplier;
                 const inverseFocalAdjustment = 1.0 / focalAdjustment;
 
-                this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment,
-                                              focalLengthY * focalAdjustment, inverseFocalAdjustment);
+                this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment, focalLengthY * focalAdjustment,
+                                              this.camera.isOrthographicCamera, this.camera.zoom || 1.0, inverseFocalAdjustment);
             }
         };
 
@@ -832,40 +933,38 @@ export class Viewer {
      */
     addSplatBuffers = function() {
 
-        let loadCount = 0;
-        let splatProcessingTaskId = null;
-
         return function(splatBuffers, splatBufferOptions = [], finalBuild = true,
                         showLoadingUI = true, showLoadingSpinnerForSplatTreeBuild = true) {
 
             if (this.isDisposingOrDisposed()) return Promise.resolve();
 
-            this.splatRenderingInitialized = false;
-            loadCount++;
+            this.splatRenderReady = false;
+            let splatProcessingTaskId = null;
 
-            const finish = (resolver) => {
+            const finish = (buildResults, resolver) => {
                 if (this.isDisposingOrDisposed()) return;
 
-                loadCount--;
-                if (loadCount === 0) {
-                    if (splatProcessingTaskId !== null) {
-                        this.loadingSpinner.removeTask(splatProcessingTaskId);
-                        splatProcessingTaskId = null;
-                    }
-                    this.splatRenderingInitialized = true;
+                if (splatProcessingTaskId !== null) {
+                    this.loadingSpinner.removeTask(splatProcessingTaskId);
+                    splatProcessingTaskId = null;
                 }
 
                 // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs splat centers and
                 // transform indexes so that it can calculate those distance values.
                 if (!this.gpuAcceleratedSort) {
-                    const centers = this.integerBasedSort ? this.splatMesh.getIntegerCenters(true) : this.splatMesh.getFloatCenters(true);
-                    const transformIndexes = this.splatMesh.getTransformIndexes();
                     this.sortWorker.postMessage({
-                        'centers': centers.buffer,
-                        'transformIndexes': transformIndexes.buffer
+                        'centers': buildResults.centers.buffer,
+                        'transformIndexes': buildResults.transformIndexes.buffer,
+                        'range': {
+                            'from': buildResults.from,
+                            'to': buildResults.to,
+                            'count': buildResults.count
+                        }
                     });
                 }
-                this.forceSort = true;
+
+                this.splatRenderReady = true;
+                this.sortNeededForSceneChange = true;
                 resolver();
             };
 
@@ -878,20 +977,21 @@ export class Viewer {
                         if (this.isDisposingOrDisposed()) {
                             resolve();
                         } else {
-                            this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild, showLoadingSpinnerForSplatTreeBuild);
+                            const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
+                                                                            finalBuild, showLoadingSpinnerForSplatTreeBuild);
                             const maxSplatCount = this.splatMesh.getMaxSplatCount();
                             if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
                                 this.disposeSortWorker();
                             }
                             if (!this.sortWorker) {
                                 this.setupSortWorker(this.splatMesh).then(() => {
-                                    finish(resolve);
+                                    finish(buildResults, resolve);
                                 });
                             } else {
-                                finish(resolve);
+                                finish(buildResults, resolve);
                             }
                         }
-                    });
+                    }, true);
                 });
             };
 
@@ -899,12 +999,6 @@ export class Viewer {
         };
 
     }();
-
-    disposeSortWorker() {
-        if (this.sortWorker) this.sortWorker.terminate();
-        this.sortWorker = null;
-        this.sortRunning = false;
-    }
 
     /**
      * Add one or more instances of SplatBuffer to the SplatMesh instance managed by the viewer. This function is additive; all splat
@@ -924,6 +1018,7 @@ export class Viewer {
      * @param {boolean} finalBuild Will the splat mesh be in its final state after this build?
      * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whether or not to show the loading spinner during
      *                                                      construction of the splat tree.
+     * @return {object} Object containing info about the splats that are updated
      */
     addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingSpinnerForSplatTreeBuild = false) {
         if (this.isDisposingOrDisposed()) return;
@@ -943,15 +1038,13 @@ export class Viewer {
                 }
             }
         };
-        const onSplatTreeConstructed = (finished) => {
+        const onSplatTreeReady = (finished) => {
             if (this.isDisposingOrDisposed()) return;
             if (finished && splatOptimizingTaskId) {
                 this.loadingSpinner.removeTask(splatOptimizingTaskId);
             }
         };
-        this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild,
-                             onSplatTreeIndexesUpload, onSplatTreeConstructed);
-        this.splatMesh.frustumCulled = false;
+        return this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild, onSplatTreeIndexesUpload, onSplatTreeReady);
     }
 
     /**
@@ -979,7 +1072,6 @@ export class Viewer {
                     }
                     this.lastSortTime = e.data.sortTime;
                     this.sortPromiseResolver();
-                    this.sortPromise = null;
                     this.sortPromiseResolver = null;
                     this.forceRenderNextFrame();
                     if (sortCount === 0) {
@@ -1010,16 +1102,108 @@ export class Viewer {
                     }
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                     this.sortWorker.maxSplatCount = maxSplatCount;
-                    resolve();
-                } else if (e.data.sortSetupComplete) {
+
                     console.log('Sorting web worker ready.');
                     const splatDataTextures = this.splatMesh.getSplatDataTextures();
                     const covariancesTextureSize = splatDataTextures.covariances.size;
                     const centersColorsTextureSize = splatDataTextures.centerColors.size;
                     console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
                     console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
+
+                    resolve();
                 }
             };
+        });
+    }
+
+    disposeSortWorker() {
+        if (this.sortWorker) this.sortWorker.terminate();
+        this.sortWorker = null;
+        this.sortRunning = false;
+    }
+
+    removeSplatScene(index, showLoadingUI = true) {
+        if (this.isDisposingOrDisposed()) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            let revmovalTaskId;
+
+            if (showLoadingUI) {
+                this.loadingSpinner.show();
+                revmovalTaskId = this.loadingSpinner.addTask('Removing splat scene...');
+            }
+
+            const checkAndHideLoadingUI = () => {
+                if (showLoadingUI) {
+                    this.loadingSpinner.hide();
+                    this.loadingSpinner.removeTask(revmovalTaskId);
+                }
+            };
+
+            const onDone = () => {
+                checkAndHideLoadingUI();
+                resolve();
+            };
+
+            const checkForEarlyExit = () => {
+                if (this.isDisposingOrDisposed()) {
+                    onDone();
+                    return true;
+                }
+                return false;
+            };
+
+            delayedExecute(() => {
+                this.sortPromise.then(() => {
+                    if (checkForEarlyExit()) return;
+                    const savedSplatBuffers = [];
+                    const savedSceneOptions = [];
+                    const savedSceneTransformComponents = [];
+                    const savedVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
+                    for (let i = 0; i < this.splatMesh.scenes.length; i++) {
+                        if (i !== index) {
+                            const scene = this.splatMesh.scenes[i];
+                            savedSplatBuffers.push(scene.splatBuffer);
+                            savedSceneOptions.push(this.splatMesh.sceneOptions[i]);
+                            savedSceneTransformComponents.push({
+                                'position': scene.position.clone(),
+                                'quaternion': scene.quaternion.clone(),
+                                'scale': scene.scale.clone()
+                            });
+                        }
+                    }
+                    this.splatMesh.dispose();
+                    this.createSplatMesh();
+
+                    this.addSplatBuffers(savedSplatBuffers, savedSceneOptions, true, false, true)
+                    .then(() => {
+                        if (checkForEarlyExit()) return;
+                        checkAndHideLoadingUI();
+                        this.splatMesh.visibleRegionFadeStartRadius = savedVisibleRegionFadeStartRadius;
+                        this.splatMesh.scenes.forEach((scene, index) => {
+                            scene.position.copy(savedSceneTransformComponents[index].position);
+                            scene.quaternion.copy(savedSceneTransformComponents[index].quaternion);
+                            scene.scale.copy(savedSceneTransformComponents[index].scale);
+                        });
+                        this.splatMesh.updateTransforms();
+
+                        this.splatRenderReady = false;
+                        this.updateSplatSort(true)
+                        .then(() => {
+                            if (checkForEarlyExit()) {
+                                this.splatRenderReady = true;
+                                return;
+                            }
+                            this.sortPromise.then(() => {
+                                this.splatRenderReady = true;
+                                onDone();
+                            });
+                        });
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+                });
+            });
         });
     }
 
@@ -1097,7 +1281,7 @@ export class Viewer {
 
             this.camera = null;
             this.threeScene = null;
-            this.splatRenderingInitialized = false;
+            this.splatRenderReady = false;
             this.initialized = false;
             if (this.renderer) {
                 if (!this.usingExternalRenderer) {
@@ -1181,7 +1365,7 @@ export class Viewer {
     render = function() {
 
         return function() {
-            if (!this.initialized || !this.splatRenderingInitialized) return;
+            if (!this.initialized || !this.splatRenderReady) return;
 
             const hasRenderables = (threeScene) => {
                 for (let child of threeScene.children) {
@@ -1189,10 +1373,14 @@ export class Viewer {
                 }
                 return false;
             };
+
             const savedAuoClear = this.renderer.autoClear;
-            this.renderer.autoClear = false;
-            if (hasRenderables(this.threeScene)) this.renderer.render(this.threeScene, this.camera);
+            if (hasRenderables(this.threeScene)) {
+                this.renderer.render(this.threeScene, this.camera);
+                this.renderer.autoClear = false;
+            }
             this.renderer.render(this.splatMesh, this.camera);
+            this.renderer.autoClear = false;
             if (this.sceneHelper.getFocusMarkerOpacity() > 0.0) this.renderer.render(this.sceneHelper.focusMarker, this.camera);
             if (this.showControlPlane) this.renderer.render(this.sceneHelper.controlPlane, this.camera);
             this.renderer.autoClear = savedAuoClear;
@@ -1202,8 +1390,13 @@ export class Viewer {
 
     update(renderer, camera) {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
-        if (!this.initialized || !this.splatRenderingInitialized) return;
-        if (this.controls) this.controls.update();
+        if (!this.initialized || !this.splatRenderReady) return;
+        if (this.controls) {
+            this.controls.update();
+            if (this.camera.isOrthographicCamera && !this.usingExternalCamera) {
+                Viewer.setCameraPositionFromZoom(this.camera, this.camera, this.controls);
+            }
+        }
         this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
         this.updateSplatSort();
         this.updateForRendererSizeChanges();
@@ -1250,15 +1443,25 @@ export class Viewer {
 
         const lastRendererSize = new THREE.Vector2();
         const currentRendererSize = new THREE.Vector2();
+        let lastCameraOrthographic;
 
         return function() {
-            this.renderer.getSize(currentRendererSize);
-            if (currentRendererSize.x !== lastRendererSize.x || currentRendererSize.y !== lastRendererSize.y) {
-                if (!this.usingExternalCamera) {
-                    this.camera.aspect = currentRendererSize.x / currentRendererSize.y;
+            if (!this.usingExternalCamera) {
+                this.renderer.getSize(currentRendererSize);
+                if (lastCameraOrthographic === undefined || lastCameraOrthographic !== this.camera.isOrthographicCamera ||
+                    currentRendererSize.x !== lastRendererSize.x || currentRendererSize.y !== lastRendererSize.y) {
+                    if (this.camera.isOrthographicCamera) {
+                        this.camera.left = -currentRendererSize.x / 2.0;
+                        this.camera.right = currentRendererSize.x / 2.0;
+                        this.camera.top = currentRendererSize.y / 2.0;
+                        this.camera.bottom = -currentRendererSize.y / 2.0;
+                    } else {
+                        this.camera.aspect = currentRendererSize.x / currentRendererSize.y;
+                    }
                     this.camera.updateProjectionMatrix();
+                    lastRendererSize.copy(currentRendererSize);
+                    lastCameraOrthographic = this.camera.isOrthographicCamera;
                 }
-                lastRendererSize.copy(currentRendererSize);
             }
         };
 
@@ -1375,8 +1578,10 @@ export class Viewer {
             const meshCursorPosition = this.showMeshCursor ? this.sceneHelper.meshCursor.position : null;
             const splatRenderCountPct = this.splatRenderCount / splatCount * 100;
             this.infoPanel.update(renderDimensions, this.camera.position, cameraLookAtPosition,
-                                  this.camera.up, meshCursorPosition, this.currentFPS || 'N/A', splatCount,
-                                  this.splatRenderCount, splatRenderCountPct, this.lastSortTime, this.focalAdjustment);
+                                  this.camera.up, this.camera.isOrthographicCamera, meshCursorPosition,
+                                  this.currentFPS || 'N/A', splatCount, this.splatRenderCount, splatRenderCountPct,
+                                  this.lastSortTime, this.focalAdjustment, this.splatMesh.getSplatScale(),
+                                  this.splatMesh.getPointCloudModeEnabled());
         };
 
     }();
@@ -1415,9 +1620,8 @@ export class Viewer {
             }
         ];
 
-        return async function() {
+        return async function(force = false) {
             if (this.sortRunning) return;
-            if (!this.initialized || !this.splatRenderingInitialized) return;
 
             let angleDiff = 0;
             let positionDiff = 0;
@@ -1428,10 +1632,12 @@ export class Viewer {
             angleDiff = sortViewDir.dot(lastSortViewDir);
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
-            if (!this.forceSort && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
-                if (angleDiff <= 0.99) needsRefreshForRotation = true;
-                if (positionDiff >= 1.0) needsRefreshForPosition = true;
-                if (!needsRefreshForRotation && !needsRefreshForPosition) return;
+            if (!force) {
+                if (!this.sortNeededForSceneChange && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
+                    if (angleDiff <= 0.99) needsRefreshForRotation = true;
+                    if (positionDiff >= 1.0) needsRefreshForPosition = true;
+                    if (!needsRefreshForRotation && !needsRefreshForPosition) return;
+                }
             }
 
             this.sortRunning = true;
@@ -1496,7 +1702,7 @@ export class Viewer {
                 lastSortViewDir.copy(sortViewDir);
             }
 
-            this.forceSort = false;
+            this.sortNeededForSceneChange = false;
         };
 
     }();

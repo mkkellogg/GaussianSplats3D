@@ -59,11 +59,19 @@ Keyboard
   - Ratio of rendered splats to total splats
   - Last splat sort duration
 
-- `P` Toggles a debug object that shows the orientation of the camera controls. It includes a green arrow representing the camera's orbital axis and a white square representing the plane at which the camera's elevation angle is 0.
+- `U` Toggles a debug object that shows the orientation of the camera controls. It includes a green arrow representing the camera's orbital axis and a white square representing the plane at which the camera's elevation angle is 0.
 
 - `Left arrow` Rotate the camera's up vector counter-clockwise
 
 - `Right arrow` Rotate the camera's up vector clockwise
+
+- `P` Toggle point-cloud mode, where each splat is rendered as a filled circle
+
+- `=` Increase splat scale
+
+- `-` Decrease splat scale
+
+- `O` Toggle orthographic mode
 
 <br>
 
@@ -262,8 +270,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'webXRMode': GaussianSplats3D.WebXRMode.None,
     'renderMode': GaussianSplats3D.RenderMode.OnChange,
     'sceneRevealMode': GaussianSplats3D.SceneRevealMode.Instant,
-    `antialiased`: false,
-    `focalAdjustment`: 1.0
+    'antialiased': false,
+    'focalAdjustment': 1.0
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
