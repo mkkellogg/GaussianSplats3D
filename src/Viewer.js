@@ -1119,7 +1119,16 @@ export class Viewer {
     }
 
     removeSplatScene(index, showLoadingUI = true) {
+        if (this.isLoading()) {
+            throw new Error('Cannot remove splat scene while another load is already in progress.');
+        }
+
+        if (this.isDisposingOrDisposed()) {
+            throw new Error('Cannot remove splat scene after dispose() is called.');
+        }
+
         if (this.isDisposingOrDisposed()) return Promise.resolve();
+
         return new Promise((resolve, reject) => {
             let revmovalTaskId;
 
