@@ -1169,7 +1169,6 @@ export class Viewer {
                     }
                     this.splatMesh.dispose();
                     this.createSplatMesh();
-
                     this.addSplatBuffers(savedSplatBuffers, savedSceneOptions, true, false, true)
                     .then(() => {
                         if (checkForEarlyExit()) return;

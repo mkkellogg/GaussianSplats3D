@@ -96,6 +96,7 @@ export class SplatMesh extends THREE.Mesh {
 
         this.disposed = false;
         this.lastRenderer = null;
+        this.visible = false;
     }
 
     /**
@@ -672,16 +673,28 @@ export class SplatMesh extends THREE.Mesh {
         }
         this.scenes = newScenes;
 
+        let splatBuffersChanged = false;
+        if (splatBuffers.length !== this.lastBuildScenes.length) {
+            splatBuffersChanged = true;
+        } else {
+            for (let i = 0; i < splatBuffers.length; i++) {
+                const splatBuffer = splatBuffers[i];
+                if (splatBuffer !== this.lastBuildScenes[i].splatBuffer) {
+                    splatBuffersChanged = true;
+                    break;
+                }
+            }
+        }
+
         let isUpdateBuild = true;
-        if (this.scenes.length > 1 ||
+        if (this.scenes.length !== 1 ||
             this.lastBuildSceneCount !== this.scenes.length ||
             this.lastBuildMaxSplatCount !== maxSplatCount ||
-            this.scenes[0].splatBuffer !== this.lastBuildScenes[0].splatBuffer) {
+            splatBuffersChanged) {
                 isUpdateBuild = false;
        }
 
        if (!isUpdateBuild) {
-            isUpdateBuild = false;
             this.boundingBox = new THREE.Box3();
             this.maxSplatDistanceFromSceneCenter = 0;
             this.visibleRegionBufferRadius = 0;
@@ -723,13 +736,15 @@ export class SplatMesh extends THREE.Mesh {
         this.lastBuildMaxSplatCount = this.getMaxSplatCount();
         this.lastBuildSceneCount = this.scenes.length;
 
-        if (finalBuild) {
+        if (finalBuild && this.scenes.length > 0) {
             this.buildSplatTree(sceneOptions.map(options => options.splatAlphaRemovalThreshold || 1),
                                 onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
                 if (this.onSplatTreeReadyCallback) this.onSplatTreeReadyCallback(this.splatTree);
             });
         }
+
+        this.visible = (this.scenes.length > 0);
 
         return buildResults;
     }
@@ -789,6 +804,7 @@ export class SplatMesh extends THREE.Mesh {
 
         this.disposed = true;
         this.lastRenderer = null;
+        this.visible = false;
     }
 
     /**

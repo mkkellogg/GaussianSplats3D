@@ -19,6 +19,7 @@ export class DropInViewer extends THREE.Group {
         options.renderer = undefined;
 
         this.viewer = new Viewer(options);
+        this.splatMesh = null;
 
         this.callbackMesh = DropInViewer.createCallbackMesh();
         this.add(this.callbackMesh);
@@ -49,11 +50,7 @@ export class DropInViewer extends THREE.Group {
      */
     addSplatScene(path, options = {}) {
         if (options.showLoadingUI !== false) options.showLoadingUI = true;
-        const loadPromise = this.viewer.addSplatScene(path, options);
-        loadPromise.then(() => {
-            this.add(this.viewer.splatMesh);
-        });
-        return loadPromise;
+        return this.viewer.addSplatScene(path, options);
     }
 
     /**
@@ -76,11 +73,7 @@ export class DropInViewer extends THREE.Group {
      */
     addSplatScenes(sceneOptions, showLoadingUI) {
         if (showLoadingUI !== false) showLoadingUI = true;
-        const loadPromise = this.viewer.addSplatScenes(sceneOptions, showLoadingUI);
-        loadPromise.then(() => {
-            this.add(this.viewer.splatMesh);
-        });
-        return loadPromise;
+        return this.viewer.addSplatScenes(sceneOptions, showLoadingUI);
     }
 
     /**
@@ -92,11 +85,22 @@ export class DropInViewer extends THREE.Group {
         return this.viewer.getSplatScene(sceneIndex);
     }
 
+    removeSplatScene(index) {
+        return this.viewer.removeSplatScene(index);
+    }
+
     dispose() {
         return this.viewer.dispose();
     }
 
     static onBeforeRender(viewer, renderer, threeScene, camera) {
+        if (this.splatMesh !== this.viewer.splatMesh) {
+            if (this.splatMesh) {
+                this.remove(this.splatMesh);
+            }
+            this.splatMesh = this.viewer.splatMesh;
+            this.add(this.viewer.splatMesh);
+        }
         viewer.update(renderer, camera);
     }
 
