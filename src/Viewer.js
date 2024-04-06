@@ -191,6 +191,7 @@ export class Viewer {
         this.sortPromiseResolver = null;
         this.downloadPromisesToAbort = {};
         this.splatSceneLoadPromise = null;
+        this.splatSceneRemovalPromise = null;
 
         this.loadingSpinner = new LoadingSpinner(null, this.rootElement || document.body);
         this.loadingSpinner.hide();
@@ -545,8 +546,9 @@ export class Viewer {
 
     }();
 
-    isLoading() {
-        return Object.keys(this.downloadPromisesToAbort) > 0 || this.splatSceneLoadPromise !== null;
+    isLoadingOrUnloading() {
+        return Object.keys(this.downloadPromisesToAbort) > 0 || this.splatSceneLoadPromise !== null ||
+                           this.splatSceneRemovalPromise !== null;
     }
 
     isDisposingOrDisposed() {
@@ -585,8 +587,8 @@ export class Viewer {
      */
     addSplatScene(path, options = {}) {
 
-        if (this.isLoading()) {
-            throw new Error('Cannot add splat scene while another load is already in progress.');
+        if (this.isLoadingOrUnloading()) {
+            throw new Error('Cannot add splat scene while another load or unload is already in progress.');
         }
 
         if (this.isDisposingOrDisposed()) {
@@ -693,8 +695,8 @@ export class Viewer {
      */
     addSplatScenes(sceneOptions, showLoadingUI = true, onProgress = undefined) {
 
-        if (this.isLoading()) {
-            throw new Error('Cannot add splat scene while another load is already in progress.');
+        if (this.isLoadingOrUnloading()) {
+            throw new Error('Cannot add splat scene while another load or unload is already in progress.');
         }
 
         if (this.isDisposingOrDisposed()) {
@@ -1119,8 +1121,8 @@ export class Viewer {
     }
 
     removeSplatScene(index, showLoadingUI = true) {
-        if (this.isLoading()) {
-            throw new Error('Cannot remove splat scene while another load is already in progress.');
+        if (this.isLoadingOrUnloading()) {
+            throw new Error('Cannot remove splat scene while another load or unload is already in progress.');
         }
 
         if (this.isDisposingOrDisposed()) {
@@ -1129,7 +1131,7 @@ export class Viewer {
 
         if (this.isDisposingOrDisposed()) return Promise.resolve();
 
-        return new Promise((resolve, reject) => {
+        this.splatSceneRemovalPromise = new Promise((resolve, reject) => {
             let revmovalTaskId;
 
             if (showLoadingUI) {
@@ -1144,9 +1146,11 @@ export class Viewer {
                 }
             };
 
-            const onDone = () => {
+            const onDone = (error) => {
                 checkAndHideLoadingUI();
-                resolve();
+                this.splatSceneRemovalPromise = null;
+                if (!error) resolve();
+                else reject(error);
             };
 
             const checkForEarlyExit = () => {
@@ -1204,11 +1208,13 @@ export class Viewer {
                         });
                     })
                     .catch((e) => {
-                        reject(e);
+                        onDone(e);
                     });
                 });
             });
         });
+
+        return this.splatSceneRemovalPromise;
     }
 
     /**
