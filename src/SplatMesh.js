@@ -835,10 +835,13 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     disposeSplatTree() {
-        if (this.splatTree) this.splatTree.dispose();
-        this.splatTree = null;
-        if (this.baseSplatTree) this.baseSplatTree.dispose();
-        this.baseSplatTree = null;
+        if (this.splatTree) {
+            this.splatTree.dispose();
+            this.splatTree = null;
+        } else if (this.baseSplatTree) {
+            this.baseSplatTree.dispose();
+            this.baseSplatTree = null;
+        }
     }
 
     getSplatTree() {

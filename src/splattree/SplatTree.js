@@ -78,7 +78,6 @@ class SplatSubTree {
     }
 }
 
-let splatTreeWorker;
 function createSplatTreeWorker(self) {
 
     let WorkerSplatTreeNodeIDGen = 0;
@@ -278,7 +277,7 @@ function createSplatTreeWorker(self) {
     };
 }
 
-function workerProcessCenters(centers, transferBuffers, maxDepth, maxCentersPerNode) {
+function workerProcessCenters(splatTreeWorker, centers, transferBuffers, maxDepth, maxCentersPerNode) {
     splatTreeWorker.postMessage({
         'process': {
             'centers': centers,
@@ -289,15 +288,14 @@ function workerProcessCenters(centers, transferBuffers, maxDepth, maxCentersPerN
 }
 
 function checkAndCreateWorker() {
-    if (!splatTreeWorker) {
-        splatTreeWorker = new Worker(
-            URL.createObjectURL(
-                new Blob(['(', createSplatTreeWorker.toString(), ')(self)'], {
-                    type: 'application/javascript',
-                }),
-            ),
-        );
-    }
+    const splatTreeWorker = new Worker(
+        URL.createObjectURL(
+            new Blob(['(', createSplatTreeWorker.toString(), ')(self)'], {
+                type: 'application/javascript',
+            }),
+        ),
+    );
+    return splatTreeWorker;
 }
 
 /**
@@ -319,8 +317,8 @@ export class SplatTree {
     }
 
     diposeSplatTreeWorker() {
-        if (splatTreeWorker) splatTreeWorker.terminate();
-        splatTreeWorker = null;
+        if (this.splatTreeWorker) this.splatTreeWorker.terminate();
+        this.splatTreeWorker = null;
     };
 
     /**
@@ -335,7 +333,7 @@ export class SplatTree {
      * @return {undefined}
      */
     processSplatMesh = function(splatMesh, filterFunc = () => true, onIndexesUpload, onSplatTreeConstruction) {
-        checkAndCreateWorker();
+        if (!this.splatTreeWorker) this.splatTreeWorker = checkAndCreateWorker();
 
         this.splatMesh = splatMesh;
         this.subTrees = [];
@@ -391,7 +389,7 @@ export class SplatTree {
                     allCenters.push(sceneCenters);
                 }
 
-                splatTreeWorker.onmessage = (e) => {
+                this.splatTreeWorker.onmessage = (e) => {
 
                     if (checkForEarlyExit()) return;
 
@@ -423,7 +421,7 @@ export class SplatTree {
                     if (checkForEarlyExit()) return;
                     if (onIndexesUpload) onIndexesUpload(true);
                     const transferBuffers = allCenters.map((array) => array.buffer);
-                    workerProcessCenters(allCenters, transferBuffers, this.maxDepth, this.maxCentersPerNode);
+                    workerProcessCenters(this.splatTreeWorker, allCenters, transferBuffers, this.maxDepth, this.maxCentersPerNode);
                 });
 
             });
