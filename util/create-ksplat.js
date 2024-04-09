@@ -1,4 +1,5 @@
 import * as GaussianSplats3D from '../build/gaussian-splats-3d.module.js';
+import * as THREE from '../build/demo/lib/three.module.js';
 import * as fs from 'fs';
 
 if (process.argv.length < 4) {
@@ -21,7 +22,7 @@ const path = intputFile.toLowerCase().trim();
 const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(path);
 const splatBuffer = fileBufferToSplatBuffer(fileData.buffer, format, compressionLevel, splatAlphaRemovalThreshold);
 
-fs.writeFileSync(outputFile, splatBuffer.bufferData);
+fs.writeFileSync(outputFile, Buffer.from(splatBuffer.bufferData));
 
 function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alphaRemovalThreshold) {
     let splatBuffer;
