@@ -189,8 +189,8 @@ export class Viewer {
 
         this.sortPromise = null;
         this.sortPromiseResolver = null;
-        this.downloadPromisesToAbort = {};
-        this.splatSceneLoadPromise = null;
+        this.splatSceneDownloadPromises = {};
+        this.splatSceneDownloadAndBuildPromise = null;
         this.splatSceneRemovalPromise = null;
 
         this.loadingSpinner = new LoadingSpinner(null, this.rootElement || document.body);
@@ -547,7 +547,7 @@ export class Viewer {
     }();
 
     isLoadingOrUnloading() {
-        return Object.keys(this.downloadPromisesToAbort) > 0 || this.splatSceneLoadPromise !== null ||
+        return Object.keys(this.splatSceneDownloadPromises).length > 0 || this.splatSceneDownloadAndBuildPromise !== null ||
                            this.splatSceneRemovalPromise !== null;
     }
 
@@ -555,13 +555,20 @@ export class Viewer {
         return this.disposing || this.disposed;
     }
 
-
-    clearSplatSceneLoadPromise() {
-        this.splatSceneLoadPromise = null;
+    addSplatSceneDownloadPromise(promise) {
+        this.splatSceneDownloadPromises[promise.id] = promise;
     }
 
-    setSplatSceneLoadPromise(promise) {
-        this.splatSceneLoadPromise = promise;
+    removeSplatSceneDownloadPromise(promise) {
+        delete this.splatSceneDownloadPromises[promise.id];
+    }
+
+    setSplatSceneDownloadAndBuildPromise(promise) {
+        this.splatSceneDownloadAndBuildPromise = promise;
+    }
+
+    clearSplatSceneDownloadAndBuildPromise() {
+        this.splatSceneDownloadAndBuildPromise = null;
     }
 
     /**
@@ -595,86 +602,206 @@ export class Viewer {
             throw new Error('Cannot add splat scene after dispose() is called.');
         }
 
-        let format = options.format;
-        if (format === undefined || format === null) {
-            format = sceneFormatFromPath(path);
-        }
+        const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
         const streamBuildSections = Viewer.isStreamable(format) && options.streamView;
+        const showLoadingUI = (options.showLoadingUI !== undefined && options.showLoadingUI !== null) ? options.showLoadingUI : true;
 
-        const splatBufferOptions = {
-            'rotation': options.rotation || options.orientation,
-            'position': options.position,
-            'scale': options.scale,
-            'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
-        };
-
-        let showLoadingUI = options.showLoadingUI;
-        if (showLoadingUI !== false) showLoadingUI = true;
-
-        let loadingTaskId = null;
+        let loadingUITaskId = null;
         if (showLoadingUI) {
             this.loadingSpinner.removeAllTasks();
-            loadingTaskId = this.loadingSpinner.addTask('Downloading...');
+            loadingUITaskId = this.loadingSpinner.addTask('Downloading...');
         }
-
-        let downloadDone = false;
-
-        let downloadedPercentage = 0;
-        const onProgress = (percent, percentLabel, loaderStatus) => {
-            if (showLoadingUI) {
-                if (loaderStatus === LoaderStatus.Downloading) {
-                    downloadedPercentage = percent;
-                    if (percent == 100) {
-                        this.loadingSpinner.setMessageForTask(loadingTaskId, 'Download complete!');
-                    } else {
-                        if (streamBuildSections) {
-                            this.loadingSpinner.setMessageForTask(loadingTaskId, 'Downloading splats...');
-                        } else {
-                            const suffix = percentLabel ? `: ${percentLabel}` : `...`;
-                            this.loadingSpinner.setMessageForTask(loadingTaskId, `Downloading${suffix}`);
-                        }
-                    }
-                } else if (loaderStatus === LoaderStatus.Processing) {
-                    this.loadingSpinner.setMessageForTask(loadingTaskId, 'Processing splats...');
-                } else {
-                    this.loadingSpinner.setMessageForTask(loadingTaskId, 'Ready!');
-                }
-            }
-            if (options.onProgress) options.onProgress(percent, percentLabel, loaderStatus);
-        };
-
-        const buildSection = (splatBuffer, firstBuild, finalBuild) => {
-            if (!streamBuildSections && options.onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
-            return this.addSplatBuffers([splatBuffer], [splatBufferOptions],
-                                         finalBuild, firstBuild && showLoadingUI, showLoadingUI).then(() => {
-                if (!streamBuildSections && options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
-                if (showLoadingUI) {
-                    if (firstBuild && streamBuildSections || finalBuild && !streamBuildSections) {
-                        this.runAfterFirstSort.push(() => {
-                            this.loadingSpinner.removeTask(loadingTaskId);
-                            if (!finalBuild && !downloadDone) this.loadingProgressBar.show();
-                        });
-                    }
-                    if (streamBuildSections) {
-                        if (finalBuild) {
-                            downloadDone = true;
-                            this.loadingProgressBar.hide();
-                        } else {
-                            this.loadingProgressBar.setProgress(downloadedPercentage);
-                        }
-                    }
-                }
-            });
-        };
-
         const hideLoadingUI = () => {
             this.loadingProgressBar.hide();
             this.loadingSpinner.removeAllTasks();
         };
 
-        const loadFunc = streamBuildSections ? this.loadSplatSceneToSplatBufferStreaming.bind(this) :
-                                               this.loadSplatSceneToSplatBufferNonStreaming.bind(this);
+        const onProgressUIUpdate = (percentComplete, percentCompleteLabel, loaderStatus) => {
+            if (showLoadingUI) {
+                if (loaderStatus === LoaderStatus.Downloading) {
+                    if (percentComplete == 100) {
+                        this.loadingSpinner.setMessageForTask(loadingUITaskId, 'Download complete!');
+                    } else {
+                        if (streamBuildSections) {
+                            this.loadingSpinner.setMessageForTask(loadingUITaskId, 'Downloading splats...');
+                        } else {
+                            const suffix = percentCompleteLabel ? `: ${percentCompleteLabel}` : `...`;
+                            this.loadingSpinner.setMessageForTask(loadingUITaskId, `Downloading${suffix}`);
+                        }
+                    }
+                } else if (loaderStatus === LoaderStatus.Processing) {
+                    this.loadingSpinner.setMessageForTask(loadingUITaskId, 'Processing splats...');
+                } else {
+                    this.loadingSpinner.setMessageForTask(loadingUITaskId, 'Ready!');
+                }
+            }
+        };
+
+        let downloadDone = false;
+        let downloadedPercentage = 0;
+        const splatBuffersAddedUIUpdate = (firstBuild, finalBuild) => {
+            if (showLoadingUI) {
+                if (firstBuild && streamBuildSections || finalBuild && !streamBuildSections) {
+                    this.runAfterFirstSort.push(() => {
+                        this.loadingSpinner.removeTask(loadingUITaskId);
+                        if (!finalBuild && !downloadDone) this.loadingProgressBar.show();
+                    });
+                }
+                if (streamBuildSections) {
+                    if (finalBuild) {
+                        downloadDone = true;
+                        this.loadingProgressBar.hide();
+                    } else {
+                        this.loadingProgressBar.setProgress(downloadedPercentage);
+                    }
+                }
+            }
+        };
+
+        const onProgress = (percentComplete, percentCompleteLabel, loaderStatus) => {
+            downloadedPercentage = percentComplete;
+            onProgressUIUpdate(percentComplete, percentCompleteLabel, loaderStatus);
+            if (options.onProgress) options.onProgress(percentComplete, percentCompleteLabel, loaderStatus);
+        };
+
+        const buildSection = (splatBuffer, firstBuild, finalBuild) => {
+            if (!streamBuildSections && options.onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
+            const addSplatBufferOptions = {
+                'rotation': options.rotation || options.orientation,
+                'position': options.position,
+                'scale': options.scale,
+                'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
+            };
+            return this.addSplatBuffers([splatBuffer], [addSplatBufferOptions],
+                                         finalBuild, firstBuild && showLoadingUI, showLoadingUI).then(() => {
+                if (!streamBuildSections && options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
+                splatBuffersAddedUIUpdate(firstBuild, finalBuild);
+            });
+        };
+
+        const loadFunc = streamBuildSections ? this.downloadAndBuildSingleSplatSceneStreaming.bind(this) :
+                                               this.downloadAndBuildSingleSplatSceneNonStreaming.bind(this);
         return loadFunc(path, format, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
+    }
+
+    /**
+     * Download a single non-streamed splat scene, convert to splat buffer and then rebuild the viewer's splat mesh
+     * by calling 'buildFunc'. Also sets/clears relevant instance synchronization objects, and calls appropriate functions
+     * on success or failure.
+     * @param {string} path Path to splat scene to be loaded
+     * @param {SceneFormat} format Format of the splat scene file
+     * @param {number} splatAlphaRemovalThreshold Ignore any splats with an alpha less than the specified value (valid range: 0 - 255)
+     * @param {function} buildFunc Function to build the viewer's splat mesh with the downloaded splat buffer
+     * @param {function} onProgress Function to be called as file data are received, or other processing occurs
+     * @param {function} onException Function to be called when exception occurs
+     * @return {AbortablePromise}
+     */
+    downloadAndBuildSingleSplatSceneNonStreaming(path, format, splatAlphaRemovalThreshold, buildFunc, onProgress, onException) {
+        const downloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onProgress, false, undefined, format)
+        .then((splatBuffer) => {
+            this.removeSplatSceneDownloadPromise(downloadPromise);
+            return buildFunc(splatBuffer, true, true).then(() => {
+                this.clearSplatSceneDownloadAndBuildPromise();
+            });
+        })
+        .catch((e) => {
+            if (onException) onException();
+            this.clearSplatSceneDownloadAndBuildPromise();
+            this.removeSplatSceneDownloadPromise(downloadPromise);
+            if (!(e instanceof AbortedPromiseError)) {
+                throw (new Error(`Viewer::addSplatScene -> Could not load file ${path}`));
+            }
+        });
+
+        this.addSplatSceneDownloadPromise(downloadPromise);
+        this.setSplatSceneDownloadAndBuildPromise(downloadPromise);
+
+        return downloadPromise;
+    }
+
+    /**
+     * Download a single splat scene and convert to splat buffer in a streamed manner, allowing rendering as the file downloads.
+     * As each section is downloaded, the viewer's splat mesh is rebuilt by calling 'buildFunc'
+     * Also sets/clears relevant instance synchronization objects, and calls appropriate functions on success or failure.
+     * @param {string} path Path to splat scene to be loaded
+     * @param {SceneFormat} format Format of the splat scene file
+     * @param {number} splatAlphaRemovalThreshold Ignore any splats with an alpha less than the specified value (valid range: 0 - 255)
+     * @param {function} buildFunc Function to rebuild the viewer's splat mesh after a new splat buffer section is downloaded
+     * @param {function} onDownloadProgress Function to be called as file data are received
+     * @param {function} onDownloadException Function to be called when exception occurs at any point during the full download
+     * @return {AbortablePromise}
+     */
+    downloadAndBuildSingleSplatSceneStreaming(path, format, splatAlphaRemovalThreshold, buildFunc,
+                                              onDownloadProgress, onDownloadException) {
+        let firstStreamedSectionDownloadAndBuildResolver;
+        let firstStreamedSectionDownloadAndBuildRejecter;
+        let splatSceneDownloadAndBuildResolver;
+        let splatSceneDownloadAndBuildRejecter;
+        let steamedSectionBuildCount = 0;
+        let streamedSectionBuilding = false;
+        const queuedStreamedSectionBuilds = [];
+
+        const checkAndBuildStreamedSections = () => {
+            if (queuedStreamedSectionBuilds.length > 0 && !streamedSectionBuilding && !this.isDisposingOrDisposed()) {
+                streamedSectionBuilding = true;
+                const queuedBuild = queuedStreamedSectionBuilds.shift();
+                buildFunc(queuedBuild.splatBuffer, queuedBuild.firstBuild, queuedBuild.finalBuild)
+                .then(() => {
+                    streamedSectionBuilding = false;
+                    if (queuedBuild.firstBuild) {
+                        firstStreamedSectionDownloadAndBuildRejecter = null;
+                        firstStreamedSectionDownloadAndBuildResolver();
+                    } else if (queuedBuild.finalBuild) {
+                        splatSceneDownloadAndBuildResolver();
+                        this.clearSplatSceneDownloadAndBuildPromise();
+                    }
+                    delayedExecute(() => checkAndBuildStreamedSections());
+                });
+            }
+        };
+
+        const onStreamedSectionProgress = (splatBuffer, finalBuild) => {
+            if (!this.isDisposingOrDisposed()) {
+                queuedStreamedSectionBuilds.push({
+                    splatBuffer,
+                    firstBuild: steamedSectionBuildCount === 0,
+                    finalBuild
+                });
+                steamedSectionBuildCount++;
+                checkAndBuildStreamedSections();
+            }
+        };
+
+        let splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold,
+                                                                             onDownloadProgress, true, onStreamedSectionProgress, format);
+
+        const firstStreamedSectionBuildPromise = new AbortablePromise((resolver, rejecter) => {
+            firstStreamedSectionDownloadAndBuildResolver = resolver;
+            firstStreamedSectionDownloadAndBuildRejecter = rejecter;
+        }, splatSceneDownloadPromise.abortHandler);
+
+        const splatSceneDownloadAndBuildPromise = new AbortablePromise((resolver, rejecter) => {
+            splatSceneDownloadAndBuildResolver = resolver;
+            splatSceneDownloadAndBuildRejecter = rejecter;
+        });
+
+        this.addSplatSceneDownloadPromise(splatSceneDownloadPromise);
+        this.setSplatSceneDownloadAndBuildPromise(splatSceneDownloadAndBuildPromise);
+
+        splatSceneDownloadPromise.then(() => {
+            this.removeSplatSceneDownloadPromise(splatSceneDownloadPromise);
+        })
+        .catch((e) => {
+            this.clearSplatSceneDownloadAndBuildPromise();
+            this.removeSplatSceneDownloadPromise(splatSceneDownloadPromise);
+            if (!(e instanceof AbortedPromiseError)) {
+                splatSceneDownloadAndBuildRejecter(e);
+                if (firstStreamedSectionDownloadAndBuildRejecter) firstStreamedSectionDownloadAndBuildRejecter(e);
+                if (onDownloadException) onDownloadException(e);
+            }
+        });
+
+        return firstStreamedSectionBuildPromise;
     }
 
     /**
@@ -719,187 +846,55 @@ export class Viewer {
             totalPercent = totalPercent / fileCount;
             percentLabel = `${totalPercent.toFixed(2)}%`;
             if (showLoadingUI) {
-                if (totalPercent == 100) {
-                    this.loadingSpinner.setMessage(`Download complete!`);
-                } else {
-                    this.loadingSpinner.setMessage(`Downloading: ${percentLabel}`);
-                }
+                this.loadingSpinner.setMessage(totalPercent == 100 ? `Download complete!` : `Downloading: ${percentLabel}`);
             }
             if (onProgress) onProgress(totalPercent, percentLabel, LoaderStatus.Downloading);
         };
 
-        const loadPromises = [];
+        const downloadPromises = [];
         const nativeLoadPromises = [];
         const abortHandlers = [];
         for (let i = 0; i < sceneOptions.length; i++) {
-
-            let format = sceneOptions[i].format;
-            if (format === undefined || format === null) {
-                format = sceneFormatFromPath(sceneOptions[i].path);
-            }
-
-            const downloadPromise = this.loadSplatSceneToSplatBuffer(sceneOptions[i].path, sceneOptions[i].splatAlphaRemovalThreshold,
-                                                                     onLoadProgress.bind(this, i), false, undefined, format);
+            const options = sceneOptions[i];
+            const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(options.path);
+            const downloadPromise = this.downloadSplatSceneToSplatBuffer(options.path, options.splatAlphaRemovalThreshold,
+                                                                         onLoadProgress.bind(this, i), false, undefined, format);
             abortHandlers.push(downloadPromise.abortHandler);
-            loadPromises.push(downloadPromise);
+            downloadPromises.push(downloadPromise);
             nativeLoadPromises.push(downloadPromise.promise);
-            this.downloadPromisesToAbort[downloadPromise.id] = downloadPromise;
+            this.addSplatSceneDownloadPromise(downloadPromise);
         }
-        const abortHandler = () => {
-            for (let abortHandler of abortHandlers) {
-                abortHandler();
-            }
-        };
-        const loadingPromise = new AbortablePromise((resolve, reject) => {
+
+        const downloadPromise = new AbortablePromise((resolve, reject) => {
             Promise.all(nativeLoadPromises)
             .then((splatBuffers) => {
                 if (showLoadingUI) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
                 this.addSplatBuffers(splatBuffers, sceneOptions, true, showLoadingUI, showLoadingUI).then(() => {
                     if (onProgress) onProgress(100, '100%', LoaderStatus.Processing);
+                    this.clearSplatSceneDownloadAndBuildPromise();
                     resolve();
-                    this.clearSplatSceneLoadPromise();
                 });
             })
             .catch((e) => {
                 if (showLoadingUI) this.loadingSpinner.hide();
+                this.clearSplatSceneDownloadAndBuildPromise();
                 if (!(e instanceof AbortedPromiseError)) {
                     reject(new Error(`Viewer::addSplatScenes -> Could not load one or more splat scenes.`));
                 } else {
                     resolve();
                 }
-                this.clearSplatSceneLoadPromise();
             })
             .finally(() => {
-                for (let loadPromise of loadPromises) {
-                    delete this.downloadPromisesToAbort[loadPromise.id];
+                for (let downloadPromise of downloadPromises) {
+                    this.removeSplatSceneDownloadPromise(downloadPromise);
                 }
             });
-        }, abortHandler);
-        this.setSplatSceneLoadPromise(loadingPromise);
-        return loadingPromise;
-    }
-
-    /**
-     * Download a single non-streamed splat scene and convert to splat buffer. Also sets/clears relevant instance
-     * synchronization objects, and calls appropriate functions on success or failure.
-     * @param {string} path Path to splat scene to be loaded
-     * @param {SceneFormat} format Format of the splat scene file
-     * @param {number} splatAlphaRemovalThreshold Ignore any splats with an alpha less than the specified value (valid range: 0 - 255)
-     * @param {function} onDownloadComplete Function to be called when download is complete
-     * @param {function} onProgress Function to be called as file data are received, or other processing occurs
-     * @param {function} onException Function to be called when exception occurs
-     * @return {AbortablePromise}
-     */
-    loadSplatSceneToSplatBufferNonStreaming(path, format, splatAlphaRemovalThreshold, onDownloadComplete, onProgress, onException) {
-        const clearDownloadPromise = () => {
-            delete this.downloadPromisesToAbort[loadPromise.id];
-        };
-
-        const loadPromise = this.loadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onProgress, false, undefined, format)
-        .then((splatBuffer) => {
-            clearDownloadPromise();
-            return onDownloadComplete(splatBuffer, true, true).then(() => {
-                this.clearSplatSceneLoadPromise();
-            });
-        })
-        .catch((e) => {
-            if (onException) onException();
-            this.clearSplatSceneLoadPromise();
-            clearDownloadPromise();
-            if (!(e instanceof AbortedPromiseError)) {
-                throw (new Error(`Viewer::addSplatScene -> Could not load file ${path}`));
-            }
+        }, () => {
+            for (let abortHandler of abortHandlers) abortHandler();
         });
-
-        this.downloadPromisesToAbort[loadPromise.id] = loadPromise;
-        this.setSplatSceneLoadPromise(loadPromise);
-
-        return loadPromise;
-    }
-
-    /**
-     * Download a single splat scene and convert to splat buffer in a streamed manner, allowing rendering as the file downloads.
-     * Also sets/clears relevant instance synchronization objects, and calls appropriate functions on success or failure.
-     * @param {string} path Path to splat scene to be loaded
-     * @param {SceneFormat} format Format of the splat scene file
-     * @param {number} splatAlphaRemovalThreshold Ignore any splats with an alpha less than the specified value (valid range: 0 - 255)
-     * @param {function} onSectionDownloaded Function to be called as each streamed section is downloaded
-     * @param {function} onProgress Function to be called as file data are received, or other processing occurs
-     * @param {function} onException Function to be called when exception occurs
-     * @return {AbortablePromise}
-     */
-    loadSplatSceneToSplatBufferStreaming(path, format, splatAlphaRemovalThreshold, onSectionDownloaded, onProgress, onException) {
-        let firstStreamedSectionBuildResolver;
-        let firstStreamedSectionBuildRejecter;
-        let fullBuildResolver;
-        let fullBuildRejecter;
-        let steamedSectionBuildCount = 0;
-        let streamedSectionBuilding = false;
-        const queuedStreamedSectionBuilds = [];
-
-        const checkAndBuildStreamedSections = () => {
-            if (queuedStreamedSectionBuilds.length > 0 && !streamedSectionBuilding && !this.isDisposingOrDisposed()) {
-                streamedSectionBuilding = true;
-                const queuedBuild = queuedStreamedSectionBuilds.shift();
-                onSectionDownloaded(queuedBuild.splatBuffer, queuedBuild.firstBuild, queuedBuild.finalBuild)
-                .then(() => {
-                    streamedSectionBuilding = false;
-                    if (queuedBuild.firstBuild) {
-                        firstStreamedSectionBuildResolver();
-                    } else if (queuedBuild.finalBuild) {
-                        fullBuildResolver();
-                        this.clearSplatSceneLoadPromise();
-                    }
-                    window.setTimeout(() => {
-                        checkAndBuildStreamedSections();
-                    }, 1);
-                });
-            }
-        };
-
-        const onStreamedSectionProgress = (splatBuffer, finalBuild) => {
-            if (!this.isDisposingOrDisposed()) {
-                queuedStreamedSectionBuilds.push({
-                    splatBuffer,
-                    firstBuild: steamedSectionBuildCount === 0,
-                    finalBuild
-                });
-                steamedSectionBuildCount++;
-                checkAndBuildStreamedSections();
-            }
-        };
-
-        let fullDownloadPromise = this.loadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold,
-                                                                   onProgress, true, onStreamedSectionProgress, format);
-
-        const firstStreamedSectionBuildPromise = new AbortablePromise((resolver, rejecter) => {
-            firstStreamedSectionBuildResolver = resolver;
-            firstStreamedSectionBuildRejecter = rejecter;
-            const clearDownloadPromise = () => {
-                delete this.downloadPromisesToAbort[fullDownloadPromise.id];
-            };
-            fullDownloadPromise.then(() => {
-                clearDownloadPromise();
-            })
-            .catch((e) => {
-                if (!(e instanceof AbortedPromiseError)) {
-                    fullBuildRejecter(e);
-                    firstStreamedSectionBuildRejecter(e);
-                }
-                if (onException) onException();
-                this.clearSplatSceneLoadPromise();
-                clearDownloadPromise();
-            });
-        }, fullDownloadPromise.abortHandler);
-        this.downloadPromisesToAbort[fullDownloadPromise.id] = fullDownloadPromise;
-
-        this.setSplatSceneLoadPromise(new AbortablePromise((resolver, rejecter) => {
-            fullBuildResolver = resolver;
-            fullBuildRejecter = rejecter;
-        }));
-
-        return firstStreamedSectionBuildPromise;
+        this.setSplatSceneDownloadAndBuildPromise(downloadPromise);
+        return downloadPromise;
     }
 
     /**
@@ -914,8 +909,8 @@ export class Viewer {
      * @param {string} format File format of the scene
      * @return {AbortablePromise}
      */
-    loadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
-                                streamBuiltSections = false, onSectionBuilt = undefined, format) {
+    downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
+                                    streamBuiltSections = false, onSectionBuilt = undefined, format) {
         if (format === SceneFormat.Splat) {
             return SplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, splatAlphaRemovalThreshold, 0, false);
         } else if (format === SceneFormat.KSplat) {
@@ -923,8 +918,7 @@ export class Viewer {
         } else if (format === SceneFormat.Ply) {
             return PlyLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, splatAlphaRemovalThreshold, 0);
         }
-
-        return AbortablePromise.reject(new Error(`Viewer::loadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
+        return AbortablePromise.reject(new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
     }
 
     static isStreamable(format) {
@@ -938,14 +932,14 @@ export class Viewer {
     addSplatBuffers = function() {
 
         return function(splatBuffers, splatBufferOptions = [], finalBuild = true,
-                        showLoadingUI = true, showLoadingSpinnerForSplatTreeBuild = true) {
+                        showLoadingUI = true, showLoadingUIForSplatTreeBuild = true) {
 
             if (this.isDisposingOrDisposed()) return Promise.resolve();
 
             this.splatRenderReady = false;
             let splatProcessingTaskId = null;
 
-            const finish = (buildResults, resolver) => {
+            const finish = (buildResults) => {
                 if (this.isDisposingOrDisposed()) return;
 
                 if (splatProcessingTaskId !== null) {
@@ -958,7 +952,7 @@ export class Viewer {
                 if (!this.gpuAcceleratedSort && this.sortWorker) {
                     this.sortWorker.postMessage({
                         'centers': buildResults.centers.buffer,
-                        'transformIndexes': buildResults.transformIndexes.buffer,
+                        'transformIndexes': buildResults.sceneIndexes.buffer,
                         'range': {
                             'from': buildResults.from,
                             'to': buildResults.to,
@@ -969,37 +963,29 @@ export class Viewer {
 
                 this.splatRenderReady = true;
                 this.sortNeededForSceneChange = true;
-                resolver();
             };
 
-            const performLoad = () => {
-                return new Promise((resolve) => {
-                    if (showLoadingUI) {
-                        splatProcessingTaskId = this.loadingSpinner.addTask('Processing splats...');
-                    }
-                    delayedExecute(() => {
-                        if (this.isDisposingOrDisposed()) {
+            return new Promise((resolve) => {
+                if (showLoadingUI) {
+                    splatProcessingTaskId = this.loadingSpinner.addTask('Processing splats...');
+                }
+                delayedExecute(() => {
+                    if (this.isDisposingOrDisposed()) {
+                        resolve();
+                    } else {
+                        const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
+                                                                        finalBuild, showLoadingUIForSplatTreeBuild);
+                        const maxSplatCount = this.splatMesh.getMaxSplatCount();
+                        if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) this.disposeSortWorker();
+                        const sortWorkerSetupPromise = (!this.sortWorker && maxSplatCount > 0) ?
+                                                         this.setupSortWorker(this.splatMesh) : Promise.resolve();
+                        sortWorkerSetupPromise.then(() => {
+                            finish(buildResults);
                             resolve();
-                        } else {
-                            const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
-                                                                            finalBuild, showLoadingSpinnerForSplatTreeBuild);
-                            const maxSplatCount = this.splatMesh.getMaxSplatCount();
-                            if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) {
-                                this.disposeSortWorker();
-                            }
-                            if (!this.sortWorker && maxSplatCount > 0) {
-                                this.setupSortWorker(this.splatMesh).then(() => {
-                                    finish(buildResults, resolve);
-                                });
-                            } else {
-                                finish(buildResults, resolve);
-                            }
-                        }
-                    }, true);
-                });
-            };
-
-            return performLoad();
+                        });
+                    }
+                }, true);
+            });
         };
 
     }();
@@ -1020,11 +1006,10 @@ export class Viewer {
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      * }
      * @param {boolean} finalBuild Will the splat mesh be in its final state after this build?
-     * @param {boolean} showLoadingSpinnerForSplatTreeBuild Whether or not to show the loading spinner during
-     *                                                      construction of the splat tree.
+     * @param {boolean} showLoadingUIForSplatTreeBuild Whether or not to show the loading spinner during construction of the splat tree.
      * @return {object} Object containing info about the splats that are updated
      */
-    addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingSpinnerForSplatTreeBuild = false) {
+    addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingUIForSplatTreeBuild = false) {
         if (this.isDisposingOrDisposed()) return;
         const allSplatBuffers = this.splatMesh.splatBuffers || [];
         const allSplatBufferOptions = this.splatMesh.splatBufferOptions || [];
@@ -1035,7 +1020,7 @@ export class Viewer {
         const onSplatTreeIndexesUpload = (finished) => {
             if (this.isDisposingOrDisposed()) return;
             const splatCount = this.splatMesh.getSplatCount();
-            if (showLoadingSpinnerForSplatTreeBuild && splatCount >= MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER) {
+            if (showLoadingUIForSplatTreeBuild && splatCount >= MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER) {
                 if (!finished && !splatOptimizingTaskId) {
                     this.loadingSpinner.setMinimized(true, true);
                     splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
@@ -1264,9 +1249,9 @@ export class Viewer {
         this.disposing = true;
         let waitPromises = [];
         let promisesToAbort = [];
-        for (let promiseKey in this.downloadPromisesToAbort) {
-            if (this.downloadPromisesToAbort.hasOwnProperty(promiseKey)) {
-                const downloadPromiseToAbort = this.downloadPromisesToAbort[promiseKey];
+        for (let promiseKey in this.splatSceneDownloadPromises) {
+            if (this.splatSceneDownloadPromises.hasOwnProperty(promiseKey)) {
+                const downloadPromiseToAbort = this.splatSceneDownloadPromises[promiseKey];
                 promisesToAbort.push(downloadPromiseToAbort);
                 waitPromises.push(downloadPromiseToAbort.promise);
             }
