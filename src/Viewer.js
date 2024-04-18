@@ -334,7 +334,7 @@ export class Viewer {
                 }
             }
             this.controls = this.camera.isOrthographicCamera ? this.orthographicControls : this.perspectiveControls;
-        } 
+        }
     }
 
     setupEventHandlers() {
@@ -510,11 +510,19 @@ export class Viewer {
         this.camera = toCamera;
 
         if (this.controls) {
+
+            const resetControls = (controls) => {
+                controls.saveState();
+                controls.reset();
+            };
+
             const fromControls = this.controls;
             const toControls = orthographicMode ? this.orthographicControls : this.perspectiveControls;
+
+            resetControls(toControls);
+            resetControls(fromControls);
+
             toControls.target.copy(fromControls.target);
-            toControls.clearDampedRotation();
-            fromControls.clearDampedRotation();
             if (orthographicMode) {
                 Viewer.setCameraZoomFromPosition(toCamera, fromCamera, fromControls);
             } else {
@@ -1693,7 +1701,8 @@ export class Viewer {
             this.splatRenderCount = splatRenderCount;
 
             mvpMatrix.copy(this.camera.matrixWorld).invert();
-            mvpMatrix.premultiply(this.camera.projectionMatrix);
+            const mvpCamera = this.perspectiveCamera || this.camera;
+            mvpMatrix.premultiply(mvpCamera.projectionMatrix);
             mvpMatrix.multiply(this.splatMesh.matrixWorld);
 
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
