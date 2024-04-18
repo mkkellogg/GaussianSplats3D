@@ -219,17 +219,16 @@ export class SplatMesh extends THREE.Mesh {
                     cov3D_M11_M12_M13.z, cov3D_M22_M23_M33.y, cov3D_M22_M23_M33.z
                 );
 
-                // Construct the Jacobian of the affine approximation of the projection matrix. It will be used to transform the
-                // 3D covariance matrix instead of using the actual projection matrix because that transformation would
-                // require a non-linear component (perspective division) which would yield a non-gaussian result. (This assumes
-                // the current projection is a perspective projection).
-
                 mat3 J;
                 if (orthographicMode == 1) {
+                    // Since the projection is linear, we don't need an approximation
                     J = transpose(mat3(orthoZoom, 0.0, 0.0,
                                        0.0, orthoZoom, 0.0,
                                        0.0, 0.0, 0.0));
                 } else {
+                    // Construct the Jacobian of the affine approximation of the projection matrix. It will be used to transform the
+                    // 3D covariance matrix instead of using the actual projection matrix because that transformation would
+                    // require a non-linear component (perspective division) which would yield a non-gaussian result.
                     float s = 1.0 / (viewCenter.z * viewCenter.z);
                     J = mat3(
                         focal.x / viewCenter.z, 0., -(focal.x * viewCenter.x) * s,

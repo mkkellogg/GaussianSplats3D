@@ -115,10 +115,10 @@ export class Viewer {
         this.antialiased = options.antialiased || false;
 
         this.webXRMode = options.webXRMode || WebXRMode.None;
-
         if (this.webXRMode !== WebXRMode.None) {
             this.gpuAcceleratedSort = false;
         }
+        this.webXRActive = false;
 
         // if 'renderMode' is RenderMode.Always, then the viewer will rrender the scene on every update. If it is RenderMode.OnChange,
         // it will only render when something in the scene has changed.
@@ -231,10 +231,30 @@ export class Viewer {
             }
         }
 
-        const renderDimensions = new THREE.Vector2();
-        this.getRenderDimensions(renderDimensions);
+        this.setupCamera();
+        this.setupRenderer();
+        this.setupWebXR();
+        this.setupControls();
+        this.setupEventHandlers();
 
+        this.threeScene = this.threeScene || new THREE.Scene();
+        this.sceneHelper = new SceneHelper(this.threeScene);
+        this.sceneHelper.setupMeshCursor();
+        this.sceneHelper.setupFocusMarker();
+        this.sceneHelper.setupControlPlane();
+
+        this.loadingProgressBar.setContainer(this.rootElement);
+        this.loadingSpinner.setContainer(this.rootElement);
+        this.infoPanel.setContainer(this.rootElement);
+
+        this.initialized = true;
+    }
+
+    setupCamera() {
         if (!this.usingExternalCamera) {
+            const renderDimensions = new THREE.Vector2();
+            this.getRenderDimensions(renderDimensions);
+
             this.perspectiveCamera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 1000);
             this.orthographicCamera = new THREE.OrthographicCamera(renderDimensions.x / -2, renderDimensions.x / 2,
                                                                    renderDimensions.y / 2, renderDimensions.y / -2, 0.1, 1000 );
@@ -243,8 +263,13 @@ export class Viewer {
             this.camera.up.copy(this.cameraUp).normalize();
             this.camera.lookAt(this.initialCameraLookAt);
         }
+    }
 
+    setupRenderer() {
         if (!this.usingExternalRenderer) {
+            const renderDimensions = new THREE.Vector2();
+            this.getRenderDimensions(renderDimensions);
+
             this.renderer = new THREE.WebGLRenderer({
                 antialias: false,
                 precision: 'highp'
@@ -263,24 +288,29 @@ export class Viewer {
             this.rootElement.appendChild(this.renderer.domElement);
         }
 
+    }
+
+    setupWebXR() {
         if (this.webXRMode) {
             if (this.webXRMode === WebXRMode.VR) {
                 this.rootElement.appendChild(VRButton.createButton(this.renderer));
             } else if (this.webXRMode === WebXRMode.AR) {
                 this.rootElement.appendChild(ARButton.createButton(this.renderer));
             }
+            this.renderer.xr.addEventListener('sessionstart', (e) => {
+                this.webXRActive = true;
+            });
+            this.renderer.xr.addEventListener('sessionend', (e) => {
+                this.webXRActive = false;
+            });
             this.renderer.xr.enabled = true;
             this.camera.position.copy(this.initialCameraPosition);
             this.camera.up.copy(this.cameraUp).normalize();
             this.camera.lookAt(this.initialCameraLookAt);
         }
+    }
 
-        this.threeScene = this.threeScene || new THREE.Scene();
-        this.sceneHelper = new SceneHelper(this.threeScene);
-        this.sceneHelper.setupMeshCursor();
-        this.sceneHelper.setupFocusMarker();
-        this.sceneHelper.setupControlPlane();
-
+    setupControls() {
         if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
             if (!this.usingExternalCamera) {
                 this.perspectiveControls = new OrbitControls(this.perspectiveCamera, this.renderer.domElement);
@@ -304,6 +334,11 @@ export class Viewer {
                 }
             }
             this.controls = this.camera.isOrthographicCamera ? this.orthographicControls : this.perspectiveControls;
+        } 
+    }
+
+    setupEventHandlers() {
+        if (this.useBuiltInControls && this.webXRMode === WebXRMode.None) {
             this.mouseMoveListener = this.onMouseMove.bind(this);
             this.renderer.domElement.addEventListener('pointermove', this.mouseMoveListener, false);
             this.mouseDownListener = this.onMouseDown.bind(this);
@@ -313,12 +348,6 @@ export class Viewer {
             this.keyDownListener = this.onKeyDown.bind(this);
             window.addEventListener('keydown', this.keyDownListener, false);
         }
-
-        this.loadingProgressBar.setContainer(this.rootElement);
-        this.loadingSpinner.setContainer(this.rootElement);
-        this.infoPanel.setContainer(this.rootElement);
-
-        this.initialized = true;
     }
 
     removeEventHandlers() {
@@ -539,12 +568,23 @@ export class Viewer {
                 const focalAdjustment = this.focalAdjustment * focalMultiplier;
                 const inverseFocalAdjustment = 1.0 / focalAdjustment;
 
+                this.adjustForWebXRStereo(renderDimensions);
                 this.splatMesh.updateUniforms(renderDimensions, focalLengthX * focalAdjustment, focalLengthY * focalAdjustment,
                                               this.camera.isOrthographicCamera, this.camera.zoom || 1.0, inverseFocalAdjustment);
             }
         };
 
     }();
+
+    adjustForWebXRStereo(renderDimensions) {
+        // TODO: Figure out a less hacky way to determine if stereo rendering is active
+        if (this.camera && this.webXRActive) {
+            const xrCamera = this.renderer.xr.getCamera();
+            const xrCameraProj00 = xrCamera.projectionMatrix.elements[0];
+            const cameraProj00 = this.camera.projectionMatrix.elements[0];
+            renderDimensions.x *= (cameraProj00 / xrCameraProj00);
+        }
+    }
 
     isLoadingOrUnloading() {
         return Object.keys(this.splatSceneDownloadPromises).length > 0 || this.splatSceneDownloadAndBuildPromise !== null ||
