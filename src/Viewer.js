@@ -21,6 +21,7 @@ import { ARButton } from './webxr/ARButton.js';
 import { delayedExecute } from './Util.js';
 import { LoaderStatus } from './loaders/LoaderStatus.js';
 import { RenderMode } from './RenderMode.js';
+import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
 
 const THREE_CAMERA_FOV = 50;
@@ -137,6 +138,9 @@ export class Viewer {
         // Specify the maximum screen-space splat size, can help deal with large splats that get too unwieldy
         this.maxScreenSpaceSplatSize = options.maxScreenSpaceSplatSize || 2048;
 
+        // The verbosity of console logging
+        this.logLevel = options.logLevel || LogLevel.None;
+
         this.createSplatMesh();
 
         this.controls = null;
@@ -211,7 +215,8 @@ export class Viewer {
 
     createSplatMesh() {
         this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize);
+                                       this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased,
+                                       this.maxScreenSpaceSplatSize, this.logLevel);
         this.splatMesh.frustumCulled = false;
     }
 
@@ -1121,7 +1126,7 @@ export class Viewer {
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
-                    console.log('Sorting web worker WASM setup complete.');
+                    if (this.logLevel >= LogLevel.Info) console.log('Sorting web worker WASM setup complete.');
                     if (this.sharedMemoryForWorkers) {
                         this.sortWorkerSortedIndexes = new Uint32Array(e.data.sortedIndexesBuffer,
                                                                        e.data.sortedIndexesOffset, maxSplatCount);
@@ -1140,12 +1145,14 @@ export class Viewer {
                     for (let i = 0; i < splatCount; i++) this.sortWorkerIndexesToSort[i] = i;
                     this.sortWorker.maxSplatCount = maxSplatCount;
 
-                    console.log('Sorting web worker ready.');
-                    const splatDataTextures = this.splatMesh.getSplatDataTextures();
-                    const covariancesTextureSize = splatDataTextures.covariances.size;
-                    const centersColorsTextureSize = splatDataTextures.centerColors.size;
-                    console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
-                    console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
+                    if (this.logLevel >= LogLevel.Info) {
+                        console.log('Sorting web worker ready.');
+                        const splatDataTextures = this.splatMesh.getSplatDataTextures();
+                        const covariancesTextureSize = splatDataTextures.covariances.size;
+                        const centersColorsTextureSize = splatDataTextures.centerColors.size;
+                        console.log('Covariances texture size: ' + covariancesTextureSize.x + ' x ' + covariancesTextureSize.y);
+                        console.log('Centers/colors texture size: ' + centersColorsTextureSize.x + ' x ' + centersColorsTextureSize.y);
+                    }
 
                     resolve();
                 }
