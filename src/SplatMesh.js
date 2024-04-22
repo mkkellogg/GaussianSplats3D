@@ -6,6 +6,7 @@ import { WebGLCapabilities } from './three-shim/WebGLCapabilities.js';
 import { uintEncodedFloat, rgbaArrayToInteger } from './Util.js';
 import { Constants } from './Constants.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
+import { LogLevel } from './LogLevel.js';
 
 const dummyGeometry = new THREE.BufferGeometry();
 const dummyMaterial = new THREE.MeshBasicMaterial();
@@ -30,7 +31,7 @@ export class SplatMesh extends THREE.Mesh {
 
     constructor(dynamicMode = true, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
                 enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false,
-                antialiased = false, maxScreenSpaceSplatSize = 2048) {
+                antialiased = false, maxScreenSpaceSplatSize = 2048, logLevel = LogLevel.None) {
         super(dummyGeometry, dummyMaterial);
         // Reference to a Three.js renderer
         this.renderer = undefined;
@@ -55,6 +56,8 @@ export class SplatMesh extends THREE.Mesh {
         this.antialiased = antialiased;
         // Specify the maximum clip space splat size, can help deal with large splats that get too unwieldy
         this.maxScreenSpaceSplatSize = maxScreenSpaceSplatSize;
+        // The verbosity of console logging
+        this.logLevel = logLevel;
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -601,7 +604,7 @@ export class SplatMesh extends THREE.Mesh {
             }, onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
                 const buildTime = performance.now() - buildStartTime;
-                console.log('SplatTree build: ' + buildTime + ' ms');
+                if (this.logLevel >= LogLevel.Info) console.log('SplatTree build: ' + buildTime + ' ms');
                 if (this.disposed) {
                     resolve();
                 } else {
@@ -623,11 +626,13 @@ export class SplatMesh extends THREE.Mesh {
                             leavesWithVertices++;
                         }
                     });
-                    console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
-                    console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
-                    avgSplatCount = avgSplatCount / nodeCount;
-                    console.log(`Avg splat count per node: ${avgSplatCount}`);
-                    console.log(`Total splat count: ${this.getSplatCount()}`);
+                    if (this.logLevel >= LogLevel.Info) {
+                        console.log(`SplatTree leaves: ${this.splatTree.countLeaves()}`);
+                        console.log(`SplatTree leaves with splats:${leavesWithVertices}`);
+                        avgSplatCount = avgSplatCount / nodeCount;
+                        console.log(`Avg splat count per node: ${avgSplatCount}`);
+                        console.log(`Total splat count: ${this.getSplatCount()}`);
+                    }
                     resolve();
                 }
             });
