@@ -15,6 +15,7 @@ import { AbortablePromise } from './AbortablePromise.js';
 import { SceneFormat } from './loaders/SceneFormat.js';
 import { WebXRMode } from './webxr/WebXRMode.js';
 import { RenderMode } from './RenderMode.js';
+import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
 
 export {
@@ -35,5 +36,6 @@ export {
     SceneFormat,
     WebXRMode,
     RenderMode,
+    LogLevel,
     SceneRevealMode
 };

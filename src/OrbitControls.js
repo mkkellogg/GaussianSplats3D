@@ -165,6 +165,8 @@ class OrbitControls extends EventDispatcher {
             scope.target.copy( scope.target0 );
             scope.object.position.copy( scope.position0 );
             scope.object.zoom = scope.zoom0;
+            this.clearDampedRotation();
+            this.clearDampedPan();
 
             scope.object.updateProjectionMatrix();
             scope.dispatchEvent( _changeEvent );
@@ -173,6 +175,15 @@ class OrbitControls extends EventDispatcher {
 
             state = STATE.NONE;
 
+        };
+
+        this.clearDampedRotation = function() {
+            sphericalDelta.theta = 0.0;
+            sphericalDelta.phi = 0.0;
+        };
+
+        this.clearDampedPan = function() {
+            panOffset.set(0, 0, 0);
         };
 
         // this method is exposed, but perhaps it would be better if we can make it private...
@@ -435,11 +446,6 @@ class OrbitControls extends EventDispatcher {
 
             }
 
-        };
-
-        this.clearDampedRotation = function() {
-            sphericalDelta.theta = 0.0;
-            sphericalDelta.phi = 0.0;
         };
 
         //
