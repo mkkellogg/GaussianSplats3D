@@ -83,7 +83,8 @@ export class PlyParser {
             'headerLines': prunedLines,
             'headerSizeBytes': headerText.indexOf(PlyParser.HeaderEndToken) + PlyParser.HeaderEndToken.length + 1,
             'bytesPerSplat': bytesPerSplat,
-            'fieldOffsets': fieldOffsets
+            'fieldOffsets': fieldOffsets,
+            'sphericalHarmonicsLevels': 0
         };
     }
 
@@ -126,11 +127,12 @@ export class PlyParser {
         }
     }
 
-    static parseToUncompressedSplatBufferSection(header, fromSplat, toSplat, vertexData, vertexDataOffset, toBuffer, toOffset) {
+    static parseToUncompressedSplatBufferSection(header, fromSplat, toSplat, vertexData, vertexDataOffset,
+                                                 toBuffer, toOffset, sphericalHarmonicsLevel = 0) {
         const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
         const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
         const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
-        const outBytesPerSplat = SplatBuffer.CompressionLevels[0].BytesPerSplat;
+        const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[sphericalHarmonicsLevel].BytesPerSplat;
 
         for (let i = fromSplat; i <= toSplat; i++) {
 

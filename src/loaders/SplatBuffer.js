@@ -25,16 +25,24 @@ export class SplatBuffer {
             BytesPerColor: 4,
             BytesPerScale: 12,
             BytesPerRotation: 16,
-            BytesPerSplat: 44,
-            ScaleRange: 1
+            ScaleRange: 1,
+            SphericalHarmonicsLevels: {
+                0: {
+                    BytesPerSplat: 44,
+                }
+            },
         },
         1: {
             BytesPerCenter: 6,
             BytesPerColor: 4,
             BytesPerScale: 6,
             BytesPerRotation: 8,
-            BytesPerSplat: 24,
-            ScaleRange: 32767
+            ScaleRange: 32767,
+            SphericalHarmonicsLevels: {
+                0: {
+                    BytesPerSplat: 24,
+                }
+            },
         }
     };
 
@@ -324,6 +332,7 @@ export class SplatBuffer {
         const splatCount = headerArrayUint32[4];
         const compressionLevel = headerArrayUint16[10];
         const sceneCenter = new THREE.Vector3(headerArrayFloat32[6], headerArrayFloat32[7], headerArrayFloat32[8]);
+        const sphericalHarmonicsLevel = headerArrayUint16[18];
 
         return {
             versionMajor,
@@ -333,7 +342,8 @@ export class SplatBuffer {
             maxSplatCount,
             splatCount,
             compressionLevel,
-            sceneCenter
+            sceneCenter,
+            sphericalHarmonicsLevel
         };
     }
 

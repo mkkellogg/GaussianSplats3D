@@ -86,7 +86,8 @@ export class PlyLoader {
                             readyToLoadSplatData = true;
                         }
 
-                        const splatBufferSizeBytes = splatDataOffsetBytes + SplatBuffer.CompressionLevels[0].BytesPerSplat * maxSplatCount;
+                        const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[header.sphericalHarmonicsLevel];
+                        const splatBufferSizeBytes = splatDataOffsetBytes + shDescriptor.BytesPerSplat * maxSplatCount;
                         streamBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                         SplatBuffer.writeHeaderToBuffer({
                             versionMajor: SplatBuffer.CurrentMajorVersion,
@@ -130,15 +131,16 @@ export class PlyLoader {
                             const parsedDataViewOffset = numBytesParsed - chunks[0].startBytes;
                             const dataToParse = new DataView(streamBufferIn, parsedDataViewOffset, numBytesToParse);
 
-                            const outOffset = splatCount * SplatBuffer.CompressionLevels[0].BytesPerSplat + splatDataOffsetBytes;
+                            const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[header.sphericalHarmonicsLevel];
+                            const outOffset = splatCount * shDescriptor.BytesPerSplat + splatDataOffsetBytes;
 
                             if (compressed) {
                                 CompressedPlyParser.parseToUncompressedSplatBufferSection(header.chunkElement, header.vertexElement, 0,
                                                                                           addedSplatCount - 1, splatCount,
                                                                                           dataToParse, 0, streamBufferOut, outOffset);
                             } else {
-                                PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1,
-                                                                                dataToParse, 0, streamBufferOut, outOffset);
+                                PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1, dataToParse, 0, streamBufferOut,
+                                                                                outOffset, header.sphericalHarmonicsLevel);
                             }
 
                             splatCount = newSplatCount;

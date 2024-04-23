@@ -364,7 +364,7 @@ export class CompressedPlyParser {
     const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
     const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
     const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
-    const outBytesPerSplat = SplatBuffer.CompressionLevels[0].BytesPerSplat;
+    const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[0].BytesPerSplat;
 
     const { positionExtremes, scaleExtremes, position, rotation, scale, color } =
       CompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
