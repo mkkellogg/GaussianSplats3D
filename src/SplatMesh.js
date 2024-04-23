@@ -7,6 +7,7 @@ import { uintEncodedFloat, rgbaArrayToInteger } from './Util.js';
 import { Constants } from './Constants.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
 import { LogLevel } from './LogLevel.js';
+import { getSphericalHarmonicsComponentCountForDegree } from './Util.js';
 
 const dummyGeometry = new THREE.BufferGeometry();
 const dummyMaterial = new THREE.MeshBasicMaterial();
@@ -17,6 +18,7 @@ const CENTER_COLORS_ELEMENTS_PER_SPLAT = 4;
 const COVARIANCES_ELEMENTS_PER_TEXEL = 2;
 const CENTER_COLORS_ELEMENTS_PER_TEXEL = 4;
 const TRANSFORM_INDEXES_ELEMENTS_PER_TEXEL = 1;
+const SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL = 2;
 
 const SCENE_FADEIN_RATE_FAST = 0.012;
 const SCENE_FADEIN_RATE_GRADUAL = 0.003;
@@ -31,7 +33,7 @@ export class SplatMesh extends THREE.Mesh {
 
     constructor(dynamicMode = true, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
                 enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false,
-                antialiased = false, maxScreenSpaceSplatSize = 2048, logLevel = LogLevel.None) {
+                antialiased = false, maxScreenSpaceSplatSize = 2048, logLevel = LogLevel.None, sphericalHarmonicsDegree = 0) {
         super(dummyGeometry, dummyMaterial);
         // Reference to a Three.js renderer
         this.renderer = undefined;
@@ -58,6 +60,9 @@ export class SplatMesh extends THREE.Mesh {
         this.maxScreenSpaceSplatSize = maxScreenSpaceSplatSize;
         // The verbosity of console logging
         this.logLevel = logLevel;
+        // Level 0 means no spherical harmonics
+        this.sphericalHarmonicsDegree = sphericalHarmonicsDegree;
+        console.log(sphericalHarmonicsDegree)
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -409,6 +414,10 @@ export class SplatMesh extends THREE.Mesh {
                 'type': 't',
                 'value': null
             },
+            'sphericalHarmonicsTexture': {
+                'type': 't',
+                'value': null
+            },
             'focal': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
@@ -438,6 +447,10 @@ export class SplatMesh extends THREE.Mesh {
                 'value': new THREE.Vector2(1024, 1024)
             },
             'centersColorsTextureSize': {
+                'type': 'v2',
+                'value': new THREE.Vector2(1024, 1024)
+            },
+            'sphericalHarmonicsTextureSize': {
                 'type': 'v2',
                 'value': new THREE.Vector2(1024, 1024)
             },
@@ -928,7 +941,9 @@ export class SplatMesh extends THREE.Mesh {
         const covariances = new Float32Array(maxSplatCount * COVARIANCES_ELEMENTS_PER_SPLAT);
         const centers = new Float32Array(maxSplatCount * 3);
         const colors = new Uint8Array(maxSplatCount * 4);
-        this.fillSplatDataArrays(covariances, centers, colors);
+        const sphericalHarmonicsComponentCount = getSphericalHarmonicsComponentCountForDegree(this.sphericalHarmonicsDegree);
+        const sphericalHarmonics = this.sphericalHarmonicsDegree ? new Float32Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
+        this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics);
 
         // set up covariances data texture
         const covTexSize = computeDataTextureSize(COVARIANCES_ELEMENTS_PER_TEXEL, 6);
@@ -959,7 +974,8 @@ export class SplatMesh extends THREE.Mesh {
             'baseData': {
                 'covariances': covariances,
                 'centers': centers,
-                'colors': colors
+                'colors': colors,
+                'sphericalHarmonics': sphericalHarmonics
             },
             'covariances': {
                 'data': paddedCovariances,
@@ -972,6 +988,27 @@ export class SplatMesh extends THREE.Mesh {
                 'size': centersColsTexSize
             }
         };
+
+        if (sphericalHarmonics) {
+
+            const sphericalHarmonicsTexSize = computeDataTextureSize(SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL,
+                                                                     sphericalHarmonicsComponentCount);
+            const paddedSHArraySize = sphericalHarmonicsTexSize.x * sphericalHarmonicsTexSize.y * SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL;
+            const paddedSHArray = new Float32Array(paddedSHArraySize);
+            paddedSHArray.set(sphericalHarmonics);
+            const sphericalHarmonicsTex = new THREE.DataTexture(paddedSHArray, sphericalHarmonicsTexSize.x,
+                                                                sphericalHarmonicsTexSize.y, THREE.RGFormat, THREE.FloatType);
+            sphericalHarmonicsTex.needsUpdate = true;
+            this.material.uniforms.sphericalHarmonicsTexture.value = sphericalHarmonicsTex;
+            this.material.uniforms.sphericalHarmonicsTextureSize.value.copy(sphericalHarmonicsTexSize);
+            this.material.uniformsNeedUpdate = true;
+
+            this.splatDataTextures.sphericalHarmonics = {
+                'data': paddedSHArray,
+                'texture': sphericalHarmonicsTex,
+                'size': sphericalHarmonicsTexSize
+            };
+        }
 
         if (this.dynamicMode) {
             const transformIndexesTexSize = computeDataTextureSize(TRANSFORM_INDEXES_ELEMENTS_PER_TEXEL, 4);
@@ -997,7 +1034,8 @@ export class SplatMesh extends THREE.Mesh {
     updateDataTextures() {
         const splatCount = this.getSplatCount();
         this.fillSplatDataArrays(this.splatDataTextures.baseData.covariances,
-                                 this.splatDataTextures.baseData.centers, this.splatDataTextures.baseData.colors, undefined,
+                                 this.splatDataTextures.baseData.centers, this.splatDataTextures.baseData.colors,
+                                 this.splatDataTextures.baseData.sphericalHarmonics, undefined,
                                  this.lastBuildSplatCount, splatCount - 1, this.lastBuildSplatCount);
 
         const covariancesTextureDescriptor = this.splatDataTextures['covariances'];
@@ -1767,7 +1805,7 @@ export class SplatMesh extends THREE.Mesh {
      * @param {number} srcEnd The end location from which to pull source data
      * @param {number} destStart The start location from which to write data
      */
-    fillSplatDataArrays(covariances, centers, colors, applySceneTransform, srcStart, srcEnd, destStart = 0) {
+    fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics, applySceneTransform, srcStart, srcEnd, destStart = 0) {
 
         for (let i = 0; i < this.scenes.length; i++) {
             if (applySceneTransform === undefined || applySceneTransform === null) {
@@ -1783,6 +1821,9 @@ export class SplatMesh extends THREE.Mesh {
             }
             if (centers) splatBuffer.fillSplatCenterArray(centers, sceneTransform, srcStart, srcEnd, destStart);
             if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, sceneTransform, srcStart, srcEnd, destStart);
+            if (sphericalHarmonics) {
+                splatBuffer.fillSphericalHarmonicsArray(sphericalHarmonics, sceneTransform, srcStart, srcEnd, destStart);
+            }
             destStart += splatBuffer.getSplatCount();
         }
     }
@@ -1798,7 +1839,7 @@ export class SplatMesh extends THREE.Mesh {
     getIntegerCenters(start, end, padFour = false) {
         const splatCount = end - start + 1;
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, undefined, start);
+        this.fillSplatDataArrays(null, floatCenters, null, null, undefined, start);
         let intCenters;
         let componentCount = padFour ? 4 : 3;
         intCenters = new Int32Array(splatCount * componentCount);
@@ -1821,7 +1862,7 @@ export class SplatMesh extends THREE.Mesh {
     getFloatCenters(start, end, padFour = false) {
         const splatCount = end - start + 1;
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, undefined, start);
+        this.fillSplatDataArrays(null, floatCenters, null, null, undefined, start);
         if (!padFour) return floatCenters;
         let paddedFloatCenters = new Float32Array(splatCount * 4);
         for (let i = 0; i < splatCount; i++) {
