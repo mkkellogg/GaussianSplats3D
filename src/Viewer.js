@@ -141,6 +141,10 @@ export class Viewer {
         // The verbosity of console logging
         this.logLevel = options.logLevel || LogLevel.None;
 
+        // Level of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene).
+        // Valid values are 0 - 3. Default value is 0.
+        this.sphericalHarmonicsDegree = options.sphericalHarmonicsDegree || 0;
+
         this.createSplatMesh();
 
         this.controls = null;
@@ -216,7 +220,7 @@ export class Viewer {
     createSplatMesh() {
         this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
                                        this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased,
-                                       this.maxScreenSpaceSplatSize, this.logLevel);
+                                       this.maxScreenSpaceSplatSize, this.logLevel, this.sphericalHarmonicsDegree);
         this.splatMesh.frustumCulled = false;
     }
 
@@ -969,7 +973,8 @@ export class Viewer {
         } else if (format === SceneFormat.KSplat) {
             return KSplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt);
         } else if (format === SceneFormat.Ply) {
-            return PlyLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt, splatAlphaRemovalThreshold, 0);
+            return PlyLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt,
+                                         splatAlphaRemovalThreshold, 0, this.sphericalHarmonicsDegree);
         }
         return AbortablePromise.reject(new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
     }

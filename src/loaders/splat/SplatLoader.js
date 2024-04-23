@@ -37,7 +37,7 @@ export class SplatLoader {
                 if (!streamBufferIn) {
                     maxSplatCount = fileSize / SplatParser.RowSizeBytes;
                     streamBufferIn = new ArrayBuffer(fileSize);
-                    const bytesPerSplat =  SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[0].BytesPerSplat;
+                    const bytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[0].BytesPerSplat;
                     const splatBufferSizeBytes = splatDataOffsetBytes + bytesPerSplat * maxSplatCount;
                     streamBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                     SplatBuffer.writeHeaderToBuffer({

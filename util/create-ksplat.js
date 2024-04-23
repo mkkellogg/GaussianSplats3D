@@ -15,7 +15,7 @@ const compressionLevel = (process.argv.length >= 5) ? parseInt(process.argv[4]) 
 const sceneCenter = (process.argv.length >= 6) ? new THREE.Vector3().fromArray(process.argv[5].split(',')) : undefined;
 const blockSize = (process.argv.length >= 7) ? parseFloat(process.argv[6]) : undefined;
 const bucketSize = (process.argv.length >= 8) ? parseInt(process.argv[7]) : undefined;
-const outSphericalHarmonicsLevel = (process.argv.length >= 9) ? parseInt(process.argv[8]) : undefined;
+const outSphericalHarmonicsDegree = (process.argv.length >= 9) ? parseInt(process.argv[8]) : undefined;
 const sectionSize = 0;
 
 const fileData = fs.readFileSync(intputFile);
@@ -36,7 +36,7 @@ function fileBufferToSplatBuffer(fileBufferData, format, compressionLevel, alpha
         }
         const splatBufferGenerator = GaussianSplats3D.SplatBufferGenerator.getStandardGenerator(alphaRemovalThreshold, compressionLevel,
                                                                                                 sectionSize, sceneCenter, blockSize,
-                                                                                                bucketSize, outSphericalHarmonicsLevel);
+                                                                                                bucketSize, outSphericalHarmonicsDegree);
         splatBuffer = splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
     } else {
         splatBuffer = new GaussianSplats3D.SplatBuffer(fileBufferData);
