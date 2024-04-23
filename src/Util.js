@@ -145,3 +145,12 @@ export const delayedExecute = (func, fast) => {
         }, fast ? 1 : 50);
     });
 };
+
+
+export const getSphericalHarmonicsComponentCountForDegree = (sphericalHarmonicsDegree = 0) => {
+    switch(sphericalHarmonicsDegree) {
+        case 1:
+            return 9;
+    }
+    return 0;
+};

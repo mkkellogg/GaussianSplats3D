@@ -307,6 +307,7 @@ Advanced `Viewer` parameters
 | `antialiased` |  When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at substantially different resolutions than that at which they were rendered during training. This will only work correctly for models that were trained using a process that utilizes this compensation calculation. For more details: https://github.com/nerfstudio-project/gsplat/pull/117, https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
 | `focalAdjustment` | Hacky, non-scientific parameter for tweaking focal length related calculations. For scenes with very small gaussians & small details, increasing this value can help improve visual quality. Default value is 1.0.
 | `logLevel` | Verbosity of the console logging. Defaults to `GaussianSplats3D.LogLevel.None`.
+| `sphericalHarmonicsDegree` | Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene). Valid values are 0 - 3. Default value is 0.
 <br>
 
 ### Creating KSPLAT files

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { UncompressedSplatArray } from './UncompressedSplatArray.js';
-import { clamp } from '../Util.js';
+import { clamp, getSphericalHarmonicsComponentCountForDegree } from '../Util.js';
 
 /**
  * SplatBuffer: Container for splat data from a single scene/file and capable of (mediocre) compression.
@@ -26,7 +26,8 @@ export class SplatBuffer {
             BytesPerScale: 12,
             BytesPerRotation: 16,
             ScaleRange: 1,
-            SphericalHarmonicsLevels: {
+            BytesPerSphericalHarmonicsComponent: 4,
+            SphericalHarmonicsDegrees: {
                 0: {
                     BytesPerSplat: 44,
                 }
@@ -38,7 +39,8 @@ export class SplatBuffer {
             BytesPerScale: 6,
             BytesPerRotation: 8,
             ScaleRange: 32767,
-            SphericalHarmonicsLevels: {
+            BytesPerSphericalHarmonicsComponent: 2,
+            SphericalHarmonicsDegrees: {
                 0: {
                     BytesPerSplat: 24,
                 }
@@ -314,8 +316,33 @@ export class SplatBuffer {
             outColorArray[colorDestBase + 1] = section.dataArrayUint8[colorSrcBase + 1];
             outColorArray[colorDestBase + 2] = section.dataArrayUint8[colorSrcBase + 2];
             outColorArray[colorDestBase + 3] = alpha;
+        }
+    }
 
-            // TODO: implement application of transform for spherical harmonics
+    fillSphericalHarmonicsArray(outSphericalHarmonicsArray, transform, srcFrom, srcTo, destFrom) {
+        const splatCount = this.splatCount;
+
+        srcFrom = srcFrom || 0;
+        srcTo = srcTo || splatCount - 1;
+        if (destFrom === undefined) destFrom = srcFrom;
+        const splatSphericalHarmonicsOffset = this.bytesPerCenter + this.bytesPerScale + this.bytesPerRotation + this.bytesPerColor;
+
+        for (let i = srcFrom; i <= srcTo; i++) {
+
+            const sectionIndex = this.globalSplatIndexToSectionMap[i];
+            const section = this.sections[sectionIndex];
+            const localSplatIndex = i - section.splatCountOffset;
+
+            const sphericalHarmonicsSrcBase = this.bytesPerSplat * localSplatIndex + splatSphericalHarmonicsOffset;
+            const sphericalHarmonicsDestBase = (i - srcFrom + destFrom) * this.sphericalHarmonicsComponentsPerSplat;
+
+            if (this.compressionLevel === 1) {
+
+            } else {
+
+            }
+
+            // TODO: transform spherical harmonics if necessary
         }
     }
 
@@ -332,7 +359,7 @@ export class SplatBuffer {
         const splatCount = headerArrayUint32[4];
         const compressionLevel = headerArrayUint16[10];
         const sceneCenter = new THREE.Vector3(headerArrayFloat32[6], headerArrayFloat32[7], headerArrayFloat32[8]);
-        const sphericalHarmonicsLevel = headerArrayUint16[18];
+        const sphericalHarmonicsDegree = headerArrayUint16[18];
 
         return {
             versionMajor,
@@ -343,7 +370,7 @@ export class SplatBuffer {
             splatCount,
             compressionLevel,
             sceneCenter,
-            sphericalHarmonicsLevel
+            sphericalHarmonicsDegree
         };
     }
 
@@ -475,12 +502,17 @@ export class SplatBuffer {
         this.splatCount = secLoadedCountsToMax ? header.maxSplatCount : 0;
         this.compressionLevel = header.compressionLevel;
         this.sceneCenter = new THREE.Vector3().copy(header.sceneCenter);
+        this.sphericalHarmonicsDegree = header.sphericalHarmonicsDegree;
 
         this.bytesPerCenter = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerCenter;
         this.bytesPerScale = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerScale;
         this.bytesPerRotation = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerRotation;
         this.bytesPerColor = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerColor;
-        this.bytesPerSplat = this.bytesPerCenter + this.bytesPerScale + this.bytesPerRotation + this.bytesPerColor;
+        this.sphericalHarmonicsComponentsPerSplat = getSphericalHarmonicsComponentCountForDegree(this.sphericalHarmonicsDegree);
+        this.sphericalHarmonicsBytesPerSplat = SplatBuffer.CompressionLevels[this.compressionLevel].BytesPerSphericalHarmonicsComponent *
+                                               this.sphericalHarmonicsComponentsPerSplat;
+        this.bytesPerSplat = this.bytesPerCenter + this.bytesPerScale + this.bytesPerRotation +
+                             this.bytesPerColor + this.sphericalHarmonicsBytesPerSplat;
 
         this.float32PerSplat = this.bytesPerSplat / 4;
         this.uint32PerSplat = this.bytesPerSplat / 4;
