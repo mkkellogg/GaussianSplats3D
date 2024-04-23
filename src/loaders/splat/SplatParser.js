@@ -15,7 +15,7 @@ export class SplatParser {
         const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
         const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
         const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
-        const outBytesPerSplat = SplatBuffer.CompressionLevels[0].BytesPerSplat;
+        const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[0].BytesPerSplat;
 
         for (let i = fromSplat; i <= toSplat; i++) {
             const inBase = i * SplatParser.RowSizeBytes + fromOffset;
