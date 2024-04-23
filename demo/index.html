@@ -262,14 +262,15 @@
     let currentCameraPositionArray;
     let currentCameraLookAtArray;
     let currentAntialiased;
+    let currentSphericalHarmonicsLevel;
   </script>
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
     import * as THREE from 'three';
 
-    function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
+    function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize, outSphericalHarmonicsLevel = 0) {
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
+        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize, outSphericalHarmonicsLevel);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
           return GaussianSplats3D.SplatLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
@@ -310,6 +311,7 @@
       const conversionFile = document.getElementById("conversionFile");
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
+      const sphericalHarmonicsLevel = parseInt(document.getElementById("conversionSphericalHarmonicsLevel").value);
       const sectionSize = 0;
       let sceneCenterArray = document.getElementById("sceneCenter").value;
       const blockSize = parseFloat(document.getElementById("blockSize").value);
@@ -338,6 +340,9 @@
         return;
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
         setConversionError("Invalid alpha remval threshold.");
+        return;
+      } else if (isNaN(sphericalHarmonicsLevel) || sphericalHarmonicsLevel < 0 || sphericalHarmonicsLevel > 3) {
+        setConversionError("Invalid SH level.");
         return;
       } else if (isNaN(blockSize) || blockSize < 0.1) {
         setConversionError("Invalid block size.");
@@ -379,7 +384,7 @@
           window.setTimeout(() => {
             try {
               const splatBufferPromise = fileBufferToSplatBuffer(fileData, format, alphaRemovalThreshold, compressionLevel,
-                                                                 sectionSize, sceneCenter, blockSize, bucketSize);
+                                                                 sectionSize, sceneCenter, blockSize, bucketSize, sphericalHarmonicsLevel);
               splatBufferPromise.then((splatBuffer) => {
                 GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
                 conversionDone();
@@ -427,6 +432,7 @@
       let cameraPositionArray = document.getElementById("cameraPosition").value;
       let cameraLookAtArray = document.getElementById("cameraLookAt").value;
       let antialiased = document.getElementById("antialiased").checked;
+      let sphericalHarmonicsLevel = parseInt(document.getElementById("viewSphericalHarmonicsLevel").value);
 
       cameraUpArray = cameraUpArray.split(',');
       cameraPositionArray = cameraPositionArray.split(',');
@@ -438,7 +444,10 @@
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold < 0 || alphaRemovalThreshold > 255) {
         setViewError("Invalid alpha remval threshold.");
         return;
-      }
+      } else if (isNaN(sphericalHarmonicsLevel) || sphericalHarmonicsLevel < 0 || sphericalHarmonicsLevel > 3) {
+        setConversionError("Invalid SH level.");
+        return;
+      } 
 
       if (cameraUpArray.length !== 3) {
         setViewError("Camera up must contain 3 elements.");
@@ -484,12 +493,13 @@
       currentCameraPositionArray = cameraPositionArray;
       currentCameraLookAtArray = cameraLookAtArray;
       currentAntialiased = antialiased;
+      currentSphericalHarmonicsLevel = sphericalHarmonicsLevel;
 
       try {
         const fileReader = new FileReader();
         fileReader.onload = function(){
           try {
-           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased);
+           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sphericalHarmonicsLevel);
           } catch (e) {
             console.error(e);
             setViewError("Could not view scene.");
@@ -521,13 +531,13 @@
   
     window.addEventListener("popstate", (event) => {
       if (currentAlphaRemovalThreshold !== undefined) {
-        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray + "&aa=" + currentAntialiased;
+        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray + "&aa=" + currentAntialiased + "&sh=" + currentSphericalHarmonicsLevel;
       } else {
         window.location = 'index.html';
       }
     });
 
-    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased) {
+    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sphericalHarmonicsLevel) {
       const viewerOptions = {
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
@@ -538,7 +548,8 @@
       const splatBufferOptions = {
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
-      const splatBufferPromise = fileBufferToSplatBuffer({data: splatBufferData}, format, alphaRemovalThreshold, 0);
+      const splatBufferPromise = fileBufferToSplatBuffer({data: splatBufferData}, format, alphaRemovalThreshold, 0,
+                                                          undefined, undefined, undefined, undefined, sphericalHarmonicsLevel);
       splatBufferPromise.then((splatBuffer) => {
         document.getElementById("demo-content").style.display = 'none';
         document.body.style.backgroundColor = "#000000";
@@ -617,7 +628,7 @@
     <br>
     <div class="header-content-container">
         <div class="content-row">
-            <div id ="view-panel" class="splat-panel" style="height:330px;">
+            <div id ="view-panel" class="splat-panel" style="height:350px;">
                 <br>
                 <div class="small-title">View a <span class="file-ext">.ply</span>, <span class="file-ext">.ksplat</span>, or <span class="file-ext-small">.splat</span> file</div>
                 <br>
@@ -674,6 +685,15 @@
                         <input id="cameraLookAt" type="text" class="text-input" style="width: 90px" value="1, 0, 0"></input>
                     </td>
                     </tr>
+                    <tr>
+                      <td>
+                          SH level:
+                      </td>
+                      <td>
+                          <input id="viewSphericalHarmonicsLevel" type="text" class="text-input" style="width: 50px" value="0"></input>
+                          <span class="valid-value-label">(0, 1, 2, or 3)</span>
+                      </td>
+                      </tr>
                 </table>
                 <br>
                 <span class="button" onclick="window.viewSplat()">View</span>
@@ -691,7 +711,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:390px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:420px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -733,6 +753,15 @@
                     <td>
                         <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1" onChange="window.onCompressionLevelChange(this);"></input>
                         <span class="valid-value-label">(0 or 1)</span>
+                    </td>
+                    </tr>
+                    <tr>
+                    <td>
+                        SH level:
+                    </td>
+                    <td>
+                        <input id="conversionSphericalHarmonicsLevel" type="text" class="text-input" style="width: 50px" value="0"></input>
+                        <span class="valid-value-label">(0, 1, 2, or 3)</span>
                     </td>
                     </tr>
                     <tr id="advancedCompressionRow1">
@@ -893,6 +922,9 @@
         } else if (varName == "aa") {
           currentAntialiased = component[1] === 'true' ? true : false;
           document.getElementById('antialiased').checked = currentAntialiased;
+        }  else if (varName == "sh") {
+          currentSphericalHarmonicsLevel = component[1];
+          document.getElementById('viewSphericalHarmonicsLevel').value = currentSphericalHarmonicsLevel;
         }
       }
     }

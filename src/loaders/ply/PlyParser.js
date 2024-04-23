@@ -67,11 +67,20 @@ export class PlyParser {
             'uchar': 1,
         };
 
+        const fieldNames = [];
         for (let fieldName in propertyTypes) {
             if (propertyTypes.hasOwnProperty(fieldName)) {
+                fieldNames.push(fieldName);
                 const type = propertyTypes[fieldName];
                 fieldOffsets[fieldName] = bytesPerSplat;
                 bytesPerSplat += fieldSize[type];
+            }
+        }
+
+        let sphericalHarmonicsLevel = 0;
+        for (let fieldName of fieldNames) {
+            if (fieldName === 'f_rest_0' && sphericalHarmonicsLevel === 0) {
+                sphericalHarmonicsLevel = 1;
             }
         }
 
@@ -84,7 +93,7 @@ export class PlyParser {
             'headerSizeBytes': headerText.indexOf(PlyParser.HeaderEndToken) + PlyParser.HeaderEndToken.length + 1,
             'bytesPerSplat': bytesPerSplat,
             'fieldOffsets': fieldOffsets,
-            'sphericalHarmonicsLevels': 0
+            'sphericalHarmonicsLevel': sphericalHarmonicsLevel
         };
     }
 
@@ -128,15 +137,16 @@ export class PlyParser {
     }
 
     static parseToUncompressedSplatBufferSection(header, fromSplat, toSplat, vertexData, vertexDataOffset,
-                                                 toBuffer, toOffset, sphericalHarmonicsLevel = 0) {
+                                                 toBuffer, toOffset, outSphericalHarmonicsLevel = 0) {
+        outSphericalHarmonicsLevel = Math.min(outSphericalHarmonicsLevel, header.sphericalHarmonicsLevel);
         const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
         const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
         const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
-        const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[sphericalHarmonicsLevel].BytesPerSplat;
+        const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsLevels[outSphericalHarmonicsLevel].BytesPerSplat;
 
         for (let i = fromSplat; i <= toSplat; i++) {
 
-            const parsedSplat = PlyParser.parseToUncompressedSplat(vertexData, i, header, vertexDataOffset);
+            const parsedSplat = PlyParser.parseToUncompressedSplat(vertexData, i, header, vertexDataOffset, outSphericalHarmonicsLevel);
 
             const outBase = i * outBytesPerSplat + toOffset;
             const outCenter = new Float32Array(toBuffer, outBase, 3);
@@ -169,7 +179,8 @@ export class PlyParser {
         let rawVertex = {};
         const tempRotation = new THREE.Quaternion();
 
-        return function(vertexData, row, header, vertexDataOffset = 0) {
+        return function(vertexData, row, header, vertexDataOffset = 0, outSphericalHarmonicsLevel = 0) {
+            outSphericalHarmonicsLevel = Math.min(outSphericalHarmonicsLevel, header.sphericalHarmonicsLevel);
             PlyParser.readRawVertexFast(vertexData, row * header.bytesPerSplat + vertexDataOffset, header.fieldOffsets,
                                         PlyParser.Fields, header.propertyTypes, rawVertex);
             const newSplat = UncompressedSplatArray.createSplat();
@@ -223,7 +234,7 @@ export class PlyParser {
 
     }();
 
-    static parseToUncompressedSplatArray(plyBuffer) {
+    static parseToUncompressedSplatArray(plyBuffer, outSphericalHarmonicsLevel = 0) {
 
         const header = PlyParser.decodeHeadeFromBuffer(plyBuffer);
 
@@ -265,7 +276,7 @@ export class PlyParser {
             const splatArray = new UncompressedSplatArray();
 
             for (let row = 0; row < splatCount; row++) {
-                const newSplat = PlyParser.parseToUncompressedSplat(vertexData, row, header);
+                const newSplat = PlyParser.parseToUncompressedSplat(vertexData, row, header, 0, outSphericalHarmonicsLevel);
                 splatArray.addSplat(newSplat);
             }
 
