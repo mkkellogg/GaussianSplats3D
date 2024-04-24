@@ -812,20 +812,23 @@ export class Viewer {
                         splatSceneDownloadAndBuildResolver();
                         this.clearSplatSceneDownloadAndBuildPromise();
                     }
-                    delayedExecute(() => checkAndBuildStreamedSections());
+                    if (queuedStreamedSectionBuilds.length > 0) delayedExecute(() => checkAndBuildStreamedSections());
                 });
             }
         };
 
         const onStreamedSectionProgress = (splatBuffer, finalBuild) => {
             if (!this.isDisposingOrDisposed()) {
-                queuedStreamedSectionBuilds.push({
-                    splatBuffer,
-                    firstBuild: steamedSectionBuildCount === 0,
-                    finalBuild
-                });
-                steamedSectionBuildCount++;
-                checkAndBuildStreamedSections();
+                if (finalBuild || queuedStreamedSectionBuilds.length === 0 ||
+                    splatBuffer.getSplatCount() > queuedStreamedSectionBuilds[0].splatBuffer.getSplatCount()) {
+                    queuedStreamedSectionBuilds.push({
+                        splatBuffer,
+                        firstBuild: steamedSectionBuildCount === 0,
+                        finalBuild
+                    });
+                    steamedSectionBuildCount++;
+                    checkAndBuildStreamedSections();
+                }
             }
         };
 
@@ -974,7 +977,8 @@ export class Viewer {
             return KSplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt);
         } else if (format === SceneFormat.Ply) {
             return PlyLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt,
-                                         splatAlphaRemovalThreshold, 0, this.sphericalHarmonicsDegree);
+                                         splatAlphaRemovalThreshold, 0, undefined, undefined,
+                                         undefined, undefined, this.sphericalHarmonicsDegree);
         }
         return AbortablePromise.reject(new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
     }
