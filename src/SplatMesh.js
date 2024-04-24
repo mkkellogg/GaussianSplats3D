@@ -62,7 +62,6 @@ export class SplatMesh extends THREE.Mesh {
         this.logLevel = logLevel;
         // Level 0 means no spherical harmonics
         this.sphericalHarmonicsDegree = sphericalHarmonicsDegree;
-        console.log(sphericalHarmonicsDegree)
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -942,7 +941,8 @@ export class SplatMesh extends THREE.Mesh {
         const centers = new Float32Array(maxSplatCount * 3);
         const colors = new Uint8Array(maxSplatCount * 4);
         const sphericalHarmonicsComponentCount = getSphericalHarmonicsComponentCountForDegree(this.sphericalHarmonicsDegree);
-        const sphericalHarmonics = this.sphericalHarmonicsDegree ? new Float32Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
+        const sphericalHarmonics = this.sphericalHarmonicsDegree ?
+                                   new Float32Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
         this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics);
 
         // set up covariances data texture
@@ -1798,6 +1798,7 @@ export class SplatMesh extends THREE.Mesh {
      * @param {Float32Array} covariances Target storage for splat covariances
      * @param {Float32Array} centers Target storage for splat centers
      * @param {Uint8Array} colors Target storage for splat colors
+     * @param {Float32Array} sphericalHarmonics Target storage for spherical harmonics
      * @param {boolean} applySceneTransform By default, scene transforms are applied to relevant splat data only if the splat mesh is
      *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
      *                                      it is false, they will never be applied. If undefined, the default behavior will apply.

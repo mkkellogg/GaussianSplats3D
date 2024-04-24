@@ -148,7 +148,7 @@ export const delayedExecute = (func, fast) => {
 
 
 export const getSphericalHarmonicsComponentCountForDegree = (sphericalHarmonicsDegree = 0) => {
-    switch(sphericalHarmonicsDegree) {
+    switch (sphericalHarmonicsDegree) {
         case 1:
             return 9;
     }
