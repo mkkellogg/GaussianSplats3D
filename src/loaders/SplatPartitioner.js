@@ -28,7 +28,7 @@ export class SplatPartitioner {
 
         const newArrays = [];
         for (let s = 0; s < sectionCount; s++) {
-            const sectionSplats = new UncompressedSplatArray();
+            const sectionSplats = new UncompressedSplatArray(splatArray.sphericalHarmonicsDegree);
             const sectionFilter = sectionFilters[s];
             for (let i = 0; i < splatArray.splatCount; i++) {
                 if (sectionFilter(i)) {
