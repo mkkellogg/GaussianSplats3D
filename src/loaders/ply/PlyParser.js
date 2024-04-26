@@ -93,7 +93,7 @@ export class PlyParser {
         if (sphericalHarmonicsDegree >= 1) {
             for (let i = 0; i < 3; i++) {
                 for (let rgb = 0; rgb < 3; rgb++) {
-                    sphericalHarmonicsDegree1Fields.push('f_rest_' + (i + sphericalHarmonicsCoefficientsPerChannel * rgb));
+                    sphericalHarmonicsDegree1Fields.push('f_rest_' + (i * sphericalHarmonicsCoefficientsPerChannel + rgb));
                 }
             }
         }
