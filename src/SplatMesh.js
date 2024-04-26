@@ -230,15 +230,24 @@ export class SplatMesh extends THREE.Mesh {
 
                 if (sphericalHarmonicsDegree >= 1) {
                     vec3 worldViewDir = normalize(splatCenter - cameraPosition);
+                `;
+
+            if (dynamicMode) {
+                vertexShaderSource += `
+                worldViewDir = inverse(mat3(transform)) * worldViewDir;
+                `;
+            }
+
+            vertexShaderSource += `
                     vec2 sampledSH01 = texture(sphericalHarmonicsTexture, getDataUV(5, 0, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH23 = texture(sphericalHarmonicsTexture, getDataUV(5, 1, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH45 = texture(sphericalHarmonicsTexture, getDataUV(5, 2, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH67 = texture(sphericalHarmonicsTexture, getDataUV(5, 3, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH89 = texture(sphericalHarmonicsTexture, getDataUV(5, 4, sphericalHarmonicsTextureSize)).rg;
                     float SH_C1 = 0.4886025119029199f;
-                    vColor.r = vColor.r + dot(vec3(-sampledSH01.r, sampledSH23.g, -sampledSH67.r), worldViewDir.yzx) * SH_C1;
-                    vColor.g = vColor.g + dot(vec3(-sampledSH01.g, sampledSH45.r, -sampledSH67.g), worldViewDir.yzx) * SH_C1;
-                    vColor.b = vColor.b + dot(vec3(-sampledSH23.r, sampledSH45.g, -sampledSH89.r), worldViewDir.yzx) * SH_C1;
+                    vColor.r = vColor.r + dot(vec3(sampledSH01.r, sampledSH01.g, sampledSH23.r), worldViewDir.xyz) * SH_C1;
+                    vColor.g = vColor.g + dot(vec3(sampledSH23.g, sampledSH45.r, sampledSH45.g), worldViewDir.xyz) * SH_C1;
+                    vColor.b = vColor.b + dot(vec3(sampledSH67.r, sampledSH67.g, sampledSH89.r), worldViewDir.xyz) * SH_C1;
                 }
 
                 uint oddOffset = splatIndex & uint(0x00000001);

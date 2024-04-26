@@ -176,7 +176,6 @@ export class SplatBuffer {
         const colorBase = this.bytesPerSplat * localSplatIndex + this.bytesPerCenter + this.bytesPerScale + this.bytesPerRotation;
         outColor.set(section.dataArrayUint8[colorBase], section.dataArrayUint8[colorBase + 1],
                      section.dataArrayUint8[colorBase + 2], section.dataArrayUint8[colorBase + 3]);
-        // TODO: apply transform for spherical harmonics
     }
 
     fillSplatCenterArray(outCenterArray, transform, srcFrom, srcTo, destFrom) {
@@ -333,6 +332,8 @@ export class SplatBuffer {
         for (let i = 0; i < 15; i++) {
             sphericalHarmonicVectors[i] = new THREE.Vector3();
         }
+        const tempVector = new THREE.Vector3();
+        const tempMatrix3 = new THREE.Matrix3();
 
         return function(outSphericalHarmonicsArray, transform, srcFrom, srcTo, destFrom) {
             const splatCount = this.splatCount;
@@ -341,6 +342,12 @@ export class SplatBuffer {
             srcTo = srcTo || splatCount - 1;
             if (destFrom === undefined) destFrom = srcFrom;
             const floatsPerSplat = this.compressionLevel === 1 ? this.uint16PerSplat : this.float32PerSplat;
+
+            if (transform) {
+                tempMatrix3.setFromMatrix4(transform);
+                tempMatrix3.invert();
+                tempMatrix3.transpose();
+            }
 
             for (let i = srcFrom; i <= srcTo; i++) {
 
@@ -354,17 +361,37 @@ export class SplatBuffer {
 
                 if (this.sphericalHarmonicsDegree >= 1) {
                     const sectionFloatArray = this.compressionLevel === 1 ? section.dataArrayUint16 : section.dataArrayFloat32;
-                    outSphericalHarmonicsArray[shDestBase] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase]);
-                    outSphericalHarmonicsArray[shDestBase + 1] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 1]);
-                    outSphericalHarmonicsArray[shDestBase + 2] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 2]);
+                    outSphericalHarmonicsArray[shDestBase] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 2]);
+                    outSphericalHarmonicsArray[shDestBase + 1] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase]);
+                    outSphericalHarmonicsArray[shDestBase + 2] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 1]);
 
-                    outSphericalHarmonicsArray[shDestBase + 3] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 3]);
-                    outSphericalHarmonicsArray[shDestBase + 4] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 4]);
-                    outSphericalHarmonicsArray[shDestBase + 5] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 5]);
+                    outSphericalHarmonicsArray[shDestBase + 3] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 5]);
+                    outSphericalHarmonicsArray[shDestBase + 4] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 3]);
+                    outSphericalHarmonicsArray[shDestBase + 5] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 4]);
 
-                    outSphericalHarmonicsArray[shDestBase + 6] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 6]);
-                    outSphericalHarmonicsArray[shDestBase + 7] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 7]);
-                    outSphericalHarmonicsArray[shDestBase + 8] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 8]);
+                    outSphericalHarmonicsArray[shDestBase + 6] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 8]);
+                    outSphericalHarmonicsArray[shDestBase + 7] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 6]);
+                    outSphericalHarmonicsArray[shDestBase + 8] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 7]);
+
+                    if (transform) {
+                        tempVector.set(outSphericalHarmonicsArray[shDestBase], outSphericalHarmonicsArray[shDestBase + 1],
+                                       outSphericalHarmonicsArray[shDestBase + 2]).applyMatrix3(tempMatrix3);
+                        outSphericalHarmonicsArray[shDestBase] = tempVector.x;
+                        outSphericalHarmonicsArray[shDestBase + 1] = tempVector.y;
+                        outSphericalHarmonicsArray[shDestBase + 2] = tempVector.z;
+
+                        tempVector.set(outSphericalHarmonicsArray[shDestBase + 3], outSphericalHarmonicsArray[shDestBase + 4],
+                                       outSphericalHarmonicsArray[shDestBase + 5]).applyMatrix3(tempMatrix3);
+                        outSphericalHarmonicsArray[shDestBase + 3] = tempVector.x;
+                        outSphericalHarmonicsArray[shDestBase + 4] = tempVector.y;
+                        outSphericalHarmonicsArray[shDestBase + 5] = tempVector.z;
+
+                        tempVector.set(outSphericalHarmonicsArray[shDestBase + 6], outSphericalHarmonicsArray[shDestBase + 7],
+                                       outSphericalHarmonicsArray[shDestBase + 8]).applyMatrix3(tempMatrix3);
+                        outSphericalHarmonicsArray[shDestBase + 6] = tempVector.x;
+                        outSphericalHarmonicsArray[shDestBase + 7] = tempVector.y;
+                        outSphericalHarmonicsArray[shDestBase + 8] = tempVector.z;
+                    }
                 }
 
                 // TODO: transform spherical harmonics if necessary
@@ -402,16 +429,16 @@ export class SplatBuffer {
     }
 
     static writeHeaderCountsToBuffer(sectionCount, splatCount, buffer) {
-        const headerArrayUint32 = new Uint32Array(buffer);
+        const headerArrayUint32 = new Uint32Array(buffer, 0, SplatBuffer.HeaderSizeBytes / 4);
         headerArrayUint32[2] = sectionCount;
         headerArrayUint32[4] = splatCount;
     }
 
     static writeHeaderToBuffer(header, buffer) {
-        const headerArrayUint8 = new Uint8Array(buffer);
-        const headerArrayUint32 = new Uint32Array(buffer);
-        const headerArrayFloat32 = new Float32Array(buffer);
-        const headerArrayUint16 = new Uint16Array(buffer);
+        const headerArrayUint8 = new Uint8Array(buffer, 0, SplatBuffer.HeaderSizeBytes);
+        const headerArrayUint16 = new Uint16Array(buffer, 0, SplatBuffer.HeaderSizeBytes / 2);
+        const headerArrayUint32 = new Uint32Array(buffer, 0, SplatBuffer.HeaderSizeBytes / 4);
+        const headerArrayFloat32 = new Float32Array(buffer, 0, SplatBuffer.HeaderSizeBytes / 4);
         headerArrayUint8[0] = header.versionMajor;
         headerArrayUint8[1] = header.versionMinor;
         headerArrayUint8[2] = 0; // unused for now
@@ -800,7 +827,7 @@ export class SplatBuffer {
             totalSplatCount += outSplatCount;
 
             if (compressionLevel === 1) {
-                const bucketMetaDataArray = new Uint32Array(sectionBuffer);
+                const bucketMetaDataArray = new Uint32Array(sectionBuffer, 0, partiallyFullBucketLengths.length * 4);
                 for (let pfb = 0; pfb < partiallyFullBucketLengths.length; pfb ++) {
                     bucketMetaDataArray[pfb] = partiallyFullBucketLengths[pfb];
                 }
