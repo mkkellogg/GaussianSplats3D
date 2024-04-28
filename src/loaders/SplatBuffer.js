@@ -334,6 +334,7 @@ export class SplatBuffer {
         }
         const tempVector = new THREE.Vector3();
         const tempMatrix3 = new THREE.Matrix3();
+        const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
 
         return function(outSphericalHarmonicsArray, transform, srcFrom, srcTo, destFrom) {
             const splatCount = this.splatCount;
@@ -361,36 +362,45 @@ export class SplatBuffer {
 
                 if (this.sphericalHarmonicsDegree >= 1) {
                     const sectionFloatArray = this.compressionLevel === 1 ? section.dataArrayUint16 : section.dataArrayFloat32;
-                    outSphericalHarmonicsArray[shDestBase] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 2]);
-                    outSphericalHarmonicsArray[shDestBase + 1] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase]);
-                    outSphericalHarmonicsArray[shDestBase + 2] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 1]);
+                    const s1 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 2]);
+                    const s2 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase]);
+                    const s3 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 1]);
 
-                    outSphericalHarmonicsArray[shDestBase + 3] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 5]);
-                    outSphericalHarmonicsArray[shDestBase + 4] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 3]);
-                    outSphericalHarmonicsArray[shDestBase + 5] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 4]);
+                    const s4 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 5]);
+                    const s5 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 3]);
+                    const s6 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 4]);
 
-                    outSphericalHarmonicsArray[shDestBase + 6] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 8]);
-                    outSphericalHarmonicsArray[shDestBase + 7] = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 6]);
-                    outSphericalHarmonicsArray[shDestBase + 8] = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 7]);
+                    const s7 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 8]);
+                    const s8 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 6]);
+                    const s9 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 7]);
 
                     if (transform) {
-                        tempVector.set(outSphericalHarmonicsArray[shDestBase], outSphericalHarmonicsArray[shDestBase + 1],
-                                       outSphericalHarmonicsArray[shDestBase + 2]).applyMatrix3(tempMatrix3);
-                        outSphericalHarmonicsArray[shDestBase] = tempVector.x;
-                        outSphericalHarmonicsArray[shDestBase + 1] = tempVector.y;
-                        outSphericalHarmonicsArray[shDestBase + 2] = tempVector.z;
+                        tempVector.set(s1, s2, s3).applyMatrix3(tempMatrix3);
+                        outSphericalHarmonicsArray[shDestBase] = thf(tempVector.x);
+                        outSphericalHarmonicsArray[shDestBase + 1] = thf(tempVector.y);
+                        outSphericalHarmonicsArray[shDestBase + 2] = thf(tempVector.z);
 
-                        tempVector.set(outSphericalHarmonicsArray[shDestBase + 3], outSphericalHarmonicsArray[shDestBase + 4],
-                                       outSphericalHarmonicsArray[shDestBase + 5]).applyMatrix3(tempMatrix3);
-                        outSphericalHarmonicsArray[shDestBase + 3] = tempVector.x;
-                        outSphericalHarmonicsArray[shDestBase + 4] = tempVector.y;
-                        outSphericalHarmonicsArray[shDestBase + 5] = tempVector.z;
+                        tempVector.set(s4, s5, s6).applyMatrix3(tempMatrix3);
+                        outSphericalHarmonicsArray[shDestBase + 3] = thf(tempVector.x);
+                        outSphericalHarmonicsArray[shDestBase + 4] = thf(tempVector.y);
+                        outSphericalHarmonicsArray[shDestBase + 5] = thf(tempVector.z);
 
-                        tempVector.set(outSphericalHarmonicsArray[shDestBase + 6], outSphericalHarmonicsArray[shDestBase + 7],
-                                       outSphericalHarmonicsArray[shDestBase + 8]).applyMatrix3(tempMatrix3);
-                        outSphericalHarmonicsArray[shDestBase + 6] = tempVector.x;
-                        outSphericalHarmonicsArray[shDestBase + 7] = tempVector.y;
-                        outSphericalHarmonicsArray[shDestBase + 8] = tempVector.z;
+                        tempVector.set(s7, s8, s9).applyMatrix3(tempMatrix3);
+                        outSphericalHarmonicsArray[shDestBase + 6] = thf(tempVector.x);
+                        outSphericalHarmonicsArray[shDestBase + 7] = thf(tempVector.y);
+                        outSphericalHarmonicsArray[shDestBase + 8] = thf(tempVector.z);
+                    } else {
+                        outSphericalHarmonicsArray[shDestBase] = thf(s1);
+                        outSphericalHarmonicsArray[shDestBase + 1] = thf(s2);
+                        outSphericalHarmonicsArray[shDestBase + 2] = thf(s3);
+    
+                        outSphericalHarmonicsArray[shDestBase + 3] = thf(s4);
+                        outSphericalHarmonicsArray[shDestBase + 4] = thf(s5);
+                        outSphericalHarmonicsArray[shDestBase + 5] = thf(s6);
+    
+                        outSphericalHarmonicsArray[shDestBase + 6] = thf(s7);
+                        outSphericalHarmonicsArray[shDestBase + 7] = thf(s8);
+                        outSphericalHarmonicsArray[shDestBase + 8] = thf(s9);
                     }
                 }
 
