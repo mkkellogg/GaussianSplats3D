@@ -1042,7 +1042,7 @@ export class SplatMesh extends THREE.Mesh {
             const sphericalHarmonicsTexSize = computeDataTextureSize(SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL,
                                                                      paddedSphericalHarmonicsComponentCount);
             const paddedSHArraySize = sphericalHarmonicsTexSize.x * sphericalHarmonicsTexSize.y * SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL;
-            const paddedSHArray = new Float32Array(paddedSHArraySize);
+            const paddedSHArray = new Uint16Array(paddedSHArraySize);
             for (let c = 0; c < splatCount; c++) {
                 const srcBase = sphericalHarmonicsComponentCount * c;
                 const destBase = paddedSphericalHarmonicsComponentCount * c;
@@ -1051,7 +1051,7 @@ export class SplatMesh extends THREE.Mesh {
                 }
             }
             const sphericalHarmonicsTex = new THREE.DataTexture(paddedSHArray, sphericalHarmonicsTexSize.x,
-                                                                sphericalHarmonicsTexSize.y, THREE.RGFormat, THREE.FloatType);
+                                                                sphericalHarmonicsTexSize.y, THREE.RGFormat, THREE.HalfFloatType);
             sphericalHarmonicsTex.needsUpdate = true;
             this.material.uniforms.sphericalHarmonicsTexture.value = sphericalHarmonicsTex;
             this.material.uniforms.sphericalHarmonicsTextureSize.value.copy(sphericalHarmonicsTexSize);
@@ -1146,7 +1146,7 @@ export class SplatMesh extends THREE.Mesh {
                 sphericalHarmonicsTex.needsUpdate = true;
             } else {
                 this.updateDataTexture(paddedSHArray, sphericalHarmonicsTexDesc, sphericalHarmonicsTextureProps,
-                                       SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL, paddedSphericalHarmonicsComponentCount, 4,
+                                       SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL, paddedSphericalHarmonicsComponentCount, 2,
                                        this.lastBuildSplatCount, splatCount - 1);
             }
         }
