@@ -87,13 +87,24 @@ export class PlyParser {
             if (fieldName.startsWith('f_rest')) sphericalHarmonicsFieldCount++;
         }
         sphericalHarmonicsCoefficientsPerChannel = sphericalHarmonicsFieldCount / 3;
+        let sphericalHarmonicsDegree = 0;
+        if (sphericalHarmonicsCoefficientsPerChannel >= 3) sphericalHarmonicsDegree = 1;
+        if (sphericalHarmonicsCoefficientsPerChannel >= 8) sphericalHarmonicsDegree = 2;
 
         let sphericalHarmonicsDegree1Fields = [];
-        let sphericalHarmonicsDegree = sphericalHarmonicsCoefficientsPerChannel;
         if (sphericalHarmonicsDegree >= 1) {
-            for (let i = 0; i < 3; i++) {
-                for (let rgb = 0; rgb < 3; rgb++) {
-                    sphericalHarmonicsDegree1Fields.push('f_rest_' + (i * sphericalHarmonicsCoefficientsPerChannel + rgb));
+            for (let rgb = 0; rgb < 3; rgb++) {
+                for (let i = 0; i < 3; i++) {
+                    sphericalHarmonicsDegree1Fields.push('f_rest_' + (i + sphericalHarmonicsCoefficientsPerChannel * rgb));
+                }
+            }
+        }
+
+        let sphericalHarmonicsDegree2Fields = [];
+        if (sphericalHarmonicsDegree >= 2) {
+            for (let rgb = 0; rgb < 3; rgb++) {
+                for (let i = 0; i < 5; i++) {
+                    sphericalHarmonicsDegree2Fields.push('f_rest_' + (i + sphericalHarmonicsCoefficientsPerChannel * rgb + 3));
                 }
             }
         }
@@ -109,7 +120,8 @@ export class PlyParser {
             'fieldOffsets': fieldOffsets,
             'sphericalHarmonicsDegree': sphericalHarmonicsDegree,
             'sphericalHarmonicsCoefficientsPerChannel': sphericalHarmonicsCoefficientsPerChannel,
-            'sphericalHarmonicsDegree1Fields': sphericalHarmonicsDegree1Fields
+            'sphericalHarmonicsDegree1Fields': sphericalHarmonicsDegree1Fields,
+            'sphericalHarmonicsDegree2Fields': sphericalHarmonicsDegree2Fields
         };
     }
 
@@ -202,6 +214,24 @@ export class PlyParser {
                 outSphericalHarmonics[6] = parsedSplat[UncompressedSplatArray.OFFSET.FRC6];
                 outSphericalHarmonics[7] = parsedSplat[UncompressedSplatArray.OFFSET.FRC7];
                 outSphericalHarmonics[8] = parsedSplat[UncompressedSplatArray.OFFSET.FRC8];
+
+                if (outSphericalHarmonicsDegree >= 2) {
+                    outSphericalHarmonics[9] = parsedSplat[UncompressedSplatArray.OFFSET.FRC9];
+                    outSphericalHarmonics[10] = parsedSplat[UncompressedSplatArray.OFFSET.FRC10];
+                    outSphericalHarmonics[11] = parsedSplat[UncompressedSplatArray.OFFSET.FRC11];
+                    outSphericalHarmonics[12] = parsedSplat[UncompressedSplatArray.OFFSET.FRC12];
+                    outSphericalHarmonics[13] = parsedSplat[UncompressedSplatArray.OFFSET.FRC13];
+                    outSphericalHarmonics[14] = parsedSplat[UncompressedSplatArray.OFFSET.FRC14];
+                    outSphericalHarmonics[15] = parsedSplat[UncompressedSplatArray.OFFSET.FRC15];
+                    outSphericalHarmonics[16] = parsedSplat[UncompressedSplatArray.OFFSET.FRC16];
+                    outSphericalHarmonics[17] = parsedSplat[UncompressedSplatArray.OFFSET.FRC17];
+                    outSphericalHarmonics[18] = parsedSplat[UncompressedSplatArray.OFFSET.FRC18];
+                    outSphericalHarmonics[19] = parsedSplat[UncompressedSplatArray.OFFSET.FRC19];
+                    outSphericalHarmonics[20] = parsedSplat[UncompressedSplatArray.OFFSET.FRC20];
+                    outSphericalHarmonics[21] = parsedSplat[UncompressedSplatArray.OFFSET.FRC21];
+                    outSphericalHarmonics[22] = parsedSplat[UncompressedSplatArray.OFFSET.FRC22];
+                    outSphericalHarmonics[23] = parsedSplat[UncompressedSplatArray.OFFSET.FRC23];
+                }
             }
         }
     }
@@ -214,7 +244,7 @@ export class PlyParser {
         return function(vertexData, row, header, vertexDataOffset = 0, outSphericalHarmonicsDegree = 0) {
             outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
             PlyParser.readRawVertexFast(vertexData, row * header.bytesPerSplat + vertexDataOffset, header.fieldOffsets,
-                                        PlyParser.Fields[outSphericalHarmonicsDegree], header.propertyTypes, rawVertex);
+                                        PlyParser.Fields[outSphericalHarmonicsDegree > 0 ? 1 : 0], header.propertyTypes, rawVertex);
             const newSplat = UncompressedSplatArray.createSplat(outSphericalHarmonicsDegree);
             if (rawVertex['scale_0'] !== undefined) {
                 newSplat[UncompressedSplatArray.OFFSET.SCALE0] = Math.exp(rawVertex['scale_0']);
@@ -261,6 +291,25 @@ export class PlyParser {
                     newSplat[UncompressedSplatArray.OFFSET.FRC6] = rawVertex[header.sphericalHarmonicsDegree1Fields[6]];
                     newSplat[UncompressedSplatArray.OFFSET.FRC7] = rawVertex[header.sphericalHarmonicsDegree1Fields[7]];
                     newSplat[UncompressedSplatArray.OFFSET.FRC8] = rawVertex[header.sphericalHarmonicsDegree1Fields[8]];
+
+                    if (outSphericalHarmonicsDegree >= 2) {
+                        newSplat[UncompressedSplatArray.OFFSET.FRC9] = rawVertex[header.sphericalHarmonicsDegree2Fields[0]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC10] = rawVertex[header.sphericalHarmonicsDegree2Fields[1]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC11] = rawVertex[header.sphericalHarmonicsDegree2Fields[2]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC12] = rawVertex[header.sphericalHarmonicsDegree2Fields[3]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC13] = rawVertex[header.sphericalHarmonicsDegree2Fields[4]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC14] = rawVertex[header.sphericalHarmonicsDegree2Fields[5]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC15] = rawVertex[header.sphericalHarmonicsDegree2Fields[6]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC16] = rawVertex[header.sphericalHarmonicsDegree2Fields[7]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC17] = rawVertex[header.sphericalHarmonicsDegree2Fields[8]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC18] = rawVertex[header.sphericalHarmonicsDegree2Fields[9]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC19] = rawVertex[header.sphericalHarmonicsDegree2Fields[10]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC20] = rawVertex[header.sphericalHarmonicsDegree2Fields[11]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC21] = rawVertex[header.sphericalHarmonicsDegree2Fields[12]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC22] = rawVertex[header.sphericalHarmonicsDegree2Fields[13]];
+                        newSplat[UncompressedSplatArray.OFFSET.FRC23] = rawVertex[header.sphericalHarmonicsDegree2Fields[14]];
+
+                    }
                 } else {
                     newSplat[UncompressedSplatArray.OFFSET.FRC0] = 0;
                     newSplat[UncompressedSplatArray.OFFSET.FRC1] = 0;
