@@ -362,7 +362,7 @@ export class SplatBuffer {
 
                 if (this.sphericalHarmonicsDegree >= 1) {
                     const sectionFloatArray = this.compressionLevel === 1 ? section.dataArrayUint16 : section.dataArrayFloat32;
-                    const s1 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 2]);
+                   /* const s1 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 2]);
                     const s2 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase]);
                     const s3 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 1]);
 
@@ -372,7 +372,19 @@ export class SplatBuffer {
 
                     const s7 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 8]);
                     const s8 = -this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 6]);
-                    const s9 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 7]);
+                    const s9 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 7]);*/
+
+                    const s1 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase]);
+                    const s2 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 1]);
+                    const s3 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 2]);
+
+                    const s4 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 3]);
+                    const s5 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 4]);
+                    const s6 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 5]);
+
+                    const s7 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 6]);
+                    const s8 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 7]);
+                    const s9 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 8]);
 
                     if (transform) {
                         tempVector.set(s1, s2, s3).applyMatrix3(tempMatrix3);
