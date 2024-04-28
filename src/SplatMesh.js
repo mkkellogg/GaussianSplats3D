@@ -230,28 +230,28 @@ export class SplatMesh extends THREE.Mesh {
 
                 if (sphericalHarmonicsDegree >= 1) {
                     vec3 worldViewDir = normalize(splatCenter - cameraPosition);
-                    float x = worldViewDir.x;
-                    float y = worldViewDir.y;
-                    float z = worldViewDir.z;
                 `;
 
             if (dynamicMode) {
                 vertexShaderSource += `
-                worldViewDir = inverse(mat3(transform)) * worldViewDir;
+                worldViewDir = normalize(inverse(mat3(transform)) * worldViewDir);
                 `;
             }
 
             // res += SH_C1 * (-splat.sh1 * y + splat.sh2 * z - splat.sh3 * x);
             vertexShaderSource += `
+                    float x = worldViewDir.x;
+                    float y = worldViewDir.y;
+                    float z = worldViewDir.z;
                     vec2 sampledSH01 = texture(sphericalHarmonicsTexture, getDataUV(5, 0, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH23 = texture(sphericalHarmonicsTexture, getDataUV(5, 1, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH45 = texture(sphericalHarmonicsTexture, getDataUV(5, 2, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH67 = texture(sphericalHarmonicsTexture, getDataUV(5, 3, sphericalHarmonicsTextureSize)).rg;
                     vec2 sampledSH89 = texture(sphericalHarmonicsTexture, getDataUV(5, 4, sphericalHarmonicsTextureSize)).rg;
                     float SH_C1 = 0.4886025119029199f;
-                    vColor.rgb += SH_C1 * (-vec3(sampledSH01.r, sampledSH23.g, sampledSH67.r) * y +
-                                            vec3(sampledSH01.g, sampledSH45.r, sampledSH67.g) * z -
-                                            vec3(sampledSH23.r, sampledSH45.g, sampledSH89.r) * x);
+                    vColor.rgb += SH_C1 * (-vec3(sampledSH01.r, sampledSH01.g, sampledSH23.r) * y +
+                                            vec3(sampledSH23.g, sampledSH45.r, sampledSH45.g) * z -
+                                            vec3(sampledSH67.r, sampledSH67.g, sampledSH89.r) * x);
                 }
 
                 uint oddOffset = splatIndex & uint(0x00000001);
@@ -994,7 +994,7 @@ export class SplatMesh extends THREE.Mesh {
         let paddedSphericalHarmonicsComponentCount = sphericalHarmonicsComponentCount;
         if (paddedSphericalHarmonicsComponentCount % 2 !== 0) paddedSphericalHarmonicsComponentCount++;
         const sphericalHarmonics = this.sphericalHarmonicsDegree ?
-                                   new Float32Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
+                                   new Uint16Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
         this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics);
 
         // set up covariances data texture
