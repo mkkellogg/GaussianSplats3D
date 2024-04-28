@@ -34,6 +34,9 @@ export class SplatBuffer {
                 },
                 1: {
                     BytesPerSplat: 80,
+                },
+                2: {
+                    BytesPerSplat: 140,
                 }
             },
         },
@@ -51,6 +54,9 @@ export class SplatBuffer {
                 },
                 1: {
                     BytesPerSplat: 42,
+                },
+                2: {
+                    BytesPerSplat: 72,
                 }
             },
         }
@@ -342,7 +348,7 @@ export class SplatBuffer {
         const transformR3 = new THREE.Vector3();
         const thf = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
 
-        return function(outSphericalHarmonicsArray, transform, srcFrom, srcTo, destFrom) {
+        return function(outSphericalHarmonicsArray, outSphericalHarmonicsDegree, transform, srcFrom, srcTo, destFrom) {
             const splatCount = this.splatCount;
 
             srcFrom = srcFrom || 0;
@@ -357,6 +363,9 @@ export class SplatBuffer {
                 transformR3.set(tempMatrix3.elements[3], -tempMatrix3.elements[6], tempMatrix3.elements[0]);
             }
 
+            outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, this.sphericalHarmonicsDegree);
+            const outSphericalHarmonicsComponentsCount = getSphericalHarmonicsComponentCountForDegree(outSphericalHarmonicsDegree);
+
             for (let i = srcFrom; i <= srcTo; i++) {
 
                 const sectionIndex = this.globalSplatIndexToSectionMap[i];
@@ -365,9 +374,9 @@ export class SplatBuffer {
 
                 const sphericalHarmonicsOffsetFloat = SplatBuffer.CompressionLevels[this.compressionLevel].SphericalHarmonicsOffsetFloat;
                 const sphericalHarmonicsSrcBase = floatsPerSplat * localSplatIndex + sphericalHarmonicsOffsetFloat;
-                const shDestBase = (i - srcFrom + destFrom) * this.sphericalHarmonicsComponentsPerSplat;
+                const shDestBase = (i - srcFrom + destFrom) * outSphericalHarmonicsComponentsCount;
 
-                if (this.sphericalHarmonicsDegree >= 1) {
+                if (outSphericalHarmonicsDegree >= 1) {
                     const sectionFloatArray = this.compressionLevel === 1 ? section.dataArrayUint16 : section.dataArrayFloat32;
 
                     const s1 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase]);
@@ -415,6 +424,48 @@ export class SplatBuffer {
                         outSphericalHarmonicsArray[shDestBase + 6] = thf(s7);
                         outSphericalHarmonicsArray[shDestBase + 7] = thf(s8);
                         outSphericalHarmonicsArray[shDestBase + 8] = thf(s9);
+                    }
+
+                    if (outSphericalHarmonicsDegree >= 2) {
+                        const s10 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 9]);
+                        const s11 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 14]);
+                        const s12 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 19]);
+
+                        const s13 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 10]);
+                        const s14 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 15]);
+                        const s15 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 20]);
+
+                        const s16 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 11]);
+                        const s17 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 16]);
+                        const s18 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 21]);
+
+                        const s19 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 12]);
+                        const s20 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 17]);
+                        const s21 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 22]);
+
+                        const s22 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 13]);
+                        const s23 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 18]);
+                        const s24 = this.fbf(sectionFloatArray[sphericalHarmonicsSrcBase + 23]);
+
+                        outSphericalHarmonicsArray[shDestBase + 9] = thf(s10);
+                        outSphericalHarmonicsArray[shDestBase + 10] = thf(s11);
+                        outSphericalHarmonicsArray[shDestBase + 11] = thf(s12);
+
+                        outSphericalHarmonicsArray[shDestBase + 12] = thf(s13);
+                        outSphericalHarmonicsArray[shDestBase + 13] = thf(s14);
+                        outSphericalHarmonicsArray[shDestBase + 14] = thf(s15);
+
+                        outSphericalHarmonicsArray[shDestBase + 15] = thf(s16);
+                        outSphericalHarmonicsArray[shDestBase + 16] = thf(s17);
+                        outSphericalHarmonicsArray[shDestBase + 17] = thf(s18);
+
+                        outSphericalHarmonicsArray[shDestBase + 18] = thf(s19);
+                        outSphericalHarmonicsArray[shDestBase + 19] = thf(s20);
+                        outSphericalHarmonicsArray[shDestBase + 20] = thf(s21);
+
+                        outSphericalHarmonicsArray[shDestBase + 21] = thf(s22);
+                        outSphericalHarmonicsArray[shDestBase + 22] = thf(s23);
+                        outSphericalHarmonicsArray[shDestBase + 23] = thf(s24);
                     }
                 }
             }
@@ -780,6 +831,24 @@ export class SplatBuffer {
                                 sphericalHarmonics[6] = targetSplat[UncompressedSplatArray.OFFSET.FRC6];
                                 sphericalHarmonics[7] = targetSplat[UncompressedSplatArray.OFFSET.FRC7];
                                 sphericalHarmonics[8] = targetSplat[UncompressedSplatArray.OFFSET.FRC8];
+
+                                if (sphericalHarmonicsDegree >= 2) {
+                                    sphericalHarmonics[9] = targetSplat[UncompressedSplatArray.OFFSET.FRC9];
+                                    sphericalHarmonics[10] = targetSplat[UncompressedSplatArray.OFFSET.FRC10];
+                                    sphericalHarmonics[11] = targetSplat[UncompressedSplatArray.OFFSET.FRC11];
+                                    sphericalHarmonics[12] = targetSplat[UncompressedSplatArray.OFFSET.FRC12];
+                                    sphericalHarmonics[13] = targetSplat[UncompressedSplatArray.OFFSET.FRC13];
+                                    sphericalHarmonics[14] = targetSplat[UncompressedSplatArray.OFFSET.FRC14];
+                                    sphericalHarmonics[15] = targetSplat[UncompressedSplatArray.OFFSET.FRC15];
+                                    sphericalHarmonics[16] = targetSplat[UncompressedSplatArray.OFFSET.FRC16];
+                                    sphericalHarmonics[17] = targetSplat[UncompressedSplatArray.OFFSET.FRC17];
+                                    sphericalHarmonics[18] = targetSplat[UncompressedSplatArray.OFFSET.FRC18];
+                                    sphericalHarmonics[19] = targetSplat[UncompressedSplatArray.OFFSET.FRC19];
+                                    sphericalHarmonics[20] = targetSplat[UncompressedSplatArray.OFFSET.FRC20];
+                                    sphericalHarmonics[21] = targetSplat[UncompressedSplatArray.OFFSET.FRC21];
+                                    sphericalHarmonics[22] = targetSplat[UncompressedSplatArray.OFFSET.FRC22];
+                                    sphericalHarmonics[23] = targetSplat[UncompressedSplatArray.OFFSET.FRC23];
+                                }
                            }
                         }
                     } else {
@@ -824,6 +893,24 @@ export class SplatBuffer {
                                  sphericalHarmonics[6] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC6]);
                                  sphericalHarmonics[7] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC7]);
                                  sphericalHarmonics[8] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC8]);
+
+                                 if (sphericalHarmonicsDegree >= 2) {
+                                    sphericalHarmonics[9] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC9]);
+                                    sphericalHarmonics[10] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC10]);
+                                    sphericalHarmonics[11] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC11]);
+                                    sphericalHarmonics[12] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC12]);
+                                    sphericalHarmonics[13] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC13]);
+                                    sphericalHarmonics[14] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC14]);
+                                    sphericalHarmonics[15] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC15]);
+                                    sphericalHarmonics[16] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC16]);
+                                    sphericalHarmonics[17] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC17]);
+                                    sphericalHarmonics[18] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC18]);
+                                    sphericalHarmonics[19] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC19]);
+                                    sphericalHarmonics[20] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC20]);
+                                    sphericalHarmonics[21] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC21]);
+                                    sphericalHarmonics[22] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC22]);
+                                    sphericalHarmonics[23] = thf(targetSplat[UncompressedSplatArray.OFFSET.FRC23]);
+                                }
                             }
                          }
                     }
