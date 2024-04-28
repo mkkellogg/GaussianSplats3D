@@ -62,6 +62,7 @@ export class SplatMesh extends THREE.Mesh {
         this.logLevel = logLevel;
         // Level 0 means no spherical harmonics
         this.sphericalHarmonicsDegree = sphericalHarmonicsDegree;
+        this.minSphericalHarmonicsDegree = 0;
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -199,6 +200,9 @@ export class SplatMesh extends THREE.Mesh {
                 return samplerUV;
             }
 
+            const float SH_C1 = 0.4886025119029199f;
+            const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
+
             void main () {
 
                 uvec4 sampledCenterColor = texture(centersColorsTexture, getDataUV(1, 0, centersColorsTextureSize));
@@ -240,18 +244,48 @@ export class SplatMesh extends THREE.Mesh {
 
             // res += SH_C1 * (-splat.sh1 * y + splat.sh2 * z - splat.sh3 * x);
             vertexShaderSource += `
+                    const int[2] strides = int[](5, 12);
+                    int stride = strides[sphericalHarmonicsDegree - 1];
                     float x = worldViewDir.x;
                     float y = worldViewDir.y;
                     float z = worldViewDir.z;
-                    vec2 sampledSH01 = texture(sphericalHarmonicsTexture, getDataUV(5, 0, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH23 = texture(sphericalHarmonicsTexture, getDataUV(5, 1, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH45 = texture(sphericalHarmonicsTexture, getDataUV(5, 2, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH67 = texture(sphericalHarmonicsTexture, getDataUV(5, 3, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH89 = texture(sphericalHarmonicsTexture, getDataUV(5, 4, sphericalHarmonicsTextureSize)).rg;
-                    float SH_C1 = 0.4886025119029199f;
+                    vec2 sampledSH01 = texture(sphericalHarmonicsTexture, getDataUV(stride, 0, sphericalHarmonicsTextureSize)).rg;
+                    vec2 sampledSH23 = texture(sphericalHarmonicsTexture, getDataUV(stride, 1, sphericalHarmonicsTextureSize)).rg;
+                    vec2 sampledSH45 = texture(sphericalHarmonicsTexture, getDataUV(stride, 2, sphericalHarmonicsTextureSize)).rg;
+                    vec2 sampledSH67 = texture(sphericalHarmonicsTexture, getDataUV(stride, 3, sphericalHarmonicsTextureSize)).rg;
+                    vec2 sampledSH89 = texture(sphericalHarmonicsTexture, getDataUV(stride, 4, sphericalHarmonicsTextureSize)).rg;
                     vColor.rgb += SH_C1 * (-vec3(sampledSH01.r, sampledSH01.g, sampledSH23.r) * y +
                                             vec3(sampledSH23.g, sampledSH45.r, sampledSH45.g) * z -
                                             vec3(sampledSH67.r, sampledSH67.g, sampledSH89.r) * x);
+
+                    if (sphericalHarmonicsDegree >= 2) {
+                        float xx = x * x;
+                        float yy = y * y;
+                        float zz = z * z;
+                        float xy = x * y;
+                        float yz = y * z;
+                        float xz = x * z;
+
+                        vec2 sampledSH1011 = texture(sphericalHarmonicsTexture, getDataUV(stride, 5, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH1213 = texture(sphericalHarmonicsTexture, getDataUV(stride, 6, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH1415 = texture(sphericalHarmonicsTexture, getDataUV(stride, 7, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH1617 = texture(sphericalHarmonicsTexture, getDataUV(stride, 8, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH1819 = texture(sphericalHarmonicsTexture, getDataUV(stride, 9, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH2021 = texture(sphericalHarmonicsTexture, getDataUV(stride, 10, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH2223 = texture(sphericalHarmonicsTexture, getDataUV(stride, 11, sphericalHarmonicsTextureSize)).rg;
+
+                        vec3 sh4 = vec3(sampledSH89.g, sampledSH1011.rg);
+                        vec3 sh5 = vec3(sampledSH1213.rg, sampledSH1415.r);
+                        vec3 sh6 = vec3(sampledSH1415.g, sampledSH1617.rg);
+                        vec3 sh7 = vec3(sampledSH1819.rg, sampledSH2021.r);
+                        vec3 sh8 = vec3(sampledSH2021.g, sampledSH2223.rg);
+                        vColor.rgb +=
+                            (SH_C2[0] * xy) * sh4 +
+                            (SH_C2[1] * yz) * sh5 +
+                            (SH_C2[2] * (2.0 * zz - xx - yy)) * sh6 +
+                            (SH_C2[3] * xz) * sh7 +
+                            (SH_C2[4] * (xx - yy)) * sh8;
+                    }
                 }
 
                 uint oddOffset = splatIndex & uint(0x00000001);
@@ -743,6 +777,14 @@ export class SplatMesh extends THREE.Mesh {
         }
         this.scenes = newScenes;
 
+        let minSphericalHarmonicsDegree = 1000;
+        for (let splatBuffer of splatBuffers) {
+            if (splatBuffer.sphericalHarmonicsDegree < minSphericalHarmonicsDegree) {
+                minSphericalHarmonicsDegree = splatBuffer.sphericalHarmonicsDegree;
+            }
+        }
+        this.minSphericalHarmonicsDegree = Math.min(minSphericalHarmonicsDegree, this.sphericalHarmonicsDegree);
+
         let splatBuffersChanged = false;
         if (splatBuffers.length !== this.lastBuildScenes.length) {
             splatBuffersChanged = true;
@@ -777,7 +819,7 @@ export class SplatMesh extends THREE.Mesh {
             this.disposeMeshData();
             this.geometry = SplatMesh.buildGeomtery(maxSplatCount);
             this.material = SplatMesh.buildMaterial(this.dynamicMode, this.antialiased, this.maxScreenSpaceSplatSize,
-                                                    this.splatScale, this.pointCloudModeEnabled, this.sphericalHarmonicsDegree);
+                                                    this.splatScale, this.pointCloudModeEnabled, this.minSphericalHarmonicsDegree);
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
@@ -990,10 +1032,10 @@ export class SplatMesh extends THREE.Mesh {
         const covariances = new Float32Array(maxSplatCount * COVARIANCES_ELEMENTS_PER_SPLAT);
         const centers = new Float32Array(maxSplatCount * 3);
         const colors = new Uint8Array(maxSplatCount * 4);
-        const sphericalHarmonicsComponentCount = getSphericalHarmonicsComponentCountForDegree(this.sphericalHarmonicsDegree);
+        const sphericalHarmonicsComponentCount = getSphericalHarmonicsComponentCountForDegree(this.minSphericalHarmonicsDegree);
         let paddedSphericalHarmonicsComponentCount = sphericalHarmonicsComponentCount;
         if (paddedSphericalHarmonicsComponentCount % 2 !== 0) paddedSphericalHarmonicsComponentCount++;
-        const sphericalHarmonics = this.sphericalHarmonicsDegree ?
+        const sphericalHarmonics = this.minSphericalHarmonicsDegree ?
                                    new Uint16Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
         this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics);
 
@@ -1907,7 +1949,8 @@ export class SplatMesh extends THREE.Mesh {
             if (centers) splatBuffer.fillSplatCenterArray(centers, sceneTransform, srcStart, srcEnd, destStart);
             if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, sceneTransform, srcStart, srcEnd, destStart);
             if (sphericalHarmonics) {
-                splatBuffer.fillSphericalHarmonicsArray(sphericalHarmonics, sceneTransform, srcStart, srcEnd, destStart);
+                splatBuffer.fillSphericalHarmonicsArray(sphericalHarmonics, this.minSphericalHarmonicsDegree,
+                                                        sceneTransform, srcStart, srcEnd, destStart);
             }
             destStart += splatBuffer.getSplatCount();
         }

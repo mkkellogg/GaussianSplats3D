@@ -151,6 +151,8 @@ export const getSphericalHarmonicsComponentCountForDegree = (sphericalHarmonicsD
     switch (sphericalHarmonicsDegree) {
         case 1:
             return 9;
+        case 2:
+            return 24;
     }
     return 0;
 };
