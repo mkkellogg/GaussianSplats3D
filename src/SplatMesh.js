@@ -233,16 +233,19 @@ export class SplatMesh extends THREE.Mesh {
                 vColor = uintToRGBAVec(sampledCenterColor.r);
 
                 if (sphericalHarmonicsDegree >= 1) {
-                    vec3 worldViewDir = normalize(splatCenter - cameraPosition);
                 `;
 
-            if (dynamicMode) {
+           if (dynamicMode) {
                 vertexShaderSource += `
-                worldViewDir = normalize(inverse(mat3(transform)) * worldViewDir);
+                mat4 mTransform = modelMatrix * transform;
+                vec3 worldViewDir = normalize(splatCenter - vec3(inverse(mTransform) * vec4(cameraPosition, 1.0)));
+                `;
+            } else {
+                vertexShaderSource += `
+                vec3 worldViewDir = normalize(splatCenter - cameraPosition);
                 `;
             }
 
-            // res += SH_C1 * (-splat.sh1 * y + splat.sh2 * z - splat.sh3 * x);
             vertexShaderSource += `
                     const int[2] strides = int[](5, 12);
                     int stride = strides[sphericalHarmonicsDegree - 1];
