@@ -1040,12 +1040,14 @@ export class SplatMesh extends THREE.Mesh {
         if (paddedSphericalHarmonicsComponentCount % 2 !== 0) paddedSphericalHarmonicsComponentCount++;
         const sphericalHarmonics = this.minSphericalHarmonicsDegree ?
                                    new Uint16Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
-        this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics);
+
+        const covarianceCompressionLevel = this.getTargetCovarianceCompressionLevel();
+        this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics, undefined, covarianceCompressionLevel);
 
         // set up covariances data texture
         const covTexSize = computeDataTextureSize(COVARIANCES_ELEMENTS_PER_TEXEL, 6);
-        let CovariancesDataType = this.halfPrecisionCovariancesOnGPU ? Uint16Array : Float32Array;
-        let covariancesTextureType = this.halfPrecisionCovariancesOnGPU ? THREE.HalfFloatType : THREE.FloatType;
+        let CovariancesDataType = covarianceCompressionLevel === 1 ? Uint16Array : Float32Array;
+        let covariancesTextureType = covarianceCompressionLevel === 1 ? THREE.HalfFloatType : THREE.FloatType;
         const paddedCovariances = new CovariancesDataType(covTexSize.x * covTexSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
         paddedCovariances.set(covariances);
 
@@ -1138,9 +1140,11 @@ export class SplatMesh extends THREE.Mesh {
 
     updateDataTextures() {
         const splatCount = this.getSplatCount();
+        const covarianceCompressionLevel = this.getTargetCovarianceCompressionLevel();
+
         this.fillSplatDataArrays(this.splatDataTextures.baseData.covariances,
                                  this.splatDataTextures.baseData.centers, this.splatDataTextures.baseData.colors,
-                                 this.splatDataTextures.baseData.sphericalHarmonics, undefined,
+                                 this.splatDataTextures.baseData.sphericalHarmonics, undefined, covarianceCompressionLevel,
                                  this.lastBuildSplatCount, splatCount - 1, this.lastBuildSplatCount);
 
         const covariancesTextureDescriptor = this.splatDataTextures['covariances'];
@@ -1156,7 +1160,7 @@ export class SplatMesh extends THREE.Mesh {
         if (!covariancesTextureProps || !covariancesTextureProps.__webglTexture) {
             covariancesTexture.needsUpdate = true;
         } else {
-            const covaranceBytesPerElement = this.halfPrecisionCovariancesOnGPU ? 2 : 4;
+            const covaranceBytesPerElement = covarianceCompressionLevel ? 2 : 4;
             this.updateDataTexture(paddedCovariances, covariancesTextureDescriptor, covariancesTextureProps,
                                    COVARIANCES_ELEMENTS_PER_TEXEL, COVARIANCES_ELEMENTS_PER_SPLAT, covaranceBytesPerElement,
                                    this.lastBuildSplatCount, splatCount - 1);
@@ -1216,6 +1220,23 @@ export class SplatMesh extends THREE.Mesh {
                                        this.lastBuildSplatCount, splatCount - 1);
             }
         }
+    }
+
+    getTargetCovarianceCompressionLevel() {
+        const baseCompressionLevel = this.halfPrecisionCovariancesOnGPU ? 1 : 0;
+        return Math.max(baseCompressionLevel, this.getMaximumSplatBufferCompressionLevel());
+    }
+
+    getMaximumSplatBufferCompressionLevel() {
+        let maxCompressionLevel;
+        for (let i = 0; i < this.scenes.length; i++) {
+            const scene = this.getScene(i);
+            const splatBuffer = scene.splatBuffer;
+            if (i === 0 || splatBuffer.compressionLevel > maxCompressionLevel) {
+                maxCompressionLevel = splatBuffer.compressionLevel;
+            }
+        }
+        return maxCompressionLevel;
     }
 
     static computeTextureUpdateRegion(startSplat, endSplat, textureWidth, elementsPerTexel, elementsPerSplat) {
@@ -1931,11 +1952,13 @@ export class SplatMesh extends THREE.Mesh {
      * @param {boolean} applySceneTransform By default, scene transforms are applied to relevant splat data only if the splat mesh is
      *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
      *                                      it is false, they will never be applied. If undefined, the default behavior will apply.
+     * @param {number} covarianceCompressionLevel The compression level for covariances in the destination array
      * @param {number} srcStart The start location from which to pull source data
      * @param {number} srcEnd The end location from which to pull source data
      * @param {number} destStart The start location from which to write data
      */
-    fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics, applySceneTransform, srcStart, srcEnd, destStart = 0) {
+    fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics, applySceneTransform,
+                        covarianceCompressionLevel = 0, srcStart, srcEnd, destStart = 0) {
 
         for (let i = 0; i < this.scenes.length; i++) {
             if (applySceneTransform === undefined || applySceneTransform === null) {
@@ -1947,7 +1970,7 @@ export class SplatMesh extends THREE.Mesh {
             const sceneTransform = applySceneTransform ? scene.transform : null;
             if (covariances) {
                 splatBuffer.fillSplatCovarianceArray(covariances, sceneTransform,
-                                                     srcStart, srcEnd, destStart, this.halfPrecisionCovariancesOnGPU ? 1 : 0);
+                                                     srcStart, srcEnd, destStart, covarianceCompressionLevel);
             }
             if (centers) splatBuffer.fillSplatCenterArray(centers, sceneTransform, srcStart, srcEnd, destStart);
             if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, sceneTransform, srcStart, srcEnd, destStart);
@@ -1970,7 +1993,7 @@ export class SplatMesh extends THREE.Mesh {
     getIntegerCenters(start, end, padFour = false) {
         const splatCount = end - start + 1;
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, null, undefined, start);
+        this.fillSplatDataArrays(null, floatCenters, null, null, undefined, undefined, start);
         let intCenters;
         let componentCount = padFour ? 4 : 3;
         intCenters = new Int32Array(splatCount * componentCount);
@@ -1993,7 +2016,7 @@ export class SplatMesh extends THREE.Mesh {
     getFloatCenters(start, end, padFour = false) {
         const splatCount = end - start + 1;
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, floatCenters, null, null, undefined, start);
+        this.fillSplatDataArrays(null, floatCenters, null, null, undefined, undefined, start);
         if (!padFour) return floatCenters;
         let paddedFloatCenters = new Float32Array(splatCount * 4);
         for (let i = 0; i < splatCount; i++) {
