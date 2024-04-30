@@ -120,11 +120,11 @@ export class SplatMesh extends THREE.Mesh {
      * @param {number} maxScreenSpaceSplatSize The maximum clip space splat size
      * @param {number} splatScale Value by which all splats are scaled in screen-space (default is 1.0)
      * @param {number} pointCloudModeEnabled Render all splats as screen-space circles
-     * @param {number} sphericalHarmonicsDegree Level of spherical harmonics to utilize in rendering splats
+     * @param {number} maxSphericalHarmonicsDegree Level of spherical harmonics to utilize in rendering splats
      * @return {THREE.ShaderMaterial}
      */
     static buildMaterial(dynamicMode = false, antialiased = false, maxScreenSpaceSplatSize = 2048,
-                         splatScale = 1.0, pointCloudModeEnabled = false, sphericalHarmonicsDegree = 0) {
+                         splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
 
         // Contains the code to project 3D covariance to 2D and from there calculate the quad (using the eigen vectors of the
         // 2D covariance) that is ultimately rasterized
@@ -232,64 +232,91 @@ export class SplatMesh extends THREE.Mesh {
                 vPosition = position.xy;
                 vColor = uintToRGBAVec(sampledCenterColor.r);
 
+            `;
+
+            if (maxSphericalHarmonicsDegree >= 1) {
+
+                vertexShaderSource += `   
                 if (sphericalHarmonicsDegree >= 1) {
                 `;
 
-           if (dynamicMode) {
+                if (dynamicMode) {
+                    vertexShaderSource += `
+                        mat4 mTransform = modelMatrix * transform;
+                        vec3 worldViewDir = normalize(splatCenter - vec3(inverse(mTransform) * vec4(cameraPosition, 1.0)));
+                    `;
+                } else {
+                    vertexShaderSource += `
+                        vec3 worldViewDir = normalize(splatCenter - cameraPosition);
+                    `;
+                }
+
+                if (maxSphericalHarmonicsDegree >= 2) {
+                    vertexShaderSource += `
+                        vec4 sampledSH0123 = texture(sphericalHarmonicsTexture, getDataUV(6, 0, sphericalHarmonicsTextureSize)).rgba;
+                        vec4 sampledSH4567 = texture(sphericalHarmonicsTexture, getDataUV(6, 1, sphericalHarmonicsTextureSize)).rgba;
+                        vec4 sampledSH891011 = texture(sphericalHarmonicsTexture, getDataUV(6, 2, sphericalHarmonicsTextureSize)).rgba;
+                        vec3 sh1 = sampledSH0123.rgb;
+                        vec3 sh2 = vec3(sampledSH0123.a, sampledSH4567.rg);
+                        vec3 sh3 = vec3(sampledSH4567.ba, sampledSH891011.r);
+                    `;
+                } else {
+                    vertexShaderSource += `
+                        vec2 sampledSH01 = texture(sphericalHarmonicsTexture, getDataUV(5, 0, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH23 = texture(sphericalHarmonicsTexture, getDataUV(5, 1, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH45 = texture(sphericalHarmonicsTexture, getDataUV(5, 2, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH67 = texture(sphericalHarmonicsTexture, getDataUV(5, 3, sphericalHarmonicsTextureSize)).rg;
+                        vec2 sampledSH89 = texture(sphericalHarmonicsTexture, getDataUV(5, 4, sphericalHarmonicsTextureSize)).rg;
+                        vec3 sh1 = vec3(sampledSH01.r, sampledSH01.g, sampledSH23.r);
+                        vec3 sh2 = vec3(sampledSH23.g, sampledSH45.r, sampledSH45.g);
+                        vec3 sh3 = vec3(sampledSH67.r, sampledSH67.g, sampledSH89.r);
+                    `;
+                }
+
                 vertexShaderSource += `
-                mat4 mTransform = modelMatrix * transform;
-                vec3 worldViewDir = normalize(splatCenter - vec3(inverse(mTransform) * vec4(cameraPosition, 1.0)));
+                        float x = worldViewDir.x;
+                        float y = worldViewDir.y;
+                        float z = worldViewDir.z;
+                        vColor.rgb += SH_C1 * (-sh1 * y + sh2 * z - sh3 * x);
                 `;
-            } else {
+
+                if (maxSphericalHarmonicsDegree >= 2) {
+
+                    vertexShaderSource += `
+                        if (sphericalHarmonicsDegree >= 2) {
+                            float xx = x * x;
+                            float yy = y * y;
+                            float zz = z * z;
+                            float xy = x * y;
+                            float yz = y * z;
+                            float xz = x * z;
+
+                            vec4 sampledSH12131415 = texture(sphericalHarmonicsTexture, getDataUV(6, 3, sphericalHarmonicsTextureSize)).rgba;
+                            vec4 sampledSH16171819 = texture(sphericalHarmonicsTexture, getDataUV(6, 4, sphericalHarmonicsTextureSize)).rgba;
+                            vec4 sampledSH20212223 = texture(sphericalHarmonicsTexture, getDataUV(6, 5, sphericalHarmonicsTextureSize)).rgba;
+
+                            vec3 sh4 = sampledSH891011.gba;
+                            vec3 sh5 = sampledSH12131415.rgb;
+                            vec3 sh6 = vec3(sampledSH12131415.a, sampledSH16171819.rg);
+                            vec3 sh7 = vec3(sampledSH16171819.ba, sampledSH20212223.r);
+                            vec3 sh8 = sampledSH20212223.gba;
+
+                            vColor.rgb +=
+                                (SH_C2[0] * xy) * sh4 +
+                                (SH_C2[1] * yz) * sh5 +
+                                (SH_C2[2] * (2.0 * zz - xx - yy)) * sh6 +
+                                (SH_C2[3] * xz) * sh7 +
+                                (SH_C2[4] * (xx - yy)) * sh8;
+                        }
+                    `;
+                }
+
                 vertexShaderSource += `
-                vec3 worldViewDir = normalize(splatCenter - cameraPosition);
+                }
                 `;
             }
 
             vertexShaderSource += `
-                    const int[2] strides = int[](5, 12);
-                    int stride = strides[sphericalHarmonicsDegree - 1];
-                    float x = worldViewDir.x;
-                    float y = worldViewDir.y;
-                    float z = worldViewDir.z;
-                    vec2 sampledSH01 = texture(sphericalHarmonicsTexture, getDataUV(stride, 0, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH23 = texture(sphericalHarmonicsTexture, getDataUV(stride, 1, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH45 = texture(sphericalHarmonicsTexture, getDataUV(stride, 2, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH67 = texture(sphericalHarmonicsTexture, getDataUV(stride, 3, sphericalHarmonicsTextureSize)).rg;
-                    vec2 sampledSH89 = texture(sphericalHarmonicsTexture, getDataUV(stride, 4, sphericalHarmonicsTextureSize)).rg;
-                    vColor.rgb += SH_C1 * (-vec3(sampledSH01.r, sampledSH01.g, sampledSH23.r) * y +
-                                            vec3(sampledSH23.g, sampledSH45.r, sampledSH45.g) * z -
-                                            vec3(sampledSH67.r, sampledSH67.g, sampledSH89.r) * x);
-
-                    if (sphericalHarmonicsDegree >= 2) {
-                        float xx = x * x;
-                        float yy = y * y;
-                        float zz = z * z;
-                        float xy = x * y;
-                        float yz = y * z;
-                        float xz = x * z;
-
-                        vec2 sampledSH1011 = texture(sphericalHarmonicsTexture, getDataUV(stride, 5, sphericalHarmonicsTextureSize)).rg;
-                        vec2 sampledSH1213 = texture(sphericalHarmonicsTexture, getDataUV(stride, 6, sphericalHarmonicsTextureSize)).rg;
-                        vec2 sampledSH1415 = texture(sphericalHarmonicsTexture, getDataUV(stride, 7, sphericalHarmonicsTextureSize)).rg;
-                        vec2 sampledSH1617 = texture(sphericalHarmonicsTexture, getDataUV(stride, 8, sphericalHarmonicsTextureSize)).rg;
-                        vec2 sampledSH1819 = texture(sphericalHarmonicsTexture, getDataUV(stride, 9, sphericalHarmonicsTextureSize)).rg;
-                        vec2 sampledSH2021 = texture(sphericalHarmonicsTexture, getDataUV(stride, 10, sphericalHarmonicsTextureSize)).rg;
-                        vec2 sampledSH2223 = texture(sphericalHarmonicsTexture, getDataUV(stride, 11, sphericalHarmonicsTextureSize)).rg;
-
-                        vec3 sh4 = vec3(sampledSH89.g, sampledSH1011.rg);
-                        vec3 sh5 = vec3(sampledSH1213.rg, sampledSH1415.r);
-                        vec3 sh6 = vec3(sampledSH1415.g, sampledSH1617.rg);
-                        vec3 sh7 = vec3(sampledSH1819.rg, sampledSH2021.r);
-                        vec3 sh8 = vec3(sampledSH2021.g, sampledSH2223.rg);
-                        vColor.rgb +=
-                            (SH_C2[0] * xy) * sh4 +
-                            (SH_C2[1] * yz) * sh5 +
-                            (SH_C2[2] * (2.0 * zz - xx - yy)) * sh6 +
-                            (SH_C2[3] * xz) * sh7 +
-                            (SH_C2[4] * (xx - yy)) * sh8;
-                    }
-                }
 
                 uint oddOffset = splatIndex & uint(0x00000001);
                 bool isEven = oddOffset == uint(0);
@@ -534,7 +561,7 @@ export class SplatMesh extends THREE.Mesh {
             },
             'sphericalHarmonicsDegree': {
                 'type': 'i',
-                'value': sphericalHarmonicsDegree
+                'value': maxSphericalHarmonicsDegree
             },
             'sphericalHarmonicsTextureSize': {
                 'type': 'v2',
@@ -1094,10 +1121,11 @@ export class SplatMesh extends THREE.Mesh {
         };
 
         if (sphericalHarmonics) {
-
-            const sphericalHarmonicsTexSize = computeDataTextureSize(SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL,
+            const format = this.minSphericalHarmonicsDegree >= 2 ? THREE.RGBAFormat : THREE.RGFormat;
+            const sphericalHarmonicsElementsPerTexel = this.minSphericalHarmonicsDegree >= 2 ? 4 : 2;
+            const sphericalHarmonicsTexSize = computeDataTextureSize(sphericalHarmonicsElementsPerTexel,
                                                                      paddedSphericalHarmonicsComponentCount);
-            const paddedSHArraySize = sphericalHarmonicsTexSize.x * sphericalHarmonicsTexSize.y * SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL;
+            const paddedSHArraySize = sphericalHarmonicsTexSize.x * sphericalHarmonicsTexSize.y * sphericalHarmonicsElementsPerTexel;
             const paddedSHArray = new SphericalHarmonicsArrayType(paddedSHArraySize);
             for (let c = 0; c < splatCount; c++) {
                 const srcBase = sphericalHarmonicsComponentCount * c;
@@ -1106,8 +1134,9 @@ export class SplatMesh extends THREE.Mesh {
                     paddedSHArray[destBase + i] = sphericalHarmonics[srcBase + i];
                 }
             }
+
             const sphericalHarmonicsTex = new THREE.DataTexture(paddedSHArray, sphericalHarmonicsTexSize.x,
-                                                                sphericalHarmonicsTexSize.y, THREE.RGFormat, THREE.HalfFloatType);
+                                                                sphericalHarmonicsTexSize.y, format, THREE.HalfFloatType);
             sphericalHarmonicsTex.needsUpdate = true;
             this.material.uniforms.sphericalHarmonicsTexture.value = sphericalHarmonicsTex;
             this.material.uniforms.sphericalHarmonicsTextureSize.value.copy(sphericalHarmonicsTexSize);
@@ -1204,9 +1233,13 @@ export class SplatMesh extends THREE.Mesh {
             if (!sphericalHarmonicsTextureProps || !sphericalHarmonicsTextureProps.__webglTexture) {
                 sphericalHarmonicsTex.needsUpdate = true;
             } else {
+                const sphericalHarmonicsElementsPerTexel = this.minSphericalHarmonicsDegree >= 2 ? 4 : 2;
+                let sphericalHarmonicsBytesPerElement = 4;
+                if (sphericalHarmonicsCompresionLevel == 1) sphericalHarmonicsBytesPerElement = 2;
+                else if (sphericalHarmonicsCompresionLevel == 2) sphericalHarmonicsBytesPerElement = 1;
                 this.updateDataTexture(paddedSHArray, sphericalHarmonicsTexDesc, sphericalHarmonicsTextureProps,
-                                       SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL, paddedSphericalHarmonicsComponentCount, 2,
-                                       this.lastBuildSplatCount, splatCount - 1);
+                                       sphericalHarmonicsElementsPerTexel, paddedSphericalHarmonicsComponentCount,
+                                       sphericalHarmonicsBytesPerElement, this.lastBuildSplatCount, splatCount - 1);
             }
         }
 
