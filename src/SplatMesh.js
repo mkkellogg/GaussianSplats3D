@@ -1032,17 +1032,22 @@ export class SplatMesh extends THREE.Mesh {
             return texSize;
         };
 
+        const covarianceCompressionLevel = this.getTargetCovarianceCompressionLevel();
+        const sphericalHarmonicsCompresionLevel = this.getTargetSphericalHarmonicsCompressionLevel();
+
         const covariances = new Float32Array(maxSplatCount * COVARIANCES_ELEMENTS_PER_SPLAT);
         const centers = new Float32Array(maxSplatCount * 3);
         const colors = new Uint8Array(maxSplatCount * 4);
+
+        const SphericalHarmonicsArrayType = sphericalHarmonicsCompresionLevel === 0 ? Float32Array : Uint16Array;
         const sphericalHarmonicsComponentCount = getSphericalHarmonicsComponentCountForDegree(this.minSphericalHarmonicsDegree);
         let paddedSphericalHarmonicsComponentCount = sphericalHarmonicsComponentCount;
         if (paddedSphericalHarmonicsComponentCount % 2 !== 0) paddedSphericalHarmonicsComponentCount++;
         const sphericalHarmonics = this.minSphericalHarmonicsDegree ?
-                                   new Uint16Array(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
+                                   new SphericalHarmonicsArrayType(maxSplatCount * sphericalHarmonicsComponentCount) : undefined;
 
-        const covarianceCompressionLevel = this.getTargetCovarianceCompressionLevel();
-        this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics, undefined, covarianceCompressionLevel);
+        this.fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics, undefined,
+                                 covarianceCompressionLevel, sphericalHarmonicsCompresionLevel);
 
         // set up covariances data texture
         const covTexSize = computeDataTextureSize(COVARIANCES_ELEMENTS_PER_TEXEL, 6);
@@ -1093,7 +1098,7 @@ export class SplatMesh extends THREE.Mesh {
             const sphericalHarmonicsTexSize = computeDataTextureSize(SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL,
                                                                      paddedSphericalHarmonicsComponentCount);
             const paddedSHArraySize = sphericalHarmonicsTexSize.x * sphericalHarmonicsTexSize.y * SPHERICAL_HARMONICS_ELEMENTS_PER_TEXEL;
-            const paddedSHArray = new Uint16Array(paddedSHArraySize);
+            const paddedSHArray = new SphericalHarmonicsArrayType(paddedSHArraySize);
             for (let c = 0; c < splatCount; c++) {
                 const srcBase = sphericalHarmonicsComponentCount * c;
                 const destBase = paddedSphericalHarmonicsComponentCount * c;
@@ -1141,11 +1146,12 @@ export class SplatMesh extends THREE.Mesh {
     updateDataTextures() {
         const splatCount = this.getSplatCount();
         const covarianceCompressionLevel = this.getTargetCovarianceCompressionLevel();
+        const sphericalHArmonicsCompresionLevel = this.getTargetSphericalHarmonicsCompressionLevel();
 
         this.fillSplatDataArrays(this.splatDataTextures.baseData.covariances,
                                  this.splatDataTextures.baseData.centers, this.splatDataTextures.baseData.colors,
                                  this.splatDataTextures.baseData.sphericalHarmonics, undefined, covarianceCompressionLevel,
-                                 this.lastBuildSplatCount, splatCount - 1, this.lastBuildSplatCount);
+                                 sphericalHArmonicsCompresionLevel, this.lastBuildSplatCount, splatCount - 1, this.lastBuildSplatCount);
 
         const covariancesTextureDescriptor = this.splatDataTextures['covariances'];
         const paddedCovariances = covariancesTextureDescriptor.data;
@@ -1225,6 +1231,10 @@ export class SplatMesh extends THREE.Mesh {
     getTargetCovarianceCompressionLevel() {
         const baseCompressionLevel = this.halfPrecisionCovariancesOnGPU ? 1 : 0;
         return Math.max(baseCompressionLevel, this.getMaximumSplatBufferCompressionLevel());
+    }
+
+    getTargetSphericalHarmonicsCompressionLevel() {
+        return Math.max(1, this.getMaximumSplatBufferCompressionLevel());
     }
 
     getMaximumSplatBufferCompressionLevel() {
@@ -1953,12 +1963,13 @@ export class SplatMesh extends THREE.Mesh {
      *                                      static. If 'applySceneTransform' is true, scene transforms will always be applied and if
      *                                      it is false, they will never be applied. If undefined, the default behavior will apply.
      * @param {number} covarianceCompressionLevel The compression level for covariances in the destination array
+     * @param {number} sphericalHArmonicsCompresionLevel The compression level for spherical harmonics in the destination array
      * @param {number} srcStart The start location from which to pull source data
      * @param {number} srcEnd The end location from which to pull source data
      * @param {number} destStart The start location from which to write data
      */
     fillSplatDataArrays(covariances, centers, colors, sphericalHarmonics, applySceneTransform,
-                        covarianceCompressionLevel = 0, srcStart, srcEnd, destStart = 0) {
+                        covarianceCompressionLevel = 0, sphericalHArmonicsCompresionLevel = 1, srcStart, srcEnd, destStart = 0) {
 
         for (let i = 0; i < this.scenes.length; i++) {
             if (applySceneTransform === undefined || applySceneTransform === null) {
@@ -1976,7 +1987,7 @@ export class SplatMesh extends THREE.Mesh {
             if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, sceneTransform, srcStart, srcEnd, destStart);
             if (sphericalHarmonics) {
                 splatBuffer.fillSphericalHarmonicsArray(sphericalHarmonics, this.minSphericalHarmonicsDegree,
-                                                        sceneTransform, srcStart, srcEnd, destStart);
+                                                        sceneTransform, srcStart, srcEnd, destStart, sphericalHArmonicsCompresionLevel);
             }
             destStart += splatBuffer.getSplatCount();
         }
