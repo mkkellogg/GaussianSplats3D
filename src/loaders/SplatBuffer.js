@@ -433,11 +433,11 @@ export class SplatBuffer {
             addInto3(v5[0] * t4, v5[1] * t4, v5[2] * t4, outArray);
         };
 
-        const kSqrt01_04 = Math.sqrt(1.0 /  4.0);
-        const kSqrt03_04 = Math.sqrt(3.0 /  4.0);
-        const kSqrt01_03 = Math.sqrt(1.0 /  3.0);
-        const kSqrt04_03 = Math.sqrt(4.0 /  3.0);
-        const kSqrt01_12 = Math.sqrt(1.0 / 12.0);
+        const kSqrt0104 = Math.sqrt(1.0 / 4.0);
+        const kSqrt0304 = Math.sqrt(3.0 / 4.0);
+        const kSqrt0103 = Math.sqrt(1.0 / 3.0);
+        const kSqrt0403 = Math.sqrt(4.0 / 3.0);
+        const kSqrt0112 = Math.sqrt(1.0 / 12.0);
 
         return function(outSphericalHarmonicsArray, outSphericalHarmonicsDegree, transform,
                         srcFrom, srcTo, destFrom, desiredOutputCompressionLevel) {
@@ -498,7 +498,7 @@ export class SplatBuffer {
                     } else {
                         copy3(shIn1, shOut1);
                         copy3(shIn2, shOut2);
-                        copy3(shIn3, shOut3); 
+                        copy3(shIn3, shOut3);
                     }
 
                     let conversionFunc = noop;
@@ -555,39 +555,41 @@ export class SplatBuffer {
 
                             srcCompressionLevel = 0;
 
-                            sh21[0] = kSqrt01_04 * ((sh13[2] * sh11[0] + sh13[0] * sh11[2]) + (sh11[2] * sh13[0] + sh11[0] * sh13[2]));
+                            sh21[0] = kSqrt0104 * ((sh13[2] * sh11[0] + sh13[0] * sh11[2]) + (sh11[2] * sh13[0] + sh11[0] * sh13[2]));
                             sh21[1] = (sh13[1] * sh11[0] + sh11[1] * sh13[0]);
-                            sh21[2] = kSqrt03_04 * (sh13[1] * sh11[1] + sh11[1] * sh13[1]);
+                            sh21[2] = kSqrt0304 * (sh13[1] * sh11[1] + sh11[1] * sh13[1]);
                             sh21[3] = (sh13[1] * sh11[2] + sh11[1] * sh13[2]);
-                            sh21[4] = kSqrt01_04 * ((sh13[2] * sh11[2] - sh13[0] * sh11[0]) + (sh11[2] * sh13[2] - sh11[0] * sh13[0]));
+                            sh21[4] = kSqrt0104 * ((sh13[2] * sh11[2] - sh13[0] * sh11[0]) + (sh11[2] * sh13[2] - sh11[0] * sh13[0]));
                             dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh21, shOut1);
-                        
-                            sh22[0] = kSqrt01_04 * ((sh12[2] * sh11[0] + sh12[0] * sh11[2]) + (sh11[2] * sh12[0] + sh11[0] * sh12[2]));
+
+                            sh22[0] = kSqrt0104 * ((sh12[2] * sh11[0] + sh12[0] * sh11[2]) + (sh11[2] * sh12[0] + sh11[0] * sh12[2]));
                             sh22[1] = sh12[1] * sh11[0] + sh11[1] * sh12[0];
-                            sh22[2] = kSqrt03_04 * (sh12[1] * sh11[1] + sh11[1] * sh12[1]);
+                            sh22[2] = kSqrt0304 * (sh12[1] * sh11[1] + sh11[1] * sh12[1]);
                             sh22[3] = sh12[1] * sh11[2] + sh11[1] * sh12[2];
-                            sh22[4] = kSqrt01_04 * ((sh12[2] * sh11[2] - sh12[0] * sh11[0]) + (sh11[2] * sh12[2] - sh11[0] * sh12[0]));
+                            sh22[4] = kSqrt0104 * ((sh12[2] * sh11[2] - sh12[0] * sh11[0]) + (sh11[2] * sh12[2] - sh11[0] * sh12[0]));
                             dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh22, shOut2);
 
-                            sh23[0] = kSqrt01_03 * (sh12[2] * sh12[0] + sh12[0] * sh12[2]) + -kSqrt01_12 * ((sh13[2] * sh13[0] + sh13[0] * sh13[2]) + (sh11[2] * sh11[0] + sh11[0] * sh11[2]));
-                            sh23[1] = kSqrt04_03 * sh12[1] * sh12[0] + -kSqrt01_03 * (sh13[1] * sh13[0] + sh11[1] * sh11[0]);
-                            sh23[2] = sh12[1] * sh12[1] + -kSqrt01_04 * (sh13[1] * sh13[1] + sh11[1] * sh11[1]);
-                            sh23[3] = kSqrt04_03 * sh12[1] * sh12[2] + -kSqrt01_03 * (sh13[1] * sh13[2] + sh11[1] * sh11[2]);
-                            sh23[4] = kSqrt01_03 * (sh12[2] * sh12[2] - sh12[0] * sh12[0]) + -kSqrt01_12 * ((sh13[2] * sh13[2] - sh13[0] * sh13[0]) + (sh11[2] * sh11[2] - sh11[0] * sh11[0]));
+                            sh23[0] = kSqrt0103 * (sh12[2] * sh12[0] + sh12[0] * sh12[2]) + -kSqrt0112 *
+                                      ((sh13[2] * sh13[0] + sh13[0] * sh13[2]) + (sh11[2] * sh11[0] + sh11[0] * sh11[2]));
+                            sh23[1] = kSqrt0403 * sh12[1] * sh12[0] + -kSqrt0103 * (sh13[1] * sh13[0] + sh11[1] * sh11[0]);
+                            sh23[2] = sh12[1] * sh12[1] + -kSqrt0104 * (sh13[1] * sh13[1] + sh11[1] * sh11[1]);
+                            sh23[3] = kSqrt0403 * sh12[1] * sh12[2] + -kSqrt0103 * (sh13[1] * sh13[2] + sh11[1] * sh11[2]);
+                            sh23[4] = kSqrt0103 * (sh12[2] * sh12[2] - sh12[0] * sh12[0]) + -kSqrt0112 *
+                                      ((sh13[2] * sh13[2] - sh13[0] * sh13[0]) + (sh11[2] * sh11[2] - sh11[0] * sh11[0]));
                             dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh23, shOut3);
 
-                            sh24[0] = kSqrt01_04 * ((sh12[2] * sh13[0] + sh12[0] * sh13[2]) + (sh13[2] * sh12[0] + sh13[0] * sh12[2]));
+                            sh24[0] = kSqrt0104 * ((sh12[2] * sh13[0] + sh12[0] * sh13[2]) + (sh13[2] * sh12[0] + sh13[0] * sh12[2]));
                             sh24[1] = sh12[1] * sh13[0] + sh13[1] * sh12[0];
-                            sh24[2] = kSqrt03_04 * (sh12[1] * sh13[1] + sh13[1] * sh12[1]);
+                            sh24[2] = kSqrt0304 * (sh12[1] * sh13[1] + sh13[1] * sh12[1]);
                             sh24[3] = sh12[1] * sh13[2] + sh13[1] * sh12[2];
-                            sh24[4] = kSqrt01_04 * ((sh12[2] * sh13[2] - sh12[0] * sh13[0]) + (sh13[2] * sh12[2] - sh13[0] * sh12[0]));
+                            sh24[4] = kSqrt0104 * ((sh12[2] * sh13[2] - sh12[0] * sh13[0]) + (sh13[2] * sh12[2] - sh13[0] * sh12[0]));
                             dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh24, shOut4);
 
-                            sh25[0] = kSqrt01_04 * ((sh13[2] * sh13[0] + sh13[0] * sh13[2]) - (sh11[2] * sh11[0] + sh11[0] * sh11[2]));
+                            sh25[0] = kSqrt0104 * ((sh13[2] * sh13[0] + sh13[0] * sh13[2]) - (sh11[2] * sh11[0] + sh11[0] * sh11[2]));
                             sh25[1] = (sh13[1] * sh13[0] - sh11[1] * sh11[0]);
-                            sh25[2] = kSqrt03_04 * (sh13[1] * sh13[1] - sh11[1] * sh11[1]);
+                            sh25[2] = kSqrt0304 * (sh13[1] * sh13[1] - sh11[1] * sh11[1]);
                             sh25[3] = (sh13[1] * sh13[2] - sh11[1] * sh11[2]);
-                            sh25[4] = kSqrt01_04 * ((sh13[2] * sh13[2] - sh13[0] * sh13[0]) - (sh11[2] * sh11[2] - sh11[0] * sh11[0]));
+                            sh25[4] = kSqrt0104 * ((sh13[2] * sh13[2] - sh13[0] * sh13[0]) - (sh11[2] * sh11[2] - sh11[0] * sh11[0]));
                             dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh25, shOut5);
                         } else {
                             copy3(shIn1, shOut1);
