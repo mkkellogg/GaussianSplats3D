@@ -391,26 +391,10 @@ export class SplatBuffer {
         const fbf = THREE.DataUtils.fromHalfFloat.bind(THREE.DataUtils);
         const noop = (v) => v;
 
-        const dot3 = (v1, v2, v3, transformRow, outArray) => {
-            outArray[0] = outArray[1] = outArray[2] = 0;
-            const t0 = transformRow[0];
-            const t1 = transformRow[1];
-            const t2 = transformRow[2];
-            addInto3(v1[0] * t0, v1[1] * t0, v1[2] * t0, outArray);
-            addInto3(v2[0] * t1, v2[1] * t1, v2[2] * t1, outArray);
-            addInto3(v3[0] * t2, v3[1] * t2, v3[2] * t2, outArray);
-        };
-
         const set3 = (array, val1, val2, val3) => {
             array[0] = val1;
             array[1] = val2;
             array[2] = val3;
-        };
-
-        const addInto3 = (val1, val2, val3, destArray) => {
-            destArray[0] = destArray[0] + val1;
-            destArray[1] = destArray[1] + val2;
-            destArray[2] = destArray[2] + val3;
         };
 
         const copy3 = (srcArray, destArray) => {
@@ -418,26 +402,6 @@ export class SplatBuffer {
             destArray[1] = srcArray[1];
             destArray[2] = srcArray[2];
         };
-
-        const dot5 = (v1, v2, v3, v4, v5, transformRow, outArray) => {
-            outArray[0] = outArray[1] = outArray[2] = 0;
-            const t0 = transformRow[0];
-            const t1 = transformRow[1];
-            const t2 = transformRow[2];
-            const t3 = transformRow[3];
-            const t4 = transformRow[4];
-            addInto3(v1[0] * t0, v1[1] * t0, v1[2] * t0, outArray);
-            addInto3(v2[0] * t1, v2[1] * t1, v2[2] * t1, outArray);
-            addInto3(v3[0] * t2, v3[1] * t2, v3[2] * t2, outArray);
-            addInto3(v4[0] * t3, v4[1] * t3, v4[2] * t3, outArray);
-            addInto3(v5[0] * t4, v5[1] * t4, v5[2] * t4, outArray);
-        };
-
-        const kSqrt0104 = Math.sqrt(1.0 / 4.0);
-        const kSqrt0304 = Math.sqrt(3.0 / 4.0);
-        const kSqrt0103 = Math.sqrt(1.0 / 3.0);
-        const kSqrt0403 = Math.sqrt(4.0 / 3.0);
-        const kSqrt0112 = Math.sqrt(1.0 / 12.0);
 
         return function(outSphericalHarmonicsArray, outSphericalHarmonicsDegree, transform,
                         srcFrom, srcTo, destFrom, desiredOutputCompressionLevel) {
@@ -486,15 +450,11 @@ export class SplatBuffer {
                                  sectionFloatArray[sphericalHarmonicsSrcBase + 8]);
 
                     if (transform) {
+                        srcCompressionLevel = 0;
                         this.fbfA3(shIn1, shIn1);
                         this.fbfA3(shIn2, shIn2);
                         this.fbfA3(shIn3, shIn3);
-
-                        srcCompressionLevel = 0;
-
-                        dot3(shIn1, shIn2, shIn3, sh11, shOut1);
-                        dot3(shIn1, shIn2, shIn3, sh12, shOut2);
-                        dot3(shIn1, shIn2, shIn3, sh13, shOut3);
+                        SplatBuffer.rotateSphericalHarmonics3(shIn1, shIn2, shIn3, sh11, sh12, sh13, shOut1, shOut2, shOut3);
                     } else {
                         copy3(shIn1, shOut1);
                         copy3(shIn2, shOut2);
@@ -547,50 +507,15 @@ export class SplatBuffer {
                                     sectionFloatArray[sphericalHarmonicsSrcBase + 23]);
 
                         if (transform) {
+                            srcCompressionLevel = 0;
                             this.fbfA3(shIn1, shIn1);
                             this.fbfA3(shIn2, shIn2);
                             this.fbfA3(shIn3, shIn3);
                             this.fbfA3(shIn4, shIn4);
                             this.fbfA3(shIn5, shIn5);
-
-                            srcCompressionLevel = 0;
-
-                            sh21[0] = kSqrt0104 * ((sh13[2] * sh11[0] + sh13[0] * sh11[2]) + (sh11[2] * sh13[0] + sh11[0] * sh13[2]));
-                            sh21[1] = (sh13[1] * sh11[0] + sh11[1] * sh13[0]);
-                            sh21[2] = kSqrt0304 * (sh13[1] * sh11[1] + sh11[1] * sh13[1]);
-                            sh21[3] = (sh13[1] * sh11[2] + sh11[1] * sh13[2]);
-                            sh21[4] = kSqrt0104 * ((sh13[2] * sh11[2] - sh13[0] * sh11[0]) + (sh11[2] * sh13[2] - sh11[0] * sh13[0]));
-                            dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh21, shOut1);
-
-                            sh22[0] = kSqrt0104 * ((sh12[2] * sh11[0] + sh12[0] * sh11[2]) + (sh11[2] * sh12[0] + sh11[0] * sh12[2]));
-                            sh22[1] = sh12[1] * sh11[0] + sh11[1] * sh12[0];
-                            sh22[2] = kSqrt0304 * (sh12[1] * sh11[1] + sh11[1] * sh12[1]);
-                            sh22[3] = sh12[1] * sh11[2] + sh11[1] * sh12[2];
-                            sh22[4] = kSqrt0104 * ((sh12[2] * sh11[2] - sh12[0] * sh11[0]) + (sh11[2] * sh12[2] - sh11[0] * sh12[0]));
-                            dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh22, shOut2);
-
-                            sh23[0] = kSqrt0103 * (sh12[2] * sh12[0] + sh12[0] * sh12[2]) + -kSqrt0112 *
-                                      ((sh13[2] * sh13[0] + sh13[0] * sh13[2]) + (sh11[2] * sh11[0] + sh11[0] * sh11[2]));
-                            sh23[1] = kSqrt0403 * sh12[1] * sh12[0] + -kSqrt0103 * (sh13[1] * sh13[0] + sh11[1] * sh11[0]);
-                            sh23[2] = sh12[1] * sh12[1] + -kSqrt0104 * (sh13[1] * sh13[1] + sh11[1] * sh11[1]);
-                            sh23[3] = kSqrt0403 * sh12[1] * sh12[2] + -kSqrt0103 * (sh13[1] * sh13[2] + sh11[1] * sh11[2]);
-                            sh23[4] = kSqrt0103 * (sh12[2] * sh12[2] - sh12[0] * sh12[0]) + -kSqrt0112 *
-                                      ((sh13[2] * sh13[2] - sh13[0] * sh13[0]) + (sh11[2] * sh11[2] - sh11[0] * sh11[0]));
-                            dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh23, shOut3);
-
-                            sh24[0] = kSqrt0104 * ((sh12[2] * sh13[0] + sh12[0] * sh13[2]) + (sh13[2] * sh12[0] + sh13[0] * sh12[2]));
-                            sh24[1] = sh12[1] * sh13[0] + sh13[1] * sh12[0];
-                            sh24[2] = kSqrt0304 * (sh12[1] * sh13[1] + sh13[1] * sh12[1]);
-                            sh24[3] = sh12[1] * sh13[2] + sh13[1] * sh12[2];
-                            sh24[4] = kSqrt0104 * ((sh12[2] * sh13[2] - sh12[0] * sh13[0]) + (sh13[2] * sh12[2] - sh13[0] * sh12[0]));
-                            dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh24, shOut4);
-
-                            sh25[0] = kSqrt0104 * ((sh13[2] * sh13[0] + sh13[0] * sh13[2]) - (sh11[2] * sh11[0] + sh11[0] * sh11[2]));
-                            sh25[1] = (sh13[1] * sh13[0] - sh11[1] * sh11[0]);
-                            sh25[2] = kSqrt0304 * (sh13[1] * sh13[1] - sh11[1] * sh11[1]);
-                            sh25[3] = (sh13[1] * sh13[2] - sh11[1] * sh11[2]);
-                            sh25[4] = kSqrt0104 * ((sh13[2] * sh13[2] - sh13[0] * sh13[0]) - (sh11[2] * sh11[2] - sh11[0] * sh11[0]));
-                            dot5(shIn1, shIn2, shIn3, shIn4, shIn5, sh25, shOut5);
+                            SplatBuffer.rotateSphericalHarmonics5(shIn1, shIn2, shIn3, shIn4, shIn5,
+                                                                  sh11, sh12, sh13, sh21, sh22, sh23, sh24, sh25,
+                                                                  shOut1, shOut2, shOut3, shOut4, shOut5);
                         } else {
                             copy3(shIn1, shOut1);
                             copy3(shIn2, shOut2);
@@ -634,6 +559,89 @@ export class SplatBuffer {
         };
 
     }();
+
+    static dot3 = (v1, v2, v3, transformRow, outArray) => {
+        outArray[0] = outArray[1] = outArray[2] = 0;
+        const t0 = transformRow[0];
+        const t1 = transformRow[1];
+        const t2 = transformRow[2];
+        SplatBuffer.addInto3(v1[0] * t0, v1[1] * t0, v1[2] * t0, outArray);
+        SplatBuffer.addInto3(v2[0] * t1, v2[1] * t1, v2[2] * t1, outArray);
+        SplatBuffer.addInto3(v3[0] * t2, v3[1] * t2, v3[2] * t2, outArray);
+    };
+
+    static addInto3 = (val1, val2, val3, destArray) => {
+        destArray[0] = destArray[0] + val1;
+        destArray[1] = destArray[1] + val2;
+        destArray[2] = destArray[2] + val3;
+    };
+
+    static dot5 = (v1, v2, v3, v4, v5, transformRow, outArray) => {
+        outArray[0] = outArray[1] = outArray[2] = 0;
+        const t0 = transformRow[0];
+        const t1 = transformRow[1];
+        const t2 = transformRow[2];
+        const t3 = transformRow[3];
+        const t4 = transformRow[4];
+        SplatBuffer.addInto3(v1[0] * t0, v1[1] * t0, v1[2] * t0, outArray);
+        SplatBuffer.addInto3(v2[0] * t1, v2[1] * t1, v2[2] * t1, outArray);
+        SplatBuffer.addInto3(v3[0] * t2, v3[1] * t2, v3[2] * t2, outArray);
+        SplatBuffer.addInto3(v4[0] * t3, v4[1] * t3, v4[2] * t3, outArray);
+        SplatBuffer.addInto3(v5[0] * t4, v5[1] * t4, v5[2] * t4, outArray);
+    };
+
+    static rotateSphericalHarmonics3 = (in1, in2, in3, tsh11, tsh12, tsh13, out1, out2, out3) => {
+        SplatBuffer.dot3(in1, in2, in3, tsh11, out1);
+        SplatBuffer.dot3(in1, in2, in3, tsh12, out2);
+        SplatBuffer.dot3(in1, in2, in3, tsh13, out3);
+    };
+
+    static rotateSphericalHarmonics5 = (in1, in2, in3, in4, in5, tsh11, tsh12, tsh13,
+                                        tsh21, tsh22, tsh23, tsh24, tsh25, out1, out2, out3, out4, out5) => {
+
+        const kSqrt0104 = Math.sqrt(1.0 / 4.0);
+        const kSqrt0304 = Math.sqrt(3.0 / 4.0);
+        const kSqrt0103 = Math.sqrt(1.0 / 3.0);
+        const kSqrt0403 = Math.sqrt(4.0 / 3.0);
+        const kSqrt0112 = Math.sqrt(1.0 / 12.0);
+
+        tsh21[0] = kSqrt0104 * ((tsh13[2] * tsh11[0] + tsh13[0] * tsh11[2]) + (tsh11[2] * tsh13[0] + tsh11[0] * tsh13[2]));
+        tsh21[1] = (tsh13[1] * tsh11[0] + tsh11[1] * tsh13[0]);
+        tsh21[2] = kSqrt0304 * (tsh13[1] * tsh11[1] + tsh11[1] * tsh13[1]);
+        tsh21[3] = (tsh13[1] * tsh11[2] + tsh11[1] * tsh13[2]);
+        tsh21[4] = kSqrt0104 * ((tsh13[2] * tsh11[2] - tsh13[0] * tsh11[0]) + (tsh11[2] * tsh13[2] - tsh11[0] * tsh13[0]));
+        SplatBuffer.dot5(in1, in2, in3, in4, in5, tsh21, out1);
+
+        tsh22[0] = kSqrt0104 * ((tsh12[2] * tsh11[0] + tsh12[0] * tsh11[2]) + (tsh11[2] * tsh12[0] + tsh11[0] * tsh12[2]));
+        tsh22[1] = tsh12[1] * tsh11[0] + tsh11[1] * tsh12[0];
+        tsh22[2] = kSqrt0304 * (tsh12[1] * tsh11[1] + tsh11[1] * tsh12[1]);
+        tsh22[3] = tsh12[1] * tsh11[2] + tsh11[1] * tsh12[2];
+        tsh22[4] = kSqrt0104 * ((tsh12[2] * tsh11[2] - tsh12[0] * tsh11[0]) + (tsh11[2] * tsh12[2] - tsh11[0] * tsh12[0]));
+        SplatBuffer.dot5(in1, in2, in3, in4, in5, tsh22, out2);
+
+        tsh23[0] = kSqrt0103 * (tsh12[2] * tsh12[0] + tsh12[0] * tsh12[2]) + -kSqrt0112 *
+                    ((tsh13[2] * tsh13[0] + tsh13[0] * tsh13[2]) + (tsh11[2] * tsh11[0] + tsh11[0] * tsh11[2]));
+        tsh23[1] = kSqrt0403 * tsh12[1] * tsh12[0] + -kSqrt0103 * (tsh13[1] * tsh13[0] + tsh11[1] * tsh11[0]);
+        tsh23[2] = tsh12[1] * tsh12[1] + -kSqrt0104 * (tsh13[1] * tsh13[1] + tsh11[1] * tsh11[1]);
+        tsh23[3] = kSqrt0403 * tsh12[1] * tsh12[2] + -kSqrt0103 * (tsh13[1] * tsh13[2] + tsh11[1] * tsh11[2]);
+        tsh23[4] = kSqrt0103 * (tsh12[2] * tsh12[2] - tsh12[0] * tsh12[0]) + -kSqrt0112 *
+                    ((tsh13[2] * tsh13[2] - tsh13[0] * tsh13[0]) + (tsh11[2] * tsh11[2] - tsh11[0] * tsh11[0]));
+        SplatBuffer.dot5(in1, in2, in3, in4, in5, tsh23, out3);
+
+        tsh24[0] = kSqrt0104 * ((tsh12[2] * tsh13[0] + tsh12[0] * tsh13[2]) + (tsh13[2] * tsh12[0] + tsh13[0] * tsh12[2]));
+        tsh24[1] = tsh12[1] * tsh13[0] + tsh13[1] * tsh12[0];
+        tsh24[2] = kSqrt0304 * (tsh12[1] * tsh13[1] + tsh13[1] * tsh12[1]);
+        tsh24[3] = tsh12[1] * tsh13[2] + tsh13[1] * tsh12[2];
+        tsh24[4] = kSqrt0104 * ((tsh12[2] * tsh13[2] - tsh12[0] * tsh13[0]) + (tsh13[2] * tsh12[2] - tsh13[0] * tsh12[0]));
+        SplatBuffer.dot5(in1, in2, in3, in4, in5, tsh24, out4);
+
+        tsh25[0] = kSqrt0104 * ((tsh13[2] * tsh13[0] + tsh13[0] * tsh13[2]) - (tsh11[2] * tsh11[0] + tsh11[0] * tsh11[2]));
+        tsh25[1] = (tsh13[1] * tsh13[0] - tsh11[1] * tsh11[0]);
+        tsh25[2] = kSqrt0304 * (tsh13[1] * tsh13[1] - tsh11[1] * tsh11[1]);
+        tsh25[3] = (tsh13[1] * tsh13[2] - tsh11[1] * tsh11[2]);
+        tsh25[4] = kSqrt0104 * ((tsh13[2] * tsh13[2] - tsh13[0] * tsh13[0]) - (tsh11[2] * tsh11[2] - tsh11[0] * tsh11[0]));
+        SplatBuffer.dot5(in1, in2, in3, in4, in5, tsh25, out5);
+    };
 
     static parseHeader(buffer) {
         const headerArrayUint8 = new Uint8Array(buffer, 0, SplatBuffer.HeaderSizeBytes);
