@@ -341,8 +341,8 @@
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
         setConversionError("Invalid alpha remval threshold.");
         return;
-      } else if (isNaN(sphericalHarmonicsDegree) || sphericalHarmonicsDegree < 0 || sphericalHarmonicsDegree > 3) {
-        setConversionError("Invalid SH level.");
+      } else if (isNaN(sphericalHarmonicsDegree) || sphericalHarmonicsDegree < 0 || sphericalHarmonicsDegree > 2) {
+        setConversionError("Invalid SH degree.");
         return;
       } else if (isNaN(blockSize) || blockSize < 0.1) {
         setConversionError("Invalid block size.");
@@ -444,10 +444,10 @@
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold < 0 || alphaRemovalThreshold > 255) {
         setViewError("Invalid alpha remval threshold.");
         return;
-      } else if (isNaN(sphericalHarmonicsDegree) || sphericalHarmonicsDegree < 0 || sphericalHarmonicsDegree > 3) {
-        setConversionError("Invalid SH level.");
+      } else if (isNaN(sphericalHarmonicsDegree) || sphericalHarmonicsDegree < 0 || sphericalHarmonicsDegree > 2) {
+        setViewError("Invalid SH degree.");
         return;
-      } 
+      }
 
       if (cameraUpArray.length !== 3) {
         setViewError("Camera up must contain 3 elements.");
@@ -629,7 +629,7 @@
     <br>
     <div class="header-content-container">
         <div class="content-row">
-            <div id ="view-panel" class="splat-panel" style="height:350px;">
+            <div id ="view-panel" class="splat-panel" style="height:370px;">
                 <br>
                 <div class="small-title">View a <span class="file-ext">.ply</span>, <span class="file-ext">.ksplat</span>, or <span class="file-ext-small">.splat</span> file</div>
                 <br>
@@ -692,7 +692,7 @@
                       </td>
                       <td>
                           <input id="viewSphericalHarmonicsDegree" type="text" class="text-input" style="width: 50px" value="0"></input>
-                          <span class="valid-value-label">(0, 1, 2, or 3)</span>
+                          <span class="valid-value-label">(0, 1, 2)</span>
                       </td>
                       </tr>
                 </table>
@@ -762,7 +762,7 @@
                     </td>
                     <td>
                         <input id="conversionSphericalHarmonicsDegree" type="text" class="text-input" style="width: 50px" value="0"></input>
-                        <span class="valid-value-label">(0, 1, 2, or 3)</span>
+                        <span class="valid-value-label">(0, 1, 2)</span>
                     </td>
                     </tr>
                     <tr id="advancedCompressionRow1">
