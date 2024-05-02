@@ -271,7 +271,8 @@ const viewer = new GaussianSplats3D.Viewer({
     'renderMode': GaussianSplats3D.RenderMode.OnChange,
     'sceneRevealMode': GaussianSplats3D.SceneRevealMode.Instant,
     'antialiased': false,
-    'focalAdjustment': 1.0
+    'focalAdjustment': 1.0,
+    'logLevel': GaussianSplats3D.LogLevel.None
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -305,6 +306,7 @@ Advanced `Viewer` parameters
 | `sceneRevealMode` | Controls the fade-in effect used when the scene is loaded. Valid values are defined in the `SceneRevealMode` enum: `Default`, `Gradual`, and `Instant`. `Default` results in a nice, slow fade-in effect for progressively loaded scenes, and a fast fade-in for non progressively loaded scenes. `Gradual` will force a slow fade-in for all scenes. `Instant` will force all loaded scene data to be immediately visible.
 | `antialiased` |  When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at substantially different resolutions than that at which they were rendered during training. This will only work correctly for models that were trained using a process that utilizes this compensation calculation. For more details: https://github.com/nerfstudio-project/gsplat/pull/117, https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
 | `focalAdjustment` | Hacky, non-scientific parameter for tweaking focal length related calculations. For scenes with very small gaussians & small details, increasing this value can help improve visual quality. Default value is 1.0.
+| `logLevel` | Verbosity of the console logging. Defaults to `GaussianSplats3D.LogLevel.None`.
 <br>
 
 ### Creating KSPLAT files

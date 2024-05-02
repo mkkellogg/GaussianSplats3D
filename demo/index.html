@@ -891,7 +891,7 @@
           currentCameraLookAtArray = component[1];
           document.getElementById('cameraLookAt').value = currentCameraLookAtArray;
         } else if (varName == "aa") {
-          currentAntialiased = component[1];
+          currentAntialiased = component[1] === 'true' ? true : false;
           document.getElementById('antialiased').checked = currentAntialiased;
         }
       }
