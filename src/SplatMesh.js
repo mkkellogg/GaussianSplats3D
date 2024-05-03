@@ -157,6 +157,7 @@ export class SplatMesh extends THREE.Mesh {
             uniform vec2 centersColorsTextureSize;
             uniform int sphericalHarmonicsDegree;
             uniform vec2 sphericalHarmonicsTextureSize;
+            uniform int sphericalHarmonics8BitMode;
             uniform float visibleRegionRadius;
             uniform float visibleRegionFadeStartRadius;
             uniform float firstRenderTime;
@@ -281,6 +282,11 @@ export class SplatMesh extends THREE.Mesh {
                 }
 
                 vertexShaderSource += `
+                        if (sphericalHarmonics8BitMode == 1) {
+                            sh1 = sh1 * 2.0 - vec3(1.0, 1.0, 1.0);
+                            sh2 = sh2 * 2.0 - vec3(1.0, 1.0, 1.0);
+                            sh3 = sh3 * 2.0 - vec3(1.0, 1.0, 1.0);
+                        }
                         float x = worldViewDir.x;
                         float y = worldViewDir.y;
                         float z = worldViewDir.z;
@@ -307,6 +313,14 @@ export class SplatMesh extends THREE.Mesh {
                             vec3 sh6 = vec3(sampledSH12131415.a, sampledSH16171819.rg);
                             vec3 sh7 = vec3(sampledSH16171819.ba, sampledSH20212223.r);
                             vec3 sh8 = sampledSH20212223.gba;
+
+                            if (sphericalHarmonics8BitMode == 1) {
+                                sh4 = sh4 * 2.0 - vec3(1.0, 1.0, 1.0);
+                                sh5 = sh5 * 2.0 - vec3(1.0, 1.0, 1.0);
+                                sh6 = sh6 * 2.0 - vec3(1.0, 1.0, 1.0);
+                                sh7 = sh7 * 2.0 - vec3(1.0, 1.0, 1.0);
+                                sh8 = sh8 * 2.0 - vec3(1.0, 1.0, 1.0);
+                            }
 
                             vColor.rgb +=
                                 (SH_C2[0] * xy) * sh4 +
@@ -568,6 +582,10 @@ export class SplatMesh extends THREE.Mesh {
             'sphericalHarmonicsTextureSize': {
                 'type': 'v2',
                 'value': new THREE.Vector2(1024, 1024)
+            },
+            'sphericalHarmonics8BitMode': {
+                'type': 'i',
+                'value': 0
             },
             'splatScale': {
                 'type': 'f',
@@ -1068,7 +1086,9 @@ export class SplatMesh extends THREE.Mesh {
         const centers = new Float32Array(maxSplatCount * 3);
         const colors = new Uint8Array(maxSplatCount * 4);
 
-        const SphericalHarmonicsArrayType = sphericalHarmonicsCompressionLevel === 0 ? Float32Array : Uint16Array;
+        let SphericalHarmonicsArrayType = Float32Array;
+        if (sphericalHarmonicsCompressionLevel === 1) SphericalHarmonicsArrayType = Uint16Array;
+        else if (sphericalHarmonicsCompressionLevel === 2) SphericalHarmonicsArrayType = Uint8Array;
         const sphericalHarmonicsComponentCount = getSphericalHarmonicsComponentCountForDegree(this.minSphericalHarmonicsDegree);
         let paddedSphericalHarmonicsComponentCount = sphericalHarmonicsComponentCount;
         if (paddedSphericalHarmonicsComponentCount % 2 !== 0) paddedSphericalHarmonicsComponentCount++;
@@ -1124,7 +1144,6 @@ export class SplatMesh extends THREE.Mesh {
         };
 
         if (sphericalHarmonics) {
-            const format = THREE.RGBAFormat;
             const sphericalHarmonicsElementsPerTexel = 4;
             const sphericalHarmonicsTexSize = computeDataTextureSize(sphericalHarmonicsElementsPerTexel,
                                                                      paddedSphericalHarmonicsComponentCount);
@@ -1138,11 +1157,15 @@ export class SplatMesh extends THREE.Mesh {
                 }
             }
 
+            const textureType = sphericalHarmonicsCompressionLevel === 2 ? THREE.UnsignedByteType : THREE.HalfFloatType;
             const sphericalHarmonicsTex = new THREE.DataTexture(paddedSHArray, sphericalHarmonicsTexSize.x,
-                                                                sphericalHarmonicsTexSize.y, format, THREE.HalfFloatType);
+                                                                sphericalHarmonicsTexSize.y, THREE.RGBAFormat, textureType);
             sphericalHarmonicsTex.needsUpdate = true;
             this.material.uniforms.sphericalHarmonicsTexture.value = sphericalHarmonicsTex;
             this.material.uniforms.sphericalHarmonicsTextureSize.value.copy(sphericalHarmonicsTexSize);
+            if (sphericalHarmonicsCompressionLevel === 2) {
+                this.material.uniforms.sphericalHarmonics8BitMode.value = 1;
+            }
             this.material.uniformsNeedUpdate = true;
 
             this.splatDataTextures['sphericalHarmonics'] = {
@@ -1240,8 +1263,8 @@ export class SplatMesh extends THREE.Mesh {
             } else {
                 const sphericalHarmonicsElementsPerTexel = 4;
                 let sphericalHarmonicsBytesPerElement = 4;
-                if (sphericalHarmonicsCompressionLevel == 1) sphericalHarmonicsBytesPerElement = 2;
-                else if (sphericalHarmonicsCompressionLevel == 2) sphericalHarmonicsBytesPerElement = 1;
+                if (sphericalHarmonicsCompressionLevel === 1) sphericalHarmonicsBytesPerElement = 2;
+                else if (sphericalHarmonicsCompressionLevel === 2) sphericalHarmonicsBytesPerElement = 1;
                 this.updateDataTexture(paddedSHArray, sphericalHarmonicsTextureDesc, sphericalHarmonicsTextureProps,
                                        sphericalHarmonicsElementsPerTexel, paddedSphericalHarmonicsComponentCount,
                                        sphericalHarmonicsBytesPerElement, this.lastBuildSplatCount, splatCount - 1);

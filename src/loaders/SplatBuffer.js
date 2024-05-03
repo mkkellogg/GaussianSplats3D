@@ -377,7 +377,13 @@ export class SplatBuffer {
         const shOut5 = [];
 
         const toHalfFloat = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
+        const toUint8 = (v) => {
+            return Math.floor(v * 128) + 128;
+        };
         const fromHalfFloat = THREE.DataUtils.fromHalfFloat.bind(THREE.DataUtils);
+        const fromHalfFloatToUint8 = (v) => {
+            return Math.floor(fromHalfFloat(v) * 128) + 128;
+        };
         const noop = (v) => v;
 
         const set3 = (array, val1, val2, val3) => {
@@ -438,8 +444,10 @@ export class SplatBuffer {
                 if (compressionLevelForOutputConversion !== desiredOutputCompressionLevel) {
                     if (compressionLevelForOutputConversion === 1) {
                         if (desiredOutputCompressionLevel === 0) outputConversionFunc = fromHalfFloat;
+                        else if (desiredOutputCompressionLevel == 2) outputConversionFunc = fromHalfFloatToUint8;
                     } else if (compressionLevelForOutputConversion === 0) {
                         if (desiredOutputCompressionLevel === 1) outputConversionFunc = toHalfFloat;
+                        else if (desiredOutputCompressionLevel == 2) outputConversionFunc = toUint8;
                     }
                 }
 
