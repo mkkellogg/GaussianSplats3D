@@ -24,10 +24,14 @@ const toUncompressedFloat = (f, compressionLevel, isSH = false) => {
     }
 };
 
-const floatTypeForCompressionLevel = (compressionLevel, isSH = false) => {
-    if (compressionLevel === 0) return Float32Array;
-    else if (compressionLevel === 1 || compressionLevel === 2 && !isSH) return Uint16Array;
-    else return Uint8Array;
+const dataViewFloatForCompressionLevel = (dataView, floatIndex, compressionLevel, isSH = false) => {
+    if (compressionLevel === 0) {
+        return dataView.getFloat32(floatIndex * 4, true);
+    } else if (compressionLevel === 1 || compressionLevel === 2 && !isSH) {
+        return dataView.getUint16(floatIndex * 2, true);
+    } else {
+        return dataView.getUint8(floatIndex, true);
+    }
 };
 
 /**
@@ -61,15 +65,9 @@ export class SplatBuffer {
             BytesPerSphericalHarmonicsComponent: 4,
             SphericalHarmonicsOffsetFloat: 11,
             SphericalHarmonicsDegrees: {
-                0: {
-                    BytesPerSplat: 44
-                },
-                1: {
-                    BytesPerSplat: 80,
-                },
-                2: {
-                    BytesPerSplat: 140,
-                }
+                0: { BytesPerSplat: 44 },
+                1: { BytesPerSplat: 80 },
+                2: { BytesPerSplat: 140 }
             },
         },
         1: {
@@ -85,15 +83,9 @@ export class SplatBuffer {
             BytesPerSphericalHarmonicsComponent: 2,
             SphericalHarmonicsOffsetFloat: 12,
             SphericalHarmonicsDegrees: {
-                0: {
-                    BytesPerSplat: 24,
-                },
-                1: {
-                    BytesPerSplat: 42,
-                },
-                2: {
-                    BytesPerSplat: 72,
-                }
+                0: { BytesPerSplat: 24 },
+                1: { BytesPerSplat: 42 },
+                2: { BytesPerSplat: 72 }
             },
         },
         2: {
@@ -109,15 +101,9 @@ export class SplatBuffer {
             BytesPerSphericalHarmonicsComponent: 1,
             SphericalHarmonicsOffsetFloat: 12,
             SphericalHarmonicsDegrees: {
-                0: {
-                    BytesPerSplat: 24,
-                },
-                1: {
-                    BytesPerSplat: 33,
-                },
-                2: {
-                    BytesPerSplat: 48,
-                }
+                0: { BytesPerSplat: 24 },
+                1: { BytesPerSplat: 33 },
+                2: { BytesPerSplat: 48 }
             },
         }
     };
@@ -173,21 +159,23 @@ export class SplatBuffer {
         const localSplatIndex = globalSplatIndex - section.splatCountOffset;
 
         const srcSplatCentersBase = this.bytesPerSplat * localSplatIndex;
-        const FloatArrayType = floatTypeForCompressionLevel(this.compressionLevel);
-        const splatCentersArray = new FloatArrayType(this.bufferData, section.dataBase + srcSplatCentersBase, 3);
+        const dataView = new DataView(this.bufferData, section.dataBase + srcSplatCentersBase);
 
+        const x = dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel);
+        const y = dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel);
+        const z = dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel);
         if (this.compressionLevel >= 1) {
             const bucketIndex = this.getBucketIndex(section, localSplatIndex);
             const bucketBase = bucketIndex * SplatBuffer.BucketStorageSizeFloats;
             const sf = section.compressionScaleFactor;
             const sr = section.compressionScaleRange;
-            outCenter.x = (splatCentersArray[0] - sr) * sf + section.bucketArray[bucketBase];
-            outCenter.y = (splatCentersArray[1] - sr) * sf + section.bucketArray[bucketBase + 1];
-            outCenter.z = (splatCentersArray[2] - sr) * sf + section.bucketArray[bucketBase + 2];
+            outCenter.x = (x - sr) * sf + section.bucketArray[bucketBase];
+            outCenter.y = (y - sr) * sf + section.bucketArray[bucketBase + 1];
+            outCenter.z = (z - sr) * sf + section.bucketArray[bucketBase + 2];
         } else {
-            outCenter.x = splatCentersArray[0];
-            outCenter.y = splatCentersArray[1];
-            outCenter.z = splatCentersArray[2];
+            outCenter.x = x;
+            outCenter.y = y;
+            outCenter.z = z;
         }
         if (transform) outCenter.applyMatrix4(transform);
     }
@@ -198,6 +186,8 @@ export class SplatBuffer {
         const rotationMatrix = new THREE.Matrix4();
         const tempMatrix = new THREE.Matrix4();
         const tempPosition = new THREE.Vector3();
+        const scale = new THREE.Vector3();
+        const rotation = new THREE.Quaternion();
 
         return function(index, outScale, outRotation, transform) {
             const sectionIndex = this.globalSplatIndexToSectionMap[index];
@@ -206,21 +196,21 @@ export class SplatBuffer {
 
             const srcSplatScalesBase = this.bytesPerSplat * localSplatIndex +
                                       SplatBuffer.CompressionLevels[this.compressionLevel].ScaleOffsetBytes;
-            const FloatArrayType = floatTypeForCompressionLevel(this.compressionLevel);
-            const splatScaleRotationArray = new FloatArrayType(this.bufferData, section.dataBase + srcSplatScalesBase, 7);
 
-            outScale.set(toUncompressedFloat(splatScaleRotationArray[0], this.compressionLevel),
-                         toUncompressedFloat(splatScaleRotationArray[1], this.compressionLevel),
-                         toUncompressedFloat(splatScaleRotationArray[2], this.compressionLevel));
+            const dataView = new DataView(this.bufferData, section.dataBase + srcSplatScalesBase);
 
-            outRotation.set(toUncompressedFloat(splatScaleRotationArray[4], this.compressionLevel),
-                            toUncompressedFloat(splatScaleRotationArray[5], this.compressionLevel),
-                            toUncompressedFloat(splatScaleRotationArray[6], this.compressionLevel),
-                            toUncompressedFloat(splatScaleRotationArray[3], this.compressionLevel));
+            scale.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel), this.compressionLevel),
+                      toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel), this.compressionLevel),
+                      toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel), this.compressionLevel));
+
+            rotation.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel), this.compressionLevel),
+                         toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 5, this.compressionLevel), this.compressionLevel),
+                         toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 6, this.compressionLevel), this.compressionLevel),
+                         toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 3, this.compressionLevel), this.compressionLevel));
 
             if (transform) {
-                scaleMatrix.makeScale(outScale.x, outScale.y, outScale.z);
-                rotationMatrix.makeRotationFromQuaternion(outRotation);
+                scaleMatrix.makeScale(scale.x, scale.y, scale.z);
+                rotationMatrix.makeRotationFromQuaternion(rotation);
                 tempMatrix.copy(scaleMatrix).multiply(rotationMatrix).multiply(transform);
                 tempMatrix.decompose(tempPosition, outRotation, outScale);
             }
@@ -256,21 +246,23 @@ export class SplatBuffer {
             const centerDestBase = (i - srcFrom + destFrom) * SplatBuffer.CenterComponentCount;
 
             const srcSplatCentersBase = this.bytesPerSplat * localSplatIndex;
-            const FloatArrayType = floatTypeForCompressionLevel(this.compressionLevel);
-            const splatCentersArray = new FloatArrayType(this.bufferData, section.dataBase + srcSplatCentersBase, 3);
+            const dataView = new DataView(this.bufferData, section.dataBase + srcSplatCentersBase);
 
+            const x = dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel);
+            const y = dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel);
+            const z = dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel);
             if (this.compressionLevel >= 1) {
                 const bucketIndex = this.getBucketIndex(section, localSplatIndex);
                 const bucketBase = bucketIndex * SplatBuffer.BucketStorageSizeFloats;
                 const sf = section.compressionScaleFactor;
                 const sr = section.compressionScaleRange;
-                center.x = (splatCentersArray[0] - sr) * sf + section.bucketArray[bucketBase];
-                center.y = (splatCentersArray[1] - sr) * sf + section.bucketArray[bucketBase + 1];
-                center.z = (splatCentersArray[2] - sr) * sf + section.bucketArray[bucketBase + 2];
+                center.x = (x - sr) * sf + section.bucketArray[bucketBase];
+                center.y = (y - sr) * sf + section.bucketArray[bucketBase + 1];
+                center.z = (z - sr) * sf + section.bucketArray[bucketBase + 2];
             } else {
-                center.x = splatCentersArray[0];
-                center.y = splatCentersArray[1];
-                center.z = splatCentersArray[2];
+                center.x = x;
+                center.y = y;
+                center.z = z;
             }
             if (transform) {
                 center.applyMatrix4(transform);
@@ -309,7 +301,7 @@ export class SplatBuffer {
                 transformedCovariance.premultiply(transform3x3);
             }
 
-            if (desiredOutputCompressionLevel === 1) {
+            if (desiredOutputCompressionLevel >= 1) {
                 outCovariance[outOffset] = toHalfFloat(transformedCovariance.elements[0]);
                 outCovariance[outOffset + 1] = toHalfFloat(transformedCovariance.elements[3]);
                 outCovariance[outOffset + 2] = toHalfFloat(transformedCovariance.elements[6]);
@@ -347,16 +339,16 @@ export class SplatBuffer {
             const covarianceDestBase = (i - srcFrom + destFrom) * SplatBuffer.CovarianceComponentCount;
             const srcSplatScalesBase = this.bytesPerSplat * localSplatIndex +
                                        SplatBuffer.CompressionLevels[this.compressionLevel].ScaleOffsetBytes;
-            const FloatArrayType = floatTypeForCompressionLevel(this.compressionLevel);
-            const splatScaleRotationArray = new FloatArrayType(this.bufferData, section.dataBase + srcSplatScalesBase, 7);
 
-            scale.set(toUncompressedFloat(splatScaleRotationArray[0], this.compressionLevel),
-                      toUncompressedFloat(splatScaleRotationArray[1], this.compressionLevel),
-                      toUncompressedFloat(splatScaleRotationArray[2], this.compressionLevel));
-            rotation.set(toUncompressedFloat(splatScaleRotationArray[4], this.compressionLevel),
-                      toUncompressedFloat(splatScaleRotationArray[5], this.compressionLevel),
-                      toUncompressedFloat(splatScaleRotationArray[6], this.compressionLevel),
-                      toUncompressedFloat(splatScaleRotationArray[3], this.compressionLevel));
+            const dataView = new DataView(this.bufferData, section.dataBase + srcSplatScalesBase);
+
+            scale.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel), this.compressionLevel),
+                      toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel), this.compressionLevel),
+                      toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel), this.compressionLevel));
+            rotation.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel), this.compressionLevel),
+                         toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 5, this.compressionLevel), this.compressionLevel),
+                         toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 6, this.compressionLevel), this.compressionLevel),
+                         toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 3, this.compressionLevel), this.compressionLevel));
 
             SplatBuffer.computeCovariance(scale, rotation, transform, covarianceArray, covarianceDestBase, desiredOutputCompressionLevel);
         }
@@ -378,14 +370,15 @@ export class SplatBuffer {
             const colorDestBase = (i - srcFrom + destFrom) * SplatBuffer.ColorComponentCount;
             const srcSplatColorsBase = this.bytesPerSplat * localSplatIndex +
                                        SplatBuffer.CompressionLevels[this.compressionLevel].ColorOffsetBytes;
-            const splatColorsArray = new Uint8Array(this.bufferData, section.dataBase + srcSplatColorsBase, 4);
 
-            let alpha = splatColorsArray[3];
+            const dataView = new Uint8Array(this.bufferData, section.dataBase + srcSplatColorsBase);
+
+            let alpha = dataView[3];
             alpha = (alpha >= minimumAlpha) ? alpha : 0;
 
-            outColorArray[colorDestBase] = splatColorsArray[0];
-            outColorArray[colorDestBase + 1] = splatColorsArray[1];
-            outColorArray[colorDestBase + 2] = splatColorsArray[2];
+            outColorArray[colorDestBase] = dataView[0];
+            outColorArray[colorDestBase + 1] = dataView[1];
+            outColorArray[colorDestBase + 2] = dataView[2];
             outColorArray[colorDestBase + 3] = alpha;
         }
     }
@@ -429,10 +422,10 @@ export class SplatBuffer {
             array[2] = val3;
         };
 
-        const set3FromArray = (array, srcArray, stride, srcBase) => {
-            array[0] = srcArray[srcBase];
-            array[1] = srcArray[srcBase + stride];
-            array[2] = srcArray[srcBase + stride + stride];
+        const set3FromArray = (array, srcDestView, stride, srcBase, compressionLevel) => {
+            array[0] = dataViewFloatForCompressionLevel(srcDestView, srcBase, compressionLevel, true);
+            array[1] = dataViewFloatForCompressionLevel(srcDestView, srcBase + stride, compressionLevel, true);
+            array[2] = dataViewFloatForCompressionLevel(srcDestView, srcBase + stride + stride, compressionLevel, true);
         };
 
         const copy3 = (srcArray, destArray) => {
@@ -480,9 +473,8 @@ export class SplatBuffer {
 
                 const srcSplatSHBase = this.bytesPerSplat * localSplatIndex +
                                        SplatBuffer.CompressionLevels[this.compressionLevel].SphericalHarmonicsOffsetBytes;
-                const FloatArrayType = floatTypeForCompressionLevel(this.compressionLevel, true);
-                const splatSHArray = new FloatArrayType(this.bufferData, section.dataBase + srcSplatSHBase,
-                                                        outSphericalHarmonicsComponentsCount);
+
+                const dataView = new DataView(this.bufferData, section.dataBase + srcSplatSHBase);
 
                 const shDestBase = (i - srcFrom + destFrom) * outSphericalHarmonicsComponentsCount;
 
@@ -500,9 +492,9 @@ export class SplatBuffer {
 
                 if (outSphericalHarmonicsDegree >= 1) {
 
-                    set3FromArray(shIn1, splatSHArray, 3, 0);
-                    set3FromArray(shIn2, splatSHArray, 3, 1);
-                    set3FromArray(shIn3, splatSHArray, 3, 2);
+                    set3FromArray(shIn1, dataView, 3, 0, this.compressionLevel);
+                    set3FromArray(shIn2, dataView, 3, 1, this.compressionLevel);
+                    set3FromArray(shIn3, dataView, 3, 2, this.compressionLevel);
 
                     if (transform) {
                         toUncompressedFloatArray3(shIn1, shIn1, this.compressionLevel);
@@ -521,11 +513,11 @@ export class SplatBuffer {
 
                     if (outSphericalHarmonicsDegree >= 2) {
 
-                        set3FromArray(shIn1, splatSHArray, 5, 9);
-                        set3FromArray(shIn2, splatSHArray, 5, 10);
-                        set3FromArray(shIn3, splatSHArray, 5, 11);
-                        set3FromArray(shIn4, splatSHArray, 5, 12);
-                        set3FromArray(shIn5, splatSHArray, 5, 13);
+                        set3FromArray(shIn1, dataView, 5, 9, this.compressionLevel);
+                        set3FromArray(shIn2, dataView, 5, 10, this.compressionLevel);
+                        set3FromArray(shIn3, dataView, 5, 11, this.compressionLevel);
+                        set3FromArray(shIn4, dataView, 5, 12, this.compressionLevel);
+                        set3FromArray(shIn5, dataView, 5, 13, this.compressionLevel);
 
                         if (transform) {
                             toUncompressedFloatArray3(shIn1, shIn1, this.compressionLevel);
@@ -616,12 +608,12 @@ export class SplatBuffer {
         SplatBuffer.dot5(in1, in2, in3, in4, in5, tsh22, out2);
 
         tsh23[0] = kSqrt0103 * (tsh12[2] * tsh12[0] + tsh12[0] * tsh12[2]) + -kSqrt0112 *
-                    ((tsh13[2] * tsh13[0] + tsh13[0] * tsh13[2]) + (tsh11[2] * tsh11[0] + tsh11[0] * tsh11[2]));
+                   ((tsh13[2] * tsh13[0] + tsh13[0] * tsh13[2]) + (tsh11[2] * tsh11[0] + tsh11[0] * tsh11[2]));
         tsh23[1] = kSqrt0403 * tsh12[1] * tsh12[0] + -kSqrt0103 * (tsh13[1] * tsh13[0] + tsh11[1] * tsh11[0]);
         tsh23[2] = tsh12[1] * tsh12[1] + -kSqrt0104 * (tsh13[1] * tsh13[1] + tsh11[1] * tsh11[1]);
         tsh23[3] = kSqrt0403 * tsh12[1] * tsh12[2] + -kSqrt0103 * (tsh13[1] * tsh13[2] + tsh11[1] * tsh11[2]);
         tsh23[4] = kSqrt0103 * (tsh12[2] * tsh12[2] - tsh12[0] * tsh12[0]) + -kSqrt0112 *
-                    ((tsh13[2] * tsh13[2] - tsh13[0] * tsh13[0]) + (tsh11[2] * tsh11[2] - tsh11[0] * tsh11[0]));
+                   ((tsh13[2] * tsh13[2] - tsh13[0] * tsh13[0]) + (tsh11[2] * tsh11[2] - tsh11[0] * tsh11[0]));
         SplatBuffer.dot5(in1, in2, in3, in4, in5, tsh23, out3);
 
         tsh24[0] = kSqrt0104 * ((tsh12[2] * tsh13[0] + tsh12[0] * tsh13[2]) + (tsh13[2] * tsh12[0] + tsh13[0] * tsh12[2]));
@@ -874,6 +866,14 @@ export class SplatBuffer {
     static generateFromUncompressedSplatArrays(splatArrays, minimumAlpha, compressionLevel,
                                                sceneCenter, blockSize, bucketSize, options = []) {
 
+        const copyBetweenBuffers = (srcBuffer, srcOffset, destBuffer, destOffset, byteCount = 0) => {
+            const src = new Uint8Array(srcBuffer, srcOffset);
+            const dest = new Uint8Array(destBuffer, destOffset);
+            for (let i = 0; i < byteCount; i++) {
+                dest[i] = src[i];
+            }
+        };
+
         let sphericalHarmonicsDegree = 0;
 
         for (let sa = 0; sa < splatArrays.length; sa ++) {
@@ -889,7 +889,8 @@ export class SplatBuffer {
         }
 
         const {bytesPerCenter, bytesPerScale, bytesPerRotation, bytesPerColor, sphericalHarmonicsComponentsPerSplat,
-              bytesPerSplat} = SplatBuffer.calculateComponentStorage(compressionLevel, sphericalHarmonicsDegree);
+              sphericalHarmonicsBytesPerSplat, bytesPerSplat} =
+              SplatBuffer.calculateComponentStorage(compressionLevel, sphericalHarmonicsDegree);
 
         const compressionScaleRange = SplatBuffer.CompressionLevels[compressionLevel].ScaleRange;
 
@@ -939,6 +940,12 @@ export class SplatBuffer {
             const compressionScaleFactor = compressionScaleRange / blockHalfSize;
             const doubleCompressionScaleRange = compressionScaleRange * 2 + 1;
 
+            const tempCenterBuffer = new ArrayBuffer(bytesPerCenter);
+            const tempScaleBuffer = new ArrayBuffer(bytesPerScale);
+            const tempRotationBuffer = new ArrayBuffer(bytesPerRotation);
+            const tempColorBuffer = new ArrayBuffer(bytesPerColor);
+            const tempSHBuffer = new ArrayBuffer(sphericalHarmonicsBytesPerSplat);
+
             const bucketCenter = new THREE.Vector3();
             const bucketCenterDelta = new THREE.Vector3();
             let outSplatCount = 0;
@@ -976,23 +983,18 @@ export class SplatBuffer {
                                     targetSplat[UncompressedSplatArray.OFFSET.Y],
                                     targetSplat[UncompressedSplatArray.OFFSET.Z]]);
                         if (sphericalHarmonicsDegree > 0) {
-                           const sphericalHarmonics = new Float32Array(sectionBuffer, sphericalHarmonicsBase,
-                                                                       sphericalHarmonicsComponentsPerSplat);
+                           const shOut = new Float32Array(sectionBuffer, sphericalHarmonicsBase, sphericalHarmonicsComponentsPerSplat);
                            if (sphericalHarmonicsDegree >= 1) {
-                                for (let s = 0; s < 9; s++) {
-                                    sphericalHarmonics[s] = targetSplat[UncompressedSplatArray.OFFSET.FRC0 + s];
-                                }
+                                for (let s = 0; s < 9; s++) shOut[s] = targetSplat[UncompressedSplatArray.OFFSET.FRC0 + s];
                                 if (sphericalHarmonicsDegree >= 2) {
-                                    for (let s = 0; s < 15; s++) {
-                                        sphericalHarmonics[s + 9] = targetSplat[UncompressedSplatArray.OFFSET.FRC9 + s];
-                                    }
+                                    for (let s = 0; s < 15; s++) shOut[s + 9] = targetSplat[UncompressedSplatArray.OFFSET.FRC9 + s];
                                 }
                            }
                         }
                     } else {
-                        const center = new Uint16Array(sectionBuffer, centerBase, SplatBuffer.CenterComponentCount);
-                        const rot = new Uint16Array(sectionBuffer, rotationBase, SplatBuffer.RotationComponentCount);
-                        const scale = new Uint16Array(sectionBuffer, scaleBase, SplatBuffer.ScaleComponentCount);
+                        const center = new Uint16Array(tempCenterBuffer, 0, SplatBuffer.CenterComponentCount);
+                        const rot = new Uint16Array(tempRotationBuffer, 0, SplatBuffer.RotationComponentCount);
+                        const scale = new Uint16Array(tempScaleBuffer, 0, SplatBuffer.ScaleComponentCount);
 
                         if (targetSplat[UncompressedSplatArray.OFFSET.SCALE0] !== undefined) {
                             tempRotation.set(targetSplat[UncompressedSplatArray.OFFSET.ROTATION0],
@@ -1020,31 +1022,34 @@ export class SplatBuffer {
                         bucketCenterDelta.z = clamp(bucketCenterDelta.z, 0, doubleCompressionScaleRange);
                         center.set([bucketCenterDelta.x, bucketCenterDelta.y, bucketCenterDelta.z]);
                         if (sphericalHarmonicsDegree > 0) {
-                            const SphericalHarmonicsArrayType = compressionLevel === 1 ? Uint16Array : Uint8Array;
-                            const sphericalHarmonics = new SphericalHarmonicsArrayType(sectionBuffer, sphericalHarmonicsBase,
-                                                                                       sphericalHarmonicsComponentsPerSplat);
+                            const SHArrayType = compressionLevel === 1 ? Uint16Array : Uint8Array;
+                            const bytesPerSHComponent = compressionLevel === 1 ? 2 : 1;
+                            const shOut = new SHArrayType(tempSHBuffer, 0, sphericalHarmonicsComponentsPerSplat);
                             if (sphericalHarmonicsDegree >= 1) {
                                 for (let s = 0; s < 9; s++) {
-                                    if (compressionLevel === 1) {
-                                        sphericalHarmonics[s] = toHalfFloat(targetSplat[UncompressedSplatArray.OFFSET.FRC0 + s]);
-                                    } else {
-                                        sphericalHarmonics[s] = toUint8(targetSplat[UncompressedSplatArray.OFFSET.FRC0 + s]);
-                                    }
+                                    const srcVal = targetSplat[UncompressedSplatArray.OFFSET.FRC0 + s];
+                                    shOut[s] = compressionLevel === 1 ? toHalfFloat(srcVal) : toUint8(srcVal);
                                 }
+                                const degree1ByteCount = 9 * bytesPerSHComponent;
+                                copyBetweenBuffers(shOut.buffer, 0, sectionBuffer, sphericalHarmonicsBase, degree1ByteCount);
                                 if (sphericalHarmonicsDegree >= 2) {
                                     for (let s = 0; s < 15; s++) {
-                                        if (compressionLevel === 1) {
-                                            sphericalHarmonics[s + 9] = toHalfFloat(targetSplat[UncompressedSplatArray.OFFSET.FRC9 + s]);
-                                        } else {
-                                            sphericalHarmonics[s + 9] = toUint8(targetSplat[UncompressedSplatArray.OFFSET.FRC9 + s]);
-                                        }
+                                        const srcVal = targetSplat[UncompressedSplatArray.OFFSET.FRC9 + s];
+                                        shOut[s + 9] = compressionLevel === 1 ? toHalfFloat(srcVal) : toUint8(srcVal);
                                     }
+                                    const degree2ByteCount = 15 * bytesPerSHComponent;
+                                    copyBetweenBuffers(shOut.buffer, degree1ByteCount, sectionBuffer,
+                                                       sphericalHarmonicsBase + degree1ByteCount, degree2ByteCount);
                                 }
                             }
-                         }
+                        }
+
+                        copyBetweenBuffers(center.buffer, 0, sectionBuffer, centerBase, 6);
+                        copyBetweenBuffers(scale.buffer, 0, sectionBuffer, scaleBase, 6);
+                        copyBetweenBuffers(rot.buffer, 0, sectionBuffer, rotationBase, 8);
                     }
 
-                    const rgba = new Uint8ClampedArray(sectionBuffer, colorBase, 4);
+                    const rgba = new Uint8ClampedArray(tempColorBuffer, 0, 4);
 
                     if (targetSplat[UncompressedSplatArray.OFFSET.FDC0] !== undefined) {
                         rgba.set([targetSplat[UncompressedSplatArray.OFFSET.FDC0],
@@ -1058,6 +1063,8 @@ export class SplatBuffer {
                     } else {
                         rgba[3] = 255;
                     }
+
+                    copyBetweenBuffers(rgba.buffer, 0, sectionBuffer, colorBase, 4);
 
                     outSplatCount++;
                 }
