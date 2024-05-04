@@ -1100,8 +1100,8 @@ export class SplatMesh extends THREE.Mesh {
 
         // set up covariances data texture
         const covTexSize = computeDataTextureSize(COVARIANCES_ELEMENTS_PER_TEXEL, 6);
-        let CovariancesDataType = covarianceCompressionLevel === 1 ? Uint16Array : Float32Array;
-        let covariancesTextureType = covarianceCompressionLevel === 1 ? THREE.HalfFloatType : THREE.FloatType;
+        let CovariancesDataType = covarianceCompressionLevel >= 1 ? Uint16Array : Float32Array;
+        let covariancesTextureType = covarianceCompressionLevel >= 1 ? THREE.HalfFloatType : THREE.FloatType;
         const paddedCovariances = new CovariancesDataType(covTexSize.x * covTexSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
         paddedCovariances.set(covariances);
 
