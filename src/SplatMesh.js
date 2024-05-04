@@ -2045,7 +2045,7 @@ export class SplatMesh extends THREE.Mesh {
                                                      srcStart, srcEnd, destStart, covarianceCompressionLevel);
             }
             if (centers) splatBuffer.fillSplatCenterArray(centers, sceneTransform, srcStart, srcEnd, destStart);
-            if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, sceneTransform, srcStart, srcEnd, destStart);
+            if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, srcStart, srcEnd, destStart);
             if (sphericalHarmonics) {
                 splatBuffer.fillSphericalHarmonicsArray(sphericalHarmonics, this.minSphericalHarmonicsDegree,
                                                         sceneTransform, srcStart, srcEnd, destStart, sphericalHarmonicsCompressionLevel);
@@ -2153,7 +2153,7 @@ export class SplatMesh extends THREE.Mesh {
 
         return function(globalIndex, outColor) {
             this.getLocalSplatParameters(globalIndex, paramsObj);
-            paramsObj.splatBuffer.getSplatColor(paramsObj.localIndex, outColor, paramsObj.sceneTransform);
+            paramsObj.splatBuffer.getSplatColor(paramsObj.localIndex, outColor);
         };
 
     }();
