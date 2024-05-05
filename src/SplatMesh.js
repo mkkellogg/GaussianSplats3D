@@ -829,8 +829,9 @@ export class SplatMesh extends THREE.Mesh {
 
         let minSphericalHarmonicsDegree = 1000;
         for (let splatBuffer of splatBuffers) {
-            if (splatBuffer.sphericalHarmonicsDegree < minSphericalHarmonicsDegree) {
-                minSphericalHarmonicsDegree = splatBuffer.sphericalHarmonicsDegree;
+            const splatBufferSphericalHarmonicsDegree = splatBuffer.getMinSphericalHarmonicsDegree();
+            if (splatBufferSphericalHarmonicsDegree < minSphericalHarmonicsDegree) {
+                minSphericalHarmonicsDegree = splatBufferSphericalHarmonicsDegree;
             }
         }
         this.minSphericalHarmonicsDegree = Math.min(minSphericalHarmonicsDegree, this.sphericalHarmonicsDegree);

@@ -131,6 +131,17 @@ export class SplatBuffer {
         return this.maxSplatCount;
     }
 
+    getMinSphericalHarmonicsDegree() {
+        let minSphericalHarmonicsDegree = 0;
+        for (let i = 0; i < this.sections.length; i++) {
+            const section = this.sections[i];
+            if (i === 0 || section.sphericalHarmonicsDegree < minSphericalHarmonicsDegree) {
+                minSphericalHarmonicsDegree = section.sphericalHarmonicsDegree;
+            }
+        }
+        return minSphericalHarmonicsDegree;
+    }
+
     getBucketIndex(section, localSplatIndex) {
         let bucketIndex;
         const maxSplatIndexInFullBuckets = section.fullBucketCount * section.bucketSize;
@@ -158,7 +169,7 @@ export class SplatBuffer {
         const section = this.sections[sectionIndex];
         const localSplatIndex = globalSplatIndex - section.splatCountOffset;
 
-        const srcSplatCentersBase = this.bytesPerSplat * localSplatIndex;
+        const srcSplatCentersBase = section.bytesPerSplat * localSplatIndex;
         const dataView = new DataView(this.bufferData, section.dataBase + srcSplatCentersBase);
 
         const x = dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel);
@@ -194,8 +205,8 @@ export class SplatBuffer {
             const section = this.sections[sectionIndex];
             const localSplatIndex = index - section.splatCountOffset;
 
-            const srcSplatScalesBase = this.bytesPerSplat * localSplatIndex +
-                                      SplatBuffer.CompressionLevels[this.compressionLevel].ScaleOffsetBytes;
+            const srcSplatScalesBase = section.bytesPerSplat * localSplatIndex +
+                                       SplatBuffer.CompressionLevels[this.compressionLevel].ScaleOffsetBytes;
 
             const dataView = new DataView(this.bufferData, section.dataBase + srcSplatScalesBase);
 
@@ -223,7 +234,7 @@ export class SplatBuffer {
         const section = this.sections[sectionIndex];
         const localSplatIndex = globalSplatIndex - section.splatCountOffset;
 
-        const srcSplatColorsBase = this.bytesPerSplat * localSplatIndex +
+        const srcSplatColorsBase = section.bytesPerSplat * localSplatIndex +
                                    SplatBuffer.CompressionLevels[this.compressionLevel].ColorOffsetBytes;
         const splatColorsArray = new Uint8Array(this.bufferData, section.dataBase + srcSplatColorsBase, 4);
 
@@ -245,7 +256,7 @@ export class SplatBuffer {
             const localSplatIndex = i - section.splatCountOffset;
             const centerDestBase = (i - srcFrom + destFrom) * SplatBuffer.CenterComponentCount;
 
-            const srcSplatCentersBase = this.bytesPerSplat * localSplatIndex;
+            const srcSplatCentersBase = section.bytesPerSplat * localSplatIndex;
             const dataView = new DataView(this.bufferData, section.dataBase + srcSplatCentersBase);
 
             const x = dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel);
@@ -337,7 +348,7 @@ export class SplatBuffer {
             const localSplatIndex = i - section.splatCountOffset;
 
             const covarianceDestBase = (i - srcFrom + destFrom) * SplatBuffer.CovarianceComponentCount;
-            const srcSplatScalesBase = this.bytesPerSplat * localSplatIndex +
+            const srcSplatScalesBase = section.bytesPerSplat * localSplatIndex +
                                        SplatBuffer.CompressionLevels[this.compressionLevel].ScaleOffsetBytes;
 
             const dataView = new DataView(this.bufferData, section.dataBase + srcSplatScalesBase);
@@ -368,7 +379,7 @@ export class SplatBuffer {
             const localSplatIndex = i - section.splatCountOffset;
 
             const colorDestBase = (i - srcFrom + destFrom) * SplatBuffer.ColorComponentCount;
-            const srcSplatColorsBase = this.bytesPerSplat * localSplatIndex +
+            const srcSplatColorsBase = section.bytesPerSplat * localSplatIndex +
                                        SplatBuffer.CompressionLevels[this.compressionLevel].ColorOffsetBytes;
 
             const dataView = new Uint8Array(this.bufferData, section.dataBase + srcSplatColorsBase);
@@ -462,16 +473,16 @@ export class SplatBuffer {
                 set3(sh13, tempMatrix3.elements[3], -tempMatrix3.elements[6], tempMatrix3.elements[0]);
             }
 
-            outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, this.sphericalHarmonicsDegree);
-            const outSphericalHarmonicsComponentsCount = getSphericalHarmonicsComponentCountForDegree(outSphericalHarmonicsDegree);
-
             for (let i = srcFrom; i <= srcTo; i++) {
 
                 const sectionIndex = this.globalSplatIndexToSectionMap[i];
                 const section = this.sections[sectionIndex];
+                outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, section.sphericalHarmonicsDegree);
+                const outSphericalHarmonicsComponentsCount = getSphericalHarmonicsComponentCountForDegree(outSphericalHarmonicsDegree);
+
                 const localSplatIndex = i - section.splatCountOffset;
 
-                const srcSplatSHBase = this.bytesPerSplat * localSplatIndex +
+                const srcSplatSHBase = section.bytesPerSplat * localSplatIndex +
                                        SplatBuffer.CompressionLevels[this.compressionLevel].SphericalHarmonicsOffsetBytes;
 
                 const dataView = new DataView(this.bufferData, section.dataBase + srcSplatSHBase);
@@ -644,7 +655,6 @@ export class SplatBuffer {
         const splatCount = headerArrayUint32[4];
         const compressionLevel = headerArrayUint16[10];
         const sceneCenter = new THREE.Vector3(headerArrayFloat32[6], headerArrayFloat32[7], headerArrayFloat32[8]);
-        const sphericalHarmonicsDegree = headerArrayUint16[18];
 
         return {
             versionMajor,
@@ -654,8 +664,7 @@ export class SplatBuffer {
             maxSplatCount,
             splatCount,
             compressionLevel,
-            sceneCenter,
-            sphericalHarmonicsDegree
+            sceneCenter
         };
     }
 
@@ -682,12 +691,10 @@ export class SplatBuffer {
         headerArrayFloat32[6] = header.sceneCenter.x;
         headerArrayFloat32[7] = header.sceneCenter.y;
         headerArrayFloat32[8] = header.sceneCenter.z;
-        headerArrayUint16[18] = header.sphericalHarmonicsDegree;
     }
 
     static parseSectionHeaders(header, buffer, offset = 0, secLoadedCountsToMax) {
         const compressionLevel = header.compressionLevel;
-        const { bytesPerSplat } = SplatBuffer.calculateComponentStorage(compressionLevel, header.sphericalHarmonicsDegree);
 
         const maxSectionCount = header.maxSectionCount;
         const sectionHeaderArrayUint16 = new Uint16Array(buffer, offset, maxSectionCount * SplatBuffer.SectionHeaderSizeBytes / 2);
@@ -714,9 +721,13 @@ export class SplatBuffer {
             const bucketsMetaDataSizeBytes = partiallyFilledBucketCount * 4;
             const bucketsStorageSizeBytes = bucketStorageSizeBytes * bucketCount + bucketsMetaDataSizeBytes;
 
+            const sphericalHarmonicsDegree = sectionHeaderArrayUint16[sectionHeaderBaseUint16 + 20];
+            const { bytesPerSplat } = SplatBuffer.calculateComponentStorage(compressionLevel, sphericalHarmonicsDegree);
+
             const splatDataStorageSizeBytes = bytesPerSplat * maxSplatCount;
             const storageSizeBytes = splatDataStorageSizeBytes + bucketsStorageSizeBytes;
             const sectionHeader = {
+                bytesPerSplat: bytesPerSplat,
                 splatCountOffset: splatCountOffset,
                 splatCount: secLoadedCountsToMax ? maxSplatCount : 0,
                 maxSplatCount: maxSplatCount,
@@ -734,7 +745,8 @@ export class SplatBuffer {
                 bucketsBase: sectionBase + bucketsMetaDataSizeBytes,
                 dataBase: sectionBase + bucketsStorageSizeBytes,
                 fullBucketCount: fullBucketCount,
-                partiallyFilledBucketCount: partiallyFilledBucketCount
+                partiallyFilledBucketCount: partiallyFilledBucketCount,
+                sphericalHarmonicsDegree: sphericalHarmonicsDegree
             };
             sectionHeaders[i] = sectionHeader;
             sectionBase += storageSizeBytes;
@@ -763,6 +775,8 @@ export class SplatBuffer {
         sectionHeadeArrayUint32[7] = sectionHeader.storageSizeBytes;
         sectionHeadeArrayUint32[8] = compressionLevel >= 1 ? sectionHeader.fullBucketCount : 0;
         sectionHeadeArrayUint32[9] = compressionLevel >= 1 ? sectionHeader.partiallyFilledBucketCount : 0;
+        sectionHeadeArrayUint16[20] = sectionHeader.sphericalHarmonicsDegree;
+
     }
 
     static writeSectionHeaderSplatCountToBuffer(splatCount, buffer, offset = 0) {
@@ -785,19 +799,6 @@ export class SplatBuffer {
         this.splatCount = secLoadedCountsToMax ? header.maxSplatCount : 0;
         this.compressionLevel = header.compressionLevel;
         this.sceneCenter = new THREE.Vector3().copy(header.sceneCenter);
-        this.sphericalHarmonicsDegree = header.sphericalHarmonicsDegree;
-
-        const {bytesPerCenter, bytesPerScale, bytesPerRotation, bytesPerColor,
-               sphericalHarmonicsComponentsPerSplat, sphericalHarmonicsBytesPerSplat,
-               bytesPerSplat} = SplatBuffer.calculateComponentStorage(this.compressionLevel, this.sphericalHarmonicsDegree);
-
-        this.bytesPerCenter = bytesPerCenter;
-        this.bytesPerScale = bytesPerScale;
-        this.bytesPerRotation = bytesPerRotation;
-        this.bytesPerColor = bytesPerColor;
-        this.sphericalHarmonicsComponentsPerSplat = sphericalHarmonicsComponentsPerSplat;
-        this.sphericalHarmonicsBytesPerSplat = sphericalHarmonicsBytesPerSplat;
-        this.bytesPerSplat = bytesPerSplat;
 
         this.sections = SplatBuffer.parseSectionHeaders(header, this.bufferData, SplatBuffer.HeaderSizeBytes, secLoadedCountsToMax);
 
@@ -1098,7 +1099,8 @@ export class SplatBuffer {
                 compressionScaleRange: compressionScaleRange,
                 storageSizeBytes: sectionSizeBytes,
                 fullBucketCount: fullBucketCount,
-                partiallyFilledBucketCount: partiallyFilledBucketCount
+                partiallyFilledBucketCount: partiallyFilledBucketCount,
+                sphericalHarmonicsDegree: sphericalHarmonicsDegree
             }, compressionLevel, sectionHeaderBuffer, 0);
             sectionHeaderBuffers.push(sectionHeaderBuffer);
 
@@ -1118,8 +1120,7 @@ export class SplatBuffer {
             maxSplatCount: totalSplatCount,
             splatCount: totalSplatCount,
             compressionLevel: compressionLevel,
-            sceneCenter: sceneCenter,
-            sphericalHarmonicsDegree: sphericalHarmonicsDegree
+            sceneCenter: sceneCenter
         }, unifiedBuffer);
 
         let currentUnifiedBase = SplatBuffer.HeaderSizeBytes;
