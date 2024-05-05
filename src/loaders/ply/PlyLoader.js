@@ -98,8 +98,7 @@ export class PlyLoader {
                             maxSplatCount: maxSplatCount,
                             splatCount: splatCount,
                             compressionLevel: 0,
-                            sceneCenter: new THREE.Vector3(),
-                            sphericalHarmonicsDegree: outSphericalHarmonicsDegree
+                            sceneCenter: new THREE.Vector3()
                         }, streamBufferOut);
 
                         numBytesStreamed = header.headerSizeBytes;
@@ -156,7 +155,8 @@ export class PlyLoader {
                                     compressionScaleRange: 0,
                                     storageSizeBytes: 0,
                                     fullBucketCount: 0,
-                                    partiallyFilledBucketCount: 0
+                                    partiallyFilledBucketCount: 0,
+                                    sphericalHarmonicsDegree: outSphericalHarmonicsDegree
                                 }, 0, streamBufferOut, SplatBuffer.HeaderSizeBytes);
                                 streamedSplatBuffer = new SplatBuffer(streamBufferOut, false);
                             }
