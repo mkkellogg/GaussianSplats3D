@@ -282,7 +282,7 @@
 
     window.onCompressionLevelChange = function(arg) {
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
-      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
+      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 2) {
         return;
       }
 
@@ -335,7 +335,7 @@
   
       const sceneCenter = new THREE.Vector3().fromArray(sceneCenterArray);
 
-      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
+      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 2) {
         setConversionError("Invalid compression level.");
         return;
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
@@ -692,7 +692,7 @@
                       </td>
                       <td>
                           <input id="viewSphericalHarmonicsDegree" type="text" class="text-input" style="width: 50px" value="0"></input>
-                          <span class="valid-value-label">(0, 1, 2)</span>
+                          <span class="valid-value-label">(0, 1, or 2)</span>
                       </td>
                       </tr>
                 </table>
@@ -753,7 +753,7 @@
                     </td>
                     <td>
                         <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1" onChange="window.onCompressionLevelChange(this);"></input>
-                        <span class="valid-value-label">(0 or 1)</span>
+                        <span class="valid-value-label">(0, 1, or 2)</span>
                     </td>
                     </tr>
                     <tr>
@@ -762,7 +762,7 @@
                     </td>
                     <td>
                         <input id="conversionSphericalHarmonicsDegree" type="text" class="text-input" style="width: 50px" value="0"></input>
-                        <span class="valid-value-label">(0, 1, 2)</span>
+                        <span class="valid-value-label">(0, 1, or 2)</span>
                     </td>
                     </tr>
                     <tr id="advancedCompressionRow1">
