@@ -1291,8 +1291,11 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     getTargetCovarianceCompressionLevel() {
-        const baseCompressionLevel = this.halfPrecisionCovariancesOnGPU ? 1 : 0;
-        return Math.max(baseCompressionLevel, this.getMaximumSplatBufferCompressionLevel());
+        if (this.halfPrecisionCovariancesOnGPU) {
+            return Math.max(1, this.getMaximumSplatBufferCompressionLevel());
+        } else {
+            return 0;
+        }
     }
 
     getTargetSphericalHarmonicsCompressionLevel() {
