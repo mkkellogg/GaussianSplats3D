@@ -3,13 +3,17 @@ import { UncompressedSplatArray } from './UncompressedSplatArray.js';
 import { clamp, getSphericalHarmonicsComponentCountForDegree } from '../Util.js';
 
 const toHalfFloat = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
+
 const toUint8 = (v) => {
     return Math.floor(v * 128) + 128;
 };
+
 const fromUint8 = (v) => {
     return (v / 255) * 2.0 - 1.0;
 };
+
 const fromHalfFloat = THREE.DataUtils.fromHalfFloat.bind(THREE.DataUtils);
+
 const fromHalfFloatToUint8 = (v) => {
     return Math.floor(fromHalfFloat(v) * 128) + 128;
 };

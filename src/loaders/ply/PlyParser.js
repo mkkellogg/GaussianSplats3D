@@ -205,32 +205,13 @@ export class PlyParser {
                 const outSphericalHarmonics = new Float32Array(toBuffer, outBase + outBytesPerCenter + outBytesPerScale +
                                                                outBytesPerRotation + outBytesPerColor,
                                                                parsedSplat.sphericalHarmonicsCount);
-                outSphericalHarmonics[0] = parsedSplat[UncompressedSplatArray.OFFSET.FRC0];
-                outSphericalHarmonics[1] = parsedSplat[UncompressedSplatArray.OFFSET.FRC1];
-                outSphericalHarmonics[2] = parsedSplat[UncompressedSplatArray.OFFSET.FRC2];
-                outSphericalHarmonics[3] = parsedSplat[UncompressedSplatArray.OFFSET.FRC3];
-                outSphericalHarmonics[4] = parsedSplat[UncompressedSplatArray.OFFSET.FRC4];
-                outSphericalHarmonics[5] = parsedSplat[UncompressedSplatArray.OFFSET.FRC5];
-                outSphericalHarmonics[6] = parsedSplat[UncompressedSplatArray.OFFSET.FRC6];
-                outSphericalHarmonics[7] = parsedSplat[UncompressedSplatArray.OFFSET.FRC7];
-                outSphericalHarmonics[8] = parsedSplat[UncompressedSplatArray.OFFSET.FRC8];
-
+                for (let i = 0; i <= 8; i++) {
+                    outSphericalHarmonics[i] = parsedSplat[UncompressedSplatArray.OFFSET.FRC0 + i];
+                }
                 if (outSphericalHarmonicsDegree >= 2) {
-                    outSphericalHarmonics[9] = parsedSplat[UncompressedSplatArray.OFFSET.FRC9];
-                    outSphericalHarmonics[10] = parsedSplat[UncompressedSplatArray.OFFSET.FRC10];
-                    outSphericalHarmonics[11] = parsedSplat[UncompressedSplatArray.OFFSET.FRC11];
-                    outSphericalHarmonics[12] = parsedSplat[UncompressedSplatArray.OFFSET.FRC12];
-                    outSphericalHarmonics[13] = parsedSplat[UncompressedSplatArray.OFFSET.FRC13];
-                    outSphericalHarmonics[14] = parsedSplat[UncompressedSplatArray.OFFSET.FRC14];
-                    outSphericalHarmonics[15] = parsedSplat[UncompressedSplatArray.OFFSET.FRC15];
-                    outSphericalHarmonics[16] = parsedSplat[UncompressedSplatArray.OFFSET.FRC16];
-                    outSphericalHarmonics[17] = parsedSplat[UncompressedSplatArray.OFFSET.FRC17];
-                    outSphericalHarmonics[18] = parsedSplat[UncompressedSplatArray.OFFSET.FRC18];
-                    outSphericalHarmonics[19] = parsedSplat[UncompressedSplatArray.OFFSET.FRC19];
-                    outSphericalHarmonics[20] = parsedSplat[UncompressedSplatArray.OFFSET.FRC20];
-                    outSphericalHarmonics[21] = parsedSplat[UncompressedSplatArray.OFFSET.FRC21];
-                    outSphericalHarmonics[22] = parsedSplat[UncompressedSplatArray.OFFSET.FRC22];
-                    outSphericalHarmonics[23] = parsedSplat[UncompressedSplatArray.OFFSET.FRC23];
+                    for (let i = 9; i <= 23; i++) {
+                        outSphericalHarmonics[i] = parsedSplat[UncompressedSplatArray.OFFSET.FRC0 + i];
+                    }
                 }
             }
         }
@@ -282,33 +263,13 @@ export class PlyParser {
 
             if (outSphericalHarmonicsDegree >= 1) {
                 if (rawVertex['f_rest_0'] !== undefined) {
-                    newSplat[UncompressedSplatArray.OFFSET.FRC0] = rawVertex[header.sphericalHarmonicsDegree1Fields[0]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC1] = rawVertex[header.sphericalHarmonicsDegree1Fields[1]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC2] = rawVertex[header.sphericalHarmonicsDegree1Fields[2]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC3] = rawVertex[header.sphericalHarmonicsDegree1Fields[3]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC4] = rawVertex[header.sphericalHarmonicsDegree1Fields[4]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC5] = rawVertex[header.sphericalHarmonicsDegree1Fields[5]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC6] = rawVertex[header.sphericalHarmonicsDegree1Fields[6]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC7] = rawVertex[header.sphericalHarmonicsDegree1Fields[7]];
-                    newSplat[UncompressedSplatArray.OFFSET.FRC8] = rawVertex[header.sphericalHarmonicsDegree1Fields[8]];
-
+                    for (let i = 0; i < 9; i++) {
+                        newSplat[UncompressedSplatArray.OFFSET.FRC0 + i] = rawVertex[header.sphericalHarmonicsDegree1Fields[i]];
+                    }
                     if (outSphericalHarmonicsDegree >= 2) {
-                        newSplat[UncompressedSplatArray.OFFSET.FRC9] = rawVertex[header.sphericalHarmonicsDegree2Fields[0]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC10] = rawVertex[header.sphericalHarmonicsDegree2Fields[1]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC11] = rawVertex[header.sphericalHarmonicsDegree2Fields[2]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC12] = rawVertex[header.sphericalHarmonicsDegree2Fields[3]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC13] = rawVertex[header.sphericalHarmonicsDegree2Fields[4]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC14] = rawVertex[header.sphericalHarmonicsDegree2Fields[5]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC15] = rawVertex[header.sphericalHarmonicsDegree2Fields[6]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC16] = rawVertex[header.sphericalHarmonicsDegree2Fields[7]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC17] = rawVertex[header.sphericalHarmonicsDegree2Fields[8]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC18] = rawVertex[header.sphericalHarmonicsDegree2Fields[9]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC19] = rawVertex[header.sphericalHarmonicsDegree2Fields[10]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC20] = rawVertex[header.sphericalHarmonicsDegree2Fields[11]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC21] = rawVertex[header.sphericalHarmonicsDegree2Fields[12]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC22] = rawVertex[header.sphericalHarmonicsDegree2Fields[13]];
-                        newSplat[UncompressedSplatArray.OFFSET.FRC23] = rawVertex[header.sphericalHarmonicsDegree2Fields[14]];
-
+                        for (let i = 0; i < 15; i++) {
+                            newSplat[UncompressedSplatArray.OFFSET.FRC9 + i] = rawVertex[header.sphericalHarmonicsDegree2Fields[i]];
+                        }
                     }
                 } else {
                     newSplat[UncompressedSplatArray.OFFSET.FRC0] = 0;

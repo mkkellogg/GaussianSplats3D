@@ -59,7 +59,7 @@ export class SplatMesh extends THREE.Mesh {
         this.maxScreenSpaceSplatSize = maxScreenSpaceSplatSize;
         // The verbosity of console logging
         this.logLevel = logLevel;
-        // Level 0 means no spherical harmonics
+        // Degree 0 means no spherical harmonics
         this.sphericalHarmonicsDegree = sphericalHarmonicsDegree;
         this.minSphericalHarmonicsDegree = 0;
         // The individual splat scenes stored in this splat mesh, each containing their own transform
@@ -119,7 +119,7 @@ export class SplatMesh extends THREE.Mesh {
      * @param {number} maxScreenSpaceSplatSize The maximum clip space splat size
      * @param {number} splatScale Value by which all splats are scaled in screen-space (default is 1.0)
      * @param {number} pointCloudModeEnabled Render all splats as screen-space circles
-     * @param {number} maxSphericalHarmonicsDegree Level of spherical harmonics to utilize in rendering splats
+     * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
      * @return {THREE.ShaderMaterial}
      */
     static buildMaterial(dynamicMode = false, antialiased = false, maxScreenSpaceSplatSize = 2048,
@@ -827,7 +827,7 @@ export class SplatMesh extends THREE.Mesh {
         }
         this.scenes = newScenes;
 
-        let minSphericalHarmonicsDegree = 1000;
+        let minSphericalHarmonicsDegree = 3;
         for (let splatBuffer of splatBuffers) {
             const splatBufferSphericalHarmonicsDegree = splatBuffer.getMinSphericalHarmonicsDegree();
             if (splatBufferSphericalHarmonicsDegree < minSphericalHarmonicsDegree) {
@@ -1291,11 +1291,7 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     getTargetCovarianceCompressionLevel() {
-        if (this.halfPrecisionCovariancesOnGPU) {
-            return Math.max(1, this.getMaximumSplatBufferCompressionLevel());
-        } else {
-            return 0;
-        }
+        return this.halfPrecisionCovariancesOnGPU ? 1 : 0;
     }
 
     getTargetSphericalHarmonicsCompressionLevel() {
@@ -1312,6 +1308,18 @@ export class SplatMesh extends THREE.Mesh {
             }
         }
         return maxCompressionLevel;
+    }
+
+    getMinimumSplatBufferCompressionLevel() {
+        let minCompressionLevel;
+        for (let i = 0; i < this.scenes.length; i++) {
+            const scene = this.getScene(i);
+            const splatBuffer = scene.splatBuffer;
+            if (i === 0 || splatBuffer.compressionLevel < minCompressionLevel) {
+                minCompressionLevel = splatBuffer.compressionLevel;
+            }
+        }
+        return minCompressionLevel;
     }
 
     static computeTextureUpdateRegion(startSplat, endSplat, textureWidth, elementsPerTexel, elementsPerSplat) {

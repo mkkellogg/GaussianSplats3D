@@ -141,7 +141,7 @@ export class Viewer {
         // The verbosity of console logging
         this.logLevel = options.logLevel || LogLevel.None;
 
-        // Level of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene).
+        // Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene).
         // Valid values are 0 - 3. Default value is 0.
         this.sphericalHarmonicsDegree = options.sphericalHarmonicsDegree || 0;
 
@@ -977,8 +977,7 @@ export class Viewer {
             return KSplatLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt);
         } else if (format === SceneFormat.Ply) {
             return PlyLoader.loadFromURL(path, onProgress, streamBuiltSections, onSectionBuilt,
-                                         splatAlphaRemovalThreshold, 0, undefined, undefined,
-                                         undefined, undefined, this.sphericalHarmonicsDegree);
+                                         splatAlphaRemovalThreshold, 0, this.sphericalHarmonicsDegree);
         }
         return AbortablePromise.reject(new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
     }
