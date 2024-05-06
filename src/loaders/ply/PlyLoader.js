@@ -27,7 +27,7 @@ function storeChunksInBuffer(chunks, buffer) {
 export class PlyLoader {
 
     static loadFromURL(fileName, onProgress, streamLoadData, onStreamedSectionProgress, minimumAlpha, compressionLevel,
-                       sectionSize, sceneCenter, blockSize, bucketSize, outSphericalHarmonicsDegree = 0) {
+                       outSphericalHarmonicsDegree = 0, sectionSize, sceneCenter, blockSize, bucketSize) {
 
         const streamedSectionSizeBytes = Constants.StreamingSectionSize;
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
@@ -193,8 +193,8 @@ export class PlyLoader {
         return fetchWithProgress(fileName, localOnProgress, !streamLoadData).then((plyFileData) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             const loadPromise = streamLoadData ? streamLoadPromise :
-                                PlyLoader.loadFromFileData(plyFileData, minimumAlpha, compressionLevel, sectionSize, sceneCenter,
-                                                           blockSize, bucketSize, outSphericalHarmonicsDegree);
+                                PlyLoader.loadFromFileData(plyFileData, minimumAlpha, compressionLevel, outSphericalHarmonicsDegree,
+                                                           sectionSize, sceneCenter, blockSize, bucketSize);
             return loadPromise.then((splatBuffer) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
                 return splatBuffer;
@@ -202,8 +202,8 @@ export class PlyLoader {
         });
     }
 
-    static loadFromFileData(plyFileData, minimumAlpha, compressionLevel, sectionSize,
-                            sceneCenter, blockSize, bucketSize, outSphericalHarmonicsDegree = 0) {
+    static loadFromFileData(plyFileData, minimumAlpha, compressionLevel, outSphericalHarmonicsDegree = 0,
+                            sectionSize, sceneCenter, blockSize, bucketSize) {
         return delayedExecute(() => {
             return PlyParser.parseToUncompressedSplatArray(plyFileData, outSphericalHarmonicsDegree);
         })
