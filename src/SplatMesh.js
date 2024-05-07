@@ -202,6 +202,7 @@ export class SplatMesh extends THREE.Mesh {
 
             const float SH_C1 = 0.4886025119029199f;
             const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
+            const vec3 vecOnes3 = vec3(1.0, 1.0, 1.0);
 
             void main () {
 
@@ -283,9 +284,9 @@ export class SplatMesh extends THREE.Mesh {
 
                 vertexShaderSource += `
                         if (sphericalHarmonics8BitMode == 1) {
-                            sh1 = sh1 * 2.0 - vec3(1.0, 1.0, 1.0);
-                            sh2 = sh2 * 2.0 - vec3(1.0, 1.0, 1.0);
-                            sh3 = sh3 * 2.0 - vec3(1.0, 1.0, 1.0);
+                            sh1 = sh1 * 2.0 - vecOnes3;
+                            sh2 = sh2 * 2.0 - vecOnes3;
+                            sh3 = sh3 * 2.0 - vecOnes3;
                         }
                         float x = worldViewDir.x;
                         float y = worldViewDir.y;
@@ -315,11 +316,11 @@ export class SplatMesh extends THREE.Mesh {
                             vec3 sh8 = sampledSH20212223.gba;
 
                             if (sphericalHarmonics8BitMode == 1) {
-                                sh4 = sh4 * 2.0 - vec3(1.0, 1.0, 1.0);
-                                sh5 = sh5 * 2.0 - vec3(1.0, 1.0, 1.0);
-                                sh6 = sh6 * 2.0 - vec3(1.0, 1.0, 1.0);
-                                sh7 = sh7 * 2.0 - vec3(1.0, 1.0, 1.0);
-                                sh8 = sh8 * 2.0 - vec3(1.0, 1.0, 1.0);
+                                sh4 = sh4 * 2.0 - vecOnes3;
+                                sh5 = sh5 * 2.0 - vecOnes3;
+                                sh6 = sh6 * 2.0 - vecOnes3;
+                                sh7 = sh7 * 2.0 - vecOnes3;
+                                sh8 = sh8 * 2.0 - vecOnes3;
                             }
 
                             vColor.rgb +=

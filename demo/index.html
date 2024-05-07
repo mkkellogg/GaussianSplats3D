@@ -60,6 +60,7 @@
       font-size: 12pt;
       font-weight: bold;
       color: #333333;
+      margin-bottom: 5px;
     }
 
     .content-row {
@@ -86,7 +87,7 @@
       margin-right: 8px;
     }
 
-    .demo-scene-panel:hover {
+    .demo-scene-panel.clickable:hover {
       color: #333333;
       border-color: #8a9ba8;
       background-color: #e4edfc;
@@ -99,6 +100,28 @@
       margin-bottom: 10px;
       width: 209px;
       height: 149px;
+    }
+
+    .demo-scene-button-row {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .demo-scene-button {
+      border-radius: 5px;
+      border: #cccccc 2px solid;
+      background-color: #eeeeee;
+      color: #666666;
+      padding: 3px 7px 3px 7px;
+    }
+
+    .demo-scene-button:hover {
+      color: #333333;
+      border: #aaaaaa 2px solid;
+      background-color: #e7eaf1;
+      cursor: pointer;
     }
 
     .button {
@@ -565,8 +588,17 @@
 
   </script>
   <script>
-    function openDemo(demoName) {
-      window.location = demoName + '.html';
+    function openDemo(page, params) {
+      let url = page + '.html';
+      if (params && params.length > 0) {
+        let index = 0;
+        for (let param of params) {
+          url += (index === 0 ? "?" : "&");
+          url += param[0] + "=" + param[1];
+          index++;
+        }
+      }
+      window.location = url;
     }
     function reset() {
       window.location = 'index.html';
@@ -599,29 +631,55 @@
         </div>
         <div style="text-align:center;">
           <div class="content-row" style="max-width: 800px; margin:auto; display:flex; align-items: center; justify-content: center;">
-            <div class="demo-scene-panel" onclick="openDemo('garden')">
+            <div class="demo-scene-panel">
+                <div class="small-title">Garden</div>
                 <img src="assets/images/garden.png" class="demo-scene-panel-image">
-                <span class="small-title">Garden</span>
+                <div class="demo-scene-button-row">
+                  <div class="demo-scene-button" onclick="openDemo('garden', [['mode', '0']])">Low</div>
+                  <div style="width: 10px;"></div>
+                  <div class="demo-scene-button" onclick="openDemo('garden', [['mode', '1']])">High</div>
+                </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('truck')">
+            <div class="demo-scene-panel">
+                <div class="small-title">Truck</div>
                 <img src="assets/images/truck.png" class="demo-scene-panel-image">
-                <span class="small-title">Truck</span>
+                <div class="demo-scene-button-row">
+                  <div class="demo-scene-button" onclick="openDemo('truck', [['mode', '0']])">Low</div>
+                  <div style="width: 10px;"></div>
+                  <div class="demo-scene-button" onclick="openDemo('truck', [['mode', '1']])">High</div>
+                </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('stump')">
-                <img src="assets/images/stump.png" class="demo-scene-panel-image">
-                <span class="small-title">Stump</span>
+            <div class="demo-scene-panel">
+              <div class="small-title">Stump</div>
+              <img src="assets/images/stump.png" class="demo-scene-panel-image">
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('stump', [['mode', '0']])">Low</div>
+                <div style="width: 10px;"></div>
+                <div class="demo-scene-button" onclick="openDemo('stump', [['mode', '1']])">High</div>
+              </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('bonsai')">
+            <div class="demo-scene-panel">
+              <div class="small-title">Bonsai</div>
               <img src="assets/images/bonsai.png" class="demo-scene-panel-image">
-              <span class="small-title">Bonsai</span>
-          </div>
-            <div class="demo-scene-panel" onclick="openDemo('dynamic_scenes')">
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('bonsai', [['mode', '0']])">Low</div>
+                <div style="width: 10px;"></div>
+                <div class="demo-scene-button" onclick="openDemo('bonsai', [['mode', '1']])">High</div>
+              </div>
+            </div>
+            <div class="demo-scene-panel">
+              <div class="small-title">Dynamic scenes</div>
               <img src="assets/images/dynamic_scenes.png" class="demo-scene-panel-image">
-              <span class="small-title">Dynamic scenes</span>
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('dynamic_scenes', [['mode', '0']])">Open</div>
+              </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('vr')">
+            <div class="demo-scene-panel">
+              <div class="small-title">AR/VR</div>
               <img src="assets/images/bonsai.png" class="demo-scene-panel-image">
-              <span class="small-title">AR/VR</span>
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('vr', [['mode', '0']])">Open</div>
+              </div>
             </div>
           </div>
         </div>
