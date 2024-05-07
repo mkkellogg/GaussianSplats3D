@@ -228,6 +228,9 @@ export class SplatBuffer {
                 rotationMatrix.makeRotationFromQuaternion(rotation);
                 tempMatrix.copy(scaleMatrix).multiply(rotationMatrix).multiply(transform);
                 tempMatrix.decompose(tempPosition, outRotation, outScale);
+            } else {
+                outScale.copy(scale);
+                outRotation.copy(rotation);
             }
         };
 
