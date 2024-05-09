@@ -5,17 +5,18 @@ import { clamp, getSphericalHarmonicsComponentCountForDegree } from '../Util.js'
 const toHalfFloat = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
 
 const toUint8 = (v) => {
-    return Math.floor(v * 128) + 128;
+    v = clamp(v, -1.5, 1.5);
+    return clamp(Math.floor((v / 3 + 0.5) * 255), 0, 255);
 };
 
 const fromUint8 = (v) => {
-    return (v / 255) * 2.0 - 1.0;
+    return (v / 255) * 3.0 - 1.5;
 };
 
 const fromHalfFloat = THREE.DataUtils.fromHalfFloat.bind(THREE.DataUtils);
 
 const fromHalfFloatToUint8 = (v) => {
-    return Math.floor(fromHalfFloat(v) * 128) + 128;
+    return toUint8(fromHalfFloat(v));
 };
 
 const toUncompressedFloat = (f, compressionLevel, isSH = false) => {
