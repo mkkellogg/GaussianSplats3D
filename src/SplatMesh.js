@@ -200,9 +200,17 @@ export class SplatMesh extends THREE.Mesh {
                 return samplerUV;
             }
 
+            vec3 gammaCompress(vec3 color) {
+                return pow(color, vec3(2.2));
+            }
+
+            vec3 gammaCorrect(vec3 color) {
+                return pow(color, vec3(1.0 / 2.2));
+            }
+
             const float SH_C1 = 0.4886025119029199f;
             const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
-            const vec3 vecOnes3 = vec3(1.0, 1.0, 1.0);
+            const vec3 vec8BitSHShift = vec3(1.5, 1.5, 1.5);
 
             void main () {
 
@@ -239,6 +247,7 @@ export class SplatMesh extends THREE.Mesh {
                 vPosition = position.xy;
                 vColor = uintToRGBAVec(sampledCenterColor.r);
 
+             //   vColor.rgb = gammaCompress(vColor.rgb);
             `;
 
             if (maxSphericalHarmonicsDegree >= 1) {
@@ -284,9 +293,9 @@ export class SplatMesh extends THREE.Mesh {
 
                 vertexShaderSource += `
                         if (sphericalHarmonics8BitMode == 1) {
-                            sh1 = sh1 * 2.0 - vecOnes3;
-                            sh2 = sh2 * 2.0 - vecOnes3;
-                            sh3 = sh3 * 2.0 - vecOnes3;
+                            sh1 = sh1 * 3.0 - vec8BitSHShift;
+                            sh2 = sh2 * 3.0 - vec8BitSHShift;
+                            sh3 = sh3 * 3.0 - vec8BitSHShift;
                         }
                         float x = worldViewDir.x;
                         float y = worldViewDir.y;
@@ -316,11 +325,11 @@ export class SplatMesh extends THREE.Mesh {
                             vec3 sh8 = sampledSH20212223.gba;
 
                             if (sphericalHarmonics8BitMode == 1) {
-                                sh4 = sh4 * 2.0 - vecOnes3;
-                                sh5 = sh5 * 2.0 - vecOnes3;
-                                sh6 = sh6 * 2.0 - vecOnes3;
-                                sh7 = sh7 * 2.0 - vecOnes3;
-                                sh8 = sh8 * 2.0 - vecOnes3;
+                                sh4 = sh4 * 3.0 - vec8BitSHShift;
+                                sh5 = sh5 * 3.0 - vec8BitSHShift;
+                                sh6 = sh6 * 3.0 - vec8BitSHShift;
+                                sh7 = sh7 * 3.0 - vec8BitSHShift;
+                                sh8 = sh8 * 3.0 - vec8BitSHShift;
                             }
 
                             vColor.rgb +=
@@ -334,7 +343,10 @@ export class SplatMesh extends THREE.Mesh {
                 }
 
                 vertexShaderSource += `
+               
                 }
+
+               // vColor.rgb = gammaCorrect(vColor.rgb);
                 `;
             }
 
