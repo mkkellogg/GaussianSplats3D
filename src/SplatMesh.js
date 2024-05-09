@@ -202,7 +202,10 @@ export class SplatMesh extends THREE.Mesh {
 
             const float SH_C1 = 0.4886025119029199f;
             const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
-            const vec3 vec8BitSHShift = vec3(1.5, 1.5, 1.5);
+
+            const float SphericalHarmonics8BitCompressionRange = ${Constants.SphericalHarmonics8BitCompressionRange.toFixed(1)};
+            const float SphericalHarmonics8BitCompressionHalfRange = SphericalHarmonics8BitCompressionRange / 2.0;
+            const vec3 vec8BitSHShift = vec3(SphericalHarmonics8BitCompressionHalfRange);
 
             void main () {
 
@@ -283,9 +286,9 @@ export class SplatMesh extends THREE.Mesh {
 
                 vertexShaderSource += `
                         if (sphericalHarmonics8BitMode == 1) {
-                            sh1 = sh1 * 3.0 - vec8BitSHShift;
-                            sh2 = sh2 * 3.0 - vec8BitSHShift;
-                            sh3 = sh3 * 3.0 - vec8BitSHShift;
+                            sh1 = sh1 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                            sh2 = sh2 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                            sh3 = sh3 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
                         }
                         float x = worldViewDir.x;
                         float y = worldViewDir.y;
@@ -315,11 +318,11 @@ export class SplatMesh extends THREE.Mesh {
                             vec3 sh8 = sampledSH20212223.gba;
 
                             if (sphericalHarmonics8BitMode == 1) {
-                                sh4 = sh4 * 3.0 - vec8BitSHShift;
-                                sh5 = sh5 * 3.0 - vec8BitSHShift;
-                                sh6 = sh6 * 3.0 - vec8BitSHShift;
-                                sh7 = sh7 * 3.0 - vec8BitSHShift;
-                                sh8 = sh8 * 3.0 - vec8BitSHShift;
+                                sh4 = sh4 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                                sh5 = sh5 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                                sh6 = sh6 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                                sh7 = sh7 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                                sh8 = sh8 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
                             }
 
                             vColor.rgb +=
