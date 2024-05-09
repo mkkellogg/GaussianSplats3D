@@ -1,16 +1,19 @@
 import * as THREE from 'three';
 import { UncompressedSplatArray } from './UncompressedSplatArray.js';
 import { clamp, getSphericalHarmonicsComponentCountForDegree } from '../Util.js';
+import { Constants } from '../Constants.js';
+
+const SphericalHarmonics8BitCompressionHalfRange = Constants.SphericalHarmonics8BitCompressionRange / 2.0;
 
 const toHalfFloat = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
 
 const toUint8 = (v) => {
-    v = clamp(v, -1.5, 1.5);
-    return clamp(Math.floor((v / 3 + 0.5) * 255), 0, 255);
+    v = clamp(v, -SphericalHarmonics8BitCompressionHalfRange, SphericalHarmonics8BitCompressionHalfRange);
+    return clamp(Math.floor((v * (0.5 / SphericalHarmonics8BitCompressionHalfRange) + 0.5) * 255), 0, 255);
 };
 
 const fromUint8 = (v) => {
-    return (v / 255) * 3.0 - 1.5;
+    return (v / 255) * Constants.SphericalHarmonics8BitCompressionRange - SphericalHarmonics8BitCompressionHalfRange;
 };
 
 const fromHalfFloat = THREE.DataUtils.fromHalfFloat.bind(THREE.DataUtils);
