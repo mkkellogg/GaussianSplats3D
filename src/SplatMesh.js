@@ -200,14 +200,6 @@ export class SplatMesh extends THREE.Mesh {
                 return samplerUV;
             }
 
-            vec3 gammaCompress(vec3 color) {
-                return pow(color, vec3(2.2));
-            }
-
-            vec3 gammaCorrect(vec3 color) {
-                return pow(color, vec3(1.0 / 2.2));
-            }
-
             const float SH_C1 = 0.4886025119029199f;
             const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
             const vec3 vec8BitSHShift = vec3(1.5, 1.5, 1.5);
@@ -246,8 +238,6 @@ export class SplatMesh extends THREE.Mesh {
 
                 vPosition = position.xy;
                 vColor = uintToRGBAVec(sampledCenterColor.r);
-
-             //   vColor.rgb = gammaCompress(vColor.rgb);
             `;
 
             if (maxSphericalHarmonicsDegree >= 1) {
@@ -346,7 +336,6 @@ export class SplatMesh extends THREE.Mesh {
                
                 }
 
-               // vColor.rgb = gammaCorrect(vColor.rgb);
                 `;
             }
 
