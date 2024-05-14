@@ -3,6 +3,7 @@ import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { CompressedPlyParser } from './CompressedPlyParser.js';
 import { SplatBuffer } from '../SplatBuffer.js';
 import { clamp } from '../../Util.js';
+import { getSphericalHarmonicsComponentCountForDegree } from '../../Util.js';
 
 export class PlyParser {
 
@@ -167,6 +168,7 @@ export class PlyParser {
     static parseToUncompressedSplatBufferSection(header, fromSplat, toSplat, vertexData, vertexDataOffset,
                                                  toBuffer, toOffset, outSphericalHarmonicsDegree = 0) {
         outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
+        const sphericalHarmonicsCount = getSphericalHarmonicsComponentCountForDegree(outSphericalHarmonicsDegree);
         const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
         const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
         const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
@@ -204,7 +206,7 @@ export class PlyParser {
             if (outSphericalHarmonicsDegree >= 1) {
                 const outSphericalHarmonics = new Float32Array(toBuffer, outBase + outBytesPerCenter + outBytesPerScale +
                                                                outBytesPerRotation + outBytesPerColor,
-                                                               parsedSplat.sphericalHarmonicsCount);
+                                                               sphericalHarmonicsCount);
                 for (let i = 0; i <= 8; i++) {
                     outSphericalHarmonics[i] = parsedSplat[UncompressedSplatArray.OFFSET.FRC0 + i];
                 }
