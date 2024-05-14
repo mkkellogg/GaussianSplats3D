@@ -337,6 +337,8 @@ export class SplatMesh extends THREE.Mesh {
 
                 vertexShaderSource += `
                
+                    vColor.rgb = clamp(vColor.rgb, vec3(0.), vec3(1.));
+
                 }
 
                 `;
