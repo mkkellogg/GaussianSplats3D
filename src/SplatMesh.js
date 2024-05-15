@@ -2005,7 +2005,7 @@ export class SplatMesh extends THREE.Mesh {
                 this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
             });*/
 
-            gl.bindVertexArray(this.distancesTransformFeedback.vao);
+           // gl.bindVertexArray(this.distancesTransformFeedback.vao);
             gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
             gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
             gl.bindBuffer(gl.ARRAY_BUFFER, null);

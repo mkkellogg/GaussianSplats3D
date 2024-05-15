@@ -1469,6 +1469,7 @@ export class Viewer {
     update = function(renderer, camera) {
 
         const mvpMatrix = new THREE.Matrix4();
+        let updateCount = 0;
 
         return function () {
             if (this.dropInMode) this.updateForDropInMode(renderer, camera);
@@ -1489,10 +1490,11 @@ export class Viewer {
             this.updateInfoPanel();
             this.updateControlPlane();
 
-            if (this.gpuAcceleratedSort) {
+            if (this.gpuAcceleratedSort && updateCount % 2 === 0) {
                 this.getMVPMatrix(mvpMatrix);
                 this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
+            updateCount++;
         };
 
     }();
