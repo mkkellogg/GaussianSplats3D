@@ -35,7 +35,6 @@ export class KSplatLoader {
 
         let numBytesLoaded = 0;
         let numBytesStreamed = 0;
-        let streamSectionSizeBytes = Constants.StreamingSectionSize;
         let totalBytesToDownload = 0;
 
         let downloadComplete = false;
@@ -123,7 +122,7 @@ export class KSplatLoader {
         const checkAndLoadSections = () => {
             if (loadSectionQueued) return;
             loadSectionQueued = true;
-            window.setTimeout(() => {
+            const checkFunc = () => {
                 loadSectionQueued = false;
                 if (sectionHeadersLoaded) {
 
@@ -132,9 +131,9 @@ export class KSplatLoader {
                     downloadComplete = numBytesLoaded >= totalBytesToDownload;
 
                     let bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
-                    if (bytesLoadedSinceLastSection > streamSectionSizeBytes || downloadComplete) {
+                    if (bytesLoadedSinceLastSection > Constants.StreamingSectionSize || downloadComplete) {
 
-                        numBytesStreamed += streamSectionSizeBytes;
+                        numBytesStreamed += Constants.StreamingSectionSize;
                         loadComplete = numBytesStreamed >= totalBytesToDownload;
 
                         if (!streamSplatBuffer) streamSplatBuffer = new SplatBuffer(streamBuffer, false);
@@ -179,7 +178,8 @@ export class KSplatLoader {
                         }
                     }
                 }
-            }, 16);
+            };
+            window.setTimeout(checkFunc, Constants.StreamingSectionDelayDuration);
         };
 
         const localOnProgress = (percent, percentStr, chunk) => {
