@@ -219,7 +219,7 @@ export class Viewer {
 
     createSplatMesh() {
         this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased,
+                                       true, this.integerBasedSort, this.antialiased,
                                        this.maxScreenSpaceSplatSize, this.logLevel, this.sphericalHarmonicsDegree);
         this.splatMesh.frustumCulled = false;
     }
@@ -1458,25 +1458,44 @@ export class Viewer {
 
     }();
 
-    update(renderer, camera) {
-        if (this.dropInMode) this.updateForDropInMode(renderer, camera);
-        if (!this.initialized || !this.splatRenderReady) return;
-        if (this.controls) {
-            this.controls.update();
-            if (this.camera.isOrthographicCamera && !this.usingExternalCamera) {
-                Viewer.setCameraPositionFromZoom(this.camera, this.camera, this.controls);
-            }
-        }
-        this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
-        this.updateSplatSort();
-        this.updateForRendererSizeChanges();
-        this.updateSplatMesh();
-        this.updateMeshCursor();
-        this.updateFPS();
-        this.timingSensitiveUpdates();
-        this.updateInfoPanel();
-        this.updateControlPlane();
+    getMVPMatrix(outMatrix) {
+        outMatrix = outMatrix || new THREE.Matrix4();
+        outMatrix.copy(this.camera.matrixWorld).invert();
+        const mvpCamera = this.perspectiveCamera || this.camera;
+        outMatrix.premultiply(mvpCamera.projectionMatrix);
+        outMatrix.multiply(this.splatMesh.matrixWorld);
     }
+
+    update = function(renderer, camera) {
+
+        const mvpMatrix = new THREE.Matrix4();
+
+        return function () {
+            if (this.dropInMode) this.updateForDropInMode(renderer, camera);
+            if (!this.initialized || !this.splatRenderReady) return;
+            if (this.controls) {
+                this.controls.update();
+                if (this.camera.isOrthographicCamera && !this.usingExternalCamera) {
+                    Viewer.setCameraPositionFromZoom(this.camera, this.camera, this.controls);
+                }
+            }
+            this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
+            this.updateSplatSort();
+            this.updateForRendererSizeChanges();
+            this.updateSplatMesh();
+            this.updateMeshCursor();
+            this.updateFPS();
+            this.timingSensitiveUpdates();
+            this.updateInfoPanel();
+            this.updateControlPlane();
+
+            if (this.gpuAcceleratedSort) {
+                this.getMVPMatrix(mvpMatrix);
+                this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
+            }
+        };
+
+    }();
 
     updateForDropInMode(renderer, camera) {
         this.renderer = renderer;
@@ -1715,14 +1734,11 @@ export class Viewer {
             const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
             this.splatRenderCount = splatRenderCount;
 
-            mvpMatrix.copy(this.camera.matrixWorld).invert();
-            const mvpCamera = this.perspectiveCamera || this.camera;
-            mvpMatrix.premultiply(mvpCamera.projectionMatrix);
-            mvpMatrix.multiply(this.splatMesh.matrixWorld);
+            this.getMVPMatrix(mvpMatrix);
 
-            if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
+            /*if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
-            }
+            }*/
 
             if (this.splatMesh.dynamicMode || shouldSortAll) {
                 queuedSorts.push(this.splatRenderCount);

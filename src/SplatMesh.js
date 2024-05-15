@@ -1968,7 +1968,7 @@ export class SplatMesh extends THREE.Mesh {
 
             gl.disable(gl.RASTERIZER_DISCARD);
 
-            const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+            /*const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
             gl.flush();
 
             const promise = new Promise((resolve) => {
@@ -2003,7 +2003,13 @@ export class SplatMesh extends THREE.Mesh {
                     }
                 };
                 this.computeDistancesOnGPUSyncTimeout = setTimeout(checkSync);
-            });
+            });*/
+
+            gl.bindVertexArray(this.distancesTransformFeedback.vao);
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.outDistancesBuffer);
+            gl.getBufferSubData(gl.ARRAY_BUFFER, 0, outComputedDistances);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            const promise = Promise.resolve();
 
             if (currentProgram && currentProgramDeleted !== true) gl.useProgram(currentProgram);
             if (currentVao) gl.bindVertexArray(currentVao);
