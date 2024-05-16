@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { PlyParser } from './PlyParser.js';
-import { CompressedPlyParser } from './CompressedPlyParser.js';
+import { INRIAV1PlyParser } from './INRIAV1PlyParser.js';
+import { PlayCanvasCompressedPlyParser } from './PlayCanvasCompressedPlyParser.js';
+import { PlyFormat } from './PlyFormat.js';
 import { fetchWithProgress, delayedExecute } from '../../Util.js';
 import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
@@ -75,17 +77,20 @@ export class PlyLoader {
                 if (!headerLoaded) {
                     headerText += textDecoder.decode(chunkData);
                     if (PlyParser.checkTextForEndHeader(headerText)) {
-                        header = PlyParser.decodeHeaderText(headerText);
-                        outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
-                        compressed = header.compressed;
-
-                        if (compressed) {
-                            header = CompressedPlyParser.decodeHeaderText(headerText);
-                            maxSplatCount = header.vertexElement.count;
-                        } else {
+                        const plyFormat = PlyParser.determineHeaderFormatFromHeaderText(headerText);
+                        if (plyFormat === PlyFormat.INRIAV1) {
+                            header = INRIAV1PlyParser.decodeHeaderText(headerText);
                             maxSplatCount = header.splatCount;
                             readyToLoadSplatData = true;
+                            compressed = false;
+                        } else if (plyFormat === PlyFormat.PlayCanvasCompressed) {
+                            header = PlayCanvasCompressedPlyParser.decodeHeaderText(headerText);
+                            maxSplatCount = header.vertexElement.count;
+                            compressed = true;
+                        } else {
+                            throw new Error('PlyLoader.loadFromURL() -> Unsupported Ply format.');
                         }
+                        outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
 
                         const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree];
                         const splatBufferSizeBytes = splatDataOffsetBytes + shDescriptor.BytesPerSplat * maxSplatCount;
@@ -109,7 +114,8 @@ export class PlyLoader {
                     const sizeRequiredForHeaderAndChunks = header.headerSizeBytes + header.chunkElement.storageSizeBytes;
                     compressedPlyHeaderChunksBuffer = storeChunksInBuffer(chunks, compressedPlyHeaderChunksBuffer);
                     if (compressedPlyHeaderChunksBuffer.byteLength >= sizeRequiredForHeaderAndChunks) {
-                        CompressedPlyParser.readElementData(header.chunkElement, compressedPlyHeaderChunksBuffer, header.headerSizeBytes);
+                        PlayCanvasCompressedPlyParser.readElementData(header.chunkElement, compressedPlyHeaderChunksBuffer,
+                                                                      header.headerSizeBytes);
                         numBytesStreamed = sizeRequiredForHeaderAndChunks;
                         numBytesParsed = sizeRequiredForHeaderAndChunks;
                         readyToLoadSplatData = true;
@@ -136,11 +142,13 @@ export class PlyLoader {
                             const outOffset = splatCount * shDescriptor.BytesPerSplat + splatDataOffsetBytes;
 
                             if (compressed) {
-                                CompressedPlyParser.parseToUncompressedSplatBufferSection(header.chunkElement, header.vertexElement, 0,
-                                                                                          addedSplatCount - 1, splatCount,
-                                                                                          dataToParse, 0, streamBufferOut, outOffset);
+                                PlayCanvasCompressedPlyParser.parseToUncompressedSplatBufferSection(header.chunkElement,
+                                                                                                    header.vertexElement, 0,
+                                                                                                    addedSplatCount - 1, splatCount,
+                                                                                                    dataToParse, 0,
+                                                                                                    streamBufferOut, outOffset);
                             } else {
-                                PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1, dataToParse, 0,
+                                INRIAV1PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1, dataToParse, 0,
                                                                                 streamBufferOut, outOffset, outSphericalHarmonicsDegree);
                             }
 
