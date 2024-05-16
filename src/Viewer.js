@@ -219,7 +219,7 @@ export class Viewer {
 
     createSplatMesh() {
         this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       true, this.integerBasedSort, this.antialiased,
+                                       this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased,
                                        this.maxScreenSpaceSplatSize, this.logLevel, this.sphericalHarmonicsDegree);
         this.splatMesh.frustumCulled = false;
     }
@@ -1490,7 +1490,7 @@ export class Viewer {
             this.updateInfoPanel();
             this.updateControlPlane();
 
-            if (this.gpuAcceleratedSort && updateCount % 2 === 0) {
+            if (this.gpuAcceleratedSort && updateCount % 1 === 0) {
                 this.getMVPMatrix(mvpMatrix);
                 this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
