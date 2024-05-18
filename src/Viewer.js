@@ -9,7 +9,7 @@ import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
 import { InfoPanel } from './ui/InfoPanel.js';
 import { SceneHelper } from './SceneHelper.js';
 import { Raycaster } from './raycaster/Raycaster.js';
-import { SplatMesh } from './SplatMesh.js';
+import { SplatMesh } from './splatmesh/SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
 import { getCurrentTime } from './Util.js';
