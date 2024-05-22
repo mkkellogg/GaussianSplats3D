@@ -510,7 +510,11 @@ export class SplatMesh extends THREE.Mesh {
         if (!sinceLastBuildOnly) {
             this.setupDataTextures();
         } else {
-            this.updateDataTextures();
+            const splatCount = this.getSplatCount();
+            const fromSplat = this.lastBuildSplatCount;
+            const toSplat = splatCount - 1;
+            this.updateBaseDataFromSplatBuffers(fromSplat, toSplat);
+            this.updateDataTexturesFromBaseData(fromSplat, toSplat);
         }
         this.updateVisibleRegion(sinceLastBuildOnly);
     }
@@ -558,7 +562,7 @@ export class SplatMesh extends THREE.Mesh {
         // set up centers/colors data texture
         const centersColsTexSize = computeDataTextureSize(CENTER_COLORS_ELEMENTS_PER_TEXEL, 4);
         const paddedCentersCols = new Uint32Array(centersColsTexSize.x * centersColsTexSize.y * CENTER_COLORS_ELEMENTS_PER_TEXEL);
-        SplatMesh.updateCenterColorsPaddedData(0, splatCount, centers, colors, paddedCentersCols);
+        SplatMesh.updateCenterColorsPaddedData(0, splatCount - 1, centers, colors, paddedCentersCols);
 
         const centersColsTex = new THREE.DataTexture(paddedCentersCols, centersColsTexSize.x, centersColsTexSize.y,
                                                      THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
@@ -700,24 +704,28 @@ export class SplatMesh extends THREE.Mesh {
         }
     }
 
-    updateDataTextures() {
-        const splatCount = this.getSplatCount();
+    updateBaseDataFromSplatBuffers(fromSplat, toSplat) {
         const covarianceCompressionLevel = this.splatDataTextures['covariances'].compressionLevel;
-
         const shTextureDesc = this.splatDataTextures['sphericalHarmonics'];
         const shCompressionLevel = shTextureDesc ? shTextureDesc.compressionLevel : 0;
 
         this.fillSplatDataArrays(this.splatDataTextures.baseData.covariances,
                                  this.splatDataTextures.baseData.centers, this.splatDataTextures.baseData.colors,
                                  this.splatDataTextures.baseData.sphericalHarmonics, undefined, covarianceCompressionLevel,
-                                 shCompressionLevel, this.lastBuildSplatCount, splatCount - 1, this.lastBuildSplatCount);
+                                 shCompressionLevel, fromSplat, toSplat, fromSplat);
+    }
+
+    updateDataTexturesFromBaseData(fromSplat, toSplat) {
+        const covarianceCompressionLevel = this.splatDataTextures['covariances'].compressionLevel;
+        const shTextureDesc = this.splatDataTextures['sphericalHarmonics'];
+        const shCompressionLevel = shTextureDesc ? shTextureDesc.compressionLevel : 0;
 
         const covariancesTextureDescriptor = this.splatDataTextures['covariances'];
         const paddedCovariances = covariancesTextureDescriptor.data;
         const covariancesTexture = covariancesTextureDescriptor.texture;
-        const covarancesStartSplat = this.lastBuildSplatCount * COVARIANCES_ELEMENTS_PER_SPLAT;
-        const covariancesEndSplat = splatCount * COVARIANCES_ELEMENTS_PER_SPLAT;
-        for (let i = covarancesStartSplat; i < covariancesEndSplat; i++) {
+        const covarancesStartSplat = fromSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
+        const covariancesEndSplat = toSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
+        for (let i = covarancesStartSplat; i <= covariancesEndSplat; i++) {
             const covariance = this.splatDataTextures.baseData.covariances[i];
             paddedCovariances[i] = covariance;
         }
@@ -728,13 +736,13 @@ export class SplatMesh extends THREE.Mesh {
             const covaranceBytesPerElement = covarianceCompressionLevel ? 2 : 4;
             this.updateDataTexture(paddedCovariances, covariancesTextureDescriptor.texture, covariancesTextureDescriptor.size,
                                    covariancesTextureProps, COVARIANCES_ELEMENTS_PER_TEXEL, COVARIANCES_ELEMENTS_PER_SPLAT,
-                                   covaranceBytesPerElement, this.lastBuildSplatCount, splatCount - 1);
+                                   covaranceBytesPerElement, fromSplat, toSplat);
         }
 
         const centerColorsTextureDescriptor = this.splatDataTextures['centerColors'];
         const paddedCenterColors = centerColorsTextureDescriptor.data;
         const centerColorsTexture = centerColorsTextureDescriptor.texture;
-        SplatMesh.updateCenterColorsPaddedData(this.lastBuildSplatCount, splatCount, this.splatDataTextures.baseData.centers,
+        SplatMesh.updateCenterColorsPaddedData(fromSplat, toSplat, this.splatDataTextures.baseData.centers,
                                                this.splatDataTextures.baseData.colors, paddedCenterColors);
         const centerColorsTextureProps = this.renderer ? this.renderer.properties.get(centerColorsTexture) : null;
         if (!centerColorsTextureProps || !centerColorsTextureProps.__webglTexture) {
@@ -742,7 +750,7 @@ export class SplatMesh extends THREE.Mesh {
         } else {
             this.updateDataTexture(paddedCenterColors, centerColorsTextureDescriptor.texture, centerColorsTextureDescriptor.size,
                                    centerColorsTextureProps, CENTER_COLORS_ELEMENTS_PER_TEXEL, CENTER_COLORS_ELEMENTS_PER_SPLAT, 4,
-                                   this.lastBuildSplatCount, splatCount - 1);
+                                   fromSplat, toSplat);
         }
 
         const shData = this.splatDataTextures.baseData.sphericalHarmonics;
@@ -757,7 +765,7 @@ export class SplatMesh extends THREE.Mesh {
                     shTexture.needsUpdate = true;
                 } else {
                     this.updateDataTexture(paddedSHArray, shTexture, shTextureSize, shTextureProps, elementsPerTexel,
-                                           paddedSHComponentCount, shBytesPerElement, this.lastBuildSplatCount, splatCount - 1);
+                                           paddedSHComponentCount, shBytesPerElement, fromSplat, toSplat);
                 }
             };
 
@@ -767,7 +775,7 @@ export class SplatMesh extends THREE.Mesh {
             // Update for the case of a single texture for all spherical harmonics data
             if (shTextureDesc.textureCount === 1) {
                 const paddedSHArray = shTextureDesc.data;
-                for (let c = this.lastBuildSplatCount; c < splatCount; c++) {
+                for (let c = fromSplat; c <= toSplat; c++) {
                     const srcBase = shComponentCount * c;
                     const destBase = paddedSHComponentCount * c;
                     for (let i = 0; i < shComponentCount; i++) {
@@ -780,7 +788,7 @@ export class SplatMesh extends THREE.Mesh {
                 const shComponentCountPerChannel = shTextureDesc.componentCountPerChannel;
                 for (let t = 0; t < 3; t++) {
                     const paddedSHArray = shTextureDesc.data[t];
-                    for (let c = this.lastBuildSplatCount; c < splatCount; c++) {
+                    for (let c = fromSplat; c <= toSplat; c++) {
                         const srcBase = shComponentCount * c;
                         const destBase = paddedSHComponentCount * c;
                         if (shComponentCountPerChannel >= 3) {
@@ -798,7 +806,7 @@ export class SplatMesh extends THREE.Mesh {
         if (this.dynamicMode) {
             const transformIndexesTexDesc = this.splatDataTextures['tansformIndexes'];
             const paddedTransformIndexes = transformIndexesTexDesc.data;
-            for (let c = this.lastBuildSplatCount; c < splatCount; c++) {
+            for (let c = this.lastBuildSplatCount; c <= toSplat; c++) {
                 paddedTransformIndexes[c] = this.globalSplatIndexToSceneIndexMap[c];
             }
 
@@ -808,7 +816,7 @@ export class SplatMesh extends THREE.Mesh {
                 transformIndexesTexture.needsUpdate = true;
             } else {
                 this.updateDataTexture(paddedTransformIndexes, transformIndexesTexDesc.texture, transformIndexesTexDesc.szie,
-                                       transformIndexesTextureProps, 1, 1, 1, this.lastBuildSplatCount, splatCount - 1);
+                                       transformIndexesTextureProps, 1, 1, 1, this.lastBuildSplatCount, toSplat);
             }
         }
     }
@@ -881,8 +889,8 @@ export class SplatMesh extends THREE.Mesh {
     }
 
 
-    static updateCenterColorsPaddedData(to, from, centers, colors, paddedCenterColors) {
-        for (let c = to; c < from; c++) {
+    static updateCenterColorsPaddedData(from, to, centers, colors, paddedCenterColors) {
+        for (let c = from; c <= to; c++) {
             const colorsBase = c * 4;
             const centersBase = c * 3;
             const centerColorsBase = c * 4;
