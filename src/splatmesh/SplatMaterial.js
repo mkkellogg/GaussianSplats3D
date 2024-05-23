@@ -168,12 +168,9 @@ export class SplatMaterial {
                         vec4 sampledSH4567;
                         vec4 sampledSH891011;
 
-                        vec2 sampledSH01R;
-                        vec2 sampledSH23R;
-                        vec2 sampledSH01G;
-                        vec2 sampledSH23G;
-                        vec2 sampledSH01B;
-                        vec2 sampledSH23B;
+                        vec4 sampledSH0123R;
+                        vec4 sampledSH0123G;
+                        vec4 sampledSH0123B;
                         
                         if (sphericalHarmonicsMultiTextureMode == 0) {
                             sampledSH0123 = texture(sphericalHarmonicsTexture, getDataUV(6, 0, sphericalHarmonicsTextureSize));
@@ -183,15 +180,12 @@ export class SplatMaterial {
                             sh2 = vec3(sampledSH0123.a, sampledSH4567.rg);
                             sh3 = vec3(sampledSH4567.ba, sampledSH891011.r);
                         } else {
-                            sampledSH01R = texture(sphericalHarmonicsTextureR, getDataUV(4, 0, sphericalHarmonicsTextureSize)).rg;
-                            sampledSH23R = texture(sphericalHarmonicsTextureR, getDataUV(4, 1, sphericalHarmonicsTextureSize)).rg;
-                            sampledSH01G = texture(sphericalHarmonicsTextureG, getDataUV(4, 0, sphericalHarmonicsTextureSize)).rg;
-                            sampledSH23G = texture(sphericalHarmonicsTextureG, getDataUV(4, 1, sphericalHarmonicsTextureSize)).rg;
-                            sampledSH01B = texture(sphericalHarmonicsTextureB, getDataUV(4, 0, sphericalHarmonicsTextureSize)).rg;
-                            sampledSH23B = texture(sphericalHarmonicsTextureB, getDataUV(4, 1, sphericalHarmonicsTextureSize)).rg;
-                            sh1 = vec3(sampledSH01R.rg, sampledSH23R.r);
-                            sh2 = vec3(sampledSH01G.rg, sampledSH23G.r);
-                            sh3 = vec3(sampledSH01B.rg, sampledSH23B.r);
+                            sampledSH0123R = texture(sphericalHarmonicsTextureR, getDataUV(2, 0, sphericalHarmonicsTextureSize));
+                            sampledSH0123G = texture(sphericalHarmonicsTextureG, getDataUV(2, 0, sphericalHarmonicsTextureSize));
+                            sampledSH0123B = texture(sphericalHarmonicsTextureB, getDataUV(2, 0, sphericalHarmonicsTextureSize));
+                            sh1 = vec3(sampledSH0123R.rgb);
+                            sh2 = vec3(sampledSH0123G.rgb);
+                            sh3 = vec3(sampledSH0123B.rgb);
                         }
                     `;
                 } else {
@@ -259,17 +253,14 @@ export class SplatMaterial {
                                 sh7 = vec3(sampledSH16171819.ba, sampledSH20212223.r);
                                 sh8 = sampledSH20212223.gba;
                             } else {
-                                vec2 sampledSH45R = texture(sphericalHarmonicsTextureR, getDataUV(4, 2, sphericalHarmonicsTextureSize)).rg;
-                                vec2 sampledSH67R = texture(sphericalHarmonicsTextureR, getDataUV(4, 3, sphericalHarmonicsTextureSize)).rg;
-                                vec2 sampledSH45G = texture(sphericalHarmonicsTextureG, getDataUV(4, 2, sphericalHarmonicsTextureSize)).rg;
-                                vec2 sampledSH67G = texture(sphericalHarmonicsTextureG, getDataUV(4, 3, sphericalHarmonicsTextureSize)).rg;
-                                vec2 sampledSH45B = texture(sphericalHarmonicsTextureB, getDataUV(4, 2, sphericalHarmonicsTextureSize)).rg;
-                                vec2 sampledSH67B = texture(sphericalHarmonicsTextureB, getDataUV(4, 3, sphericalHarmonicsTextureSize)).rg;
-                                sh4 = vec3(sampledSH23R.g, sampledSH45R.rg);
-                                sh5 = vec3(sampledSH67R.rg, sampledSH23G.g);
-                                sh6 = vec3(sampledSH45G.rg, sampledSH67G.r);
-                                sh7 = vec3(sampledSH67G.g, sampledSH23B.g, sampledSH45B.r);
-                                sh8 = vec3(sampledSH45B.g, sampledSH67B.rg);
+                                vec4 sampledSH4567R = texture(sphericalHarmonicsTextureR, getDataUV(2, 1, sphericalHarmonicsTextureSize));
+                                vec4 sampledSH4567G = texture(sphericalHarmonicsTextureG, getDataUV(2, 1, sphericalHarmonicsTextureSize));
+                                vec4 sampledSH4567B = texture(sphericalHarmonicsTextureB, getDataUV(2, 1, sphericalHarmonicsTextureSize));
+                                sh4 = vec3(sampledSH0123R.a, sampledSH4567R.rg);
+                                sh5 = vec3(sampledSH4567R.ba, sampledSH0123G.a);
+                                sh6 = vec3(sampledSH4567G.rgb);
+                                sh7 = vec3(sampledSH4567G.a, sampledSH0123B.a, sampledSH4567B.r);
+                                sh8 = vec3(sampledSH4567B.gba);
                             }
 
                             if (sphericalHarmonics8BitMode == 1) {
