@@ -153,6 +153,7 @@ Parameters for `addSplatScene()`
 | `rotation` | Rotation of the scene represented as a quaternion, defaults to `[0, 0, 0, 1]` (identity quaternion).
 | `scale` | Scene's scale, defaults to `[1, 1, 1]`.
 | `streamView` | Stream the scene's splat data and allow the scene to be rendered and viewed as the splats are loaded. Option is only valid for `addSplatScene()`, and not for `addSplatScenes()`.
+| `format` | Format supports a specified value. Include the following {'Splat':0, 'KSplat':1, 'Ply':2 }.  Defaults to `null`. Format If not set, will get the suffix from the url.
 
 <br>
 
