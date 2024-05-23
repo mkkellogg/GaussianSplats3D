@@ -42,7 +42,7 @@ export class UncompressedSplatArray {
         FRC20: 34,
         FRC21: 35,
         FRC22: 36,
-        FRC23: 37,
+        FRC23: 37
     };
 
     constructor(sphericalHarmonicsDegree = 0) {
@@ -55,6 +55,23 @@ export class UncompressedSplatArray {
     }
 
     static createSplat(sphericalHarmonicsDegree = 0) {
+        // switch (sphericalHarmonicsDegree) {
+        //     case 0:
+        //         return [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+        //     case 1:
+        //         return [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
+        //                 0, 0, 0,
+        //                 0, 0, 0,
+        //                 0, 0, 0];
+        //     case 2:
+        //         return [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
+        //                 0, 0, 0,
+        //                 0, 0, 0,
+        //                 0, 0, 0,
+        //                 0, 0, 0, 0, 0,
+        //                 0, 0, 0, 0, 0,
+        //                 0, 0, 0, 0, 0];
+        // }
         const baseSplat = [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
         let shEntries = getSphericalHarmonicsComponentCountForDegree(sphericalHarmonicsDegree);
         for (let i = 0; i < shEntries; i++) baseSplat.push(0);
