@@ -525,9 +525,9 @@ export class SplatMesh extends THREE.Mesh {
 
         this.disposeTextures();
 
-        const computeDataTextureSize = (elementsPerTexel, elementsPerSplatl) => {
+        const computeDataTextureSize = (elementsPerTexel, elementsPerSplat) => {
             const texSize = new THREE.Vector2(4096, 1024);
-            while (texSize.x * texSize.y * elementsPerTexel < maxSplatCount * elementsPerSplatl) texSize.y *= 2;
+            while (texSize.x * texSize.y * elementsPerTexel < maxSplatCount * elementsPerSplat) texSize.y *= 2;
             return texSize;
         };
 
@@ -597,7 +597,8 @@ export class SplatMesh extends THREE.Mesh {
 
             let paddedSHComponentCount = shComponentCount;
             if (paddedSHComponentCount % 2 !== 0) paddedSHComponentCount++;
-            let shElementsPerTexel = 4;
+            const shElementsPerTexel = this.minSphericalHarmonicsDegree === 2 ? 4 : 2;
+            const texelFormat = shElementsPerTexel === 4 ? THREE.RGBAFormat : THREE.RGFormat;
             let shTexSize = computeDataTextureSize(shElementsPerTexel, paddedSHComponentCount);
 
             // Based on my own observations across multiple devices, OSes and browsers, using textures that have one dimension
@@ -619,7 +620,7 @@ export class SplatMesh extends THREE.Mesh {
                     }
                 }
 
-                const shTexture = new THREE.DataTexture(paddedSHArray, shTexSize.x, shTexSize.y, THREE.RGBAFormat, shTextureType);
+                const shTexture = new THREE.DataTexture(paddedSHArray, shTexSize.x, shTexSize.y, texelFormat, shTextureType);
                 shTexture.needsUpdate = true;
                 this.material.uniforms.sphericalHarmonicsTexture.value = shTexture;
                 this.splatDataTextures['sphericalHarmonics'] = {
@@ -629,11 +630,11 @@ export class SplatMesh extends THREE.Mesh {
                     'textureCount': 1,
                     'texture': shTexture,
                     'size': shTexSize,
-                    'compressionLevel': shCompressionLevel
+                    'compressionLevel': shCompressionLevel,
+                    'elementsPerTexel': shElementsPerTexel
                 };
             // Use three textures for spherical harmonics data, one per color channel
             } else {
-                shElementsPerTexel = 2;
                 const shComponentCountPerChannel = shComponentCount / 3;
                 paddedSHComponentCount = shComponentCountPerChannel;
                 if (paddedSHComponentCount % 2 !== 0) paddedSHComponentCount++;
@@ -659,7 +660,7 @@ export class SplatMesh extends THREE.Mesh {
                         }
                     }
 
-                    const shTexture = new THREE.DataTexture(paddedSHArray, shTexSize.x, shTexSize.y, THREE.RGFormat, shTextureType);
+                    const shTexture = new THREE.DataTexture(paddedSHArray, shTexSize.x, shTexSize.y, texelFormat, shTextureType);
                     shTextures.push(shTexture);
                     shTexture.needsUpdate = true;
                     textureUniforms[t].value = shTexture;
@@ -674,7 +675,8 @@ export class SplatMesh extends THREE.Mesh {
                     'textureCount': 3,
                     'textures': shTextures,
                     'size': shTexSize,
-                    'compressionLevel': shCompressionLevel
+                    'compressionLevel': shCompressionLevel,
+                    'elementsPerTexel': shElementsPerTexel
                 };
             }
 
@@ -782,7 +784,8 @@ export class SplatMesh extends THREE.Mesh {
                         paddedSHArray[destBase + i] = shData[srcBase + i];
                     }
                 }
-                updateTexture(shTextureDesc.texture, shTextureDesc.size, 4, paddedSHArray, paddedSHComponentCount);
+                updateTexture(shTextureDesc.texture, shTextureDesc.size,
+                              shTextureDesc.elementsPerTexel, paddedSHArray, paddedSHComponentCount);
             // Update for the case of spherical harmonics data split among three textures, one for each color channel
             } else {
                 const shComponentCountPerChannel = shTextureDesc.componentCountPerChannel;
@@ -798,7 +801,8 @@ export class SplatMesh extends THREE.Mesh {
                             }
                         }
                     }
-                    updateTexture(shTextureDesc.textures[t], shTextureDesc.size, 2, paddedSHArray, paddedSHComponentCount);
+                    updateTexture(shTextureDesc.textures[t], shTextureDesc.size,
+                                  shTextureDesc.elementsPerTexel, paddedSHArray, paddedSHComponentCount);
                 }
             }
         }

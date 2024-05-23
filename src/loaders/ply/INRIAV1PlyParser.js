@@ -15,6 +15,16 @@ export class INRIAV1PlyParser {
 
     static Fields = [[...INRIAV1PlyParser.BaseFields], [...INRIAV1PlyParser.BaseFields, ...INRIAV1PlyParser.SphericalHarmonicsFields]];
 
+    static FieldSize = {
+        'double': 8,
+        'int': 4,
+        'uint': 4,
+        'float': 4,
+        'short': 2,
+        'ushort': 2,
+        'uchar': 1,
+    };
+
     static checkTextForEndHeader(endHeaderTestText) {
         if (endHeaderTestText.includes(INRIAV1PlyParser.HeaderEndToken)) {
             return true;
@@ -28,106 +38,124 @@ export class INRIAV1PlyParser {
         return INRIAV1PlyParser.checkTextForEndHeader(endHeaderTestText);
     }
 
-    static decodeHeaderLines(headerLines, startLine = 0) {
-        const prunedLines = [];
+    static extractHeaderSection(headerLines, startLine = 0) {
+        const extractedLines = [];
 
-        let splatCount = 0;
-        let propertyTypes = {};
-        let vertexMarkerFound = false;
+        let processingSection = false;
         let endLine = -1;
+        let elementCount = -1;
+        let propertyTypes = {};
 
         for (let i = startLine; i < headerLines.length; i++) {
             const line = headerLines[i].trim();
-            if (line.startsWith('element vertex')) {
-                if (vertexMarkerFound) {
+            if (line.startsWith('element')) {
+                if (processingSection) {
                     break;
                 } else {
-                    vertexMarkerFound = true;
+                    processingSection = true;
                     startLine = i;
                     endLine = i;
+                    const elementCountMatch = line.match(/\d+/);
+                    if (elementCountMatch) {
+                        elementCount = parseInt(elementCountMatch[0]);
+                    }
+                }
+            } else if (line.startsWith('property')) {
+                const propertyMatch = line.match(/(\w+)\s+(\w+)\s+(\w+)/);
+                if (propertyMatch) {
+                    const propertyType = propertyMatch[2];
+                    const propertyName = propertyMatch[3];
+                    propertyTypes[propertyName] = propertyType;
                 }
             }
-            if (vertexMarkerFound) {
-                prunedLines.push(line);
-                if (line.startsWith('element vertex')) {
-                    const splatCountMatch = line.match(/\d+/);
-                    if (splatCountMatch) {
-                        splatCount = parseInt(splatCountMatch[0]);
-                    }
-                } else if (line.startsWith('property')) {
-                    const propertyMatch = line.match(/(\w+)\s+(\w+)\s+(\w+)/);
-                    if (propertyMatch) {
-                        const propertyType = propertyMatch[2];
-                        const propertyName = propertyMatch[3];
-                        propertyTypes[propertyName] = propertyType;
-                    }
-                } else if (line === INRIAV1PlyParser.HeaderEndToken) {
+            if (processingSection) {
+                extractedLines.push(line);
+                if (line === INRIAV1PlyParser.HeaderEndToken) {
                     break;
                 }
                 endLine++;
             }
         }
 
-        let bytesPerSplat = 0;
-        let fieldOffsets = {};
-        const fieldSize = {
-            'double': 8,
-            'int': 4,
-            'uint': 4,
-            'float': 4,
-            'short': 2,
-            'ushort': 2,
-            'uchar': 1,
-        };
-
         const fieldNames = [];
+        const fieldOffsets = {};
+        let bytesPerEntry = 0;
         for (let fieldName in propertyTypes) {
             if (propertyTypes.hasOwnProperty(fieldName)) {
                 fieldNames.push(fieldName);
                 const type = propertyTypes[fieldName];
-                fieldOffsets[fieldName] = bytesPerSplat;
-                bytesPerSplat += fieldSize[type];
+                fieldOffsets[fieldName] = bytesPerEntry;
+                bytesPerEntry += INRIAV1PlyParser.FieldSize[type];
             }
         }
 
+        return {
+            'lines': extractedLines,
+            'startLine': startLine,
+            'endLine': endLine,
+            'elementCount': elementCount,
+            'propertyTypes': propertyTypes,
+            'fieldNames': fieldNames,
+            'fieldOffsets': fieldOffsets,
+            'bytesPerEntry': bytesPerEntry
+        };
+
+    }
+
+    static decodeSphericalHarmonicsFromHeaderSection(headerSection) {
         let sphericalHarmonicsFieldCount = 0;
-        let sphericalHarmonicsCoefficientsPerChannel = 0;
-        for (let fieldName of fieldNames) {
+        let coefficientsPerChannel = 0;
+        for (let fieldName of headerSection.fieldNames) {
             if (fieldName.startsWith('f_rest')) sphericalHarmonicsFieldCount++;
         }
-        sphericalHarmonicsCoefficientsPerChannel = sphericalHarmonicsFieldCount / 3;
-        let sphericalHarmonicsDegree = 0;
-        if (sphericalHarmonicsCoefficientsPerChannel >= 3) sphericalHarmonicsDegree = 1;
-        if (sphericalHarmonicsCoefficientsPerChannel >= 8) sphericalHarmonicsDegree = 2;
+        coefficientsPerChannel = sphericalHarmonicsFieldCount / 3;
+        let degree = 0;
+        if (coefficientsPerChannel >= 3) degree = 1;
+        if (coefficientsPerChannel >= 8) degree = 2;
 
-        let sphericalHarmonicsDegree1Fields = [];
-        let sphericalHarmonicsDegree2Fields = [];
+        let degree1Fields = [];
+        let degree2Fields = [];
 
         for (let rgb = 0; rgb < 3; rgb++) {
-            if (sphericalHarmonicsDegree >= 1) {
+            if (degree >= 1) {
                 for (let i = 0; i < 3; i++) {
-                    sphericalHarmonicsDegree1Fields.push('f_rest_' + (i + sphericalHarmonicsCoefficientsPerChannel * rgb));
+                    degree1Fields.push('f_rest_' + (i + coefficientsPerChannel * rgb));
                 }
             }
-            if (sphericalHarmonicsDegree >= 2) {
+            if (degree >= 2) {
                 for (let i = 0; i < 5; i++) {
-                    sphericalHarmonicsDegree2Fields.push('f_rest_' + (i + sphericalHarmonicsCoefficientsPerChannel * rgb + 3));
+                    degree2Fields.push('f_rest_' + (i + coefficientsPerChannel * rgb + 3));
                 }
             }
         }
 
         return {
-            'startLine': startLine,
-            'endLine': endLine,
+            'degree': degree,
+            'coefficientsPerChannel': coefficientsPerChannel,
+            'degree1Fields': degree1Fields,
+            'degree2Fields': degree2Fields
+        };
+    }
+
+    static decodeHeaderLines(headerLines) {
+        const prunedLines = [];
+
+        const headerFirstSection = INRIAV1PlyParser.extractHeaderSection(headerLines, 0);
+        headerLines = headerFirstSection.lines;
+        const splatCount = headerFirstSection.elementCount;
+        const propertyTypes = headerFirstSection.propertyTypes;
+        const sphericalHarmonics = INRIAV1PlyParser.decodeSphericalHarmonicsFromHeaderSection(headerFirstSection);
+
+        return {
             'splatCount': splatCount,
             'propertyTypes': propertyTypes,
             'headerLines': prunedLines,
-            'bytesPerSplat': bytesPerSplat,
-            'fieldOffsets': fieldOffsets,
-            'sphericalHarmonicsDegree': sphericalHarmonicsDegree,
-            'sphericalHarmonicsCoefficientsPerChannel': sphericalHarmonicsCoefficientsPerChannel,
-            'sphericalHarmonicsDegree1Fields': sphericalHarmonicsDegree1Fields,
-            'sphericalHarmonicsDegree2Fields': sphericalHarmonicsDegree2Fields
+            'bytesPerSplat': headerFirstSection.bytesPerEntry,
+            'fieldOffsets': headerFirstSection.fieldOffsets,
+            'sphericalHarmonicsDegree': sphericalHarmonics.degree,
+            'sphericalHarmonicsCoefficientsPerChannel': sphericalHarmonics.coefficientsPerChannel,
+            'sphericalHarmonicsDegree1Fields': sphericalHarmonics.degree1Fields,
+            'sphericalHarmonicsDegree2Fields': sphericalHarmonics.degree2Fields
         };
     }
 
@@ -159,7 +187,6 @@ export class INRIAV1PlyParser {
         }
 
         return INRIAV1PlyParser.decodeHeaderText(headerText);
-
     }
 
     static findVertexData(plyBuffer, header) {
