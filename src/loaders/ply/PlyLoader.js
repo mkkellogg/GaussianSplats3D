@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PlyParser } from './PlyParser.js';
+import { PlyParserUtils } from './PlyParserUtils.js';
 import { INRIAV1PlyParser } from './INRIAV1PlyParser.js';
 import { PlayCanvasCompressedPlyParser } from './PlayCanvasCompressedPlyParser.js';
 import { PlyFormat } from './PlyFormat.js';
@@ -60,6 +61,8 @@ export class PlyLoader {
 
         const textDecoder = new TextDecoder();
 
+        const inriaV1PlyParser = new INRIAV1PlyParser();
+
         const localOnProgress = (percent, percentLabel, chunkData) => {
             const loadComplete = percent >= 100;
             if (streamLoadData) {
@@ -76,10 +79,10 @@ export class PlyLoader {
 
                 if (!headerLoaded) {
                     headerText += textDecoder.decode(chunkData);
-                    if (PlyParser.checkTextForEndHeader(headerText)) {
-                        const plyFormat = PlyParser.determineHeaderFormatFromHeaderText(headerText);
+                    if (PlyParserUtils.checkTextForEndHeader(headerText)) {
+                        const plyFormat = PlyParserUtils.determineHeaderFormatFromHeaderText(headerText);
                         if (plyFormat === PlyFormat.INRIAV1) {
-                            header = INRIAV1PlyParser.decodeHeaderText(headerText);
+                            header = inriaV1PlyParser.decodeHeaderText(headerText);
                             maxSplatCount = header.splatCount;
                             readyToLoadSplatData = true;
                             compressed = false;
@@ -148,8 +151,9 @@ export class PlyLoader {
                                                                                                     dataToParse, 0,
                                                                                                     streamBufferOut, outOffset);
                             } else {
-                                INRIAV1PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1, dataToParse, 0,
-                                                                                streamBufferOut, outOffset, outSphericalHarmonicsDegree);
+                                inriaV1PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1, dataToParse,
+                                                                                       0, streamBufferOut, outOffset,
+                                                                                       outSphericalHarmonicsDegree);
                             }
 
                             splatCount = newSplatCount;

@@ -136,7 +136,7 @@ export class Viewer {
         this.focalAdjustment = options.focalAdjustment || 1.0;
 
         // Specify the maximum screen-space splat size, can help deal with large splats that get too unwieldy
-        this.maxScreenSpaceSplatSize = options.maxScreenSpaceSplatSize || 2048;
+        this.maxScreenSpaceSplatSize = options.maxScreenSpaceSplatSize || 1024;
 
         // The verbosity of console logging
         this.logLevel = options.logLevel || LogLevel.None;

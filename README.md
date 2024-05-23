@@ -147,6 +147,7 @@ Parameters for `addSplatScene()`
 
 | Parameter | Purpose
 | --- | ---
+| `format` | Force the loader to assume the specified file format when loading a splat scene. This is useful when loading from a URL where there is no file extension. Valid values are defined in the `SceneFormat` enum: `Ply`, `Splat`, and `KSplat`.
 | `splatAlphaRemovalThreshold` | Tells `addSplatScene()` to ignore any splats with an alpha less than the specified value (valid range: 0 - 255). Defaults to `1`.
 | `showLoadingUI` | Displays a loading spinner and/or loading progress bar while the scene is loading.  Defaults to `true`.
 | `position` | Position of the scene, acts as an offset from its default position. Defaults to `[0, 0, 0]`.
