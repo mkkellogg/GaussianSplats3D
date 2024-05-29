@@ -145,6 +145,11 @@ export class Viewer {
         // Valid values are 0 - 3. Default value is 0.
         this.sphericalHarmonicsDegree = options.sphericalHarmonicsDegree || 0;
 
+        // When true, will include a usage of per-scene attributes in the splat shader, such as opacity. Default is false for
+        // performance reasons. These properties are separate from transform properties (scale, rotation, position) that are
+        // enabled by the 'dynamicScene' parameter.
+        this.enablePerScenePropertiesInSplatShader = options.enablePerScenePropertiesInSplatShader || false;
+
         this.createSplatMesh();
 
         this.controls = null;
@@ -218,8 +223,8 @@ export class Viewer {
     }
 
     createSplatMesh() {
-        this.splatMesh = new SplatMesh(this.dynamicScene, this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio,
-                                       this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased,
+        this.splatMesh = new SplatMesh(this.dynamicScene, this.enablePerScenePropertiesInSplatShader, this.halfPrecisionCovariancesOnGPU,
+                                       this.devicePixelRatio, this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased,
                                        this.maxScreenSpaceSplatSize, this.logLevel, this.sphericalHarmonicsDegree);
         this.splatMesh.frustumCulled = false;
     }

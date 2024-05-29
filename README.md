@@ -310,6 +310,7 @@ Advanced `Viewer` parameters
 | `focalAdjustment` | Hacky, non-scientific parameter for tweaking focal length related calculations. For scenes with very small gaussians & small details, increasing this value can help improve visual quality. Default value is 1.0.
 | `logLevel` | Verbosity of the console logging. Defaults to `GaussianSplats3D.LogLevel.None`.
 | `sphericalHarmonicsDegree` | Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene). Valid values are 0, 1, or 2. Default value is 0.
+| `enablePerScenePropertiesInSplatShader` | When true, will include a usage of per-scene attributes in the splat shader, such as opacity. Default is false for performance reasons. These properties are separate from transform properties (scale, rotation, position) that are enabled by the 'dynamicScene' parameter.
 <br>
 
 ### Creating KSPLAT files

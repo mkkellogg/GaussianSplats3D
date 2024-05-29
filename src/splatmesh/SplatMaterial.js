@@ -7,6 +7,8 @@ export class SplatMaterial {
      * Build the Three.js material that is used to render the splats.
      * @param {number} dynamicMode If true, it means the scene geometry represented by this splat mesh is not stationary or
      *                             that the splat count might change
+     * @param {boolean} enablePerSceneProperties If true will include usage of per-scene attributes in the shader,
+     *                                           such as opacity. Default is false for performance reasons.
      * @param {boolean} antialiased If true, calculate compensation factor to deal with gaussians being rendered at a significantly
      *                              different resolution than that of their training
      * @param {number} maxScreenSpaceSplatSize The maximum clip space splat size
@@ -15,8 +17,8 @@ export class SplatMaterial {
      * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
      * @return {THREE.ShaderMaterial}
      */
-    static build(dynamicMode = false, antialiased = false, maxScreenSpaceSplatSize = 2048,
-                  splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
+    static build(dynamicMode = false, enablePerSceneProperties = false, antialiased = false, maxScreenSpaceSplatSize = 2048,
+                 splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
         // Contains the code to project 3D covariance to 2D and from there calculate the quad (using the eigen vectors of the
         // 2D covariance) that is ultimately rasterized
         let vertexShaderSource = `
@@ -32,11 +34,23 @@ export class SplatMaterial {
             uniform highp sampler2D sphericalHarmonicsTextureG;
             uniform highp sampler2D sphericalHarmonicsTextureB;`;
 
-        if (dynamicMode) {
+        if (enablePerSceneProperties || dynamicMode) {
             vertexShaderSource += `
                 uniform highp usampler2D sceneIndexesTexture;
-                uniform highp mat4 transforms[${Constants.MaxScenes}];
                 uniform vec2 sceneIndexesTextureSize;
+            `;
+        }
+
+        if (enablePerSceneProperties) {
+            vertexShaderSource += `
+                uniform float sceneOpacity[${Constants.MaxScenes}];
+                uniform int sceneVisibility[${Constants.MaxScenes}];
+            `;
+        }
+
+        if (dynamicMode) {
+            vertexShaderSource += `
+                uniform highp mat4 transforms[${Constants.MaxScenes}];
             `;
         }
 
@@ -114,9 +128,25 @@ export class SplatMaterial {
                 uvec4 sampledCenterColor = texture(centersColorsTexture, getDataUV(1, 0, centersColorsTextureSize));
                 vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));`;
 
-            if (dynamicMode) {
+            if (dynamicMode || enablePerSceneProperties) {
                 vertexShaderSource += `
                     uint sceneIndex = texture(sceneIndexesTexture, getDataUV(1, 0, sceneIndexesTextureSize)).r;
+                `;
+            }
+
+            if (enablePerSceneProperties) {
+                vertexShaderSource += `
+                    float splatOpacityFromScene = sceneOpacity[sceneIndex];
+                    int sceneVisible = sceneVisibility[sceneIndex];
+                    if (splatOpacityFromScene <= 0.01 || sceneVisible == 0) {
+                        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+                        return;
+                    }
+                `;
+            }
+
+            if (dynamicMode) {
+                vertexShaderSource += `
                     mat4 transform = transforms[sceneIndex];
                     mat4 transformModelViewMatrix = modelViewMatrix * transform;
                 `;
@@ -415,7 +445,15 @@ export class SplatMaterial {
                     opacityAdjust *= distanceLoadFadeInFactor;
                     vColor.a *= opacityAdjust;
                 }
+                `;
 
+            if (enablePerSceneProperties) {
+                vertexShaderSource += `
+                     vColor.a *= splatOpacityFromScene;
+                `;
+            }
+
+            vertexShaderSource += `
                 vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) *
                                  basisViewport * 2.0 * inverseFocalAdjustment;
 
@@ -566,11 +604,38 @@ export class SplatMaterial {
             }
         };
 
-        if (dynamicMode) {
+        if (dynamicMode || enablePerSceneProperties) {
             uniforms['sceneIndexesTexture'] = {
                 'type': 't',
                 'value': null
             };
+            uniforms['sceneIndexesTextureSize'] = {
+                'type': 'v2',
+                'value': new THREE.Vector2(1024, 1024)
+            };
+        }
+
+        if (enablePerSceneProperties) {
+            const sceneOpacity = [];
+            for (let i = 0; i < Constants.MaxScenes; i++) {
+                sceneOpacity.push(1.0);
+            }
+            uniforms['sceneOpacity'] ={
+                'type': 'f',
+                'value': sceneOpacity
+            };
+
+            const sceneVisibility = [];
+            for (let i = 0; i < Constants.MaxScenes; i++) {
+                sceneVisibility.push(1);
+            }
+            uniforms['sceneVisibility'] ={
+                'type': 'i',
+                'value': sceneVisibility
+            };
+        }
+
+        if (dynamicMode) {
             const transformMatrices = [];
             for (let i = 0; i < Constants.MaxScenes; i++) {
                 transformMatrices.push(new THREE.Matrix4());
@@ -578,10 +643,6 @@ export class SplatMaterial {
             uniforms['transforms'] = {
                 'type': 'mat4',
                 'value': transformMatrices
-            };
-            uniforms['sceneIndexesTextureSize'] = {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
             };
         }
 
