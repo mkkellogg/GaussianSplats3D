@@ -34,9 +34,9 @@ export class SplatMaterial {
 
         if (dynamicMode) {
             vertexShaderSource += `
-                uniform highp usampler2D transformIndexesTexture;
+                uniform highp usampler2D sceneIndexesTexture;
                 uniform highp mat4 transforms[${Constants.MaxScenes}];
-                uniform vec2 transformIndexesTextureSize;
+                uniform vec2 sceneIndexesTextureSize;
             `;
         }
 
@@ -116,8 +116,8 @@ export class SplatMaterial {
 
             if (dynamicMode) {
                 vertexShaderSource += `
-                    uint transformIndex = texture(transformIndexesTexture, getDataUV(1, 0, transformIndexesTextureSize)).r;
-                    mat4 transform = transforms[transformIndex];
+                    uint sceneIndex = texture(sceneIndexesTexture, getDataUV(1, 0, sceneIndexesTextureSize)).r;
+                    mat4 transform = transforms[sceneIndex];
                     mat4 transformModelViewMatrix = modelViewMatrix * transform;
                 `;
             } else {
@@ -567,7 +567,7 @@ export class SplatMaterial {
         };
 
         if (dynamicMode) {
-            uniforms['transformIndexesTexture'] = {
+            uniforms['sceneIndexesTexture'] = {
                 'type': 't',
                 'value': null
             };
@@ -579,7 +579,7 @@ export class SplatMaterial {
                 'type': 'mat4',
                 'value': transformMatrices
             };
-            uniforms['transformIndexesTextureSize'] = {
+            uniforms['sceneIndexesTextureSize'] = {
                 'type': 'v2',
                 'value': new THREE.Vector2(1024, 1024)
             };

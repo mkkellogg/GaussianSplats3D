@@ -1013,7 +1013,7 @@ export class Viewer {
                 if (!this.gpuAcceleratedSort && this.sortWorker) {
                     this.sortWorker.postMessage({
                         'centers': buildResults.centers.buffer,
-                        'transformIndexes': buildResults.sceneIndexes.buffer,
+                        'sceneIndexes': buildResults.sceneIndexes.buffer,
                         'range': {
                             'from': buildResults.from,
                             'to': buildResults.to,
