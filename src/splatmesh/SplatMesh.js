@@ -9,7 +9,7 @@ import { uintEncodedFloat, rgbaArrayToInteger } from '../Util.js';
 import { Constants } from '../Constants.js';
 import { SceneRevealMode } from '../SceneRevealMode.js';
 import { LogLevel } from '../LogLevel.js';
-import { getSphericalHarmonicsComponentCountForDegree } from '../Util.js';
+import { clamp, getSphericalHarmonicsComponentCountForDegree } from '../Util.js';
 
 const dummyGeometry = new THREE.BufferGeometry();
 const dummyMaterial = new THREE.MeshBasicMaterial();
@@ -32,7 +32,7 @@ const VISIBLE_REGION_EXPANSION_DELTA = 1;
  */
 export class SplatMesh extends THREE.Mesh {
 
-    constructor(dynamicMode = true, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
+    constructor(dynamicMode = true, enablePerScenePropertiesInShader = false, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
                 enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false,
                 antialiased = false, maxScreenSpaceSplatSize = 1024, logLevel = LogLevel.None, sphericalHarmonicsDegree = 0) {
         super(dummyGeometry, dummyMaterial);
@@ -64,6 +64,10 @@ export class SplatMesh extends THREE.Mesh {
         // Degree 0 means no spherical harmonics
         this.sphericalHarmonicsDegree = sphericalHarmonicsDegree;
         this.minSphericalHarmonicsDegree = 0;
+        // When true, will include a usage of per-scene attributes in the shader, such as opacity. Default is false for
+        // performance reasons. These properties are separate from transform properties (scale, rotation, position) that are
+        // enabled by the 'dynamicScene' parameter.
+        this.enablePerScenePropertiesInShader = enablePerScenePropertiesInShader;
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
         // Special octree tailored to SplatMesh instances
@@ -316,8 +320,9 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildMaxSplatCount = 0;
             this.disposeMeshData();
             this.geometry = SplatGeometry.build(maxSplatCount);
-            this.material = SplatMaterial.build(this.dynamicMode, this.antialiased, this.maxScreenSpaceSplatSize,
-                                                this.splatScale, this.pointCloudModeEnabled, this.minSphericalHarmonicsDegree);
+            this.material = SplatMaterial.build(this.dynamicMode, this.enablePerScenePropertiesInShader, this.antialiased,
+                                                this.maxScreenSpaceSplatSize, this.splatScale, this.pointCloudModeEnabled,
+                                                this.minSphericalHarmonicsDegree);
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
@@ -685,14 +690,13 @@ export class SplatMesh extends THREE.Mesh {
             this.material.uniformsNeedUpdate = true;
         }
 
-        if (this.dynamicMode) {
+        if (this.dynamicMode || this.enablePerScenePropertiesInShader) {
             const sceneIndexesTexSize = computeDataTextureSize(SCENE_INDEXES_ELEMENTS_PER_TEXEL, 4);
             const paddedTransformIndexes = new Uint32Array(sceneIndexesTexSize.x *
                                                            sceneIndexesTexSize.y * SCENE_INDEXES_ELEMENTS_PER_TEXEL);
             for (let c = 0; c < splatCount; c++) paddedTransformIndexes[c] = this.globalSplatIndexToSceneIndexMap[c];
-            const sceneIndexesTexture = new THREE.DataTexture(paddedTransformIndexes, sceneIndexesTexSize.x,
-                                                                  sceneIndexesTexSize.y, THREE.RedIntegerFormat,
-                                                                  THREE.UnsignedIntType);
+            const sceneIndexesTexture = new THREE.DataTexture(paddedTransformIndexes, sceneIndexesTexSize.x, sceneIndexesTexSize.y,
+                                                              THREE.RedIntegerFormat, THREE.UnsignedIntType);
             sceneIndexesTexture.internalFormat = 'R32UI';
             sceneIndexesTexture.needsUpdate = true;
             this.material.uniforms.sceneIndexesTexture.value = sceneIndexesTexture;
@@ -999,6 +1003,13 @@ export class SplatMesh extends THREE.Mesh {
                 if (this.dynamicMode) {
                     for (let i = 0; i < this.scenes.length; i++) {
                         this.material.uniforms.transforms.value[i].copy(this.getScene(i).transform);
+                    }
+                }
+                if (this.enablePerScenePropertiesInShader) {
+                    for (let i = 0; i < this.scenes.length; i++) {
+                        this.material.uniforms.sceneOpacity.value[i] = clamp(this.getScene(i).opacity, 0.0, 1.0);
+                        this.material.uniforms.sceneVisibility.value[i] = this.getScene(i).visible ? 1 : 0;
+                        this.material.uniformsNeedUpdate = true;
                     }
                 }
                 this.material.uniformsNeedUpdate = true;
