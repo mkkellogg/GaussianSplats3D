@@ -16,7 +16,7 @@
 
 EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* centers, void* precomputedDistances, 
                                              int* mappedDistances, unsigned int * frequencies, float* modelViewProj,
-                                             unsigned int* indexesOut,  unsigned int* transformIndexes, float* transforms,
+                                             unsigned int* indexesOut,  unsigned int* sceneIndexes, float* transforms,
                                              unsigned int distanceMapRange, unsigned int sortCount, unsigned int renderCount,
                                              unsigned int splatCount, bool usePrecomputedDistances, bool useIntegerSort,
                                              bool dynamicMode) {
@@ -43,14 +43,14 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
                 v128_t b;
                 for (unsigned int i = sortStart; i < renderCount; i++) {
                     unsigned int realIndex = indexes[i];
-                    unsigned int transformIndex = transformIndexes[realIndex];
-                    if ((int)transformIndex != lastTransformIndex) {
-                        float* transform = &transforms[transformIndex * 16];
+                    unsigned int sceneIndex = sceneIndexes[realIndex];
+                    if ((int)sceneIndex != lastTransformIndex) {
+                        float* transform = &transforms[sceneIndex * 16];
                         computeMatMul4x4ThirdRow(modelViewProj, transform, fMVPTRow3);
                         int iMVPTRow3[] = {(int)(fMVPTRow3[0] * 1000.0), (int)(fMVPTRow3[1] * 1000.0),
                                            (int)(fMVPTRow3[2] * 1000.0), (int)(fMVPTRow3[3] * 1000.0)};
                         b = wasm_v128_load(&iMVPTRow3[0]);
-                        lastTransformIndex = (int)transformIndex;
+                        lastTransformIndex = (int)sceneIndex;
                     }
                     v128_t a = wasm_v128_load(&intCenters[4 * realIndex]);
                     v128_t prod = wasm_i32x4_mul(a, b);
@@ -109,11 +109,11 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
                 for (unsigned int i = sortStart; i < renderCount; i++) {
                     unsigned int realIndex = indexes[i];
                     unsigned int indexOffset = 4 * realIndex;
-                    unsigned int transformIndex = transformIndexes[realIndex];
-                    if ((int)transformIndex != lastTransformIndex) {
-                        float* transform = &transforms[transformIndex * 16];
+                    unsigned int sceneIndex = sceneIndexes[realIndex];
+                    if ((int)sceneIndex != lastTransformIndex) {
+                        float* transform = &transforms[sceneIndex * 16];
                         computeMatMul4x4ThirdRow(modelViewProj, transform, fMVPTRow3);
-                        lastTransformIndex = (int)transformIndex;
+                        lastTransformIndex = (int)sceneIndex;
                     }
                     int distance =
                         (int)((fMVPTRow3[0] * floatCenters[indexOffset] +

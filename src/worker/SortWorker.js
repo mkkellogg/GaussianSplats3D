@@ -11,7 +11,7 @@ function sortWorker(self) {
     let splatCount;
     let indexesToSortOffset;
     let sortedIndexesOffset;
-    let transformIndexesOffset;
+    let sceneIndexesOffset;
     let transformsOffset;
     let precomputedDistancesOffset;
     let mappedDistancesOffset;
@@ -50,7 +50,7 @@ function sortWorker(self) {
         new Uint32Array(wasmMemory, frequenciesOffset, Constants.DepthMapRange).set(countsZero);
         wasmInstance.exports.sortIndexes(indexesToSortOffset, centersOffset, precomputedDistancesOffset,
                                          mappedDistancesOffset, frequenciesOffset, modelViewProjOffset,
-                                         sortedIndexesOffset, transformIndexesOffset, transformsOffset, Constants.DepthMapRange,
+                                         sortedIndexesOffset, sceneIndexesOffset, transformsOffset, Constants.DepthMapRange,
                                          splatSortCount, splatRenderCount, splatCount, usePrecomputedDistances, integerBasedSort,
                                          dynamicMode);
 
@@ -78,7 +78,7 @@ function sortWorker(self) {
     self.onmessage = (e) => {
         if (e.data.centers) {
             centers = e.data.centers;
-            transformIndexes = e.data.transformIndexes;
+            sceneIndexes = e.data.sceneIndexes;
             if (integerBasedSort) {
                 new Int32Array(wasmMemory, centersOffset + e.data.range.from * Constants.BytesPerInt * 4,
                                e.data.range.count * 4).set(new Int32Array(centers));
@@ -87,8 +87,8 @@ function sortWorker(self) {
                                  e.data.range.count * 4).set(new Float32Array(centers));
             }
             if (dynamicMode) {
-                new Uint32Array(wasmMemory, transformIndexesOffset + e.data.range.from * 4,
-                                e.data.range.count).set(new Uint32Array(transformIndexes));
+                new Uint32Array(wasmMemory, sceneIndexesOffset + e.data.range.from * 4,
+                                e.data.range.count).set(new Uint32Array(sceneIndexes));
             }
             self.postMessage({
                 'centerDataSet': true,
@@ -168,8 +168,8 @@ function sortWorker(self) {
                 mappedDistancesOffset = precomputedDistancesOffset + memoryRequiredForPrecomputedDistances;
                 frequenciesOffset = mappedDistancesOffset + memoryRequiredForMappedDistances;
                 sortedIndexesOffset = frequenciesOffset + memoryRequiredForIntermediateSortBuffers;
-                transformIndexesOffset = sortedIndexesOffset + memoryRequiredForSortedIndexes;
-                transformsOffset = transformIndexesOffset + memoryRequiredforTransformIndexes;
+                sceneIndexesOffset = sortedIndexesOffset + memoryRequiredForSortedIndexes;
+                transformsOffset = sceneIndexesOffset + memoryRequiredforTransformIndexes;
                 wasmMemory = sorterWasmImport.env.memory.buffer;
                 if (useSharedMemory) {
                     self.postMessage({

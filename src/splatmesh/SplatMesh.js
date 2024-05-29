@@ -19,7 +19,7 @@ const CENTER_COLORS_ELEMENTS_PER_SPLAT = 4;
 
 const COVARIANCES_ELEMENTS_PER_TEXEL = 4;
 const CENTER_COLORS_ELEMENTS_PER_TEXEL = 4;
-const TRANSFORM_INDEXES_ELEMENTS_PER_TEXEL = 1;
+const SCENE_INDEXES_ELEMENTS_PER_TEXEL = 1;
 
 const SCENE_FADEIN_RATE_FAST = 0.012;
 const SCENE_FADEIN_RATE_GRADUAL = 0.003;
@@ -77,11 +77,11 @@ export class SplatMesh extends THREE.Mesh {
             'fragmentShader': null,
             'program': null,
             'centersBuffer': null,
-            'transformIndexesBuffer': null,
+            'sceneIndexesBuffer': null,
             'outDistancesBuffer': null,
             'centersLoc': -1,
             'modelViewProjLoc': -1,
-            'transformIndexesLoc': -1,
+            'sceneIndexesLoc': -1,
             'transformsLocs': []
         };
         this.globalSplatIndexToLocalSplatIndexMap = [];
@@ -368,11 +368,11 @@ export class SplatMesh extends THREE.Mesh {
             'fragmentShader': null,
             'program': null,
             'centersBuffer': null,
-            'transformIndexesBuffer': null,
+            'sceneIndexesBuffer': null,
             'outDistancesBuffer': null,
             'centersLoc': -1,
             'modelViewProjLoc': -1,
-            'transformIndexesLoc': -1,
+            'sceneIndexesLoc': -1,
             'transformsLocs': []
         };
         this.renderer = null;
@@ -686,22 +686,22 @@ export class SplatMesh extends THREE.Mesh {
         }
 
         if (this.dynamicMode) {
-            const transformIndexesTexSize = computeDataTextureSize(TRANSFORM_INDEXES_ELEMENTS_PER_TEXEL, 4);
-            const paddedTransformIndexes = new Uint32Array(transformIndexesTexSize.x *
-                                                           transformIndexesTexSize.y * TRANSFORM_INDEXES_ELEMENTS_PER_TEXEL);
+            const sceneIndexesTexSize = computeDataTextureSize(SCENE_INDEXES_ELEMENTS_PER_TEXEL, 4);
+            const paddedTransformIndexes = new Uint32Array(sceneIndexesTexSize.x *
+                                                           sceneIndexesTexSize.y * SCENE_INDEXES_ELEMENTS_PER_TEXEL);
             for (let c = 0; c < splatCount; c++) paddedTransformIndexes[c] = this.globalSplatIndexToSceneIndexMap[c];
-            const transformIndexesTexture = new THREE.DataTexture(paddedTransformIndexes, transformIndexesTexSize.x,
-                                                                  transformIndexesTexSize.y, THREE.RedIntegerFormat,
+            const sceneIndexesTexture = new THREE.DataTexture(paddedTransformIndexes, sceneIndexesTexSize.x,
+                                                                  sceneIndexesTexSize.y, THREE.RedIntegerFormat,
                                                                   THREE.UnsignedIntType);
-            transformIndexesTexture.internalFormat = 'R32UI';
-            transformIndexesTexture.needsUpdate = true;
-            this.material.uniforms.transformIndexesTexture.value = transformIndexesTexture;
-            this.material.uniforms.transformIndexesTextureSize.value.copy(transformIndexesTexSize);
+            sceneIndexesTexture.internalFormat = 'R32UI';
+            sceneIndexesTexture.needsUpdate = true;
+            this.material.uniforms.sceneIndexesTexture.value = sceneIndexesTexture;
+            this.material.uniforms.sceneIndexesTextureSize.value.copy(sceneIndexesTexSize);
             this.material.uniformsNeedUpdate = true;
             this.splatDataTextures['tansformIndexes'] = {
                 'data': paddedTransformIndexes,
-                'texture': transformIndexesTexture,
-                'size': transformIndexesTexSize
+                'texture': sceneIndexesTexture,
+                'size': sceneIndexesTexSize
             };
         }
     }
@@ -808,19 +808,19 @@ export class SplatMesh extends THREE.Mesh {
         }
 
         if (this.dynamicMode) {
-            const transformIndexesTexDesc = this.splatDataTextures['tansformIndexes'];
-            const paddedTransformIndexes = transformIndexesTexDesc.data;
+            const sceneIndexesTexDesc = this.splatDataTextures['tansformIndexes'];
+            const paddedTransformIndexes = sceneIndexesTexDesc.data;
             for (let c = this.lastBuildSplatCount; c <= toSplat; c++) {
                 paddedTransformIndexes[c] = this.globalSplatIndexToSceneIndexMap[c];
             }
 
-            const transformIndexesTexture = transformIndexesTexDesc.texture;
-            const transformIndexesTextureProps = this.renderer ? this.renderer.properties.get(transformIndexesTexture) : null;
-            if (!transformIndexesTextureProps || !transformIndexesTextureProps.__webglTexture) {
-                transformIndexesTexture.needsUpdate = true;
+            const sceneIndexesTexture = sceneIndexesTexDesc.texture;
+            const sceneIndexesTextureProps = this.renderer ? this.renderer.properties.get(sceneIndexesTexture) : null;
+            if (!sceneIndexesTextureProps || !sceneIndexesTextureProps.__webglTexture) {
+                sceneIndexesTexture.needsUpdate = true;
             } else {
-                this.updateDataTexture(paddedTransformIndexes, transformIndexesTexDesc.texture, transformIndexesTexDesc.szie,
-                                       transformIndexesTextureProps, 1, 1, 1, this.lastBuildSplatCount, toSplat);
+                this.updateDataTexture(paddedTransformIndexes, sceneIndexesTexDesc.texture, sceneIndexesTexDesc.szie,
+                                       sceneIndexesTextureProps, 1, 1, 1, this.lastBuildSplatCount, toSplat);
             }
         }
     }
@@ -1182,10 +1182,10 @@ export class SplatMesh extends THREE.Mesh {
                 flat out int distance;`;
                 if (this.dynamicMode) {
                     vsSource += `
-                        in uint transformIndex;
+                        in uint sceneIndex;
                         uniform ivec4 transforms[${Constants.MaxScenes}];
                         void main(void) {
-                            ivec4 transform = transforms[transformIndex];
+                            ivec4 transform = transforms[sceneIndex];
                             distance = center.x * transform.x + center.y * transform.y + center.z * transform.z + transform.w * center.w;
                         }
                     `;
@@ -1204,10 +1204,10 @@ export class SplatMesh extends THREE.Mesh {
                 flat out float distance;`;
                 if (this.dynamicMode) {
                     vsSource += `
-                        in uint transformIndex;
+                        in uint sceneIndex;
                         uniform mat4 transforms[${Constants.MaxScenes}];
                         void main(void) {
-                            vec4 transformedCenter = transforms[transformIndex] * vec4(center.xyz, 1.0);
+                            vec4 transformedCenter = transforms[sceneIndex] * vec4(center.xyz, 1.0);
                             distance = transformedCenter.z;
                         }
                     `;
@@ -1270,8 +1270,8 @@ export class SplatMesh extends THREE.Mesh {
             this.distancesTransformFeedback.centersLoc =
                 gl.getAttribLocation(this.distancesTransformFeedback.program, 'center');
             if (this.dynamicMode) {
-                this.distancesTransformFeedback.transformIndexesLoc =
-                    gl.getAttribLocation(this.distancesTransformFeedback.program, 'transformIndex');
+                this.distancesTransformFeedback.sceneIndexesLoc =
+                    gl.getAttribLocation(this.distancesTransformFeedback.program, 'sceneIndex');
                 for (let i = 0; i < this.scenes.length; i++) {
                     this.distancesTransformFeedback.transformsLocs[i] =
                         gl.getUniformLocation(this.distancesTransformFeedback.program, `transforms[${i}]`);
@@ -1292,10 +1292,10 @@ export class SplatMesh extends THREE.Mesh {
                 }
 
                 if (this.dynamicMode) {
-                    this.distancesTransformFeedback.transformIndexesBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.transformIndexesBuffer);
-                    gl.enableVertexAttribArray(this.distancesTransformFeedback.transformIndexesLoc);
-                    gl.vertexAttribIPointer(this.distancesTransformFeedback.transformIndexesLoc, 1, gl.UNSIGNED_INT, 0, 0);
+                    this.distancesTransformFeedback.sceneIndexesBuffer = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.sceneIndexesBuffer);
+                    gl.enableVertexAttribArray(this.distancesTransformFeedback.sceneIndexesLoc);
+                    gl.vertexAttribIPointer(this.distancesTransformFeedback.sceneIndexesLoc, 1, gl.UNSIGNED_INT, 0, 0);
                 }
             }
 
@@ -1357,10 +1357,10 @@ export class SplatMesh extends THREE.Mesh {
     /**
      * Refresh GPU buffers used for pre-computing splat distances with centers data from the scenes for this mesh.
      * @param {boolean} isUpdate Specify whether or not to update the GPU buffer or to initialize & fill
-     * @param {Array<number>} transformIndexes The splat transform indexes
+     * @param {Array<number>} sceneIndexes The splat scene indexes
      * @param {number} offsetSplats Offset in the GPU buffer at which to start updating data, specified in splats
      */
-    updateGPUTransformIndexesBufferForDistancesComputation(isUpdate, transformIndexes, offsetSplats) {
+    updateGPUTransformIndexesBufferForDistancesComputation(isUpdate, sceneIndexes, offsetSplats) {
 
         if (!this.renderer || !this.dynamicMode) return;
 
@@ -1371,13 +1371,13 @@ export class SplatMesh extends THREE.Mesh {
 
         const subBufferOffset = offsetSplats * 4;
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.transformIndexesBuffer);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.sceneIndexesBuffer);
 
         if (isUpdate) {
-            gl.bufferSubData(gl.ARRAY_BUFFER, subBufferOffset, transformIndexes);
+            gl.bufferSubData(gl.ARRAY_BUFFER, subBufferOffset, sceneIndexes);
         } else {
             const maxArray = new Uint32Array(this.getMaxSplatCount() * 4);
-            maxArray.set(transformIndexes);
+            maxArray.set(sceneIndexes);
             gl.bufferData(gl.ARRAY_BUFFER, maxArray, gl.STATIC_DRAW);
         }
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
@@ -1478,9 +1478,9 @@ export class SplatMesh extends THREE.Mesh {
             }
 
             if (this.dynamicMode) {
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.transformIndexesBuffer);
-                gl.enableVertexAttribArray(this.distancesTransformFeedback.transformIndexesLoc);
-                gl.vertexAttribIPointer(this.distancesTransformFeedback.transformIndexesLoc, 1, gl.UNSIGNED_INT, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.distancesTransformFeedback.sceneIndexesBuffer);
+                gl.enableVertexAttribArray(this.distancesTransformFeedback.sceneIndexesLoc);
+                gl.vertexAttribIPointer(this.distancesTransformFeedback.sceneIndexesLoc, 1, gl.UNSIGNED_INT, 0, 0);
             }
 
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.distancesTransformFeedback.id);
