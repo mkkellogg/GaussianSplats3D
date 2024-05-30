@@ -19,9 +19,9 @@ export class KSplatLoader {
         }
     };
 
-    static loadFromURL(fileName, externalOnProgress, streamLoadData, onSectionBuilt) {
-        let streamBuffer;
-        let streamSplatBuffer;
+    static loadFromURL(fileName, externalOnProgress, progressiveLoad, onSectionBuilt) {
+        let progressiveLoadBuffer;
+        let progressiveLoadSplatBuffer;
 
         let headerBuffer;
         let header;
@@ -34,7 +34,7 @@ export class KSplatLoader {
         let sectionHeadersLoading = false;
 
         let numBytesLoaded = 0;
-        let numBytesStreamed = 0;
+        let numBytesProgressivelyLoaded = 0;
         let totalBytesToDownload = 0;
 
         let downloadComplete = false;
@@ -43,9 +43,9 @@ export class KSplatLoader {
 
         let chunks = [];
 
-        let streamLoadCompleteResolver;
-        let streamLoadPromise = new Promise((resolve) => {
-            streamLoadCompleteResolver = resolve;
+        let progressiveLoadCompleteResolver;
+        let progressiveLoadPromise = new Promise((resolve) => {
+            progressiveLoadCompleteResolver = resolve;
         });
 
         const checkAndLoadHeader = () => {
@@ -94,12 +94,12 @@ export class KSplatLoader {
                     }
                     const totalStorageSizeBytes = SplatBuffer.HeaderSizeBytes + header.maxSectionCount *
                                                   SplatBuffer.SectionHeaderSizeBytes + totalSectionStorageStorageByes;
-                    if (!streamBuffer) {
-                        streamBuffer = new ArrayBuffer(totalStorageSizeBytes);
+                    if (!progressiveLoadBuffer) {
+                        progressiveLoadBuffer = new ArrayBuffer(totalStorageSizeBytes);
                         let offset = 0;
                         for (let i = 0; i < chunks.length; i++) {
                             const chunk = chunks[i];
-                            new Uint8Array(streamBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
+                            new Uint8Array(progressiveLoadBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
                             offset += chunk.byteLength;
                         }
                     }
@@ -130,13 +130,13 @@ export class KSplatLoader {
 
                     downloadComplete = numBytesLoaded >= totalBytesToDownload;
 
-                    let bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
-                    if (bytesLoadedSinceLastSection > Constants.StreamingSectionSize || downloadComplete) {
+                    let bytesLoadedSinceLastSection = numBytesLoaded - numBytesProgressivelyLoaded;
+                    if (bytesLoadedSinceLastSection > Constants.ProgressiveLoadSectionSize || downloadComplete) {
 
-                        numBytesStreamed += Constants.StreamingSectionSize;
-                        loadComplete = numBytesStreamed >= totalBytesToDownload;
+                        numBytesProgressivelyLoaded += Constants.ProgressiveLoadSectionSize;
+                        loadComplete = numBytesProgressivelyLoaded >= totalBytesToDownload;
 
-                        if (!streamSplatBuffer) streamSplatBuffer = new SplatBuffer(streamBuffer, false);
+                        if (!progressiveLoadSplatBuffer) progressiveLoadSplatBuffer = new SplatBuffer(progressiveLoadBuffer, false);
 
                         const baseDataOffset = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount;
                         let sectionBase = 0;
@@ -147,50 +147,50 @@ export class KSplatLoader {
                             const bucketsDataOffset = sectionBase + sectionHeader.partiallyFilledBucketCount * 4 +
                                                     sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
                             const bytesRequiredToReachSectionSplatData = baseDataOffset + bucketsDataOffset;
-                            if (numBytesStreamed >= bytesRequiredToReachSectionSplatData) {
+                            if (numBytesProgressivelyLoaded >= bytesRequiredToReachSectionSplatData) {
                                 reachedSections++;
-                                const bytesPastSSectionSplatDataStart = numBytesStreamed - bytesRequiredToReachSectionSplatData;
+                                const bytesPastSSectionSplatDataStart = numBytesProgressivelyLoaded - bytesRequiredToReachSectionSplatData;
                                 const baseDescriptor = SplatBuffer.CompressionLevels[header.compressionLevel];
                                 const shDesc = baseDescriptor.SphericalHarmonicsDegrees[sectionHeader.sphericalHarmonicsDegree];
                                 const bytesPerSplat = shDesc.BytesPerSplat;
                                 let loadedSplatsForSection = Math.floor(bytesPastSSectionSplatDataStart / bytesPerSplat);
                                 loadedSplatsForSection = Math.min(loadedSplatsForSection, sectionHeader.maxSplatCount);
                                 loadedSplatCount += loadedSplatsForSection;
-                                streamSplatBuffer.updateLoadedCounts(reachedSections, loadedSplatCount);
-                                streamSplatBuffer.updateSectionLoadedCounts(i, loadedSplatsForSection);
+                                progressiveLoadSplatBuffer.updateLoadedCounts(reachedSections, loadedSplatCount);
+                                progressiveLoadSplatBuffer.updateSectionLoadedCounts(i, loadedSplatsForSection);
                             } else {
                                 break;
                             }
                             sectionBase += sectionHeader.storageSizeBytes;
                         }
 
-                        onSectionBuilt(streamSplatBuffer, loadComplete);
+                        onSectionBuilt(progressiveLoadSplatBuffer, loadComplete);
 
-                        const percentComplete = numBytesStreamed / totalBytesToDownload * 100;
+                        const percentComplete = numBytesProgressivelyLoaded / totalBytesToDownload * 100;
                         const percentLabel = (percentComplete).toFixed(2) + '%';
 
                         if (externalOnProgress) externalOnProgress(percentComplete, percentLabel, LoaderStatus.Downloading);
 
                         if (loadComplete) {
-                            streamLoadCompleteResolver(streamSplatBuffer);
+                            progressiveLoadCompleteResolver(progressiveLoadSplatBuffer);
                         } else {
                             checkAndLoadSections();
                         }
                     }
                 }
             };
-            window.setTimeout(checkFunc, Constants.StreamingSectionDelayDuration);
+            window.setTimeout(checkFunc, Constants.ProgressiveLoadSectionDelayDuration);
         };
 
         const localOnProgress = (percent, percentStr, chunk) => {
             if (chunk) {
                 chunks.push(chunk);
-                if (streamBuffer) {
-                    new Uint8Array(streamBuffer, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
+                if (progressiveLoadBuffer) {
+                    new Uint8Array(progressiveLoadBuffer, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
                 }
                 numBytesLoaded += chunk.byteLength;
             }
-            if (streamLoadData) {
+            if (progressiveLoad) {
                 checkAndLoadHeader();
                 checkAndLoadSectionHeaders();
                 checkAndLoadSections();
@@ -199,9 +199,9 @@ export class KSplatLoader {
             }
         };
 
-        return fetchWithProgress(fileName, localOnProgress, !streamLoadData).then((fullBuffer) => {
+        return fetchWithProgress(fileName, localOnProgress, !progressiveLoad).then((fullBuffer) => {
             if (externalOnProgress) externalOnProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = streamLoadData ? streamLoadPromise : KSplatLoader.loadFromFileData(fullBuffer);
+            const loadPromise = progressiveLoad ? progressiveLoadPromise : KSplatLoader.loadFromFileData(fullBuffer);
             return loadPromise.then((splatBuffer) => {
                 if (externalOnProgress) externalOnProgress(100, '100%', LoaderStatus.Done);
                 return splatBuffer;
