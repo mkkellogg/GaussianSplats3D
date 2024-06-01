@@ -172,7 +172,7 @@ export class Viewer {
         this.sortWorkerSortedIndexes = null;
         this.sortWorkerPrecomputedDistances = null;
         this.sortWorkerTransforms = null;
-        this.runAfterFirstSort = [];
+        this.runAfterNextSort = [];
 
         this.selfDrivenModeRunning = false;
         this.splatRenderReady = false;
@@ -664,6 +664,11 @@ export class Viewer {
             throw new Error('Cannot add splat scene after dispose() is called.');
         }
 
+        if (options.progressiveLoad && this.splatMesh.scenes && this.splatMesh.scenes.length > 0) {
+            console.log('addSplatScene(): "progressiveLoad" option ignore because there are multiple splat scenes');
+            options.progressiveLoad = false;
+        }
+
         const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
         const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad;
         const showLoadingUI = (options.showLoadingUI !== undefined && options.showLoadingUI !== null) ? options.showLoadingUI : true;
@@ -704,7 +709,7 @@ export class Viewer {
         const splatBuffersAddedUIUpdate = (firstBuild, finalBuild) => {
             if (showLoadingUI) {
                 if (firstBuild && progressiveLoad || finalBuild && !progressiveLoad) {
-                    this.runAfterFirstSort.push(() => {
+                    this.runAfterNextSort.push(() => {
                         this.loadingSpinner.removeTask(loadingUITaskId);
                         if (!finalBuild && !downloadDone) this.loadingProgressBar.show();
                     });
@@ -735,7 +740,8 @@ export class Viewer {
                 'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
             };
             return this.addSplatBuffers([splatBuffer], [addSplatBufferOptions],
-                                         finalBuild, firstBuild && showLoadingUI, showLoadingUI).then(() => {
+                                         finalBuild, firstBuild && showLoadingUI, showLoadingUI,
+                                         progressiveLoad, progressiveLoad).then(() => {
                 if (!progressiveLoad && options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
                 splatBuffersAddedUIUpdate(firstBuild, finalBuild);
             });
@@ -939,7 +945,7 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingUI) this.loadingSpinner.hide();
                 if (onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
-                this.addSplatBuffers(splatBuffers, sceneOptions, true, showLoadingUI, showLoadingUI).then(() => {
+                this.addSplatBuffers(splatBuffers, sceneOptions, true, showLoadingUI, showLoadingUI, false, false).then(() => {
                     if (onProgress) onProgress(100, '100%', LoaderStatus.Processing);
                     this.clearSplatSceneDownloadAndBuildPromise();
                     resolve();
@@ -1002,8 +1008,9 @@ export class Viewer {
      */
     addSplatBuffers = function() {
 
-        return function(splatBuffers, splatBufferOptions = [], finalBuild = true,
-                        showLoadingUI = true, showLoadingUIForSplatTreeBuild = true) {
+        return function(splatBuffers, splatBufferOptions = [], finalBuild = true, showLoadingUI = true,
+                        showLoadingUIForSplatTreeBuild = true, replaceExisting = false, enableRenderBeforeFirstSort = false,
+                        preserveVisibleRegion = true) {
 
             if (this.isDisposingOrDisposed()) return Promise.resolve();
 
@@ -1032,8 +1039,15 @@ export class Viewer {
                     });
                 }
 
-                this.splatRenderReady = true;
-                this.sortNeededForSceneChange = true;
+                if (enableRenderBeforeFirstSort) {
+                    this.splatRenderReady = true;
+                } else {
+                    this.runAfterNextSort.push(() => {
+                        this.splatRenderReady = true;
+                    });
+                }
+
+                this.updateSplatSort(true);
             };
 
             return new Promise((resolve) => {
@@ -1044,8 +1058,9 @@ export class Viewer {
                     if (this.isDisposingOrDisposed()) {
                         resolve();
                     } else {
-                        const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions,
-                                                                        finalBuild, showLoadingUIForSplatTreeBuild);
+                        const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild,
+                                                                        showLoadingUIForSplatTreeBuild, replaceExisting,
+                                                                        preserveVisibleRegion);
                         const maxSplatCount = this.splatMesh.getMaxSplatCount();
                         if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) this.disposeSortWorker();
                         const sortWorkerSetupPromise = (!this.sortWorker && maxSplatCount > 0) ?
@@ -1062,8 +1077,9 @@ export class Viewer {
     }();
 
     /**
-     * Add one or more instances of SplatBuffer to the SplatMesh instance managed by the viewer. This function is additive; all splat
-     * buffers contained by the viewer's splat mesh before calling this function will be preserved.
+     * Add one or more instances of SplatBuffer to the SplatMesh instance managed by the viewer. By default, this function is additive;
+     * all splat buffers contained by the viewer's splat mesh before calling this function will be preserved. This behavior can be
+     * changed by passing 'true' for 'replaceExisting'.
      * @param {Array<SplatBuffer>} splatBuffers SplatBuffer instances
      * @param {Array<object>} splatBufferOptions Array of options objects: {
      *
@@ -1080,32 +1096,44 @@ export class Viewer {
      * @param {boolean} showLoadingUIForSplatTreeBuild Whether or not to show the loading spinner during construction of the splat tree.
      * @return {object} Object containing info about the splats that are updated
      */
-    addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingUIForSplatTreeBuild = false) {
-        if (this.isDisposingOrDisposed()) return;
-        const allSplatBuffers = this.splatMesh.splatBuffers || [];
-        const allSplatBufferOptions = this.splatMesh.splatBufferOptions || [];
-        allSplatBuffers.push(...splatBuffers);
-        allSplatBufferOptions.push(...splatBufferOptions);
-        if (this.renderer) this.splatMesh.setRenderer(this.renderer);
+    addSplatBuffersToMesh = function() {
+
         let splatOptimizingTaskId;
-        const onSplatTreeIndexesUpload = (finished) => {
+
+        return function(splatBuffers, splatBufferOptions, finalBuild = true,
+                        showLoadingUIForSplatTreeBuild = false, replaceExisting = false, preserveVisibleRegion = true) {
             if (this.isDisposingOrDisposed()) return;
-            const splatCount = this.splatMesh.getSplatCount();
-            if (showLoadingUIForSplatTreeBuild && splatCount >= MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER) {
-                if (!finished && !splatOptimizingTaskId) {
-                    this.loadingSpinner.setMinimized(true, true);
-                    splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
+            let allSplatBuffers = [];
+            let allSplatBufferOptions = [];
+            if (!replaceExisting) {
+                allSplatBuffers = this.splatMesh.scenes.map((scene) => scene.splatBuffer) || [];
+                allSplatBufferOptions = this.splatMesh.sceneOptions ? this.splatMesh.sceneOptions.map((sceneOptions) => sceneOptions) : [];
+            }
+            allSplatBuffers.push(...splatBuffers);
+            allSplatBufferOptions.push(...splatBufferOptions);
+            if (this.renderer) this.splatMesh.setRenderer(this.renderer);
+            const onSplatTreeIndexesUpload = (finished) => {
+                if (this.isDisposingOrDisposed()) return;
+                const splatCount = this.splatMesh.getSplatCount();
+                if (showLoadingUIForSplatTreeBuild && splatCount >= MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER) {
+                    if (!finished && !splatOptimizingTaskId) {
+                        this.loadingSpinner.setMinimized(true, true);
+                        splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
+                    }
                 }
-            }
+            };
+            const onSplatTreeReady = (finished) => {
+                if (this.isDisposingOrDisposed()) return;
+                if (finished && splatOptimizingTaskId) {
+                    this.loadingSpinner.removeTask(splatOptimizingTaskId);
+                    splatOptimizingTaskId = null;
+                }
+            };
+            return this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true,
+                                        finalBuild, onSplatTreeIndexesUpload, onSplatTreeReady, preserveVisibleRegion);
         };
-        const onSplatTreeReady = (finished) => {
-            if (this.isDisposingOrDisposed()) return;
-            if (finished && splatOptimizingTaskId) {
-                this.loadingSpinner.removeTask(splatOptimizingTaskId);
-            }
-        };
-        return this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild, onSplatTreeIndexesUpload, onSplatTreeReady);
-    }
+
+    }();
 
     /**
      * Set up the splat sorting web worker.
@@ -1120,7 +1148,6 @@ export class Viewer {
             const maxSplatCount = splatMesh.getMaxSplatCount();
             this.sortWorker = createSortWorker(maxSplatCount, this.sharedMemoryForWorkers,
                                                this.integerBasedSort, this.splatMesh.dynamicMode);
-            let sortCount = 0;
             this.sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
@@ -1134,13 +1161,12 @@ export class Viewer {
                     this.sortPromiseResolver();
                     this.sortPromiseResolver = null;
                     this.forceRenderNextFrame();
-                    if (sortCount === 0) {
-                        this.runAfterFirstSort.forEach((func) => {
+                    if (this.runAfterNextSort.length > 0) {
+                        this.runAfterNextSort.forEach((func) => {
                             func();
                         });
-                        this.runAfterFirstSort.length = 0;
+                        this.runAfterNextSort.length = 0;
                     }
-                    sortCount++;
                 } else if (e.data.sortCanceled) {
                     this.sortRunning = false;
                 } else if (e.data.sortSetupPhase1Complete) {
@@ -1237,7 +1263,6 @@ export class Viewer {
                 const savedSplatBuffers = [];
                 const savedSceneOptions = [];
                 const savedSceneTransformComponents = [];
-                const savedVisibleRegionFadeStartRadius = this.splatMesh.visibleRegionFadeStartRadius;
                 for (let i = 0; i < this.splatMesh.scenes.length; i++) {
                     if (i !== index) {
                         const scene = this.splatMesh.scenes[i];
@@ -1257,7 +1282,6 @@ export class Viewer {
                 .then(() => {
                     if (checkForEarlyExit()) return;
                     checkAndHideLoadingUI();
-                    this.splatMesh.visibleRegionFadeStartRadius = savedVisibleRegionFadeStartRadius;
                     this.splatMesh.scenes.forEach((scene, index) => {
                         scene.position.copy(savedSceneTransformComponents[index].position);
                         scene.quaternion.copy(savedSceneTransformComponents[index].quaternion);
@@ -1714,7 +1738,7 @@ export class Viewer {
             positionDiff = sortViewOffset.copy(this.camera.position).sub(lastSortViewPos).length();
 
             if (!force) {
-                if (!this.sortNeededForSceneChange && !this.splatMesh.dynamicMode && queuedSorts.length === 0) {
+                if (!this.splatMesh.dynamicMode && queuedSorts.length === 0) {
                     if (angleDiff <= 0.99) needsRefreshForRotation = true;
                     if (positionDiff >= 1.0) needsRefreshForPosition = true;
                     if (!needsRefreshForRotation && !needsRefreshForPosition) return;
@@ -1785,8 +1809,6 @@ export class Viewer {
                 lastSortViewPos.copy(this.camera.position);
                 lastSortViewDir.copy(sortViewDir);
             }
-
-            this.sortNeededForSceneChange = false;
         };
 
     }();
