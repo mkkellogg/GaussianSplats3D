@@ -261,7 +261,7 @@ export class SplatMesh extends THREE.Mesh {
      * @return {object} Object containing info about the splats that are updated
      */
     build(splatBuffers, sceneOptions, keepSceneTransforms = true, finalBuild = false,
-          onSplatTreeIndexesUpload, onSplatTreeConstruction) {
+          onSplatTreeIndexesUpload, onSplatTreeConstruction, preserveVisibleRegion = true) {
 
         this.sceneOptions = sceneOptions;
         this.finalBuild = finalBuild;
@@ -310,11 +310,13 @@ export class SplatMesh extends THREE.Mesh {
 
        if (!isUpdateBuild) {
             this.boundingBox = new THREE.Box3();
-            this.maxSplatDistanceFromSceneCenter = 0;
-            this.visibleRegionBufferRadius = 0;
-            this.visibleRegionRadius = 0;
-            this.visibleRegionFadeStartRadius = 0;
-            this.firstRenderTime = -1;
+            if (!preserveVisibleRegion) {
+                this.maxSplatDistanceFromSceneCenter = 0;
+                this.visibleRegionBufferRadius = 0;
+                this.visibleRegionRadius = 0;
+                this.visibleRegionFadeStartRadius = 0;
+                this.firstRenderTime = -1;
+            }
             this.lastBuildScenes = [];
             this.lastBuildSplatCount = 0;
             this.lastBuildMaxSplatCount = 0;
