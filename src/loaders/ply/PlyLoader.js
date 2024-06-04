@@ -4,7 +4,7 @@ import { PlyParserUtils } from './PlyParserUtils.js';
 import { INRIAV1PlyParser } from './INRIAV1PlyParser.js';
 import { PlayCanvasCompressedPlyParser } from './PlayCanvasCompressedPlyParser.js';
 import { PlyFormat } from './PlyFormat.js';
-import { fetchWithProgress, delayedExecute } from '../../Util.js';
+import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
 import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { LoaderStatus } from '../LoaderStatus.js';
@@ -47,10 +47,7 @@ export class PlyLoader {
         let readyToLoadSplatData = false;
         let compressed = false;
 
-        let progressiveLoadLoadCompleteResolver;
-        let progressiveLoadLoadPromise = new Promise((resolve) => {
-            progressiveLoadLoadCompleteResolver = resolve;
-        });
+        const progressiveLoadPromise = nativePromiseWithExtractedComponents();
 
         let numBytesStreamed = 0;
         let numBytesParsed = 0;
@@ -194,7 +191,7 @@ export class PlyLoader {
                     }
 
                     if (loadComplete) {
-                        progressiveLoadLoadCompleteResolver(progressiveLoadSplatBuffer);
+                        progressiveLoadPromise.resolve(progressiveLoadSplatBuffer);
                     }
                 }
 
@@ -204,7 +201,7 @@ export class PlyLoader {
 
         return fetchWithProgress(fileName, localOnProgress, !progressiveLoad).then((plyFileData) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = progressiveLoad ? progressiveLoadLoadPromise :
+            const loadPromise = progressiveLoad ? progressiveLoadPromise.promise :
                                 PlyLoader.loadFromFileData(plyFileData, minimumAlpha, compressionLevel, outSphericalHarmonicsDegree,
                                                            sectionSize, sceneCenter, blockSize, bucketSize);
             return loadPromise.then((splatBuffer) => {

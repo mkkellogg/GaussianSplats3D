@@ -6,6 +6,6 @@ export class Constants {
     static BytesPerInt = 4;
     static MaxScenes = 32;
     static ProgressiveLoadSectionSize = 262144;
-    static ProgressiveLoadSectionDelayDuration = 25;
+    static ProgressiveLoadSectionDelayDuration = 15;
     static SphericalHarmonics8BitCompressionRange = 3;
 }

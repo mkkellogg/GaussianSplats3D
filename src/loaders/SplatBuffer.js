@@ -920,7 +920,7 @@ export class SplatBuffer {
             if (targetSplat[OFFSET_SCALE0] !== undefined) {
                 tempScale.set(targetSplat[OFFSET_SCALE0], targetSplat[OFFSET_SCALE1], targetSplat[OFFSET_SCALE2]);
             } else {
-                tempScale.set(0.01, 0.01, 0.01, 0.01);
+                tempScale.set(0.01, 0.01, 0.01);
             }
 
             if (compressionLevel === 0) {

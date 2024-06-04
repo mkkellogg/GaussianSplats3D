@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { SplatMaterial } from './SplatMaterial.js';
 import { SplatGeometry } from './SplatGeometry.js';
-import { SplatScene } from '../SplatScene.js';
+import { SplatScene } from './SplatScene.js';
 import { SplatTree } from '../splattree/SplatTree.js';
 import { WebGLExtensions } from '../three-shim/WebGLExtensions.js';
 import { WebGLCapabilities } from '../three-shim/WebGLCapabilities.js';
@@ -349,11 +349,87 @@ export class SplatMesh extends THREE.Mesh {
             });
         }
 
+        // EXPERIMENTAL !!
+        // if (finalBuild) {
+        //     this.freeDataTextureData(isUpdateBuild);
+        // }
+
         this.visible = (this.scenes.length > 0);
 
         return dataUpdateResults;
     }
 
+    freeDataTextureData(wasProgressiveBuild) {
+
+        const deleteTextureData = (texture) => {
+            delete texture.source.data;
+            delete texture.image;
+            texture.onUpdate = null;
+        };
+
+        delete this.splatDataTextures.baseData.covariances;
+        delete this.splatDataTextures.baseData.centers;
+        delete this.splatDataTextures.baseData.colors;
+        delete this.splatDataTextures.baseData.sphericalHarmonics;
+
+        delete this.splatDataTextures.centerColors.data;
+        delete this.splatDataTextures.covariances.data;
+        if (this.splatDataTextures.sphericalHarmonics) {
+            delete this.splatDataTextures.sphericalHarmonics.data;
+        }
+        if (this.splatDataTextures.sceneIndexes) {
+            delete this.splatDataTextures.sceneIndexes.data;
+        }
+
+        if (wasProgressiveBuild) {
+            deleteTextureData(this.splatDataTextures.covariances.texture);
+            deleteTextureData(this.splatDataTextures.centerColors.texture);
+            if (this.splatDataTextures.sphericalHarmonics) {
+                if (this.splatDataTextures.sphericalHarmonics.texture) {
+                    deleteTextureData(this.splatDataTextures.sphericalHarmonics.texture);
+                } else {
+                    this.splatDataTextures.sphericalHarmonics.textures.forEach((texture) => {
+                        deleteTextureData(texture);
+                    });
+                }
+            }
+            if (this.splatDataTextures.sceneIndexes) {
+                deleteTextureData(this.splatDataTextures.sceneIndexes.texture);
+            }
+        } else {
+            this.splatDataTextures.centerColors.texture.needsUpdate = true;
+            this.splatDataTextures.centerColors.texture.onUpdate = () => {
+                deleteTextureData(this.splatDataTextures.centerColors.texture);
+            };
+
+            this.splatDataTextures.covariances.texture.needsUpdate = true;
+            this.splatDataTextures.covariances.texture.onUpdate = () => {
+                deleteTextureData(this.splatDataTextures.covariances.texture);
+            };
+
+            if (this.splatDataTextures.sphericalHarmonics) {
+                if (this.splatDataTextures.sphericalHarmonics.texture) {
+                    this.splatDataTextures.sphericalHarmonics.texture.needsUpdate = true;
+                    this.splatDataTextures.sphericalHarmonics.texture.onUpdate = () => {
+                        deleteTextureData(this.splatDataTextures.sphericalHarmonics.texture);
+                    };
+                } else {
+                    this.splatDataTextures.sphericalHarmonics.textures.forEach((texture) => {
+                        texture.needsUpdate = true;
+                        texture.onUpdate = () => {
+                            deleteTextureData(texture);
+                        };
+                    });
+                }
+            }
+            if (this.splatDataTextures.sceneIndexes) {
+                this.splatDataTextures.sceneIndexes.texture.needsUpdate = true;
+                this.splatDataTextures.sceneIndexes.texture.onUpdate = () => {
+                    deleteTextureData(this.splatDataTextures.sceneIndexes.texture);
+                };
+            }
+        }
+    }
     /**
      * Dispose all resources held by the splat mesh
      */
@@ -704,7 +780,7 @@ export class SplatMesh extends THREE.Mesh {
             this.material.uniforms.sceneIndexesTexture.value = sceneIndexesTexture;
             this.material.uniforms.sceneIndexesTextureSize.value.copy(sceneIndexesTexSize);
             this.material.uniformsNeedUpdate = true;
-            this.splatDataTextures['tansformIndexes'] = {
+            this.splatDataTextures['sceneIndexes'] = {
                 'data': paddedTransformIndexes,
                 'texture': sceneIndexesTexture,
                 'size': sceneIndexesTexSize
@@ -814,7 +890,7 @@ export class SplatMesh extends THREE.Mesh {
         }
 
         if (this.dynamicMode) {
-            const sceneIndexesTexDesc = this.splatDataTextures['tansformIndexes'];
+            const sceneIndexesTexDesc = this.splatDataTextures['sceneIndexes'];
             const paddedTransformIndexes = sceneIndexesTexDesc.data;
             for (let c = this.lastBuildSplatCount; c <= toSplat; c++) {
                 paddedTransformIndexes[c] = this.globalSplatIndexToSceneIndexMap[c];
@@ -825,7 +901,7 @@ export class SplatMesh extends THREE.Mesh {
             if (!sceneIndexesTextureProps || !sceneIndexesTextureProps.__webglTexture) {
                 sceneIndexesTexture.needsUpdate = true;
             } else {
-                this.updateDataTexture(paddedTransformIndexes, sceneIndexesTexDesc.texture, sceneIndexesTexDesc.szie,
+                this.updateDataTexture(paddedTransformIndexes, sceneIndexesTexDesc.texture, sceneIndexesTexDesc.size,
                                        sceneIndexesTextureProps, 1, 1, 1, this.lastBuildSplatCount, toSplat);
             }
         }
