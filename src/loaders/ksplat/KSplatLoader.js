@@ -1,5 +1,5 @@
 import { SplatBuffer } from '../SplatBuffer.js';
-import { fetchWithProgress, delayedExecute } from '../../Util.js';
+import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
 
@@ -43,10 +43,7 @@ export class KSplatLoader {
 
         let chunks = [];
 
-        let progressiveLoadCompleteResolver;
-        let progressiveLoadPromise = new Promise((resolve) => {
-            progressiveLoadCompleteResolver = resolve;
-        });
+        const progressiveLoadPromise = nativePromiseWithExtractedComponents();
 
         const checkAndLoadHeader = () => {
             if (!headerLoaded && !headerLoading && numBytesLoaded >= SplatBuffer.HeaderSizeBytes) {
@@ -122,7 +119,7 @@ export class KSplatLoader {
         const checkAndLoadSections = () => {
             if (loadSectionQueued) return;
             loadSectionQueued = true;
-            const checkFunc = () => {
+            const checkAndLoadFunc = () => {
                 loadSectionQueued = false;
                 if (sectionHeadersLoaded) {
 
@@ -172,14 +169,14 @@ export class KSplatLoader {
                         if (externalOnProgress) externalOnProgress(percentComplete, percentLabel, LoaderStatus.Downloading);
 
                         if (loadComplete) {
-                            progressiveLoadCompleteResolver(progressiveLoadSplatBuffer);
+                            progressiveLoadPromise.resolve(progressiveLoadSplatBuffer);
                         } else {
                             checkAndLoadSections();
                         }
                     }
                 }
             };
-            window.setTimeout(checkFunc, Constants.ProgressiveLoadSectionDelayDuration);
+            window.setTimeout(checkAndLoadFunc, Constants.ProgressiveLoadSectionDelayDuration);
         };
 
         const localOnProgress = (percent, percentStr, chunk) => {
@@ -201,7 +198,7 @@ export class KSplatLoader {
 
         return fetchWithProgress(fileName, localOnProgress, !progressiveLoad).then((fullBuffer) => {
             if (externalOnProgress) externalOnProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = progressiveLoad ? progressiveLoadPromise : KSplatLoader.loadFromFileData(fullBuffer);
+            const loadPromise = progressiveLoad ? progressiveLoadPromise.promise : KSplatLoader.loadFromFileData(fullBuffer);
             return loadPromise.then((splatBuffer) => {
                 if (externalOnProgress) externalOnProgress(100, '100%', LoaderStatus.Done);
                 return splatBuffer;

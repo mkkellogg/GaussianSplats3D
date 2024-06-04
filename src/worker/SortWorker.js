@@ -1,4 +1,8 @@
 import SorterWasm from './sorter.wasm';
+import SorterWasmNoSIMD from './sorter_no_simd.wasm';
+import SorterWasmNonShared from './sorter_non_shared.wasm';
+import SorterWasmNoSIMDNonShared from './sorter_no_simd_non_shared.wasm';
+import { isIOS, getIOSSemever } from '../Util.js';
 import { Constants } from '../Constants.js';
 
 function sortWorker(self) {
@@ -193,7 +197,7 @@ function sortWorker(self) {
     };
 }
 
-export function createSortWorker(splatCount, useSharedMemory, integerBasedSort, dynamicMode) {
+export function createSortWorker(splatCount, useSharedMemory, enableSIMDInSort, integerBasedSort, dynamicMode) {
     const worker = new Worker(
         URL.createObjectURL(
             new Blob(['(', sortWorker.toString(), ')(self)'], {
@@ -202,7 +206,24 @@ export function createSortWorker(splatCount, useSharedMemory, integerBasedSort, 
         ),
     );
 
-    const sorterWasmBinaryString = atob(SorterWasm);
+    let sourceWasm = SorterWasm;
+
+    // iOS makes choosing the right WebAssembly configuration tricky :(
+    let iOSSemVer = isIOS() ? getIOSSemever() : null;
+    if (!enableSIMDInSort && !useSharedMemory) {
+        sourceWasm = SorterWasmNoSIMD;
+        if (iOSSemVer && iOSSemVer.major < 16) {
+            sourceWasm = SorterWasmNoSIMDNonShared;
+        }
+    } else if (!enableSIMDInSort) {
+        sourceWasm = SorterWasmNoSIMD;
+    } else if (!useSharedMemory) {
+        if (iOSSemVer && iOSSemVer.major < 16) {
+            sourceWasm = SorterWasmNonShared;
+        }
+    }
+
+    const sorterWasmBinaryString = atob(sourceWasm);
     const sorterWasmBytes = new Uint8Array(sorterWasmBinaryString.length);
     for (let i = 0; i < sorterWasmBinaryString.length; i++) {
         sorterWasmBytes[i] = sorterWasmBinaryString.charCodeAt(i);

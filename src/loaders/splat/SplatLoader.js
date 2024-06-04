@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { SplatParser } from './SplatParser.js';
-import { fetchWithProgress, delayedExecute } from '../../Util.js';
+import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
 
@@ -21,10 +21,7 @@ export class SplatLoader {
         let maxSplatCount = 0;
         let splatCount = 0;
 
-        let progressiveLoadCompleteResolver;
-        let progressiveLoadPromise = new Promise((resolve) => {
-            progressiveLoadCompleteResolver = resolve;
-        });
+        const progressiveLoadPromise = nativePromiseWithExtractedComponents();
 
         let numBytesStreamed = 0;
         let numBytesLoaded = 0;
@@ -85,7 +82,7 @@ export class SplatLoader {
                     }
                 }
                 if (loadComplete) {
-                    progressiveLoadCompleteResolver(progressiveLoadSplatBuffer);
+                    progressiveLoadPromise.resolve(progressiveLoadSplatBuffer);
                 }
             }
             if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
@@ -94,7 +91,7 @@ export class SplatLoader {
 
         return fetchWithProgress(fileName, localOnProgress, true).then((fullBuffer) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = progressiveLoad ? progressiveLoadPromise :
+            const loadPromise = progressiveLoad ? progressiveLoadPromise.promise :
                 SplatLoader.loadFromFileData(fullBuffer, minimumAlpha, compressionLevel, optimizeSplatData,
                                              sectionSize, sceneCenter, blockSize, bucketSize);
             return loadPromise.then((splatBuffer) => {
