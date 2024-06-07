@@ -160,6 +160,11 @@ export class Viewer {
         }
         this.plyInMemoryCompressionLevel = options.plyInMemoryCompressionLevel;
 
+        // When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to
+        // populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified
+        // it will need to be re-populated from the splat buffer(s).
+        this.freeIntermediateSplatData = options.freeIntermediateSplatData || false;
+
         // It appears that for certain iOS versions, special actions need to be taken with the
         // usage of SIMD instructions and shared memory
         if (isIOS()) {
@@ -1027,8 +1032,8 @@ export class Viewer {
     addSplatBuffers = function() {
 
         return function(splatBuffers, splatBufferOptions = [], finalBuild = true, showLoadingUI = true,
-                        showLoadingUIForSplatTreeBuild = true, replaceExisting = false, enableRenderBeforeFirstSort = false,
-                        preserveVisibleRegion = true) {
+                        showLoadingUIForSplatTreeBuild = true, replaceExisting = false,
+                        enableRenderBeforeFirstSort = false, preserveVisibleRegion = true) {
 
             if (this.isDisposingOrDisposed()) return Promise.resolve();
 
@@ -1120,8 +1125,8 @@ export class Viewer {
 
         let splatOptimizingTaskId;
 
-        return function(splatBuffers, splatBufferOptions, finalBuild = true,
-                        showLoadingUIForSplatTreeBuild = false, replaceExisting = false, preserveVisibleRegion = true) {
+        return function(splatBuffers, splatBufferOptions, finalBuild = true, showLoadingUIForSplatTreeBuild = false,
+                        replaceExisting = false, preserveVisibleRegion = true) {
             if (this.isDisposingOrDisposed()) return;
             let allSplatBuffers = [];
             let allSplatBufferOptions = [];
@@ -1149,8 +1154,10 @@ export class Viewer {
                     splatOptimizingTaskId = null;
                 }
             };
-            return this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true,
-                                        finalBuild, onSplatTreeIndexesUpload, onSplatTreeReady, preserveVisibleRegion);
+            const buildResults = this.splatMesh.build(allSplatBuffers, allSplatBufferOptions, true, finalBuild, onSplatTreeIndexesUpload,
+                                                      onSplatTreeReady, preserveVisibleRegion);
+            if (finalBuild && this.freeIntermediateSplatData) this.splatMesh.freeIntermediateSplatData();
+            return buildResults;
         };
 
     }();
