@@ -55,55 +55,13 @@ export class INRIAV1PlyParser {
     parseToUncompressedSplatBufferSection(header, fromSplat, toSplat, splatData, splatDataOffset,
                                                  toBuffer, toOffset, outSphericalHarmonicsDegree = 0) {
         outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
-        const sphericalHarmonicsCount = getSphericalHarmonicsComponentCountForDegree(outSphericalHarmonicsDegree);
-        const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
-        const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
-        const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
-        const outBytesPerColor = SplatBuffer.CompressionLevels[0].BytesPerColor;
         const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree].BytesPerSplat;
 
         for (let i = fromSplat; i <= toSplat; i++) {
-
             const parsedSplat = INRIAV1PlyParser.parseToUncompressedSplat(splatData, i, header,
                                                                           splatDataOffset, outSphericalHarmonicsDegree);
-
             const outBase = i * outBytesPerSplat + toOffset;
-            const outCenter = new Float32Array(toBuffer, outBase, 3);
-            const outScale = new Float32Array(toBuffer, outBase + outBytesPerCenter, 3);
-            const outRotation = new Float32Array(toBuffer, outBase + outBytesPerCenter + outBytesPerScale, 4);
-            const outColor = new Uint8Array(toBuffer, outBase + outBytesPerCenter + outBytesPerScale + outBytesPerRotation, 4);
-
-            outCenter[0] = parsedSplat[UncompressedSplatArray.OFFSET.X];
-            outCenter[1] = parsedSplat[UncompressedSplatArray.OFFSET.Y];
-            outCenter[2] = parsedSplat[UncompressedSplatArray.OFFSET.Z];
-
-            outScale[0] = parsedSplat[UncompressedSplatArray.OFFSET.SCALE0];
-            outScale[1] = parsedSplat[UncompressedSplatArray.OFFSET.SCALE1];
-            outScale[2] = parsedSplat[UncompressedSplatArray.OFFSET.SCALE2];
-
-            outRotation[0] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION0];
-            outRotation[1] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION1];
-            outRotation[2] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION2];
-            outRotation[3] = parsedSplat[UncompressedSplatArray.OFFSET.ROTATION3];
-
-            outColor[0] = parsedSplat[UncompressedSplatArray.OFFSET.FDC0];
-            outColor[1] = parsedSplat[UncompressedSplatArray.OFFSET.FDC1];
-            outColor[2] = parsedSplat[UncompressedSplatArray.OFFSET.FDC2];
-            outColor[3] = parsedSplat[UncompressedSplatArray.OFFSET.OPACITY];
-
-            if (outSphericalHarmonicsDegree >= 1) {
-                const outSphericalHarmonics = new Float32Array(toBuffer, outBase + outBytesPerCenter + outBytesPerScale +
-                                                               outBytesPerRotation + outBytesPerColor,
-                                                               sphericalHarmonicsCount);
-                for (let i = 0; i <= 8; i++) {
-                    outSphericalHarmonics[i] = parsedSplat[UncompressedSplatArray.OFFSET.FRC0 + i];
-                }
-                if (outSphericalHarmonicsDegree >= 2) {
-                    for (let i = 9; i <= 23; i++) {
-                        outSphericalHarmonics[i] = parsedSplat[UncompressedSplatArray.OFFSET.FRC0 + i];
-                    }
-                }
-            }
+            SplatBuffer.writeSplatDataToSectionBuffer(parsedSplat, toBuffer, outBase, 0, outSphericalHarmonicsDegree);
         }
     }
 

@@ -202,7 +202,7 @@ class Semver {
 
 export function isIOS() {
     const ua = navigator.userAgent;
-    return ua.indexOf('iPhone') > 0 || ua.indexOf('iPad') > 0 || ua.indexOf('iPhone') > 0;
+    return ua.indexOf('iPhone') > 0 || ua.indexOf('iPad') > 0;
 }
 
 export function getIOSSemever() {
