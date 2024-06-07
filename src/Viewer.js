@@ -154,6 +154,12 @@ export class Viewer {
         if (options.enableSIMDInSort === undefined || options.enableSIMDInSort === null) options.enableSIMDInSort = true;
         this.enableSIMDInSort = options.enableSIMDInSort;
 
+        // Level to compress PLY files when loading them for direct rendering (not exporting to .ksplat)
+        if (options.plyInMemoryCompressionLevel === undefined || options.plyInMemoryCompressionLevel === null) {
+            options.plyInMemoryCompressionLevel = 2;
+        }
+        this.plyInMemoryCompressionLevel = options.plyInMemoryCompressionLevel;
+
         // It appears that for certain iOS versions, special actions need to be taken with the
         // usage of SIMD instructions and shared memory
         if (isIOS()) {
@@ -1005,7 +1011,7 @@ export class Viewer {
             return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
         } else if (format === SceneFormat.Ply) {
             return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
-                                         splatAlphaRemovalThreshold, 0, this.sphericalHarmonicsDegree);
+                                         splatAlphaRemovalThreshold, this.plyInMemoryCompressionLevel, this.sphericalHarmonicsDegree);
         }
         return AbortablePromise.reject(new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
     }

@@ -312,6 +312,7 @@ Advanced `Viewer` parameters
 | `sphericalHarmonicsDegree` | Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene). Valid values are 0, 1, or 2. Default value is 0.
 | `enablePerScenePropertiesInSplatShader` | When true, will include a usage of per-scene attributes in the splat shader, such as opacity. Default is false for performance reasons. These properties are separate from transform properties (scale, rotation, position) that are enabled by the 'dynamicScene' parameter.
 | `enableSIMDInSort` | Enable the usage of SIMD WebAssembly instructions for the splat sort.
+| `plyInMemoryCompressionLevel` | Level to compress `.ply` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 2.
 <br>
 
 ### Creating KSPLAT files

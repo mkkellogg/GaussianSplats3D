@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { clamp } from '../../Util.js';
 import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { SplatBuffer } from '../SplatBuffer.js';
-import { getSphericalHarmonicsComponentCountForDegree } from '../../Util.js';
 import { PlyParserUtils } from './PlyParserUtils.js';
 
 const FieldNamesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
