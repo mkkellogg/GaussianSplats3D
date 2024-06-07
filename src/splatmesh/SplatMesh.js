@@ -349,17 +349,12 @@ export class SplatMesh extends THREE.Mesh {
             });
         }
 
-        // EXPERIMENTAL !!
-        // if (finalBuild) {
-        //     this.freeDataTextureData(isUpdateBuild);
-        // }
-
         this.visible = (this.scenes.length > 0);
 
         return dataUpdateResults;
     }
 
-    freeDataTextureData(wasProgressiveBuild) {
+    freeIntermediateSplatData() {
 
         const deleteTextureData = (texture) => {
             delete texture.source.data;
@@ -381,53 +376,36 @@ export class SplatMesh extends THREE.Mesh {
             delete this.splatDataTextures.sceneIndexes.data;
         }
 
-        if (wasProgressiveBuild) {
-            deleteTextureData(this.splatDataTextures.covariances.texture);
+        this.splatDataTextures.centerColors.texture.needsUpdate = true;
+        this.splatDataTextures.centerColors.texture.onUpdate = () => {
             deleteTextureData(this.splatDataTextures.centerColors.texture);
-            if (this.splatDataTextures.sphericalHarmonics) {
-                if (this.splatDataTextures.sphericalHarmonics.texture) {
+        };
+
+        this.splatDataTextures.covariances.texture.needsUpdate = true;
+        this.splatDataTextures.covariances.texture.onUpdate = () => {
+            deleteTextureData(this.splatDataTextures.covariances.texture);
+        };
+
+        if (this.splatDataTextures.sphericalHarmonics) {
+            if (this.splatDataTextures.sphericalHarmonics.texture) {
+                this.splatDataTextures.sphericalHarmonics.texture.needsUpdate = true;
+                this.splatDataTextures.sphericalHarmonics.texture.onUpdate = () => {
                     deleteTextureData(this.splatDataTextures.sphericalHarmonics.texture);
-                } else {
-                    this.splatDataTextures.sphericalHarmonics.textures.forEach((texture) => {
-                        deleteTextureData(texture);
-                    });
-                }
-            }
-            if (this.splatDataTextures.sceneIndexes) {
-                deleteTextureData(this.splatDataTextures.sceneIndexes.texture);
-            }
-        } else {
-            this.splatDataTextures.centerColors.texture.needsUpdate = true;
-            this.splatDataTextures.centerColors.texture.onUpdate = () => {
-                deleteTextureData(this.splatDataTextures.centerColors.texture);
-            };
-
-            this.splatDataTextures.covariances.texture.needsUpdate = true;
-            this.splatDataTextures.covariances.texture.onUpdate = () => {
-                deleteTextureData(this.splatDataTextures.covariances.texture);
-            };
-
-            if (this.splatDataTextures.sphericalHarmonics) {
-                if (this.splatDataTextures.sphericalHarmonics.texture) {
-                    this.splatDataTextures.sphericalHarmonics.texture.needsUpdate = true;
-                    this.splatDataTextures.sphericalHarmonics.texture.onUpdate = () => {
-                        deleteTextureData(this.splatDataTextures.sphericalHarmonics.texture);
-                    };
-                } else {
-                    this.splatDataTextures.sphericalHarmonics.textures.forEach((texture) => {
-                        texture.needsUpdate = true;
-                        texture.onUpdate = () => {
-                            deleteTextureData(texture);
-                        };
-                    });
-                }
-            }
-            if (this.splatDataTextures.sceneIndexes) {
-                this.splatDataTextures.sceneIndexes.texture.needsUpdate = true;
-                this.splatDataTextures.sceneIndexes.texture.onUpdate = () => {
-                    deleteTextureData(this.splatDataTextures.sceneIndexes.texture);
                 };
+            } else {
+                this.splatDataTextures.sphericalHarmonics.textures.forEach((texture) => {
+                    texture.needsUpdate = true;
+                    texture.onUpdate = () => {
+                        deleteTextureData(texture);
+                    };
+                });
             }
+        }
+        if (this.splatDataTextures.sceneIndexes) {
+            this.splatDataTextures.sceneIndexes.texture.needsUpdate = true;
+            this.splatDataTextures.sceneIndexes.texture.onUpdate = () => {
+                deleteTextureData(this.splatDataTextures.sceneIndexes.texture);
+            };
         }
     }
     /**
