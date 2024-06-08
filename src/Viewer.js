@@ -162,8 +162,11 @@ export class Viewer {
 
         // When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to
         // populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified
-        // it will need to be re-populated from the splat buffer(s).
-        this.freeIntermediateSplatData = options.freeIntermediateSplatData || false;
+        // it will need to be re-populated from the splat buffer(s). Default is false.
+        if (options.freeIntermediateSplatData === undefined || options.freeIntermediateSplatData === null) {
+            options.freeIntermediateSplatData = false;
+        }
+        this.freeIntermediateSplatData = options.freeIntermediateSplatData;
 
         // It appears that for certain iOS versions, special actions need to be taken with the
         // usage of SIMD instructions and shared memory

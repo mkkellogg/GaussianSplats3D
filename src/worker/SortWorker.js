@@ -153,8 +153,8 @@ function sortWorker(self) {
                 module: {},
                 env: {
                     memory: new WebAssembly.Memory({
-                        initial: totalPagesRequired * 2,
-                        maximum: totalPagesRequired * 4,
+                        initial: totalPagesRequired,
+                        maximum: totalPagesRequired,
                         shared: true,
                     }),
                 }
