@@ -32,49 +32,64 @@ const VISIBLE_REGION_EXPANSION_DELTA = 1;
  */
 export class SplatMesh extends THREE.Mesh {
 
-    constructor(dynamicMode = true, enablePerScenePropertiesInShader = false, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
+    constructor(dynamicMode = true, enableOptionalEffects = false, halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1,
                 enableDistancesComputationOnGPU = true, integerBasedDistancesComputation = false,
                 antialiased = false, maxScreenSpaceSplatSize = 1024, logLevel = LogLevel.None, sphericalHarmonicsDegree = 0) {
         super(dummyGeometry, dummyMaterial);
+
         // Reference to a Three.js renderer
         this.renderer = undefined;
+
         // Use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit
         this.halfPrecisionCovariancesOnGPU = halfPrecisionCovariancesOnGPU;
+
         // When 'dynamicMode' is true, scenes are assumed to be non-static. Dynamic scenes are handled differently
         // and certain optimizations cannot be made for them. Additionally, by default, all splat data retrieved from
         // this splat mesh will not have their scene transform applied to them if the splat mesh is dynamic. That
         // can be overriden via parameters to the individual functions that are used to retrieve splat data.
         this.dynamicMode = dynamicMode;
+
         // Ratio of the resolution in physical pixels to the resolution in CSS pixels for the current display device
         this.devicePixelRatio = devicePixelRatio;
+
         // Use a transform feedback to calculate splat distances from the camera
         this.enableDistancesComputationOnGPU = enableDistancesComputationOnGPU;
+
         // Use a faster integer-based approach for calculating splat distances from the camera
         this.integerBasedDistancesComputation = integerBasedDistancesComputation;
+
         // When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at a
         // substantially different resolution than that at which they were rendered during training. This will only work correctly
         // for models that were trained using a process that utilizes this compensation calculation. For more details:
         // https://github.com/nerfstudio-project/gsplat/pull/117
         // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
         this.antialiased = antialiased;
+
         // Specify the maximum clip space splat size, can help deal with large splats that get too unwieldy
         this.maxScreenSpaceSplatSize = maxScreenSpaceSplatSize;
+
         // The verbosity of console logging
         this.logLevel = logLevel;
+
         // Degree 0 means no spherical harmonics
         this.sphericalHarmonicsDegree = sphericalHarmonicsDegree;
         this.minSphericalHarmonicsDegree = 0;
-        // When true, will include a usage of per-scene attributes in the shader, such as opacity. Default is false for
-        // performance reasons. These properties are separate from transform properties (scale, rotation, position) that are
-        // enabled by the 'dynamicScene' parameter.
-        this.enablePerScenePropertiesInShader = enablePerScenePropertiesInShader;
+
+        // When true, allows for usage of extra properties and attributes during rendering for effects such as opacity adjustment.
+        // Default is false for performance reasons. These properties are separate from transform properties (scale, rotation, position)
+        // that are enabled by the 'dynamicScene' parameter.
+        this.enableOptionalEffects = enableOptionalEffects;
+
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
+
         // Special octree tailored to SplatMesh instances
         this.splatTree = null;
         this.baseSplatTree = null;
-        // Textures in which splat data will be stored for rendering
+
+        // Cache textures and the intermediate data used to populate them
         this.splatDataTextures = {};
+
         this.distancesTransformFeedback = {
             'id': null,
             'vertexShader': null,
@@ -88,6 +103,7 @@ export class SplatMesh extends THREE.Mesh {
             'sceneIndexesLoc': -1,
             'transformsLocs': []
         };
+
         this.globalSplatIndexToLocalSplatIndexMap = [];
         this.globalSplatIndexToSceneIndexMap = [];
 
@@ -322,7 +338,7 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildMaxSplatCount = 0;
             this.disposeMeshData();
             this.geometry = SplatGeometry.build(maxSplatCount);
-            this.material = SplatMaterial.build(this.dynamicMode, this.enablePerScenePropertiesInShader, this.antialiased,
+            this.material = SplatMaterial.build(this.dynamicMode, this.enableOptionalEffects, this.antialiased,
                                                 this.maxScreenSpaceSplatSize, this.splatScale, this.pointCloudModeEnabled,
                                                 this.minSphericalHarmonicsDegree);
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
@@ -746,7 +762,7 @@ export class SplatMesh extends THREE.Mesh {
             this.material.uniformsNeedUpdate = true;
         }
 
-        if (this.dynamicMode || this.enablePerScenePropertiesInShader) {
+        if (this.dynamicMode || this.enableOptionalEffects) {
             const sceneIndexesTexSize = computeDataTextureSize(SCENE_INDEXES_ELEMENTS_PER_TEXEL, 4);
             const paddedTransformIndexes = new Uint32Array(sceneIndexesTexSize.x *
                                                            sceneIndexesTexSize.y * SCENE_INDEXES_ELEMENTS_PER_TEXEL);
@@ -1061,7 +1077,7 @@ export class SplatMesh extends THREE.Mesh {
                         this.material.uniforms.transforms.value[i].copy(this.getScene(i).transform);
                     }
                 }
-                if (this.enablePerScenePropertiesInShader) {
+                if (this.enableOptionalEffects) {
                     for (let i = 0; i < this.scenes.length; i++) {
                         this.material.uniforms.sceneOpacity.value[i] = clamp(this.getScene(i).opacity, 0.0, 1.0);
                         this.material.uniforms.sceneVisibility.value[i] = this.getScene(i).visible ? 1 : 0;
