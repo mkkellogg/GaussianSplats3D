@@ -313,7 +313,7 @@ Advanced `Viewer` parameters
 | `enablePerScenePropertiesInSplatShader` | When true, will include a usage of per-scene attributes in the splat shader, such as opacity. Default is false for performance reasons. These properties are separate from transform properties (scale, rotation, position) that are enabled by the 'dynamicScene' parameter.
 | `enableSIMDInSort` | Enable the usage of SIMD WebAssembly instructions for the splat sort.
 | `plyInMemoryCompressionLevel` | Level to compress `.ply` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 2.
-| `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s).
+| `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s). Default is false.
 <br>
 
 ### Creating KSPLAT files
