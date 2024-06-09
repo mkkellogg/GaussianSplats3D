@@ -371,21 +371,17 @@ export class SplatMaterial {
                     cov2Dm[0][0] += 0.3;
                     cov2Dm[1][1] += 0.3;
                     float detBlur = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
-                    float compensation = sqrt(max(detOrig / detBlur, 0.0));
+                    vColor.a *= sqrt(max(detOrig / detBlur, 0.0));
+                    if (vColor.a < minAlpha) return;
                 `;
             } else {
                 vertexShaderSource += `
                     cov2Dm[0][0] += 0.3;
                     cov2Dm[1][1] += 0.3;
-                    float compensation = 1.0;
                 `;
             }
 
             vertexShaderSource += `
-
-                vColor.a *= compensation;
-
-                if (vColor.a < minAlpha) return;
 
                 // We are interested in the upper-left 2x2 portion of the projected 3D covariance matrix because
                 // we only care about the X and Y values. We want the X-diagonal, cov2Dm[0][0],
