@@ -264,9 +264,10 @@ const viewer = new GaussianSplats3D.Viewer({
     'useBuiltInControls': false,
     'ignoreDevicePixelRatio': false,
     'gpuAcceleratedSort': true,
-    'halfPrecisionCovariancesOnGPU': true,
+    `enableSIMDInSort`: true,
     'sharedMemoryForWorkers': true,
     'integerBasedSort': true,
+    'halfPrecisionCovariancesOnGPU': true,
     'dynamicScene': false,
     'webXRMode': GaussianSplats3D.WebXRMode.None,
     'renderMode': GaussianSplats3D.RenderMode.OnChange,
@@ -274,7 +275,10 @@ const viewer = new GaussianSplats3D.Viewer({
     'antialiased': false,
     'focalAdjustment': 1.0,
     'logLevel': GaussianSplats3D.LogLevel.None,
-    'sphericalHarmonicsDegree': 0
+    'sphericalHarmonicsDegree': 0,
+    `enableOptionalEffects`: false,
+    `plyInMemoryCompressionLevel`: 2
+    `freeIntermediateSplatData`: false
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
@@ -294,14 +298,15 @@ Advanced `Viewer` parameters
 | Parameter | Purpose
 | --- | ---
 | `selfDrivenMode` | If `false`, tells the viewer that you will manually call its `update()` and `render()` methods. Defaults to `true`.
-| `useBuiltInControls` | Tells the viewer to use its own camera controls. Defaults to `true`.
 | `renderer` | Pass an instance of a Three.js `Renderer` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `camera` | Pass an instance of a Three.js `Camera` to the viewer, otherwise it will create its own. Defaults to `undefined`.
+| `useBuiltInControls` | Tells the viewer to use its own camera controls. Defaults to `true`.
 | `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
 | `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. It is recommended that this only be set to `true` when `sharedMemoryForWorkers` is also `true`. Defaults to `false` on mobile devices, `true` otherwise.
-| `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `false`.
+| `enableSIMDInSort` | Enable the usage of SIMD WebAssembly instructions for the splat sort. Default is `true`.
 | `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
 | `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
+| `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `false`.
 | `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static. Additionally all splat data retrieved from the viewer's splat mesh will not have their respective scene transform applied to them by default.
 | `webXRMode` | Tells the viewer whether or not to enable built-in Web VR or Web AR. Valid values are defined in the `WebXRMode` enum: `None`, `VR`, and `AR`. Defaults to `None`.
 | `renderMode` | Controls when the viewer renders the scene. Valid values are defined in the `RenderMode` enum: `Always`, `OnChange`, and `Never`. Defaults to `Always`.
@@ -310,10 +315,9 @@ Advanced `Viewer` parameters
 | `focalAdjustment` | Hacky, non-scientific parameter for tweaking focal length related calculations. For scenes with very small gaussians & small details, increasing this value can help improve visual quality. Default value is 1.0.
 | `logLevel` | Verbosity of the console logging. Defaults to `GaussianSplats3D.LogLevel.None`.
 | `sphericalHarmonicsDegree` | Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene). Valid values are 0, 1, or 2. Default value is 0.
-| `enableOptionalEffects` | When true, allows for usage of extra properties and attributes during rendering for effects such as opacity adjustment. Default is false for performance reasons. These properties are separate from transform properties (scale, rotation, position) that are enabled by the 'dynamicScene' parameter.
-| `enableSIMDInSort` | Enable the usage of SIMD WebAssembly instructions for the splat sort.
+| `enableOptionalEffects` | When true, allows for usage of extra properties and attributes during rendering for effects such as opacity adjustment. Default is `false` for performance reasons. These properties are separate from transform properties (scale, rotation, position) that are enabled by the `dynamicScene` parameter.
 | `plyInMemoryCompressionLevel` | Level to compress `.ply` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 2.
-| `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s). Default is false.
+| `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and used to populate data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s). Defaults to `false`.
 <br>
 
 ### Creating KSPLAT files
