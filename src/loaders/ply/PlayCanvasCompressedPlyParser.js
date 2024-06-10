@@ -69,7 +69,7 @@ const getElementPropStorage = (element, name) => {
     ?.storage;
 };
 
-export class CompressedPlyParser {
+export class PlayCanvasCompressedPlyParser {
 
   static decodeHeaderText(headerText) {
 
@@ -135,6 +135,7 @@ export class CompressedPlyParser {
       'vertexElement': vertexElement,
       'bytesPerSplat': bytesPerSplat,
       'headerSizeBytes': headerText.indexOf(HeaderEndToken) + HeaderEndToken.length + 1,
+      'sphericalHarmonicsDegree': 0
     };
   }
 
@@ -203,7 +204,7 @@ export class CompressedPlyParser {
       buf.slice(0, endHeaderTokenOffset)
     );
 
-    const {chunkElement, vertexElement, bytesPerSplat} = CompressedPlyParser.decodeHeaderText(headerText);
+    const {chunkElement, vertexElement, bytesPerSplat} = PlayCanvasCompressedPlyParser.decodeHeaderText(headerText);
 
     return {
       'headerSizeBytes': endHeaderTokenOffset + HeaderEndTokenBytes.length,
@@ -268,10 +269,11 @@ export class CompressedPlyParser {
 
   static readPly(plyBuffer, propertyFilter = null) {
 
-    const header = CompressedPlyParser.decodeHeader(plyBuffer);
+    const header = PlayCanvasCompressedPlyParser.decodeHeader(plyBuffer);
 
-    let readIndex = CompressedPlyParser.readElementData(header.chunkElement, plyBuffer, header.headerSizeBytes, null, null, propertyFilter);
-    CompressedPlyParser.readElementData(header.vertexElement, plyBuffer, readIndex, null, null, propertyFilter);
+    let readIndex = PlayCanvasCompressedPlyParser.readElementData(header.chunkElement, plyBuffer,
+                                                                  header.headerSizeBytes, null, null, propertyFilter);
+    PlayCanvasCompressedPlyParser.readElementData(header.vertexElement, plyBuffer, readIndex, null, null, propertyFilter);
 
     return {
       'chunkElement': header.chunkElement,
@@ -359,64 +361,37 @@ export class CompressedPlyParser {
   static parseToUncompressedSplatBufferSection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
                                                vertexDataBuffer, veretxReadOffset, outBuffer, outOffset, propertyFilter = null) {
 
-    CompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, veretxReadOffset, fromIndex, toIndex, propertyFilter);
+    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, veretxReadOffset, fromIndex, toIndex, propertyFilter);
 
-    const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
-    const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
-    const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
     const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[0].BytesPerSplat;
 
     const { positionExtremes, scaleExtremes, position, rotation, scale, color } =
-      CompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
+      PlayCanvasCompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
 
-    const OFFSET = UncompressedSplatArray.OFFSET;
     const tempSplat = UncompressedSplatArray.createSplat();
 
     for (let i = fromIndex; i <= toIndex; ++i) {
-
-      CompressedPlyParser.decompressSplat(i, chunkSplatIndexOffset, position, positionExtremes,
-                                          scale, scaleExtremes, rotation, color, tempSplat);
-
+      PlayCanvasCompressedPlyParser.decompressSplat(i, chunkSplatIndexOffset, position, positionExtremes,
+                                                    scale, scaleExtremes, rotation, color, tempSplat);
       const outBase = i * outBytesPerSplat + outOffset;
-      const outCenter = new Float32Array(outBuffer, outBase, 3);
-      const outScale = new Float32Array(outBuffer, outBase + outBytesPerCenter, 3);
-      const outRotation = new Float32Array(outBuffer, outBase + outBytesPerCenter + outBytesPerScale, 4);
-      const outColor = new Uint8Array(outBuffer, outBase + outBytesPerCenter + outBytesPerScale + outBytesPerRotation, 4);
-
-      outCenter[0] = tempSplat[OFFSET.X];
-      outCenter[1] = tempSplat[OFFSET.Y];
-      outCenter[2] = tempSplat[OFFSET.Z];
-
-      outScale[0] = tempSplat[OFFSET.SCALE0];
-      outScale[1] = tempSplat[OFFSET.SCALE1];
-      outScale[2] = tempSplat[OFFSET.SCALE2];
-
-      outRotation[0] = tempSplat[OFFSET.ROTATION0];
-      outRotation[1] = tempSplat[OFFSET.ROTATION1];
-      outRotation[2] = tempSplat[OFFSET.ROTATION2];
-      outRotation[3] = tempSplat[OFFSET.ROTATION3];
-
-      outColor[0] = tempSplat[OFFSET.FDC0];
-      outColor[1] = tempSplat[OFFSET.FDC1];
-      outColor[2] = tempSplat[OFFSET.FDC2];
-      outColor[3] = tempSplat[OFFSET.OPACITY];
+      SplatBuffer.writeSplatDataToSectionBuffer(tempSplat, outBuffer, outBase, 0, 0);
     }
   }
 
   static parseToUncompressedSplatArray(plyBuffer) {
-    const { chunkElement, vertexElement } = CompressedPlyParser.readPly(plyBuffer);
+    const { chunkElement, vertexElement } = PlayCanvasCompressedPlyParser.readPly(plyBuffer);
 
     const splatArray = new UncompressedSplatArray();
 
     const { positionExtremes, scaleExtremes, position, rotation, scale, color } =
-      CompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
+      PlayCanvasCompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
 
     for (let i = 0; i < vertexElement.count; ++i) {
 
       splatArray.addDefaultSplat();
       const newSplat = splatArray.getSplat(splatArray.splatCount - 1);
 
-      CompressedPlyParser.decompressSplat(i, 0, position, positionExtremes, scale, scaleExtremes, rotation, color, newSplat);
+      PlayCanvasCompressedPlyParser.decompressSplat(i, 0, position, positionExtremes, scale, scaleExtremes, rotation, color, newSplat);
     }
 
     const mat = new THREE.Matrix4();

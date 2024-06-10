@@ -45,29 +45,30 @@ export class SplatPartitioner {
 
     static getStandardPartitioner(partitionSize = 0, sceneCenter = new THREE.Vector3(),
                                   blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
+
         const partitionGenerator = (splatArray) => {
+
+            const OFFSET_X = UncompressedSplatArray.OFFSET.X;
+            const OFFSET_Y = UncompressedSplatArray.OFFSET.Y;
+            const OFFSET_Z = UncompressedSplatArray.OFFSET.Z;
 
             if (partitionSize <= 0) partitionSize = splatArray.splatCount;
 
-            const centerA = new THREE.Vector3();
-            const centerB = new THREE.Vector3();
+            const center = new THREE.Vector3();
             const clampDistance = 0.5;
             const clampPoint = (point) => {
                 point.x = Math.floor(point.x / clampDistance) * clampDistance;
                 point.y = Math.floor(point.y / clampDistance) * clampDistance;
                 point.z = Math.floor(point.z / clampDistance) * clampDistance;
             };
+            splatArray.splats.forEach((splat) => {
+                center.set(splat[OFFSET_X], splat[OFFSET_Y], splat[OFFSET_Z]).sub(sceneCenter);
+                clampPoint(center);
+                splat.centerDist = center.lengthSq();
+            });
             splatArray.splats.sort((a, b) => {
-                centerA.set(a[UncompressedSplatArray.OFFSET.X],
-                            a[UncompressedSplatArray.OFFSET.Y],
-                            a[UncompressedSplatArray.OFFSET.Z]).sub(sceneCenter);
-                clampPoint(centerA);
-                const centerADist = centerA.lengthSq();
-                centerB.set(b[UncompressedSplatArray.OFFSET.X],
-                            b[UncompressedSplatArray.OFFSET.Y],
-                            b[UncompressedSplatArray.OFFSET.Z]).sub(sceneCenter);
-                clampPoint(centerB);
-                const centerBDist = centerB.lengthSq();
+                let centerADist = a.centerDist;
+                let centerBDist = b.centerDist;
                 if (centerADist > centerBDist) return 1;
                 else return -1;
             });

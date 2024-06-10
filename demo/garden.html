@@ -43,7 +43,7 @@
     });
     let path = 'assets/data/garden/garden' + (mode ? '_high' : '') + '.ksplat';
     viewer.addSplatScene(path, {
-      'streamView': true
+      'progressiveLoad': true
     })
     .then(() => {
         viewer.start();

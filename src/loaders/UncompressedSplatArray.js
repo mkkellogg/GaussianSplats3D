@@ -42,7 +42,7 @@ export class UncompressedSplatArray {
         FRC20: 34,
         FRC21: 35,
         FRC22: 36,
-        FRC23: 37,
+        FRC23: 37
     };
 
     constructor(sphericalHarmonicsDegree = 0) {
