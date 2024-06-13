@@ -23,6 +23,7 @@ import { LoaderStatus } from './loaders/LoaderStatus.js';
 import { RenderMode } from './RenderMode.js';
 import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
+import { SplatRenderMode } from './SplatRenderMode.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -180,6 +181,12 @@ export class Viewer {
             }
         }
 
+        // Tell the viewer how to render the splats
+        if (options.splatRenderMode === undefined || options.splatRenderMode === null) {
+            options.splatRenderMode = SplatRenderMode.ThreeD;
+        }
+        this.splatRenderMode = options.splatRenderMode;
+
         this.createSplatMesh();
 
         this.controls = null;
@@ -253,9 +260,10 @@ export class Viewer {
     }
 
     createSplatMesh() {
-        this.splatMesh = new SplatMesh(this.dynamicScene, this.enableOptionalEffects, this.halfPrecisionCovariancesOnGPU,
-                                       this.devicePixelRatio, this.gpuAcceleratedSort, this.integerBasedSort, this.antialiased,
-                                       this.maxScreenSpaceSplatSize, this.logLevel, this.sphericalHarmonicsDegree);
+        this.splatMesh = new SplatMesh(this.splatRenderMode, this.dynamicScene, this.enableOptionalEffects,
+                                       this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort,
+                                       this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize, this.logLevel,
+                                       this.sphericalHarmonicsDegree);
         this.splatMesh.frustumCulled = false;
     }
 
@@ -1021,7 +1029,8 @@ export class Viewer {
             return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
                                          splatAlphaRemovalThreshold, this.plyInMemoryCompressionLevel, this.sphericalHarmonicsDegree);
         }
-        return AbortablePromise.reject(new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`));
+
+        throw new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`);
     }
 
     static isProgressivelyLoadable(format) {

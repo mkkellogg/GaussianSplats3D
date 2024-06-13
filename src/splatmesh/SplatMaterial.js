@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SplatRenderMode } from '../SplatRenderMode.js';
 import { Constants } from '../Constants.js';
 
 export class SplatMaterial {
@@ -17,8 +18,9 @@ export class SplatMaterial {
      * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
      * @return {THREE.ShaderMaterial}
      */
-    static build(dynamicMode = false, enableOptionalEffects = false, antialiased = false, maxScreenSpaceSplatSize = 2048,
-                 splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
+    static build(dynamicMode = false, splatRenderMode = SplatRenderMode.ThreeD, enableOptionalEffects = false, antialiased = false,
+                 maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
+
         // Contains the code to project 3D covariance to 2D and from there calculate the quad (using the eigen vectors of the
         // 2D covariance) that is ultimately rasterized
         let vertexShaderSource = `
@@ -26,13 +28,12 @@ export class SplatMaterial {
             #include <common>
 
             attribute uint splatIndex;
-
-            uniform highp sampler2D covariancesTexture;
             uniform highp usampler2D centersColorsTexture;
             uniform highp sampler2D sphericalHarmonicsTexture;
             uniform highp sampler2D sphericalHarmonicsTextureR;
             uniform highp sampler2D sphericalHarmonicsTextureG;
-            uniform highp sampler2D sphericalHarmonicsTextureB;`;
+            uniform highp sampler2D sphericalHarmonicsTextureB;
+        `;
 
         if (enableOptionalEffects || dynamicMode) {
             vertexShaderSource += `
@@ -54,6 +55,18 @@ export class SplatMaterial {
             `;
         }
 
+        if (splatRenderMode === SplatRenderMode.ThreeD) {
+            vertexShaderSource += `
+                uniform vec2 covariancesTextureSize;
+                uniform highp sampler2D covariancesTexture;
+            `;
+        } else {
+            vertexShaderSource += `
+                uniform vec2 scaleRotationsTextureSize;
+                uniform highp sampler2D scaleRotationsTexture;
+            `;
+        }
+
         vertexShaderSource += `
             uniform vec2 focal;
             uniform float orthoZoom;
@@ -62,7 +75,6 @@ export class SplatMaterial {
             uniform float inverseFocalAdjustment;
             uniform vec2 viewport;
             uniform vec2 basisViewport;
-            uniform vec2 covariancesTextureSize;
             uniform vec2 centersColorsTextureSize;
             uniform int sphericalHarmonicsDegree;
             uniform vec2 sphericalHarmonicsTextureSize;
@@ -78,8 +90,23 @@ export class SplatMaterial {
 
             varying vec4 vColor;
             varying vec2 vUv;
-
             varying vec2 vPosition;
+
+            mat3 quaternionToRotationMatrix(float x, float y, float z, float w) {
+                float s = 1.0 / sqrt(w * w + x * x + y * y + z * z);
+            
+                return mat3(
+                    1. - 2. * (y * y + z * z),
+                    2. * (x * y + w * z),
+                    2. * (x * z - w * y),
+                    2. * (x * y - w * z),
+                    1. - 2. * (x * x + z * z),
+                    2. * (y * z + w * x),
+                    2. * (x * z + w * y),
+                    2. * (y * z - w * x),
+                    1. - 2. * (x * x + y * y)
+                );
+            }
 
             const float sqrt8 = sqrt(8.0);
             const float minAlpha = 1.0 / 255.0;
@@ -164,6 +191,8 @@ export class SplatMaterial {
                     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
                     return;
                 }
+
+                vec3 ndcCenter = clipCenter.xyz / clipCenter.w;
 
                 vPosition = position.xy;
                 vColor = uintToRGBAVec(sampledCenterColor.r);
@@ -320,12 +349,242 @@ export class SplatMaterial {
                 `;
             }
 
+        vertexShaderSource += SplatMaterial.buildSplatProjectionSection(splatRenderMode, antialiased, enableOptionalEffects, maxScreenSpaceSplatSize);
+
+        let fragmentShaderSource = `
+            precision highp float;
+            #include <common>
+ 
+            uniform vec3 debugColor;
+
+            varying vec4 vColor;
+            varying vec2 vUv;
+
+            varying vec2 vPosition;
+
+            void main () {
+        `;
+
+        if(splatRenderMode === SplatRenderMode.ThreeD) {
+            fragmentShaderSource += `
+                // Compute the positional squared distance from the center of the splat to the current fragment.
+                float A = dot(vPosition, vPosition);
+                // Since the positional data in vPosition has been scaled by sqrt(8), the squared result will be
+                // scaled by a factor of 8. If the squared result is larger than 8, it means it is outside the ellipse
+                // defined by the rectangle formed by vPosition. It also means it's farther
+                // away than sqrt(8) standard deviations from the mean.
+                if (A > 8.0) discard;
+                vec3 color = vColor.rgb;
+
+                // Since the rendered splat is scaled by sqrt(8), the inverse covariance matrix that is part of
+                // the gaussian formula becomes the identity matrix. We're then left with (X - mean) * (X - mean),
+                // and since 'mean' is zero, we have X * X, which is the same as A:
+                float opacity = exp(-0.5 * A) * vColor.a;
+
+                gl_FragColor = vec4(color.rgb, opacity);
+            `;
+        } else {
+            fragmentShaderSource += `
+            gl_FragColor = vec4(vColor.rgb, vColor.a);
+            `;
+        }
+
+        fragmentShaderSource += `
+            }
+        `;
+
+        const uniforms = {
+            'sceneCenter': {
+                'type': 'v3',
+                'value': new THREE.Vector3()
+            },
+            'fadeInComplete': {
+                'type': 'i',
+                'value': 0
+            },
+            'orthographicMode': {
+                'type': 'i',
+                'value': 0
+            },
+            'visibleRegionFadeStartRadius': {
+                'type': 'f',
+                'value': 0.0
+            },
+            'visibleRegionRadius': {
+                'type': 'f',
+                'value': 0.0
+            },
+            'currentTime': {
+                'type': 'f',
+                'value': 0.0
+            },
+            'firstRenderTime': {
+                'type': 'f',
+                'value': 0.0
+            },
+            'centersColorsTexture': {
+                'type': 't',
+                'value': null
+            },
+            'sphericalHarmonicsTexture': {
+                'type': 't',
+                'value': null
+            },
+            'sphericalHarmonicsTextureR': {
+                'type': 't',
+                'value': null
+            },
+            'sphericalHarmonicsTextureG': {
+                'type': 't',
+                'value': null
+            },
+            'sphericalHarmonicsTextureB': {
+                'type': 't',
+                'value': null
+            },
+            'focal': {
+                'type': 'v2',
+                'value': new THREE.Vector2()
+            },
+            'orthoZoom': {
+                'type': 'f',
+                'value': 1.0
+            },
+            'inverseFocalAdjustment': {
+                'type': 'f',
+                'value': 1.0
+            },
+            'viewport': {
+                'type': 'v2',
+                'value': new THREE.Vector2()
+            },
+            'basisViewport': {
+                'type': 'v2',
+                'value': new THREE.Vector2()
+            },
+            'debugColor': {
+                'type': 'v3',
+                'value': new THREE.Color()
+            },
+            'centersColorsTextureSize': {
+                'type': 'v2',
+                'value': new THREE.Vector2(1024, 1024)
+            },
+            'sphericalHarmonicsDegree': {
+                'type': 'i',
+                'value': maxSphericalHarmonicsDegree
+            },
+            'sphericalHarmonicsTextureSize': {
+                'type': 'v2',
+                'value': new THREE.Vector2(1024, 1024)
+            },
+            'sphericalHarmonics8BitMode': {
+                'type': 'i',
+                'value': 0
+            },
+            'sphericalHarmonicsMultiTextureMode': {
+                'type': 'i',
+                'value': 0
+            },
+            'splatScale': {
+                'type': 'f',
+                'value': splatScale
+            },
+            'pointCloudModeEnabled': {
+                'type': 'i',
+                'value': pointCloudModeEnabled ? 1 : 0
+            }
+        };
+
+        if (splatRenderMode === SplatRenderMode.ThreeD) {
+            uniforms['covariancesTexture'] = {
+                'type': 't',
+                'value': null
+            };
+            uniforms['covariancesTextureSize'] = {
+                'type': 'v2',
+                'value': new THREE.Vector2(1024, 1024)
+            };
+        } else {
+            uniforms['scaleRotationsTexture'] = {
+                'type': 't',
+                'value': null
+            };
+            uniforms['scaleRotationsTextureSize'] = {
+                'type': 'v2',
+                'value': new THREE.Vector2(1024, 1024)
+            };
+        }
+
+        if (dynamicMode || enableOptionalEffects) {
+            uniforms['sceneIndexesTexture'] = {
+                'type': 't',
+                'value': null
+            };
+            uniforms['sceneIndexesTextureSize'] = {
+                'type': 'v2',
+                'value': new THREE.Vector2(1024, 1024)
+            };
+        }
+
+        if (enableOptionalEffects) {
+            const sceneOpacity = [];
+            for (let i = 0; i < Constants.MaxScenes; i++) {
+                sceneOpacity.push(1.0);
+            }
+            uniforms['sceneOpacity'] ={
+                'type': 'f',
+                'value': sceneOpacity
+            };
+
+            const sceneVisibility = [];
+            for (let i = 0; i < Constants.MaxScenes; i++) {
+                sceneVisibility.push(1);
+            }
+            uniforms['sceneVisibility'] ={
+                'type': 'i',
+                'value': sceneVisibility
+            };
+        }
+
+        if (dynamicMode) {
+            const transformMatrices = [];
+            for (let i = 0; i < Constants.MaxScenes; i++) {
+                transformMatrices.push(new THREE.Matrix4());
+            }
+            uniforms['transforms'] = {
+                'type': 'mat4',
+                'value': transformMatrices
+            };
+        }
+
+        const material = new THREE.ShaderMaterial({
+            uniforms: uniforms,
+            vertexShader: vertexShaderSource,
+            fragmentShader: fragmentShaderSource,
+            transparent: true,
+            alphaTest: 1.0,
+            blending: THREE.NormalBlending,
+            depthTest: true,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        return material;
+    }
+
+    static buildSplatProjectionSection(splatRenderMode, antialiased, enableOptionalEffects, maxScreenSpaceSplatSize) {
+
+        let vertexShaderSource = "";
+
+        if (splatRenderMode === SplatRenderMode.ThreeD) {
+
             vertexShaderSource += `
 
-                vec4 sampledCovarianceA = texture(covariancesTexture,
-                                                  getDataUVF(nearestEvenIndex, 1.5, oddOffset, covariancesTextureSize));
-                vec4 sampledCovarianceB = texture(covariancesTexture,
-                                                  getDataUVF(nearestEvenIndex, 1.5, oddOffset + uint(1), covariancesTextureSize));
+                vec4 sampledCovarianceA = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset,
+                                                                                 covariancesTextureSize));
+                vec4 sampledCovarianceB = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset + uint(1),
+                                                                                 covariancesTextureSize));
 
                 vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rgb) * (1.0 - fOddOffset) +
                                          vec3(sampledCovarianceA.ba, sampledCovarianceB.r) * fOddOffset;
@@ -389,8 +648,6 @@ export class SplatMaterial {
                 // need cov2Dm[1][0] because it is a symetric matrix.
                 vec3 cov2Dv = vec3(cov2Dm[0][0], cov2Dm[0][1], cov2Dm[1][1]);
 
-                vec3 ndcCenter = clipCenter.xyz / clipCenter.w;
-
                 // We now need to solve for the eigen-values and eigen vectors of the 2D covariance matrix
                 // so that we can determine the 2D basis for the splat. This is done using the method described
                 // here: https://people.math.harvard.edu/~knill/teaching/math21b2004/exhibits/2dmatrices/index.html
@@ -445,7 +702,7 @@ export class SplatMaterial {
 
             if (enableOptionalEffects) {
                 vertexShaderSource += `
-                     vColor.a *= splatOpacityFromScene;
+                    vColor.a *= splatOpacityFromScene;
                 `;
             }
 
@@ -460,201 +717,143 @@ export class SplatMaterial {
                 vPosition *= sqrt8;
             }`;
 
-        const fragmentShaderSource = `
-            precision highp float;
-            #include <common>
- 
-            uniform vec3 debugColor;
+        } else {
+            /*
 
-            varying vec4 vColor;
-            varying vec2 vUv;
+            	glm::mat3 R = quat_to_rotmat(rot);
+                glm::mat3 S = scale_to_mat(scale, mod);
+                glm::mat3 L = R * S;
 
-            varying vec2 vPosition;
+                // center of Gaussians in the camera coordinate
+                glm::mat3x4 splat2world = glm::mat3x4(
+                    glm::vec4(L[0], 0.0),
+                    glm::vec4(L[1], 0.0),
+                    glm::vec4(p_orig.x, p_orig.y, p_orig.z, 1)
+                );
 
-            void main () {
-                // Compute the positional squared distance from the center of the splat to the current fragment.
-                float A = dot(vPosition, vPosition);
-                // Since the positional data in vPosition has been scaled by sqrt(8), the squared result will be
-                // scaled by a factor of 8. If the squared result is larger than 8, it means it is outside the ellipse
-                // defined by the rectangle formed by vPosition. It also means it's farther
-                // away than sqrt(8) standard deviations from the mean.
-                if (A > 8.0) discard;
-                vec3 color = vColor.rgb;
+                glm::mat4 world2ndc = glm::mat4(
+                    projmatrix[0], projmatrix[4], projmatrix[8], projmatrix[12],
+                    projmatrix[1], projmatrix[5], projmatrix[9], projmatrix[13],
+                    projmatrix[2], projmatrix[6], projmatrix[10], projmatrix[14],
+                    projmatrix[3], projmatrix[7], projmatrix[11], projmatrix[15]
+                );
 
-                // Since the rendered splat is scaled by sqrt(8), the inverse covariance matrix that is part of
-                // the gaussian formula becomes the identity matrix. We're then left with (X - mean) * (X - mean),
-                // and since 'mean' is zero, we have X * X, which is the same as A:
-                float opacity = exp(-0.5 * A) * vColor.a;
+                glm::mat3x4 ndc2pix = glm::mat3x4(
+                    glm::vec4(float(W) / 2.0, 0.0, 0.0, float(W-1) / 2.0),
+                    glm::vec4(0.0, float(H) / 2.0, 0.0, float(H-1) / 2.0),
+                    glm::vec4(0.0, 0.0, 0.0, 1.0)
+                );
 
-                gl_FragColor = vec4(color.rgb, opacity);
+                T = glm::transpose(splat2world) * world2ndc * ndc2pix;
+                normal = transformVec4x3({L[2].x, L[2].y, L[2].z}, viewmatrix);
+
+            */
+        
+            // Compute a 2D-to-2D mapping matrix from a tangent plane into a image plane
+            // given a 2D gaussian parameters. T = WH (from the paper: https://arxiv.org/pdf/2403.17888)
+            vertexShaderSource += `
+
+                vec4 scaleRotationA = texture(scaleRotationsTexture, getDataUVF(nearestEvenIndex, 1.5,
+                                                                                oddOffset, scaleRotationsTextureSize));
+                vec4 scaleRotationB = texture(scaleRotationsTexture, getDataUVF(nearestEvenIndex, 1.5,
+                                                                                oddOffset + uint(1), scaleRotationsTextureSize));
+
+                vec3 scaleRotation123 = vec3(scaleRotationA.rgb) * (1.0 - fOddOffset) +
+                                        vec3(scaleRotationA.ba, scaleRotationB.r) * fOddOffset;
+                vec3 scaleRotation456 = vec3(scaleRotationA.a, scaleRotationB.rg) * (1.0 - fOddOffset) +
+                                        vec3(scaleRotationB.gba) * fOddOffset;
+
+                // scaleRotation123 = vec3(0.01, 0.01, 0.0);
+                // scaleRotation456 = vec3(0.0, 0.0, 1.0);
+                float missingW = sqrt(1.0 - scaleRotation456.x * scaleRotation456.x - scaleRotation456.y * scaleRotation456.y - scaleRotation456.z * scaleRotation456.z);
+                mat3 R = quaternionToRotationMatrix(scaleRotation456.r, scaleRotation456.g, scaleRotation456.b, missingW);
+                mat3 S = mat3(scaleRotation123.r, 0.0, 0.0,
+                              0.0, scaleRotation123.g, 0.0,
+                              0.0, 0.0, scaleRotation123.b);
+                
+                mat3 L = R * S;
+
+                mat3x4 splat2World = mat3x4(vec4(L[0], 0.0),
+                                            vec4(L[1], 0.0),
+                                            vec4(splatCenter.x, splatCenter.y, splatCenter.z, 1.0));
+
+                mat4 world2ndc = transpose(projectionMatrix * transformModelViewMatrix);
+
+                mat3x4 ndc2pix = mat3x4(vec4(viewport.x / 2.0, 0.0, 0.0, (viewport.x - 1.0) / 2.0),
+                                        vec4(0.0, viewport.y / 2.0, 0.0, (viewport.y - 1.0) / 2.0),
+                                        vec4(0.0, 0.0, 0.0, 1.0));
+
+                mat3 T = transpose(splat2World) * world2ndc * ndc2pix;
+                vec3 normal = vec3(viewMatrix * vec4(L[0][2], L[1][2], L[2][2], 0.0));
+            `;
+
+
+            /*
+            	float3 T0 = {T[0][0], T[0][1], T[0][2]};
+                float3 T1 = {T[1][0], T[1][1], T[1][2]};
+                float3 T3 = {T[2][0], T[2][1], T[2][2]};
+
+                // Compute AABB
+                float3 temp_point = {1.0f, 1.0f, -1.0f};
+                float distance = sumf3(T3 * T3 * temp_point);
+                float3 f = (1 / distance) * temp_point;
+                if (distance == 0.0) return false;
+
+                point_image = {
+                    sumf3(f * T0 * T3),
+                    sumf3(f * T1 * T3)
+                };  
+                
+                float2 temp = {
+                    sumf3(f * T0 * T0),
+                    sumf3(f * T1 * T1)
+                };
+                float2 half_extend = point_image * point_image - temp;
+                extent = sqrtf2(maxf2(1e-4, half_extend));
+                return true;
+            */
+
+            // Computing the bounding box of the 2D Gaussian and its center
+            // The center of the bounding box is used to create a low pass filter
+            vertexShaderSource += `
+               /* vec3 T0 = vec3(T[0][0], T[1][0], T[2][0]);
+                vec3 T1 = vec3(T[0][1], T[1][1], T[2][1]);
+                vec3 T3 = vec3(T[0][2], T[1][2], T[2][2]);*/
+
+                vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
+                vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
+                vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
+
+                vec3 tempPoint = vec3(1.0, 1.0, -1.0);
+               // float distance = dot(T3 * T3, tempPoint);
+               float distance = (T3.x * T3.x * tempPoint.x) + (T3.y * T3.y * tempPoint.y) + (T3.z * T3.z * tempPoint.z);
+                vec3 f = (1.0 / distance) * tempPoint;
+                if (abs(distance) < 0.00001) return;
+
+                float pointImageX = (T0.x * T3.x * f.x) + (T0.y * T3.y * f.y) + (T0.z * T3.z * f.z);
+                float pointImageY = (T1.x * T3.x * f.x) + (T1.y * T3.y * f.y) + (T1.z * T3.z * f.z);
+                //vec2 pointImage = vec2(dot(T0 * T3, f), dot(T1 * T3, f));
+                vec2 pointImage = vec2(pointImageX, pointImageY);
+                float tempX = (T0.x * T0.x * f.x) + (T0.y * T0.y * f.y) + (T0.z * T0.z * f.z);
+                float tempY = (T1.x * T1.x * f.x) + (T1.y * T1.y * f.y) + (T1.z * T1.z * f.z);
+                // vec2 temp = vec2(dot(T0 * T0, f), dot(T1 * T1, f));
+                vec2 temp = vec2(tempX, tempY);
+                vec2 halfExtend = pointImage * pointImage - temp;
+                vec2 extent = sqrt(max(vec2(0.0001), halfExtend));
+                float radius = max(extent.x, extent.y);
+
+             //   vec2 ndcOffset = vec2(position * radius) *
+              //                        basisViewport * 2.0 * inverseFocalAdjustment * (1.0 / clipCenter.w);
+
+              // vec2 ndcOffset = (clipCenter.xy + position.xy * radius * 3.0) * (1.0 / clipCenter.w);
+
+                vec2 ndcOffset = (position.xy * radius * 3.0 * (1.0 / viewport));
+
+                vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                gl_Position = quadPos;
             }`;
-
-        const uniforms = {
-            'sceneCenter': {
-                'type': 'v3',
-                'value': new THREE.Vector3()
-            },
-            'fadeInComplete': {
-                'type': 'i',
-                'value': 0
-            },
-            'orthographicMode': {
-                'type': 'i',
-                'value': 0
-            },
-            'visibleRegionFadeStartRadius': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'visibleRegionRadius': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'currentTime': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'firstRenderTime': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'covariancesTexture': {
-                'type': 't',
-                'value': null
-            },
-            'centersColorsTexture': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTexture': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTextureR': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTextureG': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTextureB': {
-                'type': 't',
-                'value': null
-            },
-            'focal': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
-            },
-            'orthoZoom': {
-                'type': 'f',
-                'value': 1.0
-            },
-            'inverseFocalAdjustment': {
-                'type': 'f',
-                'value': 1.0
-            },
-            'viewport': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
-            },
-            'basisViewport': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
-            },
-            'debugColor': {
-                'type': 'v3',
-                'value': new THREE.Color()
-            },
-            'covariancesTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
-            },
-            'centersColorsTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
-            },
-            'sphericalHarmonicsDegree': {
-                'type': 'i',
-                'value': maxSphericalHarmonicsDegree
-            },
-            'sphericalHarmonicsTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
-            },
-            'sphericalHarmonics8BitMode': {
-                'type': 'i',
-                'value': 0
-            },
-            'sphericalHarmonicsMultiTextureMode': {
-                'type': 'i',
-                'value': 0
-            },
-            'splatScale': {
-                'type': 'f',
-                'value': splatScale
-            },
-            'pointCloudModeEnabled': {
-                'type': 'i',
-                'value': pointCloudModeEnabled ? 1 : 0
-            }
-        };
-
-        if (dynamicMode || enableOptionalEffects) {
-            uniforms['sceneIndexesTexture'] = {
-                'type': 't',
-                'value': null
-            };
-            uniforms['sceneIndexesTextureSize'] = {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
-            };
         }
 
-        if (enableOptionalEffects) {
-            const sceneOpacity = [];
-            for (let i = 0; i < Constants.MaxScenes; i++) {
-                sceneOpacity.push(1.0);
-            }
-            uniforms['sceneOpacity'] ={
-                'type': 'f',
-                'value': sceneOpacity
-            };
-
-            const sceneVisibility = [];
-            for (let i = 0; i < Constants.MaxScenes; i++) {
-                sceneVisibility.push(1);
-            }
-            uniforms['sceneVisibility'] ={
-                'type': 'i',
-                'value': sceneVisibility
-            };
-        }
-
-        if (dynamicMode) {
-            const transformMatrices = [];
-            for (let i = 0; i < Constants.MaxScenes; i++) {
-                transformMatrices.push(new THREE.Matrix4());
-            }
-            uniforms['transforms'] = {
-                'type': 'mat4',
-                'value': transformMatrices
-            };
-        }
-
-        const material = new THREE.ShaderMaterial({
-            uniforms: uniforms,
-            vertexShader: vertexShaderSource,
-            fragmentShader: fragmentShaderSource,
-            transparent: true,
-            alphaTest: 1.0,
-            blending: THREE.NormalBlending,
-            depthTest: true,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        });
-
-        return material;
+        return vertexShaderSource;
     }
-
 }
