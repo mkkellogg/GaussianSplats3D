@@ -34,7 +34,7 @@ const fromHalfFloatToUint8 = (v) => {
 
 const fromUint8ToHalfFloat = (v) => {
     return toHalfFloat(fromUint8(v));
-}
+};
 
 const dataViewFloatForCompressionLevel = (dataView, floatIndex, compressionLevel, isSH = false) => {
     if (compressionLevel === 0) {
@@ -354,7 +354,7 @@ export class SplatBuffer {
             quaternion.y *= flip;
             quaternion.z *= flip;
             quaternion.w *= flip;
-        }
+        };
 
         return function(outScaleArray, outRotationArray, transform, srcFrom, srcTo, destFrom, desiredOutputCompressionLevel) {
             const splatCount = this.splatCount;
