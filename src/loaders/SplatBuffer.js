@@ -348,6 +348,14 @@ export class SplatBuffer {
         const rotation = new THREE.Quaternion();
         const tempPosition = new THREE.Vector3();
 
+        const ensurePositiveW = (quaternion) => {
+            const flip = quaternion.w < 0 ? -1 : 1;
+            quaternion.x *= flip;
+            quaternion.y *= flip;
+            quaternion.z *= flip;
+            quaternion.w *= flip;
+        }
+
         return function(outScaleArray, outRotationArray, transform, srcFrom, srcTo, destFrom, desiredOutputCompressionLevel) {
             const splatCount = this.splatCount;
 
@@ -389,12 +397,6 @@ export class SplatBuffer {
                              toUncompressedFloat(srcRotationZ, this.compressionLevel),
                              toUncompressedFloat(srcRotationW, this.compressionLevel)).normalize();
 
-                let flip = rotation.w < 0 ? -1 : 1;
-                rotation.x *= flip;
-                rotation.y *= flip;
-                rotation.z *= flip;
-                rotation.w *= flip;
-
                 if (transform) {
                     tempPosition.set(0, 0, 0);
                     scaleMatrix.makeScale(scale.x, scale.y, scale.z);
@@ -402,14 +404,10 @@ export class SplatBuffer {
                     tempMatrix.identity().premultiply(scaleMatrix).premultiply(rotationMatrix);
                     tempMatrix.premultiply(transform);
                     tempMatrix.decompose(tempPosition, rotation, scale);
-
                     rotation.normalize();
-                    flip = rotation.w < 0 ? -1 : 1;
-                    rotation.x *= flip;
-                    rotation.y *= flip;
-                    rotation.z *= flip;
-                    rotation.w *= flip;
                 }
+
+                ensurePositiveW(rotation);
 
                 if (outScaleArray) {
                     outScaleArray[scaleDestBase] = outputConversion(scale.x, 0);
@@ -545,6 +543,11 @@ export class SplatBuffer {
         }
 
         const tempMatrix3 = new THREE.Matrix3();
+        const tempMatrix4 = new THREE.Matrix4();
+
+        const tempTranslation = new THREE.Vector3();
+        const tempScale = new THREE.Vector3();
+        const tempRotation = new THREE.Quaternion();
 
         const sh11 = [];
         const sh12 = [];
@@ -610,7 +613,11 @@ export class SplatBuffer {
             if (destFrom === undefined) destFrom = srcFrom;
 
             if (transform && outSphericalHarmonicsDegree >= 1) {
-                tempMatrix3.setFromMatrix4(transform);
+                tempMatrix4.copy(transform);
+                tempMatrix4.decompose(tempTranslation, tempRotation, tempScale);
+                tempRotation.normalize();
+                tempMatrix4.makeRotationFromQuaternion(tempRotation);
+                tempMatrix3.setFromMatrix4(tempMatrix4);
                 set3(sh11, tempMatrix3.elements[4], -tempMatrix3.elements[7], tempMatrix3.elements[1]);
                 set3(sh12, -tempMatrix3.elements[5], tempMatrix3.elements[8], -tempMatrix3.elements[2]);
                 set3(sh13, tempMatrix3.elements[3], -tempMatrix3.elements[6], tempMatrix3.elements[0]);
