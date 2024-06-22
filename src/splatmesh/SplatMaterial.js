@@ -934,7 +934,8 @@ export class SplatMaterial {
 
                 // Create a quad that is aligned with the eigen vectors of the projected gaussian for rendering.
                 // This is a different approach than the reference implementation, similar to how the rendering of
-                // 3D gaussians in this viewer differs from the reference implementation.
+                // 3D gaussians in this viewer differs from the reference implementation. If the quad is too small
+                // (smaller than a pixel), then revert to the reference implementation.
                 vertexShaderSource += `
 
                     mat4 splat2World4 = mat4(vec4(L[0], 0.0),
@@ -956,14 +957,50 @@ export class SplatMaterial {
                     vec2 basisVector1 = tempPoint1.xy - center.xy;
                     vec2 basisVector2 = tempPoint2.xy - center.xy;
 
-                    vec2 ndcOffset = vec2(position.x * basisVector1 + position.y * basisVector2) * 3.0;
-                    vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
-                    gl_Position = quadPos;
+                    vec2 basisVector1Screen = basisVector1 * 0.5 * viewport;
+                    vec2 basisVector2Screen = basisVector2 * 0.5 * viewport;
 
-                    vT = T;
-                    vQuadCenter = center.xy;
-                    vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
+                    const float minPix = 1.;
+                    if (length(basisVector1Screen) < minPix || length(basisVector2Screen) < minPix) {
+                        vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
+                        vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
+                        vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
+    
+                        vec3 tempPoint = vec3(1.0, 1.0, -1.0);
+                        float distance = (T3.x * T3.x * tempPoint.x) + (T3.y * T3.y * tempPoint.y) + (T3.z * T3.z * tempPoint.z);
+                        vec3 f = (1.0 / distance) * tempPoint;
+                        if (abs(distance) < 0.00001) return;
+    
+                        float pointImageX = (T0.x * T3.x * f.x) + (T0.y * T3.y * f.y) + (T0.z * T3.z * f.z);
+                        float pointImageY = (T1.x * T3.x * f.x) + (T1.y * T3.y * f.y) + (T1.z * T3.z * f.z);
+                        vec2 pointImage = vec2(pointImageX, pointImageY);
+    
+                        float tempX = (T0.x * T0.x * f.x) + (T0.y * T0.y * f.y) + (T0.z * T0.z * f.z);
+                        float tempY = (T1.x * T1.x * f.x) + (T1.y * T1.y * f.y) + (T1.z * T1.z * f.z);
+                        vec2 temp = vec2(tempX, tempY);
+    
+                        vec2 halfExtend = pointImage * pointImage - temp;
+                        vec2 extent = sqrt(max(vec2(0.0001), halfExtend));
+                        float radius = max(extent.x, extent.y);
 
+                        vec2 ndcOffset = ((position.xy * radius * 3.0) * basisViewport * 2.0);
+                        vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                        gl_Position = quadPos;
+    
+                        vT = T;
+                        vQuadCenter = pointImage;
+                        vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
+                    } else {
+                        vec2 ndcOffset = vec2(position.x * basisVector1 + position.y * basisVector2) * 3.0 * inverseFocalAdjustment;
+                        vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                        gl_Position = quadPos;
+
+                        vT = T;
+                        vQuadCenter = center.xy;
+                        vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
+    
+                    }
+        
                 `;
             }
         }
