@@ -866,72 +866,70 @@ export class SplatMaterial {
                 vec3 normal = vec3(viewMatrix * vec4(L[0][2], L[1][2], L[2][2], 0.0));
             `;
 
+            /*
+                float3 T0 = {T[0][0], T[0][1], T[0][2]};
+                float3 T1 = {T[1][0], T[1][1], T[1][2]};
+                float3 T3 = {T[2][0], T[2][1], T[2][2]};
+
+                // Compute AABB
+                float3 temp_point = {1.0f, 1.0f, -1.0f};
+                float distance = sumf3(T3 * T3 * temp_point);
+                float3 f = (1 / distance) * temp_point;
+                if (distance == 0.0) return false;
+
+                point_image = {
+                    sumf3(f * T0 * T3),
+                    sumf3(f * T1 * T3)
+                };
+
+                float2 temp = {
+                    sumf3(f * T0 * T0),
+                    sumf3(f * T1 * T1)
+                };
+                float2 half_extend = point_image * point_image - temp;
+                extent = sqrtf2(maxf2(1e-4, half_extend));
+                return true;
+            */
+            // Computing the bounding box of the 2D Gaussian and its center
+            // The center of the bounding box is used to create a low pass filter.
+            // This code is based off the reference implementation and creates an AABB aligned
+            // with the screen for the quad to be rendered.
+            const referenceQuadGeneration = `
+                vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
+                vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
+                vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
+
+                vec3 tempPoint = vec3(1.0, 1.0, -1.0);
+                float distance = (T3.x * T3.x * tempPoint.x) + (T3.y * T3.y * tempPoint.y) + (T3.z * T3.z * tempPoint.z);
+                vec3 f = (1.0 / distance) * tempPoint;
+                if (abs(distance) < 0.00001) return;
+
+                float pointImageX = (T0.x * T3.x * f.x) + (T0.y * T3.y * f.y) + (T0.z * T3.z * f.z);
+                float pointImageY = (T1.x * T3.x * f.x) + (T1.y * T3.y * f.y) + (T1.z * T3.z * f.z);
+                vec2 pointImage = vec2(pointImageX, pointImageY);
+
+                float tempX = (T0.x * T0.x * f.x) + (T0.y * T0.y * f.y) + (T0.z * T0.z * f.z);
+                float tempY = (T1.x * T1.x * f.x) + (T1.y * T1.y * f.y) + (T1.z * T1.z * f.z);
+                vec2 temp = vec2(tempX, tempY);
+
+                vec2 halfExtend = pointImage * pointImage - temp;
+                vec2 extent = sqrt(max(vec2(0.0001), halfExtend));
+                float radius = max(extent.x, extent.y);
+
+                vec2 ndcOffset = ((position.xy * radius * 3.0) * basisViewport * 2.0);
+
+                vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                gl_Position = quadPos;
+
+                vT = T;
+                vQuadCenter = pointImage;
+                vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
+            `;
 
             const useRefImplementation = false;
             if (useRefImplementation) {
-
-                /*
-                    float3 T0 = {T[0][0], T[0][1], T[0][2]};
-                    float3 T1 = {T[1][0], T[1][1], T[1][2]};
-                    float3 T3 = {T[2][0], T[2][1], T[2][2]};
-
-                    // Compute AABB
-                    float3 temp_point = {1.0f, 1.0f, -1.0f};
-                    float distance = sumf3(T3 * T3 * temp_point);
-                    float3 f = (1 / distance) * temp_point;
-                    if (distance == 0.0) return false;
-
-                    point_image = {
-                        sumf3(f * T0 * T3),
-                        sumf3(f * T1 * T3)
-                    };
-
-                    float2 temp = {
-                        sumf3(f * T0 * T0),
-                        sumf3(f * T1 * T1)
-                    };
-                    float2 half_extend = point_image * point_image - temp;
-                    extent = sqrtf2(maxf2(1e-4, half_extend));
-                    return true;
-                */
-
-                // Computing the bounding box of the 2D Gaussian and its center
-                // The center of the bounding box is used to create a low pass filter.
-                // This code is based off the reference implementation and creates an AABB aligned
-                // with the screen for the quad to be rendered.
-                vertexShaderSource += `
-                    vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
-                    vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
-                    vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
-
-                    vec3 tempPoint = vec3(1.0, 1.0, -1.0);
-                    float distance = (T3.x * T3.x * tempPoint.x) + (T3.y * T3.y * tempPoint.y) + (T3.z * T3.z * tempPoint.z);
-                    vec3 f = (1.0 / distance) * tempPoint;
-                    if (abs(distance) < 0.00001) return;
-
-                    float pointImageX = (T0.x * T3.x * f.x) + (T0.y * T3.y * f.y) + (T0.z * T3.z * f.z);
-                    float pointImageY = (T1.x * T3.x * f.x) + (T1.y * T3.y * f.y) + (T1.z * T3.z * f.z);
-                    vec2 pointImage = vec2(pointImageX, pointImageY);
-
-                    float tempX = (T0.x * T0.x * f.x) + (T0.y * T0.y * f.y) + (T0.z * T0.z * f.z);
-                    float tempY = (T1.x * T1.x * f.x) + (T1.y * T1.y * f.y) + (T1.z * T1.z * f.z);
-                    vec2 temp = vec2(tempX, tempY);
-
-                    vec2 halfExtend = pointImage * pointImage - temp;
-                    vec2 extent = sqrt(max(vec2(0.0001), halfExtend));
-                    float radius = max(extent.x, extent.y);
-
-                    vec2 ndcOffset = ((position.xy * radius * 3.0) * basisViewport * 2.0);
-
-                    vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
-                    gl_Position = quadPos;
-
-                    vT = T;
-                    vQuadCenter = pointImage;
-                    vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
-                `;
+                vertexShaderSource += referenceQuadGeneration;
             } else {
-
                 // Create a quad that is aligned with the eigen vectors of the projected gaussian for rendering.
                 // This is a different approach than the reference implementation, similar to how the rendering of
                 // 3D gaussians in this viewer differs from the reference implementation. If the quad is too small
@@ -962,34 +960,7 @@ export class SplatMaterial {
 
                     const float minPix = 1.;
                     if (length(basisVector1Screen) < minPix || length(basisVector2Screen) < minPix) {
-                        vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
-                        vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
-                        vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
-    
-                        vec3 tempPoint = vec3(1.0, 1.0, -1.0);
-                        float distance = (T3.x * T3.x * tempPoint.x) + (T3.y * T3.y * tempPoint.y) + (T3.z * T3.z * tempPoint.z);
-                        vec3 f = (1.0 / distance) * tempPoint;
-                        if (abs(distance) < 0.00001) return;
-    
-                        float pointImageX = (T0.x * T3.x * f.x) + (T0.y * T3.y * f.y) + (T0.z * T3.z * f.z);
-                        float pointImageY = (T1.x * T3.x * f.x) + (T1.y * T3.y * f.y) + (T1.z * T3.z * f.z);
-                        vec2 pointImage = vec2(pointImageX, pointImageY);
-    
-                        float tempX = (T0.x * T0.x * f.x) + (T0.y * T0.y * f.y) + (T0.z * T0.z * f.z);
-                        float tempY = (T1.x * T1.x * f.x) + (T1.y * T1.y * f.y) + (T1.z * T1.z * f.z);
-                        vec2 temp = vec2(tempX, tempY);
-    
-                        vec2 halfExtend = pointImage * pointImage - temp;
-                        vec2 extent = sqrt(max(vec2(0.0001), halfExtend));
-                        float radius = max(extent.x, extent.y);
-
-                        vec2 ndcOffset = ((position.xy * radius * 3.0) * basisViewport * 2.0);
-                        vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
-                        gl_Position = quadPos;
-    
-                        vT = T;
-                        vQuadCenter = pointImage;
-                        vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
+                        ${referenceQuadGeneration}
                     } else {
                         vec2 ndcOffset = vec2(position.x * basisVector1 + position.y * basisVector2) * 3.0 * inverseFocalAdjustment;
                         vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
@@ -998,9 +969,7 @@ export class SplatMaterial {
                         vT = T;
                         vQuadCenter = center.xy;
                         vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
-    
                     }
-        
                 `;
             }
         }
