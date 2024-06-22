@@ -398,48 +398,49 @@ export class SplatMaterial {
             `;
         } else {
             /*
-            const float2 xy = collected_xy[j];
-            const float3 Tu = collected_Tu[j];
-            const float3 Tv = collected_Tv[j];
-            const float3 Tw = collected_Tw[j];
-            float3 k = pix.x * Tw - Tu;
-            float3 l = pix.y * Tw - Tv;
-            float3 p = cross(k, l);
-            if (p.z == 0.0) continue;
-            float2 s = {p.x / p.z, p.y / p.z};
-            float rho3d = (s.x * s.x + s.y * s.y);
-            float2 d = {xy.x - pixf.x, xy.y - pixf.y};
-            float rho2d = FilterInvSquare * (d.x * d.x + d.y * d.y);
+                const float2 xy = collected_xy[j];
+                const float3 Tu = collected_Tu[j];
+                const float3 Tv = collected_Tv[j];
+                const float3 Tw = collected_Tw[j];
+                float3 k = pix.x * Tw - Tu;
+                float3 l = pix.y * Tw - Tv;
+                float3 p = cross(k, l);
+                if (p.z == 0.0) continue;
+                float2 s = {p.x / p.z, p.y / p.z};
+                float rho3d = (s.x * s.x + s.y * s.y);
+                float2 d = {xy.x - pixf.x, xy.y - pixf.y};
+                float rho2d = FilterInvSquare * (d.x * d.x + d.y * d.y);
 
-            // compute intersection and depth
-            float rho = min(rho3d, rho2d);
-            float depth = (rho3d <= rho2d) ? (s.x * Tw.x + s.y * Tw.y) + Tw.z : Tw.z;
-            if (depth < near_n) continue;
-            float4 nor_o = collected_normal_opacity[j];
-            float normal[3] = {nor_o.x, nor_o.y, nor_o.z};
-            float opa = nor_o.w;
+                // compute intersection and depth
+                float rho = min(rho3d, rho2d);
+                float depth = (rho3d <= rho2d) ? (s.x * Tw.x + s.y * Tw.y) + Tw.z : Tw.z;
+                if (depth < near_n) continue;
+                float4 nor_o = collected_normal_opacity[j];
+                float normal[3] = {nor_o.x, nor_o.y, nor_o.z};
+                float opa = nor_o.w;
 
-            float power = -0.5f * rho;
-            if (power > 0.0f)
-                continue;
+                float power = -0.5f * rho;
+                if (power > 0.0f)
+                    continue;
 
-            // Eq. (2) from 3D Gaussian splatting paper.
-            // Obtain alpha by multiplying with Gaussian opacity
-            // and its exponential falloff from mean.
-            // Avoid numerical instabilities (see paper appendix).
-            float alpha = min(0.99f, opa * exp(power));
-            if (alpha < 1.0f / 255.0f)
-                continue;
-            float test_T = T * (1 - alpha);
-            if (test_T < 0.0001f)
-            {
-                done = true;
-                continue;
-            }
+                // Eq. (2) from 3D Gaussian splatting paper.
+                // Obtain alpha by multiplying with Gaussian opacity
+                // and its exponential falloff from mean.
+                // Avoid numerical instabilities (see paper appendix).
+                float alpha = min(0.99f, opa * exp(power));
+                if (alpha < 1.0f / 255.0f)
+                    continue;
+                float test_T = T * (1 - alpha);
+                if (test_T < 0.0001f)
+                {
+                    done = true;
+                    continue;
+                }
 
-            float w = alpha * T;
+                float w = alpha * T;
             */
             fragmentShaderSource += `
+
                 const float FilterInvSquare = 2.0;
                 const float near_n = 0.2;
                 const float T = 1.0;
@@ -461,8 +462,8 @@ export class SplatMaterial {
                 float rho = min(rho3d, rho2d);
                 float depth = (rho3d <= rho2d) ? (s.x * Tw.x + s.y * Tw.y) + Tw.z : Tw.z; 
                 if (depth < near_n) discard;
-              //  vec4 nor_o = collected_normal_opacity[j];
-            //    float normal[3] = {nor_o.x, nor_o.y, nor_o.z};
+                //  vec4 nor_o = collected_normal_opacity[j];
+                //  float normal[3] = {nor_o.x, nor_o.y, nor_o.z};
                 float opa = vColor.a;
 
                 float power = -0.5f * rho;
@@ -777,20 +778,6 @@ export class SplatMaterial {
                 // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
                 vec2 basisVector1 = eigenVector1 * splatScale * min(sqrt8 * sqrt(eigenValue1), ${parseInt(maxScreenSpaceSplatSize)}.0);
                 vec2 basisVector2 = eigenVector2 * splatScale * min(sqrt8 * sqrt(eigenValue2), ${parseInt(maxScreenSpaceSplatSize)}.0);
-
-                if (fadeInComplete == 0) {
-                    float opacityAdjust = 1.0;
-                    float centerDist = length(splatCenter - sceneCenter);
-                    float renderTime = max(currentTime - firstRenderTime, 0.0);
-
-                    float fadeDistance = 0.75;
-                    float distanceLoadFadeInFactor = step(visibleRegionFadeStartRadius, centerDist);
-                    distanceLoadFadeInFactor = (1.0 - distanceLoadFadeInFactor) +
-                                               (1.0 - clamp((centerDist - visibleRegionFadeStartRadius) / fadeDistance, 0.0, 1.0)) *
-                                               distanceLoadFadeInFactor;
-                    opacityAdjust *= distanceLoadFadeInFactor;
-                    vColor.a *= opacityAdjust;
-                }
                 `;
 
             if (enableOptionalEffects) {
@@ -808,7 +795,7 @@ export class SplatMaterial {
 
                 // Scale the position data we send to the fragment shader
                 vPosition *= sqrt8;
-            }`;
+            `;
 
         } else {
             /*
@@ -856,8 +843,6 @@ export class SplatMaterial {
                 vec3 scaleRotation456 = vec3(scaleRotationA.a, scaleRotationB.rg) * (1.0 - fOddOffset) +
                                         vec3(scaleRotationB.gba) * fOddOffset;
 
-                // scaleRotation123 = vec3(0.01, 0.01, 0.0);
-                // scaleRotation456 = vec3(0.0, 0.0, 1.0);
                 float missingW = sqrt(1.0 - scaleRotation456.x * scaleRotation456.x - scaleRotation456.y *
                                       scaleRotation456.y - scaleRotation456.z * scaleRotation456.z);
                 mat3 R = quaternionToRotationMatrix(scaleRotation456.r, scaleRotation456.g, scaleRotation456.b, missingW);
@@ -882,70 +867,124 @@ export class SplatMaterial {
             `;
 
 
-            /*
-                float3 T0 = {T[0][0], T[0][1], T[0][2]};
-                float3 T1 = {T[1][0], T[1][1], T[1][2]};
-                float3 T3 = {T[2][0], T[2][1], T[2][2]};
+            const useRefImplementation = false;
+            if (useRefImplementation) {
 
-                // Compute AABB
-                float3 temp_point = {1.0f, 1.0f, -1.0f};
-                float distance = sumf3(T3 * T3 * temp_point);
-                float3 f = (1 / distance) * temp_point;
-                if (distance == 0.0) return false;
+                /*
+                    float3 T0 = {T[0][0], T[0][1], T[0][2]};
+                    float3 T1 = {T[1][0], T[1][1], T[1][2]};
+                    float3 T3 = {T[2][0], T[2][1], T[2][2]};
 
-                point_image = {
-                    sumf3(f * T0 * T3),
-                    sumf3(f * T1 * T3)
-                };
+                    // Compute AABB
+                    float3 temp_point = {1.0f, 1.0f, -1.0f};
+                    float distance = sumf3(T3 * T3 * temp_point);
+                    float3 f = (1 / distance) * temp_point;
+                    if (distance == 0.0) return false;
 
-                float2 temp = {
-                    sumf3(f * T0 * T0),
-                    sumf3(f * T1 * T1)
-                };
-                float2 half_extend = point_image * point_image - temp;
-                extent = sqrtf2(maxf2(1e-4, half_extend));
-                return true;
-            */
+                    point_image = {
+                        sumf3(f * T0 * T3),
+                        sumf3(f * T1 * T3)
+                    };
 
-            // Computing the bounding box of the 2D Gaussian and its center
-            // The center of the bounding box is used to create a low pass filter
-            vertexShaderSource += `
-               /* vec3 T0 = vec3(T[0][0], T[1][0], T[2][0]);
-                vec3 T1 = vec3(T[0][1], T[1][1], T[2][1]);
-                vec3 T3 = vec3(T[0][2], T[1][2], T[2][2]);*/
+                    float2 temp = {
+                        sumf3(f * T0 * T0),
+                        sumf3(f * T1 * T1)
+                    };
+                    float2 half_extend = point_image * point_image - temp;
+                    extent = sqrtf2(maxf2(1e-4, half_extend));
+                    return true;
+                */
 
-                vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
-                vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
-                vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
+                // Computing the bounding box of the 2D Gaussian and its center
+                // The center of the bounding box is used to create a low pass filter.
+                // This code is based off the reference implementation and creates an AABB aligned
+                // with the screen for the quad to be rendered.
+                vertexShaderSource += `
+                    vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
+                    vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
+                    vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
 
-                vec3 tempPoint = vec3(1.0, 1.0, -1.0);
-                // float distance = dot(T3 * T3, tempPoint);
-                float distance = (T3.x * T3.x * tempPoint.x) + (T3.y * T3.y * tempPoint.y) + (T3.z * T3.z * tempPoint.z);
-                vec3 f = (1.0 / distance) * tempPoint;
-                if (abs(distance) < 0.00001) return;
+                    vec3 tempPoint = vec3(1.0, 1.0, -1.0);
+                    float distance = (T3.x * T3.x * tempPoint.x) + (T3.y * T3.y * tempPoint.y) + (T3.z * T3.z * tempPoint.z);
+                    vec3 f = (1.0 / distance) * tempPoint;
+                    if (abs(distance) < 0.00001) return;
 
-                float pointImageX = (T0.x * T3.x * f.x) + (T0.y * T3.y * f.y) + (T0.z * T3.z * f.z);
-                float pointImageY = (T1.x * T3.x * f.x) + (T1.y * T3.y * f.y) + (T1.z * T3.z * f.z);
-                //vec2 pointImage = vec2(dot(T0 * T3, f), dot(T1 * T3, f));
-                vec2 pointImage = vec2(pointImageX, pointImageY);
-                float tempX = (T0.x * T0.x * f.x) + (T0.y * T0.y * f.y) + (T0.z * T0.z * f.z);
-                float tempY = (T1.x * T1.x * f.x) + (T1.y * T1.y * f.y) + (T1.z * T1.z * f.z);
-                // vec2 temp = vec2(dot(T0 * T0, f), dot(T1 * T1, f));
-                vec2 temp = vec2(tempX, tempY);
-                vec2 halfExtend = pointImage * pointImage - temp;
-                vec2 extent = sqrt(max(vec2(0.0001), halfExtend));
-                float radius = max(extent.x, extent.y);
+                    float pointImageX = (T0.x * T3.x * f.x) + (T0.y * T3.y * f.y) + (T0.z * T3.z * f.z);
+                    float pointImageY = (T1.x * T3.x * f.x) + (T1.y * T3.y * f.y) + (T1.z * T3.z * f.z);
+                    vec2 pointImage = vec2(pointImageX, pointImageY);
 
-                vec2 ndcOffset = ((position.xy * radius * 3.0) * basisViewport * 2.0);
+                    float tempX = (T0.x * T0.x * f.x) + (T0.y * T0.y * f.y) + (T0.z * T0.z * f.z);
+                    float tempY = (T1.x * T1.x * f.x) + (T1.y * T1.y * f.y) + (T1.z * T1.z * f.z);
+                    vec2 temp = vec2(tempX, tempY);
 
-                vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
-                gl_Position = quadPos;
+                    vec2 halfExtend = pointImage * pointImage - temp;
+                    vec2 extent = sqrt(max(vec2(0.0001), halfExtend));
+                    float radius = max(extent.x, extent.y);
 
-                vT = T;
-                vQuadCenter = pointImage;
-                vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
-            }`;
+                    vec2 ndcOffset = ((position.xy * radius * 3.0) * basisViewport * 2.0);
+
+                    vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                    gl_Position = quadPos;
+
+                    vT = T;
+                    vQuadCenter = pointImage;
+                    vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
+                `;
+            } else {
+
+                // Create a quad that is aligned with the eigen vectors of the projected gaussian for rendering.
+                // This is a different approach than the reference implementation, similar to how the rendering of
+                // 3D gaussians in this viewer differs from the reference implementation.
+                vertexShaderSource += `
+
+                    mat4 splat2World4 = mat4(vec4(L[0], 0.0),
+                                            vec4(L[1], 0.0),
+                                            vec4(L[2], 0.0),
+                                            vec4(splatCenter.x, splatCenter.y, splatCenter.z, 1.0));
+
+                    mat4 Tt = transpose(transpose(splat2World4) * world2ndc);
+
+                    vec4 tempPoint1 = Tt * vec4(1.0, 0.0, 0.0, 1.0);
+                    tempPoint1 /= tempPoint1.w;
+
+                    vec4 tempPoint2 = Tt * vec4(0.0, 1.0, 0.0, 1.0);
+                    tempPoint2 /= tempPoint2.w;
+
+                    vec4 center = Tt * vec4(0.0, 0.0, 0.0, 1.0);
+                    center /= center.w;
+
+                    vec2 basisVector1 = tempPoint1.xy - center.xy;
+                    vec2 basisVector2 = tempPoint2.xy - center.xy;
+
+                    vec2 ndcOffset = vec2(position.x * basisVector1 + position.y * basisVector2) * 3.0;
+                    vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+                    gl_Position = quadPos;
+
+                    vT = T;
+                    vQuadCenter = center.xy;
+                    vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
+
+                `;
+            }
         }
+
+        vertexShaderSource += `
+            
+            if (fadeInComplete == 0) {
+                float opacityAdjust = 1.0;
+                float centerDist = length(splatCenter - sceneCenter);
+                float renderTime = max(currentTime - firstRenderTime, 0.0);
+
+                float fadeDistance = 0.75;
+                float distanceLoadFadeInFactor = step(visibleRegionFadeStartRadius, centerDist);
+                distanceLoadFadeInFactor = (1.0 - distanceLoadFadeInFactor) +
+                                        (1.0 - clamp((centerDist - visibleRegionFadeStartRadius) / fadeDistance, 0.0, 1.0)) *
+                                        distanceLoadFadeInFactor;
+                opacityAdjust *= distanceLoadFadeInFactor;
+                vColor.a *= opacityAdjust;
+            }
+        }
+        `;
 
         return vertexShaderSource;
     }
