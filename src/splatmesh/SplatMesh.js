@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { SplatMaterial } from './SplatMaterial.js';
+import { SplatMaterial3D } from './SplatMaterial3D.js';
+import { SplatMaterial2D } from './SplatMaterial2D.js';
 import { SplatGeometry } from './SplatGeometry.js';
 import { SplatScene } from './SplatScene.js';
 import { SplatTree } from '../splattree/SplatTree.js';
@@ -345,9 +346,15 @@ export class SplatMesh extends THREE.Mesh {
             this.lastBuildMaxSplatCount = 0;
             this.disposeMeshData();
             this.geometry = SplatGeometry.build(maxSplatCount);
-            this.material = SplatMaterial.build(this.dynamicMode, this.splatRenderMode, this.enableOptionalEffects, this.antialiased,
-                                                this.maxScreenSpaceSplatSize, this.splatScale, this.pointCloudModeEnabled,
-                                                this.minSphericalHarmonicsDegree);
+            if (this.splatRenderMode === SplatRenderMode.ThreeD) {
+                this.material = SplatMaterial3D.build(this.dynamicMode, this.enableOptionalEffects, this.antialiased,
+                                                      this.maxScreenSpaceSplatSize, this.splatScale, this.pointCloudModeEnabled,
+                                                      this.minSphericalHarmonicsDegree);
+            } else {
+                this.material = SplatMaterial2D.build(this.dynamicMode, this.enableOptionalEffects,
+                                                      this.splatScale, this.pointCloudModeEnabled, this.minSphericalHarmonicsDegree);
+            }
+
             const indexMaps = SplatMesh.buildSplatIndexMaps(splatBuffers);
             this.globalSplatIndexToLocalSplatIndexMap = indexMaps.localSplatIndexMap;
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
