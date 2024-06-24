@@ -1052,6 +1052,13 @@ export class Viewer {
             this.splatRenderReady = false;
             let splatProcessingTaskId = null;
 
+            const removeSplatProcessingTask = () => {
+                if (splatProcessingTaskId !== null) {
+                    this.loadingSpinner.removeTask(splatProcessingTaskId);
+                    splatProcessingTaskId = null;
+                }
+            };
+
             const finish = (buildResults, resolver) => {
                 if (this.isDisposingOrDisposed()) return;
 
@@ -1071,21 +1078,23 @@ export class Viewer {
 
                 this.updateSplatSort(true);
 
-                if (enableRenderBeforeFirstSort) {
+                if (!this.sortWorker) {
                     this.splatRenderReady = true;
+                    removeSplatProcessingTask();
+                    resolver();
                 } else {
-                    this.runAfterNextSort.push(() => {
+                    if (enableRenderBeforeFirstSort) {
                         this.splatRenderReady = true;
+                    } else {
+                        this.runAfterNextSort.push(() => {
+                            this.splatRenderReady = true;
+                        });
+                    }
+                    this.runAfterNextSort.push(() => {
+                        removeSplatProcessingTask();
+                        resolver();
                     });
                 }
-
-                this.runAfterNextSort.push(() => {
-                    if (splatProcessingTaskId !== null) {
-                        this.loadingSpinner.removeTask(splatProcessingTaskId);
-                        splatProcessingTaskId = null;
-                    }
-                    resolver();
-                });
             };
 
             return new Promise((resolve) => {
@@ -1765,7 +1774,10 @@ export class Viewer {
 
         return async function(force = false) {
             if (this.sortRunning) return;
-            if (this.splatMesh.getSplatCount() <= 0) return;
+            if (this.splatMesh.getSplatCount() <= 0) {
+                this.splatRenderCount = 0;
+                return;
+            }
 
             let angleDiff = 0;
             let positionDiff = 0;
