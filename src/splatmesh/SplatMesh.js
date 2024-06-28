@@ -1763,6 +1763,12 @@ export class SplatMesh extends THREE.Mesh {
     fillSplatDataArrays(covariances, scales, rotations, centers, colors, sphericalHarmonics, applySceneTransform,
                         covarianceCompressionLevel = 0, scaleRotationCompressionLevel = 0, sphericalHarmonicsCompressionLevel = 1,
                         srcStart, srcEnd, destStart = 0) {
+        const scaleOverride = new THREE.Vector3(0, 0, 0);
+        if (this.splatRenderMode === SplatRenderMode.ThreeD) {
+            scaleOverride.set(undefined, undefined, undefined);
+        } else {
+            scaleOverride.set(undefined, undefined, 1);
+        }
 
         for (let i = 0; i < this.scenes.length; i++) {
             if (applySceneTransform === undefined || applySceneTransform === null) {
@@ -1780,7 +1786,7 @@ export class SplatMesh extends THREE.Mesh {
                     throw new Error('SplatMesh::fillSplatDataArrays() -> "scales" and "rotations" must both be valid.');
                 }
                 splatBuffer.fillSplatScaleRotationArray(scales, rotations, sceneTransform,
-                                                        srcStart, srcEnd, destStart, scaleRotationCompressionLevel);
+                                                        srcStart, srcEnd, destStart, scaleRotationCompressionLevel, scaleOverride);
             }
             if (centers) splatBuffer.fillSplatCenterArray(centers, sceneTransform, srcStart, srcEnd, destStart);
             if (colors) splatBuffer.fillSplatColorArray(colors, scene.minimumAlpha, srcStart, srcEnd, destStart);
@@ -1872,10 +1878,14 @@ export class SplatMesh extends THREE.Mesh {
     getSplatScaleAndRotation = function() {
 
         const paramsObj = {};
+        const scaleOverride = new THREE.Vector3();
 
         return function(globalIndex, outScale, outRotation, applySceneTransform) {
             this.getLocalSplatParameters(globalIndex, paramsObj, applySceneTransform);
-            paramsObj.splatBuffer.getSplatScaleAndRotation(paramsObj.localIndex, outScale, outRotation, paramsObj.sceneTransform);
+            scaleOverride.set(undefined, undefined, undefined);
+            if (this.splatRenderMode === SplatRenderMode.TwoD) scaleOverride.z = 0;
+            paramsObj.splatBuffer.getSplatScaleAndRotation(paramsObj.localIndex, outScale, outRotation,
+                                                           paramsObj.sceneTransform, scaleOverride);
         };
 
     }();

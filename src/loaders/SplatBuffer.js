@@ -252,7 +252,7 @@ export class SplatBuffer {
         const scale = new THREE.Vector3();
         const rotation = new THREE.Quaternion();
 
-        return function(index, outScale, outRotation, transform) {
+        return function(index, outScale, outRotation, transform, scaleOverride) {
             const sectionIndex = this.globalSplatIndexToSectionMap[index];
             const section = this.sections[sectionIndex];
             const localSplatIndex = index - section.splatCountOffset;
@@ -265,6 +265,11 @@ export class SplatBuffer {
             scale.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel), this.compressionLevel));
+            if (scaleOverride) {
+                if (scaleOverride.x !== undefined) scale.x = scaleOverride.x;
+                if (scaleOverride.y !== undefined) scale.y = scaleOverride.y;
+                if (scaleOverride.z !== undefined) scale.z = scaleOverride.z;
+            }
 
             rotation.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel), this.compressionLevel),
                          toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 5, this.compressionLevel), this.compressionLevel),
@@ -356,7 +361,8 @@ export class SplatBuffer {
             quaternion.w *= flip;
         };
 
-        return function(outScaleArray, outRotationArray, transform, srcFrom, srcTo, destFrom, desiredOutputCompressionLevel) {
+        return function(outScaleArray, outRotationArray, transform, srcFrom, srcTo, destFrom,
+                        desiredOutputCompressionLevel, scaleOverride) {
             const splatCount = this.splatCount;
 
             srcFrom = srcFrom || 0;
@@ -380,9 +386,12 @@ export class SplatBuffer {
                 const rotationDestBase = (i - srcFrom + destFrom) * SplatBuffer.RotationComponentCount;
                 const dataView = new DataView(this.bufferData, section.dataBase + srcSplatScalesBase);
 
-                const srcScaleX = dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel);
-                const srcScaleY = dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel);
-                const srcScaleZ = dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel);
+                const srcScaleX = (scaleOverride && scaleOverride.x !== undefined) ? scaleOverride.x :
+                                   dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel);
+                const srcScaleY = (scaleOverride && scaleOverride.y !== undefined) ? scaleOverride.y :
+                                   dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel);
+                const srcScaleZ = (scaleOverride && scaleOverride.z !== undefined) ? scaleOverride.z :
+                                   dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel);
 
                 const srcRotationW = dataViewFloatForCompressionLevel(dataView, 3, this.compressionLevel);
                 const srcRotationX = dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel);
@@ -392,6 +401,7 @@ export class SplatBuffer {
                 scale.set(toUncompressedFloat(srcScaleX, this.compressionLevel),
                           toUncompressedFloat(srcScaleY, this.compressionLevel),
                           toUncompressedFloat(srcScaleZ, this.compressionLevel));
+
                 rotation.set(toUncompressedFloat(srcRotationX, this.compressionLevel),
                              toUncompressedFloat(srcRotationY, this.compressionLevel),
                              toUncompressedFloat(srcRotationZ, this.compressionLevel),
@@ -1062,9 +1072,9 @@ export class SplatBuffer {
             }
 
             if (targetSplat[OFFSET_SCALE0] !== undefined) {
-                tempScale.set(targetSplat[OFFSET_SCALE0] || 1,
-                              targetSplat[OFFSET_SCALE1] || 1,
-                              targetSplat[OFFSET_SCALE2] || 1);
+                tempScale.set(targetSplat[OFFSET_SCALE0] || 0,
+                              targetSplat[OFFSET_SCALE1] || 0,
+                              targetSplat[OFFSET_SCALE2] || 0);
             } else {
                 tempScale.set(0, 0, 0);
             }
