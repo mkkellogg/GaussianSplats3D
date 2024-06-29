@@ -17,6 +17,7 @@ import { WebXRMode } from './webxr/WebXRMode.js';
 import { RenderMode } from './RenderMode.js';
 import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
+import { SplatRenderMode } from './SplatRenderMode.js';
 
 export {
     PlyParser,
@@ -37,5 +38,6 @@ export {
     WebXRMode,
     RenderMode,
     LogLevel,
-    SceneRevealMode
+    SceneRevealMode,
+    SplatRenderMode
 };

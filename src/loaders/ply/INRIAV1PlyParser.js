@@ -4,18 +4,14 @@ import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { SplatBuffer } from '../SplatBuffer.js';
 import { PlyParserUtils } from './PlyParserUtils.js';
 
-const FieldNamesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3',
-                          'x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'red', 'green', 'blue',
-                          'f_rest_0', 'f_rest_1', 'f_rest_2', 'f_rest_15', 'f_rest_16', 'f_rest_17', 'f_rest_30', 'f_rest_31', 'f_rest_32',
-                          'f_rest_3', 'f_rest_4', 'f_rest_5', 'f_rest_6', 'f_rest_7',
-                          'f_rest_18', 'f_rest_19', 'f_rest_20', 'f_rest_21', 'f_rest_22',
-                          'f_rest_33', 'f_rest_34', 'f_rest_35', 'f_rest_36', 'f_rest_37'];
+const BaseFieldNamesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3', 'x', 'y', 'z',
+                              'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'red', 'green', 'blue', 'f_rest_0'];
 
-const FieldsToReadIndexes = FieldNamesToRead.map((e, i) => i);
+const BaseFieldsToReadIndexes = BaseFieldNamesToRead.map((e, i) => i);
 
 const [
         SCALE_0, SCALE_1, SCALE_2, ROT_0, ROT_1, ROT_2, ROT_3, X, Y, Z, F_DC_0, F_DC_1, F_DC_2, OPACITY, RED, GREEN, BLUE, F_REST_0
-      ] = FieldsToReadIndexes;
+      ] = BaseFieldsToReadIndexes;
 
 export class INRIAV1PlyParser {
 
@@ -24,13 +20,34 @@ export class INRIAV1PlyParser {
     }
 
     decodeHeaderLines(headerLines) {
-        const fieldNameIdMap = FieldsToReadIndexes.reduce((acc, element) => {
-            acc[FieldNamesToRead[element]] = element;
+
+        let shLineCount = 0;
+        headerLines.forEach((line) => {
+            if (line.includes('f_rest_')) shLineCount++;
+        });
+
+        let shFieldsToReadCount = 0;
+        if (shLineCount >= 45) {
+            shFieldsToReadCount = 45;
+        } else if (shLineCount >= 24) {
+            shFieldsToReadCount = 24;
+        } else if (shLineCount >= 9) {
+            shFieldsToReadCount = 9;
+        }
+
+        let shRemainingFieldNamesToRead = Array.from(Array(shFieldsToReadCount - 1)).map((element, index) => `f_rest_${index + 1}`);
+
+        const fieldNamesToRead = [...BaseFieldNamesToRead, ...shRemainingFieldNamesToRead];
+        const fieldsToReadIndexes = fieldNamesToRead.map((e, i) => i);
+
+        const fieldNameIdMap = fieldsToReadIndexes.reduce((acc, element) => {
+            acc[fieldNamesToRead[element]] = element;
             return acc;
         }, {});
         const header = this.plyParserutils.decodeSectionHeader(headerLines, fieldNameIdMap, 0);
         header.splatCount = header.vertexCount;
         header.bytesPerSplat = header.bytesPerVertex;
+        header.fieldsToReadIndexes = fieldsToReadIndexes;
         return header;
     }
 
@@ -52,7 +69,7 @@ export class INRIAV1PlyParser {
     }
 
     parseToUncompressedSplatBufferSection(header, fromSplat, toSplat, splatData, splatDataOffset,
-                                                 toBuffer, toOffset, outSphericalHarmonicsDegree = 0) {
+                                          toBuffer, toOffset, outSphericalHarmonicsDegree = 0) {
         outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
         const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree].BytesPerSplat;
 
@@ -173,7 +190,7 @@ export class INRIAV1PlyParser {
     }();
 
     static readSplat(splatData, header, row, dataOffset, rawSplat) {
-        return PlyParserUtils.readVertex(splatData, header, row, dataOffset, FieldsToReadIndexes, rawSplat, true);
+        return PlyParserUtils.readVertex(splatData, header, row, dataOffset, header.fieldsToReadIndexes, rawSplat, true);
     }
 
     parseToUncompressedSplatArray(plyBuffer, outSphericalHarmonicsDegree = 0) {
