@@ -256,6 +256,7 @@ export class Viewer {
         this.initialized = false;
         this.disposing = false;
         this.disposed = false;
+        this.disposePromise = null;
         if (!this.dropInMode) this.init();
     }
 
@@ -1393,7 +1394,8 @@ export class Viewer {
      * Dispose of all resources held directly and indirectly by this viewer.
      */
     async dispose() {
-        this.disposing = true;
+        if (this.isDisposingOrDisposed()) return this.disposePromise;
+
         let waitPromises = [];
         let promisesToAbort = [];
         for (let promiseKey in this.splatSceneDownloadPromises) {
@@ -1406,7 +1408,9 @@ export class Viewer {
         if (this.sortPromise) {
             waitPromises.push(this.sortPromise);
         }
-        const disposePromise = Promise.all(waitPromises).finally(() => {
+
+        this.disposing = true;
+        this.disposePromise = Promise.all(waitPromises).finally(() => {
             this.stop();
             if (this.controls) {
                 this.controls.dispose();
@@ -1459,7 +1463,7 @@ export class Viewer {
         promisesToAbort.forEach((toAbort) => {
             toAbort.abort('Scene disposed');
         });
-        return disposePromise;
+        return this.disposePromise;
     }
 
     selfDrivenUpdate() {
