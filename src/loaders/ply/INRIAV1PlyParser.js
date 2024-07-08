@@ -35,7 +35,8 @@ export class INRIAV1PlyParser {
             shFieldsToReadCount = 9;
         }
 
-        let shRemainingFieldNamesToRead = Array.from(Array(shFieldsToReadCount - 1)).map((element, index) => `f_rest_${index + 1}`);
+        const shFieldIndexesToMap = Array.from(Array(Math.max(shFieldsToReadCount - 1, 0)));
+        let shRemainingFieldNamesToRead = shFieldIndexesToMap.map((element, index) => `f_rest_${index + 1}`);
 
         const fieldNamesToRead = [...BaseFieldNamesToRead, ...shRemainingFieldNamesToRead];
         const fieldsToReadIndexes = fieldNamesToRead.map((e, i) => i);
