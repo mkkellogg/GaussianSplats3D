@@ -187,6 +187,7 @@ export class Viewer {
         }
         this.splatRenderMode = options.splatRenderMode;
 
+        this.onSplatMeshChangedCallback = null;
         this.createSplatMesh();
 
         this.controls = null;
@@ -266,6 +267,7 @@ export class Viewer {
                                        this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize, this.logLevel,
                                        this.sphericalHarmonicsDegree);
         this.splatMesh.frustumCulled = false;
+        if (this.onSplatMeshChangedCallback) this.onSplatMeshChangedCallback();
     }
 
     init() {
@@ -420,6 +422,10 @@ export class Viewer {
 
     setRenderMode(renderMode) {
         this.renderMode = renderMode;
+    }
+
+    onSplatMeshChanged(callback) {
+        this.onSplatMeshChangedCallback = callback;
     }
 
     onKeyDown = function() {
@@ -1266,7 +1272,11 @@ export class Viewer {
         this.sortRunning = false;
     }
 
-    removeSplatScene(index, showLoadingUI = true) {
+    removeSplatScene(indexToRemove, showLoadingUI = true) {
+        return this.removeSplatScenes([indexToRemove], showLoadingUI);
+    }
+
+    removeSplatScenes(indexesToRemove, showLoadingUI = true) {
         if (this.isLoadingOrUnloading()) {
             throw new Error('Cannot remove splat scene while another load or unload is already in progress.');
         }
@@ -1315,7 +1325,14 @@ export class Viewer {
                 const savedSceneOptions = [];
                 const savedSceneTransformComponents = [];
                 for (let i = 0; i < this.splatMesh.scenes.length; i++) {
-                    if (i !== index) {
+                    let shouldRemove = false;
+                    for (let indexToRemove of indexesToRemove) {
+                        if (indexToRemove === i) {
+                            shouldRemove = true;
+                            break;
+                        }
+                    }
+                    if (!shouldRemove) {
                         const scene = this.splatMesh.scenes[i];
                         savedSplatBuffers.push(scene.splatBuffer);
                         savedSceneOptions.push(this.splatMesh.sceneOptions[i]);
@@ -1328,6 +1345,7 @@ export class Viewer {
                 }
                 this.disposeSortWorker();
                 this.splatMesh.dispose();
+                this.sceneRevealMode = SceneRevealMode.Instant;
                 this.createSplatMesh();
                 this.addSplatBuffers(savedSplatBuffers, savedSceneOptions, true, false, true)
                 .then(() => {
