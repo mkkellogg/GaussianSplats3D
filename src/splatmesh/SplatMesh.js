@@ -20,6 +20,7 @@ const COVARIANCES_ELEMENTS_PER_SPLAT = 6;
 const CENTER_COLORS_ELEMENTS_PER_SPLAT = 4;
 
 const COVARIANCES_ELEMENTS_PER_TEXEL = 4;
+const COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED = 6;
 const SCALES_ROTATIONS_ELEMENTS_PER_TEXEL = 4;
 const CENTER_COLORS_ELEMENTS_PER_TEXEL = 4;
 const SCENE_INDEXES_ELEMENTS_PER_TEXEL = 1;
@@ -28,6 +29,14 @@ const SCENE_FADEIN_RATE_FAST = 0.012;
 const SCENE_FADEIN_RATE_GRADUAL = 0.003;
 
 const VISIBLE_REGION_EXPANSION_DELTA = 1;
+
+// Based on my own observations across multiple devices, OSes and browsers, using textures that have one dimension
+// greater than 4096 while the other is greater than or equal to 4096 causes issues (Essentially any texture larger
+// than 4096 x 4096 (16777216) texels). Specifically it seems all texture data beyond the 4096 x 4096 texel boundary
+// is corrupted, while data below that boundary is usable. In these cases the texture has been valid in the eyes of
+// both Three.js and WebGL, and the texel format (RG, RGBA, etc.) has not mattered. More investigation will be needed,
+// but for now the work-around is to split the spherical harmonics into three textures (one for each color channel).
+const MAX_TEXTURE_TEXELS = 16777216;
 
 /**
  * SplatMesh: Container for one or more splat scenes, abstracting them into a single unified container for
@@ -679,22 +688,62 @@ export class SplatMesh extends THREE.Mesh {
 
         if (this.splatRenderMode === SplatRenderMode.ThreeD) {
             // set up covariances data texture
-            const covTexSize = computeDataTextureSize(COVARIANCES_ELEMENTS_PER_TEXEL, 6);
-            let CovariancesDataType = covarianceCompressionLevel >= 1 ? Uint16Array : Float32Array;
-            let covariancesTextureType = covarianceCompressionLevel >= 1 ? THREE.HalfFloatType : THREE.FloatType;
-            const paddedCovariances = new CovariancesDataType(covTexSize.x * covTexSize.y * COVARIANCES_ELEMENTS_PER_TEXEL);
-            paddedCovariances.set(covariances);
+            const covariancesElementsPerTexel = covarianceCompressionLevel >= 1 ?
+                                                COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED : COVARIANCES_ELEMENTS_PER_TEXEL;
+            const covTexSize = computeDataTextureSize(covariancesElementsPerTexel, 6);
+            let CovariancesDataType = covarianceCompressionLevel >= 1 ? Uint32Array : Float32Array;
 
-            const covTex = new THREE.DataTexture(paddedCovariances, covTexSize.x, covTexSize.y, THREE.RGBAFormat, covariancesTextureType);
+            const paddedCovariancesElementsPerTexel = covarianceCompressionLevel >= 1 ? 8 : covariancesElementsPerTexel;
+            const paddedCovariances = new CovariancesDataType(covTexSize.x * covTexSize.y * paddedCovariancesElementsPerTexel);
+
+            if (covarianceCompressionLevel === 0) {
+                paddedCovariances.set(covariances);
+            } else {
+                let paddedView = new DataView(paddedCovariances.buffer);
+                let packedIndex = 0;
+                let sequentialCount = 0;
+                for (let i = 0; i < covariances.length; i += 2) {
+                    paddedView.setUint16(packedIndex * 2, covariances[i], true);
+                    paddedView.setUint16(packedIndex * 2 + 2, covariances[i + 1], true);
+                    packedIndex+=2;
+                    sequentialCount++;
+                    if (sequentialCount >= 3) {
+                        packedIndex += 2;
+                        sequentialCount = 0;
+                    }
+                }
+            }
+
+            let covTex;
+            let dummyTex;
+            if (covarianceCompressionLevel >= 1) {
+                covTex = new THREE.DataTexture(paddedCovariances, covTexSize.x, covTexSize.y,
+                                               THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
+                covTex.internalFormat = 'RGBA32UI';
+                this.material.uniforms.covariancesTextureHalfFloat.value = covTex;
+
+                dummyTex = new THREE.DataTexture(new Float32Array(32), 2, 2, THREE.RGBAFormat, THREE.FloatType);
+                this.material.uniforms.covariancesTexture.value = dummyTex;
+            } else {
+                covTex = new THREE.DataTexture(paddedCovariances, covTexSize.x, covTexSize.y, THREE.RGBAFormat, THREE.FloatType);
+                this.material.uniforms.covariancesTexture.value = covTex;
+
+                dummyTex = new THREE.DataTexture(new Uint32Array(32), 2, 2, THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
+                dummyTex.internalFormat = 'RGBA32UI';
+                this.material.uniforms.covariancesTextureHalfFloat.value = dummyTex;
+            }
+            dummyTex.needsUpdate = true;
             covTex.needsUpdate = true;
-            this.material.uniforms.covariancesTexture.value = covTex;
+
+            this.material.uniforms.covariancesAreHalfFloat.value = (covarianceCompressionLevel >= 1) ? 1 : 0;
             this.material.uniforms.covariancesTextureSize.value.copy(covTexSize);
 
             this.splatDataTextures['covariances'] = {
                 'data': paddedCovariances,
                 'texture': covTex,
                 'size': covTexSize,
-                'compressionLevel': covarianceCompressionLevel
+                'compressionLevel': covarianceCompressionLevel,
+                'covariancesElementsPerTexel': covariancesElementsPerTexel
             };
         } else {
             // set up scale & rotations data texture
@@ -730,15 +779,8 @@ export class SplatMesh extends THREE.Mesh {
             const texelFormat = shElementsPerTexel === 4 ? THREE.RGBAFormat : THREE.RGFormat;
             let shTexSize = computeDataTextureSize(shElementsPerTexel, paddedSHComponentCount);
 
-            // Based on my own observations across multiple devices, OSes and browsers, using textures that have one dimension
-            // greater than 4096 while the other is greater than or equal to 4096 causes issues (Essentially any texture larger
-            // than 4096 x 4096 (16777216) texels). Specifically it seems all texture data beyond the 4096 x 4096 texel boundary
-            // is corrupted, while data below that boundary is usable. In these cases the texture has been valid in the eyes of
-            // both Three.js and WebGL, and the texel format (RG, RGBA, etc.) has not mattered. More investigation will be needed,
-            // but for now the work-around is to split the spherical harmonics into three textures (one for each color channel).
-
             // Use one texture for all spherical harmonics data
-            if (shTexSize.x * shTexSize.y <= 16777216) {
+            if (shTexSize.x * shTexSize.y <= MAX_TEXTURE_TEXELS) {
                 const paddedSHArraySize = shTexSize.x * shTexSize.y * shElementsPerTexel;
                 const paddedSHArray = new SphericalHarmonicsArrayType(paddedSHArraySize);
                 for (let c = 0; c < splatCount; c++) {

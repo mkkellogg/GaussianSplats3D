@@ -6,7 +6,6 @@ import { Constants } from '../Constants.js';
 const SphericalHarmonics8BitCompressionHalfRange = Constants.SphericalHarmonics8BitCompressionRange / 2.0;
 
 const toHalfFloat = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
-
 const fromHalfFloat = THREE.DataUtils.fromHalfFloat.bind(THREE.DataUtils);
 
 const toUncompressedFloat = (f, compressionLevel, isSH = false) => {
@@ -507,6 +506,7 @@ export class SplatBuffer {
             scale.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel), this.compressionLevel));
+
             rotation.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel), this.compressionLevel),
                          toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 5, this.compressionLevel), this.compressionLevel),
                          toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 6, this.compressionLevel), this.compressionLevel),

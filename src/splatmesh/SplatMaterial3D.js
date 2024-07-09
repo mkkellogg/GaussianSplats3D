@@ -23,6 +23,17 @@ export class SplatMaterial3D {
         const customVertexVars = `
             uniform vec2 covariancesTextureSize;
             uniform highp sampler2D covariancesTexture;
+            uniform highp usampler2D covariancesTextureHalfFloat;
+            uniform uint covariancesAreHalfFloat;
+
+            void fromCovarianceHalfFloatV4(uvec4 val, out vec4 first, out vec4 second) {
+                vec2 r = unpackHalf2x16(val.r);
+                vec2 g = unpackHalf2x16(val.g);
+                vec2 b = unpackHalf2x16(val.b);
+
+                first = vec4(r.x, r.y, g.x, g.y);
+                second = vec4(b.x, b.y, 0.0, 0.0);
+            }
         `;
 
         let vertexShaderSource = SplatMaterial.buildVertexShaderBase(dynamicMode, enableOptionalEffects,
@@ -33,13 +44,21 @@ export class SplatMaterial3D {
         const uniforms = SplatMaterial.getUniforms(dynamicMode, enableOptionalEffects,
                                                    maxSphericalHarmonicsDegree, splatScale, pointCloudModeEnabled);
 
+        uniforms['covariancesTextureSize'] = {
+            'type': 'v2',
+            'value': new THREE.Vector2(1024, 1024)
+        };
         uniforms['covariancesTexture'] = {
             'type': 't',
             'value': null
         };
-        uniforms['covariancesTextureSize'] = {
-            'type': 'v2',
-            'value': new THREE.Vector2(1024, 1024)
+        uniforms['covariancesTextureHalfFloat'] = {
+            'type': 't',
+            'value': null
+        };
+        uniforms['covariancesAreHalfFloat'] = {
+            'type': 'i',
+            'value': 0
         };
 
         const material = new THREE.ShaderMaterial({
@@ -60,16 +79,27 @@ export class SplatMaterial3D {
     static buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize) {
         let vertexShaderSource = `
 
-            vec4 sampledCovarianceA = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset,
+            vec4 sampledCovarianceA;
+            vec4 sampledCovarianceB;
+            vec3 cov3D_M11_M12_M13;
+            vec3 cov3D_M22_M23_M33;
+            if (covariancesAreHalfFloat == uint(0)) {
+                sampledCovarianceA = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset,
                                                                             covariancesTextureSize));
-            vec4 sampledCovarianceB = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset + uint(1),
+                sampledCovarianceB = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset + uint(1),
                                                                             covariancesTextureSize));
 
-            vec3 cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rgb) * (1.0 - fOddOffset) +
+                cov3D_M11_M12_M13 = vec3(sampledCovarianceA.rgb) * (1.0 - fOddOffset) +
                                     vec3(sampledCovarianceA.ba, sampledCovarianceB.r) * fOddOffset;
-            vec3 cov3D_M22_M23_M33 = vec3(sampledCovarianceA.a, sampledCovarianceB.rg) * (1.0 - fOddOffset) +
+                cov3D_M22_M23_M33 = vec3(sampledCovarianceA.a, sampledCovarianceB.rg) * (1.0 - fOddOffset) +
                                     vec3(sampledCovarianceB.gba) * fOddOffset;
-
+            } else {
+                uvec4 sampledCovarianceU = texture(covariancesTextureHalfFloat, getDataUV(1, 0, covariancesTextureSize));
+                fromCovarianceHalfFloatV4(sampledCovarianceU, sampledCovarianceA, sampledCovarianceB);
+                cov3D_M11_M12_M13 = sampledCovarianceA.rgb;
+                cov3D_M22_M23_M33 = vec3(sampledCovarianceA.a, sampledCovarianceB.rg);
+            }
+        
             // Construct the 3D covariance matrix
             mat3 Vrk = mat3(
                 cov3D_M11_M12_M13.x, cov3D_M11_M12_M13.y, cov3D_M11_M12_M13.z,
