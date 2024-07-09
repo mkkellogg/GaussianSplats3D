@@ -19,8 +19,10 @@ const dummyMaterial = new THREE.MeshBasicMaterial();
 const COVARIANCES_ELEMENTS_PER_SPLAT = 6;
 const CENTER_COLORS_ELEMENTS_PER_SPLAT = 4;
 
-const COVARIANCES_ELEMENTS_PER_TEXEL = 4;
-const COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED = 6;
+const COVARIANCES_ELEMENTS_PER_TEXEL_STORED = 4;
+const COVARIANCES_ELEMENTS_PER_TEXEL_ALLOCATED = 4;
+const COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_STORED = 6;
+const COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_ALLOCATED = 8;
 const SCALES_ROTATIONS_ELEMENTS_PER_TEXEL = 4;
 const CENTER_COLORS_ELEMENTS_PER_TEXEL = 4;
 const SCENE_INDEXES_ELEMENTS_PER_TEXEL = 1;
@@ -688,36 +690,26 @@ export class SplatMesh extends THREE.Mesh {
 
         if (this.splatRenderMode === SplatRenderMode.ThreeD) {
             // set up covariances data texture
-            const covariancesElementsPerTexel = covarianceCompressionLevel >= 1 ?
-                                                COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED : COVARIANCES_ELEMENTS_PER_TEXEL;
-            const covTexSize = computeDataTextureSize(covariancesElementsPerTexel, 6);
+            const covariancesElementsPerTexelStored = covarianceCompressionLevel >= 1 ?
+                                                      COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_STORED :
+                                                      COVARIANCES_ELEMENTS_PER_TEXEL_STORED;
+            const covTexSize = computeDataTextureSize(covariancesElementsPerTexelStored, 6);
             let CovariancesDataType = covarianceCompressionLevel >= 1 ? Uint32Array : Float32Array;
-
-            const paddedCovariancesElementsPerTexel = covarianceCompressionLevel >= 1 ? 8 : covariancesElementsPerTexel;
-            const paddedCovariances = new CovariancesDataType(covTexSize.x * covTexSize.y * paddedCovariancesElementsPerTexel);
+            const covariancesElementsPerTexelAllocated = covarianceCompressionLevel >= 1 ?
+                                                         COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_ALLOCATED :
+                                                         COVARIANCES_ELEMENTS_PER_TEXEL_ALLOCATED;
+            const covarianceDataForTexture = new CovariancesDataType(covTexSize.x * covTexSize.y * covariancesElementsPerTexelAllocated);
 
             if (covarianceCompressionLevel === 0) {
-                paddedCovariances.set(covariances);
+                covarianceDataForTexture.set(covariances);
             } else {
-                let paddedView = new DataView(paddedCovariances.buffer);
-                let packedIndex = 0;
-                let sequentialCount = 0;
-                for (let i = 0; i < covariances.length; i += 2) {
-                    paddedView.setUint16(packedIndex * 2, covariances[i], true);
-                    paddedView.setUint16(packedIndex * 2 + 2, covariances[i + 1], true);
-                    packedIndex+=2;
-                    sequentialCount++;
-                    if (sequentialCount >= 3) {
-                        packedIndex += 2;
-                        sequentialCount = 0;
-                    }
-                }
+                SplatMesh.updatePaddedCompressedCovariancesTextureData(covariances, covarianceDataForTexture, 0, 0, covariances.length);
             }
 
             let covTex;
             let dummyTex;
             if (covarianceCompressionLevel >= 1) {
-                covTex = new THREE.DataTexture(paddedCovariances, covTexSize.x, covTexSize.y,
+                covTex = new THREE.DataTexture(covarianceDataForTexture, covTexSize.x, covTexSize.y,
                                                THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
                 covTex.internalFormat = 'RGBA32UI';
                 this.material.uniforms.covariancesTextureHalfFloat.value = covTex;
@@ -725,7 +717,7 @@ export class SplatMesh extends THREE.Mesh {
                 dummyTex = new THREE.DataTexture(new Float32Array(32), 2, 2, THREE.RGBAFormat, THREE.FloatType);
                 this.material.uniforms.covariancesTexture.value = dummyTex;
             } else {
-                covTex = new THREE.DataTexture(paddedCovariances, covTexSize.x, covTexSize.y, THREE.RGBAFormat, THREE.FloatType);
+                covTex = new THREE.DataTexture(covarianceDataForTexture, covTexSize.x, covTexSize.y, THREE.RGBAFormat, THREE.FloatType);
                 this.material.uniforms.covariancesTexture.value = covTex;
 
                 dummyTex = new THREE.DataTexture(new Uint32Array(32), 2, 2, THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
@@ -739,11 +731,12 @@ export class SplatMesh extends THREE.Mesh {
             this.material.uniforms.covariancesTextureSize.value.copy(covTexSize);
 
             this.splatDataTextures['covariances'] = {
-                'data': paddedCovariances,
+                'data': covarianceDataForTexture,
                 'texture': covTex,
                 'size': covTexSize,
                 'compressionLevel': covarianceCompressionLevel,
-                'covariancesElementsPerTexel': covariancesElementsPerTexel
+                'elementsPerTexelStored': covariancesElementsPerTexelStored,
+                'elementsPerTexelAllocated': covariancesElementsPerTexelAllocated
             };
         } else {
             // set up scale & rotations data texture
@@ -916,22 +909,36 @@ export class SplatMesh extends THREE.Mesh {
 
         // update covariance data texture
         if (covarancesTextureDesc) {
-            const paddedCovariances = covarancesTextureDesc.data;
             const covariancesTexture = covarancesTextureDesc.texture;
-            const covarancesStartSplat = fromSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
-            const covariancesEndSplat = toSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
-            for (let i = covarancesStartSplat; i <= covariancesEndSplat; i++) {
-                const covariance = this.splatDataTextures.baseData.covariances[i];
-                paddedCovariances[i] = covariance;
+            const covarancesStartElement = fromSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
+            const covariancesEndElement = toSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
+
+            if (covarancesTextureDesc.compressionLevel === 0) {
+                for (let i = covarancesStartElement; i <= covariancesEndElement; i++) {
+                    const covariance = this.splatDataTextures.baseData.covariances[i];
+                    covarancesTextureDesc.data[i] = covariance;
+                }
+            } else {
+                SplatMesh.updatePaddedCompressedCovariancesTextureData(this.splatDataTextures.baseData.covariances,
+                                                                       covarancesTextureDesc.data,
+                                                                       fromSplat * covarancesTextureDesc.elementsPerTexelAllocated,
+                                                                       covarancesStartElement, covariancesEndElement);
             }
+
             const covariancesTextureProps = this.renderer ? this.renderer.properties.get(covariancesTexture) : null;
             if (!covariancesTextureProps || !covariancesTextureProps.__webglTexture) {
                 covariancesTexture.needsUpdate = true;
             } else {
-                const covaranceBytesPerElement = covarianceCompressionLevel ? 2 : 4;
-                this.updateDataTexture(paddedCovariances, covarancesTextureDesc.texture, covarancesTextureDesc.size,
-                                       covariancesTextureProps, COVARIANCES_ELEMENTS_PER_TEXEL, COVARIANCES_ELEMENTS_PER_SPLAT,
-                                       covaranceBytesPerElement, fromSplat, toSplat);
+                const covarianceBytesPerElement = covarianceCompressionLevel ? 2 : 4;
+                if (covarancesTextureDesc.compressionLevel === 0) {
+                    this.updateDataTexture(covarancesTextureDesc.data, covarancesTextureDesc.texture, covarancesTextureDesc.size,
+                                           covariancesTextureProps, covarancesTextureDesc.elementsPerTexelStored,
+                                           COVARIANCES_ELEMENTS_PER_SPLAT, covarianceBytesPerElement, fromSplat, toSplat);
+                } else {
+                    this.updateDataTexture(covarancesTextureDesc.data, covarancesTextureDesc.texture, covarancesTextureDesc.size,
+                                           covariancesTextureProps, covarancesTextureDesc.elementsPerTexelAllocated,
+                                           covarancesTextureDesc.elementsPerTexelAllocated, covarianceBytesPerElement, fromSplat, toSplat);
+                }
             }
         }
 
@@ -1093,6 +1100,21 @@ export class SplatMesh extends THREE.Mesh {
         gl.bindTexture(gl.TEXTURE_2D, currentTexture);
     }
 
+    static updatePaddedCompressedCovariancesTextureData(sourceData, textureData, textureDataStartIndex, fromElement, toElement) {
+        let textureDataView = new DataView(textureData.buffer);
+        let textureDataIndex = textureDataStartIndex;
+        let sequentialCount = 0;
+        for (let i = fromElement; i <= toElement; i+=2) {
+            textureDataView.setUint16(textureDataIndex * 2, sourceData[i], true);
+            textureDataView.setUint16(textureDataIndex * 2 + 2, sourceData[i + 1], true);
+            textureDataIndex += 2;
+            sequentialCount++;
+            if (sequentialCount >= 3) {
+                textureDataIndex += 2;
+                sequentialCount = 0;
+            }
+        }
+    }
 
     static updateCenterColorsPaddedData(from, to, centers, colors, paddedCenterColors) {
         for (let c = from; c <= to; c++) {
