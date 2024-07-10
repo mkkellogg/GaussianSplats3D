@@ -1,5 +1,5 @@
 import { SplatBuffer } from '../SplatBuffer.js';
-import { fetchWithProgress, delayedExecute } from '../../Util.js';
+import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
 
@@ -19,9 +19,9 @@ export class KSplatLoader {
         }
     };
 
-    static loadFromURL(fileName, onProgress, streamLoadData, onSectionBuilt) {
-        let streamBuffer;
-        let streamSplatBuffer;
+    static loadFromURL(fileName, externalOnProgress, progressiveLoad, onSectionBuilt) {
+        let progressiveLoadBuffer;
+        let progressiveLoadSplatBuffer;
 
         let headerBuffer;
         let header;
@@ -34,18 +34,16 @@ export class KSplatLoader {
         let sectionHeadersLoading = false;
 
         let numBytesLoaded = 0;
-        let numBytesStreamed = 0;
-        let streamSectionSizeBytes = Constants.StreamingSectionSize;
+        let numBytesProgressivelyLoaded = 0;
         let totalBytesToDownload = 0;
 
+        let downloadComplete = false;
         let loadComplete = false;
+        let loadSectionQueued = false;
 
         let chunks = [];
 
-        let streamLoadCompleteResolver;
-        let streamLoadPromise = new Promise((resolve) => {
-            streamLoadCompleteResolver = resolve;
-        });
+        const progressiveLoadPromise = nativePromiseWithExtractedComponents();
 
         const checkAndLoadHeader = () => {
             if (!headerLoaded && !headerLoading && numBytesLoaded >= SplatBuffer.HeaderSizeBytes) {
@@ -71,7 +69,7 @@ export class KSplatLoader {
                 queuedCheckAndLoadSectionsCount++;
                 window.setTimeout(() => {
                     queuedCheckAndLoadSectionsCount--;
-                    checkAndLoadSections(true);
+                    checkAndLoadSections();
                 }, 1);
             }
         };
@@ -93,12 +91,12 @@ export class KSplatLoader {
                     }
                     const totalStorageSizeBytes = SplatBuffer.HeaderSizeBytes + header.maxSectionCount *
                                                   SplatBuffer.SectionHeaderSizeBytes + totalSectionStorageStorageByes;
-                    if (!streamBuffer) {
-                        streamBuffer = new ArrayBuffer(totalStorageSizeBytes);
+                    if (!progressiveLoadBuffer) {
+                        progressiveLoadBuffer = new ArrayBuffer(totalStorageSizeBytes);
                         let offset = 0;
                         for (let i = 0; i < chunks.length; i++) {
                             const chunk = chunks[i];
-                            new Uint8Array(streamBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
+                            new Uint8Array(progressiveLoadBuffer, offset, chunk.byteLength).set(new Uint8Array(chunk));
                             offset += chunk.byteLength;
                         }
                     }
@@ -119,73 +117,90 @@ export class KSplatLoader {
         };
 
         const checkAndLoadSections = () => {
-            if (sectionHeadersLoaded) {
+            if (loadSectionQueued) return;
+            loadSectionQueued = true;
+            const checkAndLoadFunc = () => {
+                loadSectionQueued = false;
+                if (sectionHeadersLoaded) {
 
-                if (loadComplete) return;
+                    if (loadComplete) return;
 
-                loadComplete = numBytesLoaded >= totalBytesToDownload;
+                    downloadComplete = numBytesLoaded >= totalBytesToDownload;
 
-                const bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
-                if (bytesLoadedSinceLastSection > streamSectionSizeBytes || loadComplete) {
+                    let bytesLoadedSinceLastSection = numBytesLoaded - numBytesProgressivelyLoaded;
+                    if (bytesLoadedSinceLastSection > Constants.ProgressiveLoadSectionSize || downloadComplete) {
 
-                    numBytesStreamed = numBytesLoaded;
+                        numBytesProgressivelyLoaded += Constants.ProgressiveLoadSectionSize;
+                        loadComplete = numBytesProgressivelyLoaded >= totalBytesToDownload;
 
-                    if (!streamSplatBuffer) streamSplatBuffer = new SplatBuffer(streamBuffer, false);
+                        if (!progressiveLoadSplatBuffer) progressiveLoadSplatBuffer = new SplatBuffer(progressiveLoadBuffer, false);
 
-                    const baseDataOffset = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount;
-                    let sectionBase = 0;
-                    let reachedSections = 0;
-                    let loadedSplatCount = 0;
-                    for (let i = 0; i < header.maxSectionCount; i++) {
-                        const sectionHeader = sectionHeaders[i];
-                        const bucketsDataOffset = sectionBase + sectionHeader.partiallyFilledBucketCount * 4 +
-                                                  sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
-                        const bytesRequiredToReachSectionSplatData = baseDataOffset + bucketsDataOffset;
-                        if (numBytesLoaded >= bytesRequiredToReachSectionSplatData) {
-                            reachedSections++;
-                            const bytesPastSSectionSplatDataStart = numBytesLoaded - bytesRequiredToReachSectionSplatData;
-                            const bytesPerSplat = SplatBuffer.CompressionLevels[header.compressionLevel].BytesPerSplat;
-                            let loadedSplatsForSection = Math.floor(bytesPastSSectionSplatDataStart / bytesPerSplat);
-                            loadedSplatsForSection = Math.min(loadedSplatsForSection, sectionHeader.maxSplatCount);
-                            loadedSplatCount += loadedSplatsForSection;
-                            streamSplatBuffer.updateLoadedCounts(reachedSections, loadedSplatCount);
-                            streamSplatBuffer.updateSectionLoadedCounts(i, loadedSplatsForSection);
-                        } else {
-                            break;
+                        const baseDataOffset = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount;
+                        let sectionBase = 0;
+                        let reachedSections = 0;
+                        let loadedSplatCount = 0;
+                        for (let i = 0; i < header.maxSectionCount; i++) {
+                            const sectionHeader = sectionHeaders[i];
+                            const bucketsDataOffset = sectionBase + sectionHeader.partiallyFilledBucketCount * 4 +
+                                                    sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
+                            const bytesRequiredToReachSectionSplatData = baseDataOffset + bucketsDataOffset;
+                            if (numBytesProgressivelyLoaded >= bytesRequiredToReachSectionSplatData) {
+                                reachedSections++;
+                                const bytesPastSSectionSplatDataStart = numBytesProgressivelyLoaded - bytesRequiredToReachSectionSplatData;
+                                const baseDescriptor = SplatBuffer.CompressionLevels[header.compressionLevel];
+                                const shDesc = baseDescriptor.SphericalHarmonicsDegrees[sectionHeader.sphericalHarmonicsDegree];
+                                const bytesPerSplat = shDesc.BytesPerSplat;
+                                let loadedSplatsForSection = Math.floor(bytesPastSSectionSplatDataStart / bytesPerSplat);
+                                loadedSplatsForSection = Math.min(loadedSplatsForSection, sectionHeader.maxSplatCount);
+                                loadedSplatCount += loadedSplatsForSection;
+                                progressiveLoadSplatBuffer.updateLoadedCounts(reachedSections, loadedSplatCount);
+                                progressiveLoadSplatBuffer.updateSectionLoadedCounts(i, loadedSplatsForSection);
+                            } else {
+                                break;
+                            }
+                            sectionBase += sectionHeader.storageSizeBytes;
                         }
-                        sectionBase += sectionHeader.storageSizeBytes;
-                    }
 
-                    onSectionBuilt(streamSplatBuffer, loadComplete);
+                        onSectionBuilt(progressiveLoadSplatBuffer, loadComplete);
 
-                    if (loadComplete) {
-                        streamLoadCompleteResolver(streamSplatBuffer);
+                        const percentComplete = numBytesProgressivelyLoaded / totalBytesToDownload * 100;
+                        const percentLabel = (percentComplete).toFixed(2) + '%';
+
+                        if (externalOnProgress) externalOnProgress(percentComplete, percentLabel, LoaderStatus.Downloading);
+
+                        if (loadComplete) {
+                            progressiveLoadPromise.resolve(progressiveLoadSplatBuffer);
+                        } else {
+                            checkAndLoadSections();
+                        }
                     }
                 }
-            }
+            };
+            window.setTimeout(checkAndLoadFunc, Constants.ProgressiveLoadSectionDelayDuration);
         };
 
         const localOnProgress = (percent, percentStr, chunk) => {
             if (chunk) {
                 chunks.push(chunk);
-                if (streamBuffer) {
-                    new Uint8Array(streamBuffer, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
+                if (progressiveLoadBuffer) {
+                    new Uint8Array(progressiveLoadBuffer, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
                 }
                 numBytesLoaded += chunk.byteLength;
             }
-            if (streamLoadData) {
+            if (progressiveLoad) {
                 checkAndLoadHeader();
                 checkAndLoadSectionHeaders();
                 checkAndLoadSections();
+            } else {
+                if (externalOnProgress) externalOnProgress(percent, percentStr, LoaderStatus.Downloading);
             }
-            if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
         };
 
-        return fetchWithProgress(fileName, localOnProgress, !streamLoadData).then((fullBuffer) => {
-            if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = streamLoadData ? streamLoadPromise : KSplatLoader.loadFromFileData(fullBuffer);
+        return fetchWithProgress(fileName, localOnProgress, !progressiveLoad).then((fullBuffer) => {
+            if (externalOnProgress) externalOnProgress(0, '0%', LoaderStatus.Processing);
+            const loadPromise = progressiveLoad ? progressiveLoadPromise.promise : KSplatLoader.loadFromFileData(fullBuffer);
             return loadPromise.then((splatBuffer) => {
-                if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
+                if (externalOnProgress) externalOnProgress(100, '100%', LoaderStatus.Done);
                 return splatBuffer;
             });
         });

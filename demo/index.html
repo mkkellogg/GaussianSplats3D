@@ -60,6 +60,7 @@
       font-size: 12pt;
       font-weight: bold;
       color: #333333;
+      margin-bottom: 5px;
     }
 
     .content-row {
@@ -86,7 +87,7 @@
       margin-right: 8px;
     }
 
-    .demo-scene-panel:hover {
+    .demo-scene-panel.clickable:hover {
       color: #333333;
       border-color: #8a9ba8;
       background-color: #e4edfc;
@@ -99,6 +100,28 @@
       margin-bottom: 10px;
       width: 209px;
       height: 149px;
+    }
+
+    .demo-scene-button-row {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .demo-scene-button {
+      border-radius: 5px;
+      border: #cccccc 2px solid;
+      background-color: #eeeeee;
+      color: #666666;
+      padding: 3px 7px 3px 7px;
+    }
+
+    .demo-scene-button:hover {
+      color: #333333;
+      border: #aaaaaa 2px solid;
+      background-color: #e7eaf1;
+      cursor: pointer;
     }
 
     .button {
@@ -262,14 +285,15 @@
     let currentCameraPositionArray;
     let currentCameraLookAtArray;
     let currentAntialiased;
+    let currentSphericalHarmonicsDegree;
   </script>
   <script type="module">
     import * as GaussianSplats3D from 'gaussian-splats-3d';
     import * as THREE from 'three';
 
-    function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
+    function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize, outSphericalHarmonicsDegree = 0) {
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
+        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, outSphericalHarmonicsDegree, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
           return GaussianSplats3D.SplatLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
@@ -281,7 +305,7 @@
 
     window.onCompressionLevelChange = function(arg) {
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
-      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
+      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 2) {
         return;
       }
 
@@ -310,6 +334,7 @@
       const conversionFile = document.getElementById("conversionFile");
       const compressionLevel = parseInt(document.getElementById("compressionLevel").value);
       const alphaRemovalThreshold = parseInt(document.getElementById("alphaRemovalThreshold").value);
+      const sphericalHarmonicsDegree = parseInt(document.getElementById("conversionSphericalHarmonicsDegree").value);
       const sectionSize = 0;
       let sceneCenterArray = document.getElementById("sceneCenter").value;
       const blockSize = parseFloat(document.getElementById("blockSize").value);
@@ -333,11 +358,14 @@
   
       const sceneCenter = new THREE.Vector3().fromArray(sceneCenterArray);
 
-      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 1) {
+      if (isNaN(compressionLevel) || compressionLevel < 0 || compressionLevel > 2) {
         setConversionError("Invalid compression level.");
         return;
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold <0 || alphaRemovalThreshold > 255) {
         setConversionError("Invalid alpha remval threshold.");
+        return;
+      } else if (isNaN(sphericalHarmonicsDegree) || sphericalHarmonicsDegree < 0 || sphericalHarmonicsDegree > 2) {
+        setConversionError("Invalid SH degree.");
         return;
       } else if (isNaN(blockSize) || blockSize < 0.1) {
         setConversionError("Invalid block size.");
@@ -379,7 +407,7 @@
           window.setTimeout(() => {
             try {
               const splatBufferPromise = fileBufferToSplatBuffer(fileData, format, alphaRemovalThreshold, compressionLevel,
-                                                                 sectionSize, sceneCenter, blockSize, bucketSize);
+                                                                 sectionSize, sceneCenter, blockSize, bucketSize, sphericalHarmonicsDegree);
               splatBufferPromise.then((splatBuffer) => {
                 GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
                 conversionDone();
@@ -427,6 +455,7 @@
       let cameraPositionArray = document.getElementById("cameraPosition").value;
       let cameraLookAtArray = document.getElementById("cameraLookAt").value;
       let antialiased = document.getElementById("antialiased").checked;
+      let sphericalHarmonicsDegree = parseInt(document.getElementById("viewSphericalHarmonicsDegree").value);
 
       cameraUpArray = cameraUpArray.split(',');
       cameraPositionArray = cameraPositionArray.split(',');
@@ -437,6 +466,9 @@
         return;
       } else if (isNaN(alphaRemovalThreshold) || alphaRemovalThreshold < 0 || alphaRemovalThreshold > 255) {
         setViewError("Invalid alpha remval threshold.");
+        return;
+      } else if (isNaN(sphericalHarmonicsDegree) || sphericalHarmonicsDegree < 0 || sphericalHarmonicsDegree > 2) {
+        setViewError("Invalid SH degree.");
         return;
       }
 
@@ -484,12 +516,13 @@
       currentCameraPositionArray = cameraPositionArray;
       currentCameraLookAtArray = cameraLookAtArray;
       currentAntialiased = antialiased;
+      currentSphericalHarmonicsDegree = sphericalHarmonicsDegree;
 
       try {
         const fileReader = new FileReader();
         fileReader.onload = function(){
           try {
-           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased);
+           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sphericalHarmonicsDegree);
           } catch (e) {
             console.error(e);
             setViewError("Could not view scene.");
@@ -521,24 +554,26 @@
   
     window.addEventListener("popstate", (event) => {
       if (currentAlphaRemovalThreshold !== undefined) {
-        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray + "&aa=" + currentAntialiased;
+        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray + "&aa=" + currentAntialiased + "&sh=" + currentSphericalHarmonicsDegree;
       } else {
         window.location = 'index.html';
       }
     });
 
-    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased) {
+    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sphericalHarmonicsDegree) {
       const viewerOptions = {
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
         'initialCameraLookAt': cameraLookAtArray,
         'halfPrecisionCovariancesOnGPU': false,
-        'antialiased': antialiased || false
+        'antialiased': antialiased || false,
+        'sphericalHarmonicsDegree': sphericalHarmonicsDegree
       };
       const splatBufferOptions = {
         'splatAlphaRemovalThreshold': alphaRemovalThreshold
       };
-      const splatBufferPromise = fileBufferToSplatBuffer({data: splatBufferData}, format, alphaRemovalThreshold, 0);
+      const splatBufferPromise = fileBufferToSplatBuffer({data: splatBufferData}, format, alphaRemovalThreshold, 0,
+                                                          undefined, undefined, undefined, undefined, sphericalHarmonicsDegree);
       splatBufferPromise.then((splatBuffer) => {
         document.getElementById("demo-content").style.display = 'none';
         document.body.style.backgroundColor = "#000000";
@@ -553,8 +588,17 @@
 
   </script>
   <script>
-    function openDemo(demoName) {
-      window.location = demoName + '.html';
+    function openDemo(page, params) {
+      let url = page + '.html';
+      if (params && params.length > 0) {
+        let index = 0;
+        for (let param of params) {
+          url += (index === 0 ? "?" : "&");
+          url += param[0] + "=" + param[1];
+          index++;
+        }
+      }
+      window.location = url;
     }
     function reset() {
       window.location = 'index.html';
@@ -587,29 +631,55 @@
         </div>
         <div style="text-align:center;">
           <div class="content-row" style="max-width: 800px; margin:auto; display:flex; align-items: center; justify-content: center;">
-            <div class="demo-scene-panel" onclick="openDemo('garden')">
+            <div class="demo-scene-panel">
+                <div class="small-title">Garden</div>
                 <img src="assets/images/garden.png" class="demo-scene-panel-image">
-                <span class="small-title">Garden</span>
+                <div class="demo-scene-button-row">
+                  <div class="demo-scene-button" onclick="openDemo('garden', [['mode', '0']])">Low</div>
+                  <div style="width: 10px;"></div>
+                  <div class="demo-scene-button" onclick="openDemo('garden', [['mode', '1']])">High</div>
+                </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('truck')">
+            <div class="demo-scene-panel">
+                <div class="small-title">Truck</div>
                 <img src="assets/images/truck.png" class="demo-scene-panel-image">
-                <span class="small-title">Truck</span>
+                <div class="demo-scene-button-row">
+                  <div class="demo-scene-button" onclick="openDemo('truck', [['mode', '0']])">Low</div>
+                  <div style="width: 10px;"></div>
+                  <div class="demo-scene-button" onclick="openDemo('truck', [['mode', '1']])">High</div>
+                </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('stump')">
-                <img src="assets/images/stump.png" class="demo-scene-panel-image">
-                <span class="small-title">Stump</span>
+            <div class="demo-scene-panel">
+              <div class="small-title">Stump</div>
+              <img src="assets/images/stump.png" class="demo-scene-panel-image">
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('stump', [['mode', '0']])">Low</div>
+                <div style="width: 10px;"></div>
+                <div class="demo-scene-button" onclick="openDemo('stump', [['mode', '1']])">High</div>
+              </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('bonsai')">
+            <div class="demo-scene-panel">
+              <div class="small-title">Bonsai</div>
               <img src="assets/images/bonsai.png" class="demo-scene-panel-image">
-              <span class="small-title">Bonsai</span>
-          </div>
-            <div class="demo-scene-panel" onclick="openDemo('dynamic_scenes')">
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('bonsai', [['mode', '0']])">Low</div>
+                <div style="width: 10px;"></div>
+                <div class="demo-scene-button" onclick="openDemo('bonsai', [['mode', '1']])">High</div>
+              </div>
+            </div>
+            <div class="demo-scene-panel">
+              <div class="small-title">Dynamic scenes</div>
               <img src="assets/images/dynamic_scenes.png" class="demo-scene-panel-image">
-              <span class="small-title">Dynamic scenes</span>
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('dynamic_scenes', [['mode', '0']])">Open</div>
+              </div>
             </div>
-            <div class="demo-scene-panel" onclick="openDemo('vr')">
+            <div class="demo-scene-panel">
+              <div class="small-title">AR/VR</div>
               <img src="assets/images/bonsai.png" class="demo-scene-panel-image">
-              <span class="small-title">AR/VR</span>
+              <div class="demo-scene-button-row">
+                <div class="demo-scene-button" onclick="openDemo('vr', [['mode', '0']])">Open</div>
+              </div>
             </div>
           </div>
         </div>
@@ -617,7 +687,7 @@
     <br>
     <div class="header-content-container">
         <div class="content-row">
-            <div id ="view-panel" class="splat-panel" style="height:330px;">
+            <div id ="view-panel" class="splat-panel" style="height:370px;">
                 <br>
                 <div class="small-title">View a <span class="file-ext">.ply</span>, <span class="file-ext">.ksplat</span>, or <span class="file-ext-small">.splat</span> file</div>
                 <br>
@@ -674,6 +744,15 @@
                         <input id="cameraLookAt" type="text" class="text-input" style="width: 90px" value="1, 0, 0"></input>
                     </td>
                     </tr>
+                    <tr>
+                      <td>
+                          SH level:
+                      </td>
+                      <td>
+                          <input id="viewSphericalHarmonicsDegree" type="text" class="text-input" style="width: 50px" value="0"></input>
+                          <span class="valid-value-label">(0, 1, or 2)</span>
+                      </td>
+                      </tr>
                 </table>
                 <br>
                 <span class="button" onclick="window.viewSplat()">View</span>
@@ -691,7 +770,7 @@
                 <span id="viewError" style="color: #ff0000"></span>
             </div>
       
-            <div id ="conversion-panel" class="splat-panel" style="height:390px;">
+            <div id ="conversion-panel" class="splat-panel" style="height:420px;">
                 <br>
                 <span class="small-title">Convert a <span class="file-ext">.ply</span> or <span class="file-ext">.splat</span> to <span class="file-ext">.ksplat</span></span>
                 <br>
@@ -732,7 +811,16 @@
                     </td>
                     <td>
                         <input id="compressionLevel" type="text" class="text-input" style="width: 50px" value="1" onChange="window.onCompressionLevelChange(this);"></input>
-                        <span class="valid-value-label">(0 or 1)</span>
+                        <span class="valid-value-label">(0, 1, or 2)</span>
+                    </td>
+                    </tr>
+                    <tr>
+                    <td>
+                        SH level:
+                    </td>
+                    <td>
+                        <input id="conversionSphericalHarmonicsDegree" type="text" class="text-input" style="width: 50px" value="0"></input>
+                        <span class="valid-value-label">(0, 1, or 2)</span>
                     </td>
                     </tr>
                     <tr id="advancedCompressionRow1">
@@ -893,6 +981,9 @@
         } else if (varName == "aa") {
           currentAntialiased = component[1] === 'true' ? true : false;
           document.getElementById('antialiased').checked = currentAntialiased;
+        }  else if (varName == "sh") {
+          currentSphericalHarmonicsDegree = component[1];
+          document.getElementById('viewSphericalHarmonicsDegree').value = currentSphericalHarmonicsDegree;
         }
       }
     }
