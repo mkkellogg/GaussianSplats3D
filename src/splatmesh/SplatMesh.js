@@ -700,18 +700,18 @@ export class SplatMesh extends THREE.Mesh {
             const covariancesElementsPerTexelAllocated = covarianceCompressionLevel >= 1 ?
                                                          COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_ALLOCATED :
                                                          COVARIANCES_ELEMENTS_PER_TEXEL_ALLOCATED;
-            const covarianceDataForTexture = new CovariancesDataType(covTexSize.x * covTexSize.y * covariancesElementsPerTexelAllocated);
+            const covariancesTextureData = new CovariancesDataType(covTexSize.x * covTexSize.y * covariancesElementsPerTexelAllocated);
 
             if (covarianceCompressionLevel === 0) {
-                covarianceDataForTexture.set(covariances);
+                covariancesTextureData.set(covariances);
             } else {
-                SplatMesh.updatePaddedCompressedCovariancesTextureData(covariances, covarianceDataForTexture, 0, 0, covariances.length);
+                SplatMesh.updatePaddedCompressedCovariancesTextureData(covariances, covariancesTextureData, 0, 0, covariances.length);
             }
 
             let covTex;
             let dummyTex;
             if (covarianceCompressionLevel >= 1) {
-                covTex = new THREE.DataTexture(covarianceDataForTexture, covTexSize.x, covTexSize.y,
+                covTex = new THREE.DataTexture(covariancesTextureData, covTexSize.x, covTexSize.y,
                                                THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
                 covTex.internalFormat = 'RGBA32UI';
                 this.material.uniforms.covariancesTextureHalfFloat.value = covTex;
@@ -719,7 +719,7 @@ export class SplatMesh extends THREE.Mesh {
                 dummyTex = new THREE.DataTexture(new Float32Array(32), 2, 2, THREE.RGBAFormat, THREE.FloatType);
                 this.material.uniforms.covariancesTexture.value = dummyTex;
             } else {
-                covTex = new THREE.DataTexture(covarianceDataForTexture, covTexSize.x, covTexSize.y, THREE.RGBAFormat, THREE.FloatType);
+                covTex = new THREE.DataTexture(covariancesTextureData, covTexSize.x, covTexSize.y, THREE.RGBAFormat, THREE.FloatType);
                 this.material.uniforms.covariancesTexture.value = covTex;
 
                 dummyTex = new THREE.DataTexture(new Uint32Array(32), 2, 2, THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
@@ -733,7 +733,7 @@ export class SplatMesh extends THREE.Mesh {
             this.material.uniforms.covariancesTextureSize.value.copy(covTexSize);
 
             this.splatDataTextures['covariances'] = {
-                'data': covarianceDataForTexture,
+                'data': covariancesTextureData,
                 'texture': covTex,
                 'size': covTexSize,
                 'compressionLevel': covarianceCompressionLevel,
@@ -915,7 +915,7 @@ export class SplatMesh extends THREE.Mesh {
             const covarancesStartElement = fromSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
             const covariancesEndElement = toSplat * COVARIANCES_ELEMENTS_PER_SPLAT;
 
-            if (covarancesTextureDesc.compressionLevel === 0) {
+            if (covarianceCompressionLevel === 0) {
                 for (let i = covarancesStartElement; i <= covariancesEndElement; i++) {
                     const covariance = this.splatDataTextures.baseData.covariances[i];
                     covarancesTextureDesc.data[i] = covariance;
@@ -931,15 +931,14 @@ export class SplatMesh extends THREE.Mesh {
             if (!covariancesTextureProps || !covariancesTextureProps.__webglTexture) {
                 covariancesTexture.needsUpdate = true;
             } else {
-                const covarianceBytesPerElement = covarianceCompressionLevel ? 2 : 4;
-                if (covarancesTextureDesc.compressionLevel === 0) {
+                if (covarianceCompressionLevel === 0) {
                     this.updateDataTexture(covarancesTextureDesc.data, covarancesTextureDesc.texture, covarancesTextureDesc.size,
                                            covariancesTextureProps, covarancesTextureDesc.elementsPerTexelStored,
-                                           COVARIANCES_ELEMENTS_PER_SPLAT, covarianceBytesPerElement, fromSplat, toSplat);
+                                           COVARIANCES_ELEMENTS_PER_SPLAT, 4, fromSplat, toSplat);
                 } else {
                     this.updateDataTexture(covarancesTextureDesc.data, covarancesTextureDesc.texture, covarancesTextureDesc.size,
                                            covariancesTextureProps, covarancesTextureDesc.elementsPerTexelAllocated,
-                                           covarancesTextureDesc.elementsPerTexelAllocated, covarianceBytesPerElement, fromSplat, toSplat);
+                                           covarancesTextureDesc.elementsPerTexelAllocated, 2, fromSplat, toSplat);
                 }
             }
         }
@@ -1829,11 +1828,13 @@ export class SplatMesh extends THREE.Mesh {
     fillSplatDataArrays(covariances, scales, rotations, centers, colors, sphericalHarmonics, applySceneTransform,
                         covarianceCompressionLevel = 0, scaleRotationCompressionLevel = 0, sphericalHarmonicsCompressionLevel = 1,
                         srcStart, srcEnd, destStart = 0) {
-        const scaleOverride = new THREE.Vector3(0, 0, 0);
+        const scaleOverride = new THREE.Vector3();
+        scaleOverride.x = undefined;
+        scaleOverride.y = undefined;
         if (this.splatRenderMode === SplatRenderMode.ThreeD) {
-            scaleOverride.set(undefined, undefined, undefined);
+            scaleOverride.z = undefined;
         } else {
-            scaleOverride.set(undefined, undefined, 1);
+            scaleOverride.z = 1;
         }
 
         for (let i = 0; i < this.scenes.length; i++) {
@@ -1948,7 +1949,9 @@ export class SplatMesh extends THREE.Mesh {
 
         return function(globalIndex, outScale, outRotation, applySceneTransform) {
             this.getLocalSplatParameters(globalIndex, paramsObj, applySceneTransform);
-            scaleOverride.set(undefined, undefined, undefined);
+            scaleOverride.x = undefined;
+            scaleOverride.y = undefined;
+            scaleOverride.z = undefined;
             if (this.splatRenderMode === SplatRenderMode.TwoD) scaleOverride.z = 0;
             paramsObj.splatBuffer.getSplatScaleAndRotation(paramsObj.localIndex, outScale, outRotation,
                                                            paramsObj.sceneTransform, scaleOverride);
