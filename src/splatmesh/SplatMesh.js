@@ -387,6 +387,7 @@ export class SplatMesh extends THREE.Mesh {
                                 onSplatTreeIndexesUpload, onSplatTreeConstruction)
             .then(() => {
                 if (this.onSplatTreeReadyCallback) this.onSplatTreeReadyCallback(this.splatTree);
+                this.onSplatTreeReadyCallback = null;
             });
         }
 
@@ -538,7 +539,8 @@ export class SplatMesh extends THREE.Mesh {
         if (this.splatTree) {
             this.splatTree.dispose();
             this.splatTree = null;
-        } else if (this.baseSplatTree) {
+        }
+        if (this.baseSplatTree) {
             this.baseSplatTree.dispose();
             this.baseSplatTree = null;
         }
