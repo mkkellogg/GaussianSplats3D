@@ -30,12 +30,23 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
 - Custom `.ksplat` file format still needs work, especially around compression
 - The default, integer based splat sort does not work well for larger scenes. In that case a value of `false` for the `integerBasedSort` viewer parameter can force a slower, floating-point based sort
 
+## Limitations
+
+Currently there are limits on the number of splats that can be rendered, and those limits depend mainly on the degree of spherical harmonics desired. Those limits are:
+
+| Spherical harmonics degree | Max splat count
+| --- | ---
+| `0` | ~ 16,000,000
+| `1` | ~ 11,000,000
+| `2` | ~ 8,000,000
+
+Future work will include optimizing how splat data is packed into data textures, which will help increase these limits.
+
 ## Future work
 This is still very much a work in progress! There are several things that still need to be done:
-  - Improve the method by which splat data is stored in textures
+  - Improve the way splat data is packed into data textures
   - Continue optimizing CPU-based splat sort - maybe try an incremental sort of some kind?
-  - Add editing mode, allowing users to modify scene and export changes
-  - Support very large scenes
+  - Support very large scenes (streaming sections & LOD)
 
 ## Online demo
 [https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php](https://projects.markkellogg.org/threejs/demo_gaussian_splats_3d.php)
