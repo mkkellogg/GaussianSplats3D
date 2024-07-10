@@ -635,7 +635,17 @@ export class SplatMesh extends THREE.Mesh {
             return texSize;
         };
 
-        const covarianceCompressionLevel = this.getTargetCovarianceCompressionLevel();
+        const getCovariancesElementsPertexelStored = (compressionLevel) => {
+            return compressionLevel >= 1 ? COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_STORED : COVARIANCES_ELEMENTS_PER_TEXEL_STORED;
+        };
+
+        const getCovariancesInitialTextureSpecs = (compressionLevel) => {
+            const elementsPerTexelStored = getCovariancesElementsPertexelStored(compressionLevel);
+            const texSize = computeDataTextureSize(elementsPerTexelStored, 6);
+            return {elementsPerTexelStored, texSize};
+        };
+
+        let covarianceCompressionLevel = this.getTargetCovarianceCompressionLevel();
         const scaleRotationCompressionLevel = 0;
         const shCompressionLevel = this.getTargetSphericalHarmonicsCompressionLevel();
 
@@ -643,6 +653,10 @@ export class SplatMesh extends THREE.Mesh {
         let scales;
         let rotations;
         if (this.splatRenderMode === SplatRenderMode.ThreeD) {
+            const initialCovTexSpecs = getCovariancesInitialTextureSpecs(covarianceCompressionLevel);
+            if (initialCovTexSpecs.texSize.x * initialCovTexSpecs.texSize.y > MAX_TEXTURE_TEXELS && covarianceCompressionLevel === 0) {
+                covarianceCompressionLevel = 1;
+            }
             covariances = new Float32Array(maxSplatCount * COVARIANCES_ELEMENTS_PER_SPLAT);
         } else {
             scales = new Float32Array(maxSplatCount * 3);
@@ -692,10 +706,11 @@ export class SplatMesh extends THREE.Mesh {
 
         if (this.splatRenderMode === SplatRenderMode.ThreeD) {
             // set up covariances data texture
-            const covariancesElementsPerTexelStored = covarianceCompressionLevel >= 1 ?
-                                                      COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_STORED :
-                                                      COVARIANCES_ELEMENTS_PER_TEXEL_STORED;
-            const covTexSize = computeDataTextureSize(covariancesElementsPerTexelStored, 6);
+
+            const covTexSpecs = getCovariancesInitialTextureSpecs(covarianceCompressionLevel);
+            const covariancesElementsPerTexelStored = covTexSpecs.elementsPerTexelStored;
+            const covTexSize = covTexSpecs.texSize;
+
             let CovariancesDataType = covarianceCompressionLevel >= 1 ? Uint32Array : Float32Array;
             const covariancesElementsPerTexelAllocated = covarianceCompressionLevel >= 1 ?
                                                          COVARIANCES_ELEMENTS_PER_TEXEL_COMPRESSED_ALLOCATED :
@@ -709,24 +724,21 @@ export class SplatMesh extends THREE.Mesh {
             }
 
             let covTex;
-            let dummyTex;
             if (covarianceCompressionLevel >= 1) {
                 covTex = new THREE.DataTexture(covariancesTextureData, covTexSize.x, covTexSize.y,
                                                THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
                 covTex.internalFormat = 'RGBA32UI';
                 this.material.uniforms.covariancesTextureHalfFloat.value = covTex;
-
-                dummyTex = new THREE.DataTexture(new Float32Array(32), 2, 2, THREE.RGBAFormat, THREE.FloatType);
-                this.material.uniforms.covariancesTexture.value = dummyTex;
             } else {
                 covTex = new THREE.DataTexture(covariancesTextureData, covTexSize.x, covTexSize.y, THREE.RGBAFormat, THREE.FloatType);
                 this.material.uniforms.covariancesTexture.value = covTex;
 
-                dummyTex = new THREE.DataTexture(new Uint32Array(32), 2, 2, THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
+                // For some reason a usampler2D needs to have a valid texture attached or WebGL complains
+                const dummyTex = new THREE.DataTexture(new Uint32Array(32), 2, 2, THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
                 dummyTex.internalFormat = 'RGBA32UI';
                 this.material.uniforms.covariancesTextureHalfFloat.value = dummyTex;
+                dummyTex.needsUpdate = true;
             }
-            dummyTex.needsUpdate = true;
             covTex.needsUpdate = true;
 
             this.material.uniforms.covariancesAreHalfFloat.value = (covarianceCompressionLevel >= 1) ? 1 : 0;

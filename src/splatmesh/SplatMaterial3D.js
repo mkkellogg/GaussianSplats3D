@@ -24,7 +24,7 @@ export class SplatMaterial3D {
             uniform vec2 covariancesTextureSize;
             uniform highp sampler2D covariancesTexture;
             uniform highp usampler2D covariancesTextureHalfFloat;
-            uniform uint covariancesAreHalfFloat;
+            uniform int covariancesAreHalfFloat;
 
             void fromCovarianceHalfFloatV4(uvec4 val, out vec4 first, out vec4 second) {
                 vec2 r = unpackHalf2x16(val.r);
@@ -83,7 +83,7 @@ export class SplatMaterial3D {
             vec4 sampledCovarianceB;
             vec3 cov3D_M11_M12_M13;
             vec3 cov3D_M22_M23_M33;
-            if (covariancesAreHalfFloat == uint(0)) {
+            if (covariancesAreHalfFloat == 0) {
                 sampledCovarianceA = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset,
                                                                             covariancesTextureSize));
                 sampledCovarianceB = texture(covariancesTexture, getDataUVF(nearestEvenIndex, 1.5, oddOffset + uint(1),
