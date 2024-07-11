@@ -960,7 +960,7 @@ export class SplatMesh extends THREE.Mesh {
             const paddedScaleRotations = scaleRotationsTextureDesc.data;
             const scaleRotationsTexture = scaleRotationsTextureDesc.texture;
             const elementsPerSplat = 6;
-            const bytesPerSplat = elementsPerSplat * (scaleRotationCompressionLevel === 0 ? 4 : 2);
+            const bytesPerElement = scaleRotationCompressionLevel === 0 ? 4 : 2;
 
             SplatMesh.updateScaleRotationsPaddedData(fromSplat, toSplat, this.splatDataTextures.baseData.scales,
                                                      this.splatDataTextures.baseData.rotations, paddedScaleRotations);
@@ -969,7 +969,7 @@ export class SplatMesh extends THREE.Mesh {
                 scaleRotationsTexture.needsUpdate = true;
             } else {
                 this.updateDataTexture(paddedScaleRotations, scaleRotationsTextureDesc.texture, scaleRotationsTextureDesc.size,
-                                       scaleRotationsTextureProps, SCALES_ROTATIONS_ELEMENTS_PER_TEXEL, elementsPerSplat, bytesPerSplat,
+                                       scaleRotationsTextureProps, SCALES_ROTATIONS_ELEMENTS_PER_TEXEL, elementsPerSplat, bytesPerElement,
                                        fromSplat, toSplat);
             }
         }
@@ -1097,12 +1097,12 @@ export class SplatMesh extends THREE.Mesh {
         };
     }
 
-    updateDataTexture(paddedData, texture, textureSize, textureProps, elementsPerTexel, elementsPerSplat, bytesPerSplat, from, to) {
+    updateDataTexture(paddedData, texture, textureSize, textureProps, elementsPerTexel, elementsPerSplat, bytesPerElement, from, to) {
         const gl = this.renderer.getContext();
         const updateRegion = SplatMesh.computeTextureUpdateRegion(from, to, textureSize.x, elementsPerTexel, elementsPerSplat);
         const updateElementCount = updateRegion.dataEnd - updateRegion.dataStart;
         const updateDataView = new paddedData.constructor(paddedData.buffer,
-                                                          updateRegion.dataStart * bytesPerSplat, updateElementCount);
+                                                          updateRegion.dataStart * bytesPerElement, updateElementCount);
         const updateHeight = updateRegion.endRow - updateRegion.startRow + 1;
         const glType = this.webGLUtils.convert(texture.type);
         const glFormat = this.webGLUtils.convert(texture.format, texture.colorSpace);
