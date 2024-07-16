@@ -6,21 +6,7 @@ import { Constants } from '../Constants.js';
 const SphericalHarmonics8BitCompressionHalfRange = Constants.SphericalHarmonics8BitCompressionRange / 2.0;
 
 const toHalfFloat = THREE.DataUtils.toHalfFloat.bind(THREE.DataUtils);
-
-const toUint8 = (v) => {
-    v = clamp(v, -SphericalHarmonics8BitCompressionHalfRange, SphericalHarmonics8BitCompressionHalfRange);
-    return clamp(Math.floor((v * (0.5 / SphericalHarmonics8BitCompressionHalfRange) + 0.5) * 255), 0, 255);
-};
-
-const fromUint8 = (v) => {
-    return (v / 255) * Constants.SphericalHarmonics8BitCompressionRange - SphericalHarmonics8BitCompressionHalfRange;
-};
-
 const fromHalfFloat = THREE.DataUtils.fromHalfFloat.bind(THREE.DataUtils);
-
-const fromHalfFloatToUint8 = (v) => {
-    return toUint8(fromHalfFloat(v));
-};
 
 const toUncompressedFloat = (f, compressionLevel, isSH = false) => {
     if (compressionLevel === 0) {
@@ -32,6 +18,23 @@ const toUncompressedFloat = (f, compressionLevel, isSH = false) => {
     }
 };
 
+const toUint8 = (v) => {
+    v = clamp(v, -SphericalHarmonics8BitCompressionHalfRange, SphericalHarmonics8BitCompressionHalfRange);
+    return clamp(Math.floor((v * (0.5 / SphericalHarmonics8BitCompressionHalfRange) + 0.5) * 255), 0, 255);
+};
+
+const fromUint8 = (v) => {
+    return (v / 255) * Constants.SphericalHarmonics8BitCompressionRange - SphericalHarmonics8BitCompressionHalfRange;
+};
+
+const fromHalfFloatToUint8 = (v) => {
+    return toUint8(fromHalfFloat(v));
+};
+
+const fromUint8ToHalfFloat = (v) => {
+    return toHalfFloat(fromUint8(v));
+};
+
 const dataViewFloatForCompressionLevel = (dataView, floatIndex, compressionLevel, isSH = false) => {
     if (compressionLevel === 0) {
         return dataView.getFloat32(floatIndex * 4, true);
@@ -41,6 +44,38 @@ const dataViewFloatForCompressionLevel = (dataView, floatIndex, compressionLevel
         return dataView.getUint8(floatIndex, true);
     }
 };
+
+const convertBetweenCompressionLevels = function() {
+
+    const noop = (v) => v;
+
+    return function(val, fromLevel, toLevel, isSH = false) {
+        if (fromLevel === toLevel) return val;
+        let outputConversionFunc = noop;
+
+        if (fromLevel === 2 && isSH) {
+            if (toLevel === 1) outputConversionFunc = fromUint8ToHalfFloat;
+            else if (toLevel == 0) {
+                outputConversionFunc = fromUint8;
+            }
+        } else if (fromLevel === 2 || fromLevel === 1) {
+            if (toLevel === 0) outputConversionFunc = fromHalfFloat;
+            else if (toLevel == 2) {
+                if (!isSH) outputConversionFunc = noop;
+                else outputConversionFunc = fromHalfFloatToUint8;
+            }
+        } else if (fromLevel === 0) {
+            if (toLevel === 1) outputConversionFunc = toHalfFloat;
+            else if (toLevel == 2) {
+                if (!isSH) outputConversionFunc = toHalfFloat;
+                else outputConversionFunc = toUint8;
+            }
+        }
+
+        return outputConversionFunc(val);
+    };
+
+}();
 
 const copyBetweenBuffers = (srcBuffer, srcOffset, destBuffer, destOffset, byteCount = 0) => {
     const src = new Uint8Array(srcBuffer, srcOffset);
@@ -216,7 +251,7 @@ export class SplatBuffer {
         const scale = new THREE.Vector3();
         const rotation = new THREE.Quaternion();
 
-        return function(index, outScale, outRotation, transform) {
+        return function(index, outScale, outRotation, transform, scaleOverride) {
             const sectionIndex = this.globalSplatIndexToSectionMap[index];
             const section = this.sections[sectionIndex];
             const localSplatIndex = index - section.splatCountOffset;
@@ -229,6 +264,11 @@ export class SplatBuffer {
             scale.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel), this.compressionLevel));
+            if (scaleOverride) {
+                if (scaleOverride.x !== undefined) scale.x = scaleOverride.x;
+                if (scaleOverride.y !== undefined) scale.y = scaleOverride.y;
+                if (scaleOverride.z !== undefined) scale.z = scaleOverride.z;
+            }
 
             rotation.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel), this.compressionLevel),
                          toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 5, this.compressionLevel), this.compressionLevel),
@@ -303,6 +343,97 @@ export class SplatBuffer {
         }
     }
 
+    fillSplatScaleRotationArray = function() {
+
+        const scaleMatrix = new THREE.Matrix4();
+        const rotationMatrix = new THREE.Matrix4();
+        const tempMatrix = new THREE.Matrix4();
+        const scale = new THREE.Vector3();
+        const rotation = new THREE.Quaternion();
+        const tempPosition = new THREE.Vector3();
+
+        const ensurePositiveW = (quaternion) => {
+            const flip = quaternion.w < 0 ? -1 : 1;
+            quaternion.x *= flip;
+            quaternion.y *= flip;
+            quaternion.z *= flip;
+            quaternion.w *= flip;
+        };
+
+        return function(outScaleArray, outRotationArray, transform, srcFrom, srcTo, destFrom,
+                        desiredOutputCompressionLevel, scaleOverride) {
+            const splatCount = this.splatCount;
+
+            srcFrom = srcFrom || 0;
+            srcTo = srcTo || splatCount - 1;
+            if (destFrom === undefined) destFrom = srcFrom;
+
+            const outputConversion = (value, srcCompressionLevel) => {
+                if (srcCompressionLevel === undefined) srcCompressionLevel = this.compressionLevel;
+                return convertBetweenCompressionLevels(value, srcCompressionLevel, desiredOutputCompressionLevel);
+            };
+
+            for (let i = srcFrom; i <= srcTo; i++) {
+                const sectionIndex = this.globalSplatIndexToSectionMap[i];
+                const section = this.sections[sectionIndex];
+                const localSplatIndex = i - section.splatCountOffset;
+
+                const srcSplatScalesBase = section.bytesPerSplat * localSplatIndex +
+                                        SplatBuffer.CompressionLevels[this.compressionLevel].ScaleOffsetBytes;
+
+                const scaleDestBase = (i - srcFrom + destFrom) * SplatBuffer.ScaleComponentCount;
+                const rotationDestBase = (i - srcFrom + destFrom) * SplatBuffer.RotationComponentCount;
+                const dataView = new DataView(this.bufferData, section.dataBase + srcSplatScalesBase);
+
+                const srcScaleX = (scaleOverride && scaleOverride.x !== undefined) ? scaleOverride.x :
+                                   dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel);
+                const srcScaleY = (scaleOverride && scaleOverride.y !== undefined) ? scaleOverride.y :
+                                   dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel);
+                const srcScaleZ = (scaleOverride && scaleOverride.z !== undefined) ? scaleOverride.z :
+                                   dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel);
+
+                const srcRotationW = dataViewFloatForCompressionLevel(dataView, 3, this.compressionLevel);
+                const srcRotationX = dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel);
+                const srcRotationY = dataViewFloatForCompressionLevel(dataView, 5, this.compressionLevel);
+                const srcRotationZ = dataViewFloatForCompressionLevel(dataView, 6, this.compressionLevel);
+
+                scale.set(toUncompressedFloat(srcScaleX, this.compressionLevel),
+                          toUncompressedFloat(srcScaleY, this.compressionLevel),
+                          toUncompressedFloat(srcScaleZ, this.compressionLevel));
+
+                rotation.set(toUncompressedFloat(srcRotationX, this.compressionLevel),
+                             toUncompressedFloat(srcRotationY, this.compressionLevel),
+                             toUncompressedFloat(srcRotationZ, this.compressionLevel),
+                             toUncompressedFloat(srcRotationW, this.compressionLevel)).normalize();
+
+                if (transform) {
+                    tempPosition.set(0, 0, 0);
+                    scaleMatrix.makeScale(scale.x, scale.y, scale.z);
+                    rotationMatrix.makeRotationFromQuaternion(rotation);
+                    tempMatrix.identity().premultiply(scaleMatrix).premultiply(rotationMatrix);
+                    tempMatrix.premultiply(transform);
+                    tempMatrix.decompose(tempPosition, rotation, scale);
+                    rotation.normalize();
+                }
+
+                ensurePositiveW(rotation);
+
+                if (outScaleArray) {
+                    outScaleArray[scaleDestBase] = outputConversion(scale.x, 0);
+                    outScaleArray[scaleDestBase + 1] = outputConversion(scale.y, 0);
+                    outScaleArray[scaleDestBase + 2] = outputConversion(scale.z, 0);
+                }
+
+                if (outRotationArray) {
+                    outRotationArray[rotationDestBase] = outputConversion(rotation.x, 0);
+                    outRotationArray[rotationDestBase + 1] = outputConversion(rotation.y, 0);
+                    outRotationArray[rotationDestBase + 2] = outputConversion(rotation.z, 0);
+                    outRotationArray[rotationDestBase + 3] = outputConversion(rotation.w, 0);
+                }
+            }
+        };
+    }();
+
     static computeCovariance = function() {
 
         const tempMatrix4 = new THREE.Matrix4();
@@ -375,6 +506,7 @@ export class SplatBuffer {
             scale.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 0, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 1, this.compressionLevel), this.compressionLevel),
                       toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 2, this.compressionLevel), this.compressionLevel));
+
             rotation.set(toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 4, this.compressionLevel), this.compressionLevel),
                          toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 5, this.compressionLevel), this.compressionLevel),
                          toUncompressedFloat(dataViewFloatForCompressionLevel(dataView, 6, this.compressionLevel), this.compressionLevel),
@@ -421,6 +553,11 @@ export class SplatBuffer {
         }
 
         const tempMatrix3 = new THREE.Matrix3();
+        const tempMatrix4 = new THREE.Matrix4();
+
+        const tempTranslation = new THREE.Vector3();
+        const tempScale = new THREE.Vector3();
+        const tempRotation = new THREE.Quaternion();
 
         const sh11 = [];
         const sh12 = [];
@@ -486,7 +623,11 @@ export class SplatBuffer {
             if (destFrom === undefined) destFrom = srcFrom;
 
             if (transform && outSphericalHarmonicsDegree >= 1) {
-                tempMatrix3.setFromMatrix4(transform);
+                tempMatrix4.copy(transform);
+                tempMatrix4.decompose(tempTranslation, tempRotation, tempScale);
+                tempRotation.normalize();
+                tempMatrix4.makeRotationFromQuaternion(tempRotation);
+                tempMatrix3.setFromMatrix4(tempMatrix4);
                 set3(sh11, tempMatrix3.elements[4], -tempMatrix3.elements[7], tempMatrix3.elements[1]);
                 set3(sh12, -tempMatrix3.elements[5], tempMatrix3.elements[8], -tempMatrix3.elements[2]);
                 set3(sh13, tempMatrix3.elements[3], -tempMatrix3.elements[6], tempMatrix3.elements[0]);
@@ -931,9 +1072,11 @@ export class SplatBuffer {
             }
 
             if (targetSplat[OFFSET_SCALE0] !== undefined) {
-                tempScale.set(targetSplat[OFFSET_SCALE0], targetSplat[OFFSET_SCALE1], targetSplat[OFFSET_SCALE2]);
+                tempScale.set(targetSplat[OFFSET_SCALE0] || 0,
+                              targetSplat[OFFSET_SCALE1] || 0,
+                              targetSplat[OFFSET_SCALE2] || 0);
             } else {
-                tempScale.set(0.01, 0.01, 0.01);
+                tempScale.set(0, 0, 0);
             }
 
             if (compressionLevel === 0) {

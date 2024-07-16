@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Ray } from './Ray.js';
 import { Hit } from './Hit.js';
+import { SplatRenderMode } from '../SplatRenderMode.js';
 
 export class Raycaster {
 
@@ -116,12 +117,19 @@ export class Raycaster {
                     splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter);
                     splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation);
 
-                    if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon || tempScale.z <= scaleEpsilon) {
+                    if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon ||
+                        splatTree.splatMesh.splatRenderMode === SplatRenderMode.ThreeD && tempScale.z <= scaleEpsilon) {
                         continue;
                     }
 
                     if (!this.raycastAgainstTrueSplatEllipsoid) {
-                        const radius = (tempScale.x + tempScale.y + tempScale.z) / 3;
+                        let radius = (tempScale.x + tempScale.y);
+                        let componentCount = 2;
+                        if (splatTree.splatMesh.splatRenderMode === SplatRenderMode.ThreeD) {
+                            radius += tempScale.z;
+                            componentCount = 3;
+                        }
+                        radius = radius / componentCount;
                         if (ray.intersectSphere(tempCenter, radius, tempHit)) {
                             const hitClone = tempHit.clone();
                             hitClone.splatIndex = splatGlobalIndex;
