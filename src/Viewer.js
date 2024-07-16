@@ -122,6 +122,7 @@ export class Viewer {
         }
         this.webXRActive = false;
 
+        this.webXRSessionInit = options.webXRSessionInit || {};
         // if 'renderMode' is RenderMode.Always, then the viewer will rrender the scene on every update. If it is RenderMode.OnChange,
         // it will only render when something in the scene has changed.
         this.renderMode = options.renderMode || RenderMode.Always;
@@ -288,7 +289,7 @@ export class Viewer {
 
         this.setupCamera();
         this.setupRenderer();
-        this.setupWebXR();
+        this.setupWebXR(this.webXRSessionInit);
         this.setupControls();
         this.setupEventHandlers();
 
@@ -345,12 +346,12 @@ export class Viewer {
 
     }
 
-    setupWebXR() {
+    setupWebXR(webXRSessionInit) {
         if (this.webXRMode) {
             if (this.webXRMode === WebXRMode.VR) {
-                this.rootElement.appendChild(VRButton.createButton(this.renderer));
+                this.rootElement.appendChild(VRButton.createButton(this.renderer, webXRSessionInit));
             } else if (this.webXRMode === WebXRMode.AR) {
-                this.rootElement.appendChild(ARButton.createButton(this.renderer));
+                this.rootElement.appendChild(ARButton.createButton(this.renderer, webXRSessionInit));
             }
             this.renderer.xr.addEventListener('sessionstart', (e) => {
                 this.webXRActive = true;
