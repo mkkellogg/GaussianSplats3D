@@ -285,6 +285,7 @@
     let currentCameraPositionArray;
     let currentCameraLookAtArray;
     let currentAntialiased;
+    let current2DScene;
     let currentSphericalHarmonicsDegree;
   </script>
   <script type="module">
@@ -455,6 +456,7 @@
       let cameraPositionArray = document.getElementById("cameraPosition").value;
       let cameraLookAtArray = document.getElementById("cameraLookAt").value;
       let antialiased = document.getElementById("antialiased").checked;
+      let sceneIs2D = document.getElementById("2dScene").checked;
       let sphericalHarmonicsDegree = parseInt(document.getElementById("viewSphericalHarmonicsDegree").value);
 
       cameraUpArray = cameraUpArray.split(',');
@@ -516,13 +518,14 @@
       currentCameraPositionArray = cameraPositionArray;
       currentCameraLookAtArray = cameraLookAtArray;
       currentAntialiased = antialiased;
+      current2DScene = sceneIs2D;
       currentSphericalHarmonicsDegree = sphericalHarmonicsDegree;
 
       try {
         const fileReader = new FileReader();
         fileReader.onload = function(){
           try {
-           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sphericalHarmonicsDegree);
+           runViewer(fileReader.result, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sceneIs2D, sphericalHarmonicsDegree);
           } catch (e) {
             console.error(e);
             setViewError("Could not view scene.");
@@ -554,19 +557,20 @@
   
     window.addEventListener("popstate", (event) => {
       if (currentAlphaRemovalThreshold !== undefined) {
-        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray + "&aa=" + currentAntialiased + "&sh=" + currentSphericalHarmonicsDegree;
+        window.location = 'index.html?art=' + currentAlphaRemovalThreshold + '&cu=' + currentCameraUpArray + "&cp=" + currentCameraPositionArray + "&cla=" + currentCameraLookAtArray + "&aa=" + currentAntialiased + "&2d=" + current2DScene + "&sh=" + currentSphericalHarmonicsDegree;
       } else {
         window.location = 'index.html';
       }
     });
 
-    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sphericalHarmonicsDegree) {
+    function runViewer(splatBufferData, format, alphaRemovalThreshold, cameraUpArray, cameraPositionArray, cameraLookAtArray, antialiased, sceneIs2D, sphericalHarmonicsDegree) {
       const viewerOptions = {
         'cameraUp': cameraUpArray,
         'initialCameraPosition': cameraPositionArray,
         'initialCameraLookAt': cameraLookAtArray,
         'halfPrecisionCovariancesOnGPU': false,
         'antialiased': antialiased || false,
+        'splatRenderMode': sceneIs2D ? GaussianSplats3D.SplatRenderMode.TwoD : GaussianSplats3D.SplatRenderMode.ThreeD,
         'sphericalHarmonicsDegree': sphericalHarmonicsDegree
       };
       const splatBufferOptions = {
@@ -687,7 +691,7 @@
     <br>
     <div class="header-content-container">
         <div class="content-row">
-            <div id ="view-panel" class="splat-panel" style="height:370px;">
+            <div id ="view-panel" class="splat-panel" style="height:400px;">
                 <br>
                 <div class="small-title">View a <span class="file-ext">.ply</span>, <span class="file-ext">.ksplat</span>, or <span class="file-ext-small">.splat</span> file</div>
                 <br>
@@ -716,8 +720,16 @@
                       <td>
                         Anti-aliased
                       </td>
-                      <td style="text-align:lefts;">
+                      <td style="text-align:left;">
                         <input type="checkbox" id="antialiased" class="checkbox-input"/>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        2D scene
+                      </td>
+                      <td style="text-align:left;">
+                        <input type="checkbox" id="2dScene" class="checkbox-input"/>
                       </td>
                     </tr>
                     <tr>
@@ -981,6 +993,9 @@
         } else if (varName == "aa") {
           currentAntialiased = component[1] === 'true' ? true : false;
           document.getElementById('antialiased').checked = currentAntialiased;
+        } else if (varName == "2d") {
+          current2DScene = component[1] === 'true' ? true : false;
+          document.getElementById('2dScene').checked = current2DScene;
         }  else if (varName == "sh") {
           currentSphericalHarmonicsDegree = component[1];
           document.getElementById('viewSphericalHarmonicsDegree').value = currentSphericalHarmonicsDegree;
