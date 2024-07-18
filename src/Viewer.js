@@ -186,6 +186,7 @@ export class Viewer {
             options.splatRenderMode = SplatRenderMode.ThreeD;
         }
         this.splatRenderMode = options.splatRenderMode;
+        this.manualRender = options.manualRender || false;
 
         this.onSplatMeshChangedCallback = null;
         this.createSplatMesh();
@@ -1541,6 +1542,7 @@ export class Viewer {
     render = function() {
 
         return function() {
+            if(this.manualRender) return
             if (!this.initialized || !this.splatRenderReady) return;
 
             const hasRenderables = (threeScene) => {
