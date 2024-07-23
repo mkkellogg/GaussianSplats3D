@@ -18,7 +18,7 @@ import { SceneFormat } from './loaders/SceneFormat.js';
 import { WebXRMode } from './webxr/WebXRMode.js';
 import { VRButton } from './webxr/VRButton.js';
 import { ARButton } from './webxr/ARButton.js';
-import { delayedExecute, nativePromiseWithExtractedComponents, abortablePromiseWithExtractedComponents } from './Util.js';
+import { delayedExecute, abortablePromiseWithExtractedComponents } from './Util.js';
 import { LoaderStatus } from './loaders/LoaderStatus.js';
 import { RenderMode } from './RenderMode.js';
 import { LogLevel } from './LogLevel.js';
@@ -809,10 +809,11 @@ export class Viewer {
      */
     downloadAndBuildSingleSplatSceneStandardLoad(path, format, splatAlphaRemovalThreshold, buildFunc, onProgress, onException) {
 
-        const downloadAndBuildPromise = nativePromiseWithExtractedComponents();
+        const downloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold,
+                                                                     onProgress, false, undefined, format);
+        const downloadAndBuildPromise = abortablePromiseWithExtractedComponents(downloadPromise.abortHandler);
 
-        const downloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onProgress, false, undefined, format)
-        .then((splatBuffer) => {
+        downloadPromise.then((splatBuffer) => {
             this.removeSplatSceneDownloadPromise(downloadPromise);
             return buildFunc(splatBuffer, true, true).then(() => {
                 downloadAndBuildPromise.resolve();
@@ -821,12 +822,10 @@ export class Viewer {
         })
         .catch((e) => {
             if (onException) onException();
-            downloadAndBuildPromise.reject();
             this.clearSplatSceneDownloadAndBuildPromise();
             this.removeSplatSceneDownloadPromise(downloadPromise);
-            if (!(e instanceof AbortedPromiseError)) {
-                throw (new Error(`Viewer::addSplatScene -> Could not load file ${path}`));
-            }
+            const error = (e instanceof AbortedPromiseError) ? e : new Error(`Viewer::addSplatScene -> Could not load file ${path}`);
+            downloadAndBuildPromise.reject(error);
         });
 
         this.addSplatSceneDownloadPromise(downloadPromise);
@@ -906,11 +905,9 @@ export class Viewer {
         .catch((e) => {
             this.clearSplatSceneDownloadAndBuildPromise();
             this.removeSplatSceneDownloadPromise(splatSceneDownloadPromise);
-            if (!(e instanceof AbortedPromiseError)) {
-                splatSceneDownloadAndBuildPromise.reject(e);
-                if (progressiveLoadFirstSectionBuildPromise.reject) progressiveLoadFirstSectionBuildPromise.reject(e);
-                if (onDownloadException) onDownloadException(e);
-            }
+            const error = (e instanceof AbortedPromiseError) ? e : new Error(`Viewer::addSplatScene -> Could not load one or more scenes`);
+            progressiveLoadFirstSectionBuildPromise.reject(error);
+            if (onDownloadException) onDownloadException(error);
         });
 
         return progressiveLoadFirstSectionBuildPromise.promise;
@@ -969,22 +966,19 @@ export class Viewer {
             if (onProgress) onProgress(totalPercent, percentLabel, loaderStatus);
         };
 
-        const downloadPromises = [];
-        const nativeLoadPromises = [];
-        const abortHandlers = [];
+        const baseDownloadPromises = [];
+        const nativeDownloadPromises = [];
         for (let i = 0; i < sceneOptions.length; i++) {
             const options = sceneOptions[i];
             const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(options.path);
-            const downloadPromise = this.downloadSplatSceneToSplatBuffer(options.path, options.splatAlphaRemovalThreshold,
-                                                                         onLoadProgress.bind(this, i), false, undefined, format);
-            abortHandlers.push(downloadPromise.abortHandler);
-            downloadPromises.push(downloadPromise);
-            nativeLoadPromises.push(downloadPromise.promise);
-            this.addSplatSceneDownloadPromise(downloadPromise);
+            const baseDownloadPromise = this.downloadSplatSceneToSplatBuffer(options.path, options.splatAlphaRemovalThreshold,
+                                                                             onLoadProgress.bind(this, i), false, undefined, format);
+            baseDownloadPromises.push(baseDownloadPromise);
+            nativeDownloadPromises.push(baseDownloadPromise.promise);
         }
 
-        const downloadPromise = new AbortablePromise((resolve, reject) => {
-            Promise.all(nativeLoadPromises)
+        const downloadAndBuildPromise = new AbortablePromise((resolve, reject) => {
+            Promise.all(nativeDownloadPromises)
             .then((splatBuffers) => {
                 if (showLoadingUI) this.loadingSpinner.removeTask(loadingUITaskId);
                 if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
@@ -997,22 +991,21 @@ export class Viewer {
             .catch((e) => {
                 if (showLoadingUI) this.loadingSpinner.removeTask(loadingUITaskId);
                 this.clearSplatSceneDownloadAndBuildPromise();
-                if (!(e instanceof AbortedPromiseError)) {
-                    reject(new Error(`Viewer::addSplatScenes -> Could not load one or more splat scenes.`));
-                } else {
-                    resolve();
-                }
+                const error = (e instanceof AbortedPromiseError) ? e :
+                               new Error(`Viewer::addSplatScenes -> Could not load one or more splat scenes.`);
+                reject(error);
             })
             .finally(() => {
-                for (let downloadPromise of downloadPromises) {
-                    this.removeSplatSceneDownloadPromise(downloadPromise);
-                }
+                this.removeSplatSceneDownloadPromise(downloadAndBuildPromise);
             });
-        }, () => {
-            for (let abortHandler of abortHandlers) abortHandler();
+        }, (reason) => {
+            for (let baseDownloadPromise of baseDownloadPromises) {
+                baseDownloadPromise.abort(reason);
+            }
         });
-        this.setSplatSceneDownloadAndBuildPromise(downloadPromise);
-        return downloadPromise;
+        this.addSplatSceneDownloadPromise(downloadAndBuildPromise);
+        this.setSplatSceneDownloadAndBuildPromise(downloadAndBuildPromise);
+        return downloadAndBuildPromise;
     }
 
     /**
