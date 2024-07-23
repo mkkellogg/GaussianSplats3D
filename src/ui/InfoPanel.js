@@ -146,7 +146,7 @@ export class InfoPanel {
     };
 
     setContainer(container) {
-        if (this.container) {
+        if (this.container && this.infoPanelContainer.parentElement === this.container) {
             this.container.removeChild(this.infoPanelContainer);
         }
         if (container) {
