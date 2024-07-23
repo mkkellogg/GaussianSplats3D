@@ -1790,6 +1790,7 @@ export class Viewer {
         ];
 
         return async function(force = false) {
+            if (!this.initialized) return;
             if (this.sortRunning) return;
             if (this.splatMesh.getSplatCount() <= 0) {
                 this.splatRenderCount = 0;
