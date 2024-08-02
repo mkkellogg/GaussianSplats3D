@@ -70,6 +70,14 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
         rejectFunc = reject;
         fetch(path, { signal })
         .then(async (data) => {
+            if (!data.ok) {
+                const error_text = await data.text();
+                reject(new Error(
+                        `Fetch failed: ${data.status} ${data.statusText} ${error_text}`
+                ));
+                return;
+            }
+
             const reader = data.body.getReader();
             let bytesDownloaded = 0;
             let _fileSize = data.headers.get('Content-Length');
