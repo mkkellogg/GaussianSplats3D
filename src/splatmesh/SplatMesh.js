@@ -1174,7 +1174,7 @@ export class SplatMesh extends THREE.Mesh {
 
         const startSplatFormMaxDistanceCalc = sinceLastBuildOnly ? this.lastBuildSplatCount : 0;
         for (let i = startSplatFormMaxDistanceCalc; i < splatCount; i++) {
-            this.getSplatCenter(i, tempCenter, false);
+            this.getSplatCenter(i, tempCenter, true);
             const distFromCSceneCenter = tempCenter.sub(this.calculatedSceneCenter).length();
             if (distFromCSceneCenter > this.maxSplatDistanceFromSceneCenter) this.maxSplatDistanceFromSceneCenter = distFromCSceneCenter;
         }

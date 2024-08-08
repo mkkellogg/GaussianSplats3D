@@ -64,8 +64,8 @@ export class AbortablePromise {
         }, this.abortHandler);
     }
 
-    abort() {
-        if (this.abortHandler) this.abortHandler();
+    abort(reason) {
+        if (this.abortHandler) this.abortHandler(reason);
     }
 
 }
