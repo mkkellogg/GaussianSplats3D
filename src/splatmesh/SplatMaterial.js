@@ -14,14 +14,11 @@ export class SplatMaterial {
         uniform highp sampler2D sphericalHarmonicsTextureR;
         uniform highp sampler2D sphericalHarmonicsTextureG;
         uniform highp sampler2D sphericalHarmonicsTextureB;
-    `;
 
-    if (enableOptionalEffects || dynamicMode) {
-        vertexShaderSource += `
-            uniform highp usampler2D sceneIndexesTexture;
-            uniform vec2 sceneIndexesTextureSize;
-        `;
-    }
+        uniform highp usampler2D sceneIndexesTexture;
+        uniform vec2 sceneIndexesTextureSize;
+        uniform int sceneCount;
+    `;
 
     if (enableOptionalEffects) {
         vertexShaderSource += `
@@ -57,6 +54,7 @@ export class SplatMaterial {
         uniform int fadeInComplete;
         uniform vec3 sceneCenter;
         uniform float splatScale;
+        uniform float sphericalHarmonics8BitCompressionRange[${Constants.MaxScenes}];
 
         varying vec4 vColor;
         varying vec2 vUv;
@@ -110,10 +108,6 @@ export class SplatMaterial {
         const float SH_C1 = 0.4886025119029199f;
         const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
 
-        const float SphericalHarmonics8BitCompressionRange = ${Constants.SphericalHarmonics8BitCompressionRange.toFixed(1)};
-        const float SphericalHarmonics8BitCompressionHalfRange = SphericalHarmonics8BitCompressionRange / 2.0;
-        const vec3 vec8BitSHShift = vec3(SphericalHarmonics8BitCompressionHalfRange);
-
         void main () {
 
             uint oddOffset = splatIndex & uint(0x00000001);
@@ -123,13 +117,13 @@ export class SplatMaterial {
             float fOddOffset = float(oddOffset);
 
             uvec4 sampledCenterColor = texture(centersColorsTexture, getDataUV(1, 0, centersColorsTextureSize));
-            vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));`;
+            vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));
 
-        if (dynamicMode || enableOptionalEffects) {
-            vertexShaderSource += `
-                uint sceneIndex = texture(sceneIndexesTexture, getDataUV(1, 0, sceneIndexesTextureSize)).r;
+            uint sceneIndex = uint(0);
+            if (sceneCount > 1) {
+                sceneIndex = texture(sceneIndexesTexture, getDataUV(1, 0, sceneIndexesTextureSize)).r;
+            }
             `;
-        }
 
         if (enableOptionalEffects) {
             vertexShaderSource += `
@@ -152,6 +146,10 @@ export class SplatMaterial {
         }
 
         vertexShaderSource += `
+            float sh8BitCompressionRangeForScene = sphericalHarmonics8BitCompressionRange[sceneIndex];
+            float sh8BitCompressionHalfRangeForScene =sh8BitCompressionRangeForScene / 2.0;
+            vec3 vec8BitSHShift = vec3(sh8BitCompressionHalfRangeForScene);
+
             vec4 viewCenter = transformModelViewMatrix * vec4(splatCenter, 1.0);
 
             vec4 clipCenter = projectionMatrix * viewCenter;
@@ -245,9 +243,9 @@ export class SplatMaterial {
 
             vertexShaderSource += `
                     if (sphericalHarmonics8BitMode == 1) {
-                        sh1 = sh1 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
-                        sh2 = sh2 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
-                        sh3 = sh3 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                        sh1 = sh1 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                        sh2 = sh2 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                        sh3 = sh3 * sh8BitCompressionRangeForScene - vec8BitSHShift;
                     }
                     float x = worldViewDir.x;
                     float y = worldViewDir.y;
@@ -293,11 +291,11 @@ export class SplatMaterial {
                         }
 
                         if (sphericalHarmonics8BitMode == 1) {
-                            sh4 = sh4 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
-                            sh5 = sh5 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
-                            sh6 = sh6 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
-                            sh7 = sh7 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
-                            sh8 = sh8 * SphericalHarmonics8BitCompressionRange - vec8BitSHShift;
+                            sh4 = sh4 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                            sh5 = sh5 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                            sh6 = sh6 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                            sh7 = sh7 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                            sh8 = sh8 * sh8BitCompressionRangeForScene - vec8BitSHShift;
                         }
 
                         vColor.rgb +=
@@ -392,6 +390,10 @@ export class SplatMaterial {
                 'type': 't',
                 'value': null
             },
+            'sphericalHarmonics8BitCompressionRange': {
+                'type': 'f',
+                'value': []
+            },
             'focal': {
                 'type': 'v2',
                 'value': new THREE.Vector2()
@@ -443,18 +445,22 @@ export class SplatMaterial {
             'pointCloudModeEnabled': {
                 'type': 'i',
                 'value': pointCloudModeEnabled ? 1 : 0
-            }
-        };
-
-        if (dynamicMode || enableOptionalEffects) {
-            uniforms['sceneIndexesTexture'] = {
+            },
+            'sceneIndexesTexture': {
                 'type': 't',
                 'value': null
-            };
-            uniforms['sceneIndexesTextureSize'] = {
+            },
+            'sceneIndexesTextureSize': {
                 'type': 'v2',
                 'value': new THREE.Vector2(1024, 1024)
-            };
+            },
+            'sceneCount': {
+                'type': 'i',
+                'value': 1
+            }
+        };
+        for (let i = 0; i < Constants.MaxScenes; i++) {
+            uniforms.sphericalHarmonics8BitCompressionRange.value.push(Constants.SphericalHarmonics8BitCompressionRange);
         }
 
         if (enableOptionalEffects) {

@@ -1470,6 +1470,7 @@ export class Viewer {
             this.sortWorkerTransforms = null;
             this.disposed = true;
             this.disposing = false;
+            this.disposePromise = null;
         });
         promisesToAbort.forEach((toAbort) => {
             toAbort.abort('Scene disposed');
