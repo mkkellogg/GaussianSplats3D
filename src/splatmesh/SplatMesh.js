@@ -46,7 +46,7 @@ const MAX_TEXTURE_TEXELS = 16777216;
  */
 export class SplatMesh extends THREE.Mesh {
 
-    constructor(splatRenderMode = SplatRenderMode.ThreeD, dynamicMode = true, enableOptionalEffects = false,
+    constructor(splatRenderMode = SplatRenderMode.ThreeD, dynamicMode = false, enableOptionalEffects = false,
                 halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true,
                 integerBasedDistancesComputation = false, antialiased = false, maxScreenSpaceSplatSize = 1024, logLevel = LogLevel.None,
                 sphericalHarmonicsDegree = 0) {
@@ -611,13 +611,17 @@ export class SplatMesh extends THREE.Mesh {
      * @param {boolean} sinceLastBuildOnly Specify whether or not to only update for splats that have been added since the last build.
      */
     refreshDataTexturesFromSplatBuffers(sinceLastBuildOnly) {
-        if (!sinceLastBuildOnly) {
-            this.setupDataTextures();
-        }
         const splatCount = this.getSplatCount();
         const fromSplat = this.lastBuildSplatCount;
         const toSplat = splatCount - 1;
-        this.updateBaseDataFromSplatBuffers(fromSplat, toSplat);
+
+        if (!sinceLastBuildOnly) {
+            this.setupDataTextures();
+            this.updateBaseDataFromSplatBuffers();
+        } else {
+            this.updateBaseDataFromSplatBuffers(fromSplat, toSplat);
+        }
+
         this.updateDataTexturesFromBaseData(fromSplat, toSplat);
         this.updateVisibleRegion(sinceLastBuildOnly);
     }
@@ -866,10 +870,10 @@ export class SplatMesh extends THREE.Mesh {
 
         const sceneIndexesTexSize = computeDataTextureSize(SCENE_INDEXES_ELEMENTS_PER_TEXEL, 4);
         const paddedTransformIndexes = new Uint32Array(sceneIndexesTexSize.x *
-                                                        sceneIndexesTexSize.y * SCENE_INDEXES_ELEMENTS_PER_TEXEL);
+                                                       sceneIndexesTexSize.y * SCENE_INDEXES_ELEMENTS_PER_TEXEL);
         for (let c = 0; c < splatCount; c++) paddedTransformIndexes[c] = this.globalSplatIndexToSceneIndexMap[c];
         const sceneIndexesTexture = new THREE.DataTexture(paddedTransformIndexes, sceneIndexesTexSize.x, sceneIndexesTexSize.y,
-                                                            THREE.RedIntegerFormat, THREE.UnsignedIntType);
+                                                          THREE.RedIntegerFormat, THREE.UnsignedIntType);
         sceneIndexesTexture.internalFormat = 'R32UI';
         sceneIndexesTexture.needsUpdate = true;
         this.material.uniforms.sceneIndexesTexture.value = sceneIndexesTexture;
@@ -880,6 +884,7 @@ export class SplatMesh extends THREE.Mesh {
             'texture': sceneIndexesTexture,
             'size': sceneIndexesTexSize
         };
+        this.material.uniforms.sceneCount.value = this.scenes.length;
     }
 
     updateBaseDataFromSplatBuffers(fromSplat, toSplat) {
@@ -1040,7 +1045,6 @@ export class SplatMesh extends THREE.Mesh {
             this.updateDataTexture(paddedSceneIndexes, sceneIndexesTexDesc.texture, sceneIndexesTexDesc.size,
                                    sceneIndexesTextureProps, 1, 1, 1, this.lastBuildSplatCount, toSplat);
         }
-        this.material.uniforms.sceneCount.value = this.scenes.length;
     }
 
     getTargetCovarianceCompressionLevel() {
