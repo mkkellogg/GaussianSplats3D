@@ -54,7 +54,8 @@ export class SplatMaterial {
         uniform int fadeInComplete;
         uniform vec3 sceneCenter;
         uniform float splatScale;
-        uniform float sphericalHarmonics8BitCompressionRange[${Constants.MaxScenes}];
+        uniform float sphericalHarmonics8BitCompressionRangeMin[${Constants.MaxScenes}];
+        uniform float sphericalHarmonics8BitCompressionRangeMax[${Constants.MaxScenes}];
 
         varying vec4 vColor;
         varying vec2 vUv;
@@ -146,9 +147,11 @@ export class SplatMaterial {
         }
 
         vertexShaderSource += `
-            float sh8BitCompressionRangeForScene = sphericalHarmonics8BitCompressionRange[sceneIndex];
-            float sh8BitCompressionHalfRangeForScene =sh8BitCompressionRangeForScene / 2.0;
-            vec3 vec8BitSHShift = vec3(sh8BitCompressionHalfRangeForScene);
+            float sh8BitCompressionRangeMinForScene = sphericalHarmonics8BitCompressionRangeMin[sceneIndex];
+            float sh8BitCompressionRangeMaxForScene = sphericalHarmonics8BitCompressionRangeMax[sceneIndex];
+            float sh8BitCompressionRangeForScene = sh8BitCompressionRangeMaxForScene - sh8BitCompressionRangeMinForScene;
+            float sh8BitCompressionHalfRangeForScene = sh8BitCompressionRangeForScene / 2.0;
+            vec3 vec8BitSHShift = vec3(sh8BitCompressionRangeMinForScene);
 
             vec4 viewCenter = transformModelViewMatrix * vec4(splatCenter, 1.0);
 
@@ -243,9 +246,9 @@ export class SplatMaterial {
 
             vertexShaderSource += `
                     if (sphericalHarmonics8BitMode == 1) {
-                        sh1 = sh1 * sh8BitCompressionRangeForScene - vec8BitSHShift;
-                        sh2 = sh2 * sh8BitCompressionRangeForScene - vec8BitSHShift;
-                        sh3 = sh3 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                        sh1 = sh1 * sh8BitCompressionRangeForScene + vec8BitSHShift;
+                        sh2 = sh2 * sh8BitCompressionRangeForScene + vec8BitSHShift;
+                        sh3 = sh3 * sh8BitCompressionRangeForScene + vec8BitSHShift;
                     }
                     float x = worldViewDir.x;
                     float y = worldViewDir.y;
@@ -291,11 +294,11 @@ export class SplatMaterial {
                         }
 
                         if (sphericalHarmonics8BitMode == 1) {
-                            sh4 = sh4 * sh8BitCompressionRangeForScene - vec8BitSHShift;
-                            sh5 = sh5 * sh8BitCompressionRangeForScene - vec8BitSHShift;
-                            sh6 = sh6 * sh8BitCompressionRangeForScene - vec8BitSHShift;
-                            sh7 = sh7 * sh8BitCompressionRangeForScene - vec8BitSHShift;
-                            sh8 = sh8 * sh8BitCompressionRangeForScene - vec8BitSHShift;
+                            sh4 = sh4 * sh8BitCompressionRangeForScene + vec8BitSHShift;
+                            sh5 = sh5 * sh8BitCompressionRangeForScene + vec8BitSHShift;
+                            sh6 = sh6 * sh8BitCompressionRangeForScene + vec8BitSHShift;
+                            sh7 = sh7 * sh8BitCompressionRangeForScene + vec8BitSHShift;
+                            sh8 = sh8 * sh8BitCompressionRangeForScene + vec8BitSHShift;
                         }
 
                         vColor.rgb +=
@@ -390,7 +393,11 @@ export class SplatMaterial {
                 'type': 't',
                 'value': null
             },
-            'sphericalHarmonics8BitCompressionRange': {
+            'sphericalHarmonics8BitCompressionRangeMin': {
+                'type': 'f',
+                'value': []
+            },
+            'sphericalHarmonics8BitCompressionRangeMax': {
                 'type': 'f',
                 'value': []
             },
@@ -460,7 +467,8 @@ export class SplatMaterial {
             }
         };
         for (let i = 0; i < Constants.MaxScenes; i++) {
-            uniforms.sphericalHarmonics8BitCompressionRange.value.push(Constants.SphericalHarmonics8BitCompressionRange);
+            uniforms.sphericalHarmonics8BitCompressionRangeMin.value.push(-Constants.SphericalHarmonics8BitCompressionRange / 2.0);
+            uniforms.sphericalHarmonics8BitCompressionRangeMax.value.push(Constants.SphericalHarmonics8BitCompressionRange / 2.0);
         }
 
         if (enableOptionalEffects) {

@@ -862,8 +862,10 @@ export class SplatMesh extends THREE.Mesh {
             this.material.uniforms.sphericalHarmonics8BitMode.value = shCompressionLevel === 2 ? 1 : 0;
             for (let s = 0; s < this.scenes.length; s++) {
                 const splatBuffer = this.scenes[s].splatBuffer;
-                this.material.uniforms.sphericalHarmonics8BitCompressionRange.value[s] =
-                    splatBuffer.maxSphericalHarmonicsCoeff - splatBuffer.minSphericalHarmonicsCoeff;
+                this.material.uniforms.sphericalHarmonics8BitCompressionRangeMin.value[s] =
+                    splatBuffer.minSphericalHarmonicsCoeff;
+                this.material.uniforms.sphericalHarmonics8BitCompressionRangeMax.value[s] =
+                    splatBuffer.maxSphericalHarmonicsCoeff;
             }
             this.material.uniformsNeedUpdate = true;
         }
