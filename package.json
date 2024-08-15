@@ -2,7 +2,7 @@
     "name": "@mkkellogg/gaussian-splats-3d",
     "repository": {
         "type": "git",
-        "url": "https://github.com/mkkellogg/GaussianSplats3D"
+        "url": "https://github.com/nerpa87/GaussianSplats3D"
     },
     "version": "0.4.3",
     "description": "Three.js-based 3D Gaussian splat viewer",
@@ -13,18 +13,7 @@
     "type": "module",
     "scripts": {
         "install": "npm run build",
-        "build-demo": "mkdir -p ./build/demo && cp -r ./demo ./build/ && cp ./node_modules/three/build/three.module.js ./build/demo/lib/three.module.js",
-        "build-library": "pwd && ls -la . && npx rollup -c && mkdir -p ./build/demo/lib && cp ./build/gaussian-splats-3d.module.* ./build/demo/lib/",
-        "build": "npm run build-library",
-        "build-demo-windows": "(if not exist \".\\build\\demo\" mkdir .\\build\\demo) && xcopy /E .\\demo .\\build\\demo && xcopy .\\node_modules\\three\\build\\three.module.js .\\build\\demo\\lib\\",
-        "build-library-windows": "npx rollup -c && (if not exist \".\\build\\demo\\lib\" mkdir .\\build\\demo\\lib) && copy .\\build\\gaussian-splats-3d* .\\build\\demo\\lib\\",
-        "build-windows": "npm run build-library-windows && npm run build-demo-windows",
-        "watch": "npx npm-watch ",
-        "demo": "node util/server.js -d ./build/demo",
-        "fix-styling": "npx stylelint **/*.scss --fix",
-        "fix-js": "npx eslint src --fix",
-        "lint": "npx eslint 'src/**/*.js' || true",
-        "prettify": "npx prettier --write 'src/**/*.js'"
+        "build": "pwd && ls -la . && npx rollup -c && mkdir -p ./build/demo/lib && cp ./build/gaussian-splats-3d.module.* ./build/demo/lib/"
     },
     "watch": {
         "build-library": {
