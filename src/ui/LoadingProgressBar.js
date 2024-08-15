@@ -40,9 +40,6 @@ export class LoadingProgressBar {
 
             .progressBarBox {
                 z-index:99999;
-                padding: 7px 9px 5px 7px;
-                background-color: rgba(190, 190, 190, 0.75);
-                border: #555555 1px solid;
                 border-radius: 15px;
                 margin: 0;
                 position: absolute;
@@ -56,19 +53,17 @@ export class LoadingProgressBar {
 
             .progressBarBackground {
                 width: 100%;
-                height: 25px;
-                border-radius:10px;
-                background-color: rgba(128, 128, 128, 0.75);
+                height: 20px;
+                border-radius:5px;
+                background: rgba(172, 172, 172, 0.75);
                 border: #444444 1px solid;
-                box-shadow: inset 0 0 10px #333333;
             }
 
             .progressBar {
-                height: 25px;
+                height: 20px;
                 width: 0px;
-                border-radius:10px;
-                background-color: rgba(0, 200, 0, 0.75);
-                box-shadow: inset 0 0 10px #003300;
+                border-radius:5px;
+                background: linear-gradient(90deg, rgba(177, 61, 233, 0.75) 0%, rgba(0,212,255,1) 100%);
             }
 
         `;

@@ -68,7 +68,7 @@ export class LoadingSpinner {
 
             .spinner${this.elementID} {
                 padding: 15px;
-                background: #07e8d6;
+                background: #B13DE9;
                 z-index:99999;
             
                 aspect-ratio: 1;
