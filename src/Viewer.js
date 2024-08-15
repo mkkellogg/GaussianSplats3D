@@ -626,6 +626,7 @@ export class Viewer {
             if (!this.splatMesh) return;
             const splatCount = this.splatMesh.getSplatCount();
             if (splatCount > 0) {
+                this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
                 this.splatMesh.updateTransforms();
                 this.getRenderDimensions(renderDimensions);
                 const focalLengthX = this.camera.projectionMatrix.elements[0] * 0.5 *
@@ -1567,7 +1568,6 @@ export class Viewer {
                 Viewer.setCameraPositionFromZoom(this.camera, this.camera, this.controls);
             }
         }
-        this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
         this.updateSplatSort();
         this.updateForRendererSizeChanges();
         this.updateSplatMesh();

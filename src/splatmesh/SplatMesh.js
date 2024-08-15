@@ -164,7 +164,7 @@ export class SplatMesh extends THREE.Mesh {
      * }
      * @return {Array<THREE.Matrix4>}
      */
-    static buildScenes(splatBuffers, sceneOptions) {
+    static buildScenes(parentObject, splatBuffers, sceneOptions) {
         const scenes = [];
         scenes.length = splatBuffers.length;
         for (let i = 0; i < splatBuffers.length; i++) {
@@ -176,8 +176,10 @@ export class SplatMesh extends THREE.Mesh {
             const position = new THREE.Vector3().fromArray(positionArray);
             const rotation = new THREE.Quaternion().fromArray(rotationArray);
             const scale = new THREE.Vector3().fromArray(scaleArray);
-            scenes[i] = SplatMesh.createScene(splatBuffer, position, rotation, scale,
-                                              options.splatAlphaRemovalThreshold || 1, options.opacity, options.visible);
+            const scene = SplatMesh.createScene(splatBuffer, position, rotation, scale,
+                                                options.splatAlphaRemovalThreshold || 1, options.opacity, options.visible);
+            parentObject.add(scene);
+            scenes[i] = scene;
         }
         return scenes;
     }
@@ -303,7 +305,7 @@ export class SplatMesh extends THREE.Mesh {
 
         const maxSplatCount = SplatMesh.getTotalMaxSplatCountForSplatBuffers(splatBuffers);
 
-        const newScenes = SplatMesh.buildScenes(splatBuffers, sceneOptions);
+        const newScenes = SplatMesh.buildScenes(this, splatBuffers, sceneOptions);
         if (keepSceneTransforms) {
             for (let i = 0; i < this.scenes.length && i < newScenes.length; i++) {
                 const newScene = newScenes[i];
@@ -1232,7 +1234,7 @@ export class SplatMesh extends THREE.Mesh {
     updateTransforms() {
         for (let i = 0; i < this.scenes.length; i++) {
             const scene = this.getScene(i);
-            scene.updateTransform();
+            scene.updateTransform(this.dynamicMode);
         }
     }
 
@@ -1851,6 +1853,7 @@ export class SplatMesh extends THREE.Mesh {
         } else {
             scaleOverride.z = 1;
         }
+        const tempTransform = new THREE.Matrix4();
 
         for (let i = 0; i < this.scenes.length; i++) {
             if (applySceneTransform === undefined || applySceneTransform === null) {
@@ -1859,7 +1862,11 @@ export class SplatMesh extends THREE.Mesh {
 
             const scene = this.getScene(i);
             const splatBuffer = scene.splatBuffer;
-            const sceneTransform = applySceneTransform ? scene.transform : null;
+            let sceneTransform;
+            if (applySceneTransform) {
+                this.getSceneTransform(i, tempTransform);
+                sceneTransform = tempTransform;
+            }
             if (covariances) {
                 splatBuffer.fillSplatCovarianceArray(covariances, sceneTransform, srcStart, srcEnd, destStart, covarianceCompressionLevel);
             }
@@ -1997,7 +2004,7 @@ export class SplatMesh extends THREE.Mesh {
      */
     getSceneTransform(sceneIndex, outTransform) {
         const scene = this.getScene(sceneIndex);
-        scene.updateTransform();
+        scene.updateTransform(this.dynamicMode);
         outTransform.copy(scene.transform);
     }
 

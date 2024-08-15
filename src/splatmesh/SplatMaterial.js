@@ -177,8 +177,7 @@ export class SplatMaterial {
 
             if (dynamicMode) {
                 vertexShaderSource += `
-                    mat4 mTransform = modelMatrix * transform;
-                    vec3 worldViewDir = normalize(splatCenter - vec3(inverse(mTransform) * vec4(cameraPosition, 1.0)));
+                    vec3 worldViewDir = normalize(splatCenter - vec3(inverse(transform) * vec4(cameraPosition, 1.0)));
                 `;
             } else {
                 vertexShaderSource += `
