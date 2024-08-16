@@ -2020,6 +2020,10 @@ export class SplatMesh extends THREE.Mesh {
         return this.scenes[sceneIndex];
     }
 
+    getSceneCount() {
+        return this.scenes.length;
+    }
+
     getSplatBufferForSplat(globalIndex) {
         return this.getScene(this.globalSplatIndexToSceneIndexMap[globalIndex]).splatBuffer;
     }

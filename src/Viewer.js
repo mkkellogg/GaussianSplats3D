@@ -1079,25 +1079,26 @@ export class Viewer {
                     });
                 }
 
-                this.updateSplatSort(true);
-
-                if (!this.sortWorker) {
-                    this.splatRenderReady = true;
-                    removeSplatProcessingTask();
-                    resolver();
-                } else {
-                    if (enableRenderBeforeFirstSort) {
+                this.updateSplatSort(true).then((sortRunning) => {
+                    if (!this.sortWorker || !sortRunning) {
                         this.splatRenderReady = true;
-                    } else {
-                        this.runAfterNextSort.push(() => {
-                            this.splatRenderReady = true;
-                        });
-                    }
-                    this.runAfterNextSort.push(() => {
                         removeSplatProcessingTask();
                         resolver();
-                    });
-                }
+                    } else {
+                        if (enableRenderBeforeFirstSort) {
+                            this.splatRenderReady = true;
+                        } else {
+                            this.runAfterNextSort.push(() => {
+                                this.splatRenderReady = true;
+                            });
+                        }
+                        this.runAfterNextSort.push(() => {
+                            removeSplatProcessingTask();
+                            resolver();
+                        });
+                    }
+                });
+
             };
 
             return new Promise((resolve) => {
@@ -1352,6 +1353,7 @@ export class Viewer {
                     });
                     this.splatMesh.updateTransforms();
                     this.splatRenderReady = false;
+
                     this.updateSplatSort(true)
                     .then(() => {
                         if (checkForEarlyExit()) {
@@ -1790,12 +1792,12 @@ export class Viewer {
             }
         ];
 
-        return async function(force = false) {
-            if (!this.initialized) return;
-            if (this.sortRunning) return;
+        return function(force = false) {
+            if (!this.initialized) return Promise.resolve(false);
+            if (this.sortRunning) return Promise.resolve(true);
             if (this.splatMesh.getSplatCount() <= 0) {
                 this.splatRenderCount = 0;
-                return;
+                return false;
             }
 
             let angleDiff = 0;
@@ -1811,7 +1813,7 @@ export class Viewer {
                 if (!this.splatMesh.dynamicMode && queuedSorts.length === 0) {
                     if (angleDiff <= 0.99) needsRefreshForRotation = true;
                     if (positionDiff >= 1.0) needsRefreshForPosition = true;
-                    if (!needsRefreshForRotation && !needsRefreshForPosition) return;
+                    if (!needsRefreshForRotation && !needsRefreshForPosition) return Promise.resolve(false);
                 }
             }
 
@@ -1824,61 +1826,66 @@ export class Viewer {
             mvpMatrix.premultiply(mvpCamera.projectionMatrix);
             mvpMatrix.multiply(this.splatMesh.matrixWorld);
 
+            let gpuAcceleratedSortPromise = Promise.resolve();
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
-                await this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
+                gpuAcceleratedSortPromise = this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
 
-            if (this.splatMesh.dynamicMode || shouldSortAll) {
-                queuedSorts.push(this.splatRenderCount);
-            } else {
-                if (queuedSorts.length === 0) {
-                    for (let partialSort of partialSorts) {
-                        if (angleDiff < partialSort.angleThreshold) {
-                            for (let sortFraction of partialSort.sortFractions) {
-                                queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
-                            }
-                            break;
-                        }
-                    }
+            gpuAcceleratedSortPromise.then(() => {
+                if (this.splatMesh.dynamicMode || shouldSortAll) {
                     queuedSorts.push(this.splatRenderCount);
+                } else {
+                    if (queuedSorts.length === 0) {
+                        for (let partialSort of partialSorts) {
+                            if (angleDiff < partialSort.angleThreshold) {
+                                for (let sortFraction of partialSort.sortFractions) {
+                                    queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
+                                }
+                                break;
+                            }
+                        }
+                        queuedSorts.push(this.splatRenderCount);
+                    }
                 }
-            }
-            let sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
+                let sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
 
-            cameraPositionArray[0] = this.camera.position.x;
-            cameraPositionArray[1] = this.camera.position.y;
-            cameraPositionArray[2] = this.camera.position.z;
+                cameraPositionArray[0] = this.camera.position.x;
+                cameraPositionArray[1] = this.camera.position.y;
+                cameraPositionArray[2] = this.camera.position.z;
 
-            const sortMessage = {
-                'modelViewProj': mvpMatrix.elements,
-                'cameraPosition': cameraPositionArray,
-                'splatRenderCount': this.splatRenderCount,
-                'splatSortCount': sortCount,
-                'usePrecomputedDistances': this.gpuAcceleratedSort
-            };
-            if (this.splatMesh.dynamicMode) {
-                this.splatMesh.fillTransformsArray(this.sortWorkerTransforms);
-            }
-            if (!this.sharedMemoryForWorkers) {
-                sortMessage.indexesToSort = this.sortWorkerIndexesToSort;
-                sortMessage.transforms = this.sortWorkerTransforms;
-                if (this.gpuAcceleratedSort) {
-                    sortMessage.precomputedDistances = this.sortWorkerPrecomputedDistances;
+                const sortMessage = {
+                    'modelViewProj': mvpMatrix.elements,
+                    'cameraPosition': cameraPositionArray,
+                    'splatRenderCount': this.splatRenderCount,
+                    'splatSortCount': sortCount,
+                    'usePrecomputedDistances': this.gpuAcceleratedSort
+                };
+                if (this.splatMesh.dynamicMode) {
+                    this.splatMesh.fillTransformsArray(this.sortWorkerTransforms);
                 }
-            }
+                if (!this.sharedMemoryForWorkers) {
+                    sortMessage.indexesToSort = this.sortWorkerIndexesToSort;
+                    sortMessage.transforms = this.sortWorkerTransforms;
+                    if (this.gpuAcceleratedSort) {
+                        sortMessage.precomputedDistances = this.sortWorkerPrecomputedDistances;
+                    }
+                }
 
-            this.sortPromise = new Promise((resolve) => {
-                this.sortPromiseResolver = resolve;
+                this.sortPromise = new Promise((resolve) => {
+                    this.sortPromiseResolver = resolve;
+                });
+
+                this.sortWorker.postMessage({
+                    'sort': sortMessage
+                });
+
+                if (queuedSorts.length === 0) {
+                    lastSortViewPos.copy(this.camera.position);
+                    lastSortViewDir.copy(sortViewDir);
+                }
             });
 
-            this.sortWorker.postMessage({
-                'sort': sortMessage
-            });
-
-            if (queuedSorts.length === 0) {
-                lastSortViewPos.copy(this.camera.position);
-                lastSortViewDir.copy(sortViewDir);
-            }
+            return gpuAcceleratedSortPromise;
         };
 
     }();
@@ -2007,6 +2014,10 @@ export class Viewer {
      */
     getSplatScene(sceneIndex) {
         return this.splatMesh.getScene(sceneIndex);
+    }
+
+    getSceneCount() {
+        return this.splatMesh.getSceneCount();
     }
 
     isMobile() {
