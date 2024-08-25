@@ -212,7 +212,7 @@ export class LoadingSpinner {
     }
 
     setContainer(container) {
-        if (this.container) {
+        if (this.container && this.spinnerContainerOuter.parentElement === this.container) {
             this.container.removeChild(this.spinnerContainerOuter);
         }
         if (container) {

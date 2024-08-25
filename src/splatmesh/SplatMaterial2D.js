@@ -58,6 +58,8 @@ export class SplatMaterial2D {
     }
 
     static buildVertexShaderProjection() {
+
+        // Original CUDA code for calculating splat-to-screen transformation, for reference
         /*
             glm::mat3 R = quat_to_rotmat(rot);
             glm::mat3 S = scale_to_mat(scale, mod);
@@ -85,7 +87,6 @@ export class SplatMaterial2D {
 
             T = glm::transpose(splat2world) * world2ndc * ndc2pix;
             normal = transformVec4x3({L[2].x, L[2].y, L[2].z}, viewmatrix);
-
         */
 
         // Compute a 2D-to-2D mapping matrix from a tangent plane into a image plane
@@ -125,6 +126,7 @@ export class SplatMaterial2D {
             vec3 normal = vec3(viewMatrix * vec4(L[0][2], L[1][2], L[2][2], 0.0));
         `;
 
+        // Original CUDA code for projection to 2D, for reference
         /*
             float3 T0 = {T[0][0], T[0][1], T[0][2]};
             float3 T1 = {T[1][0], T[1][1], T[1][2]};
@@ -149,6 +151,7 @@ export class SplatMaterial2D {
             extent = sqrtf2(maxf2(1e-4, half_extend));
             return true;
         */
+
         // Computing the bounding box of the 2D Gaussian and its center
         // The center of the bounding box is used to create a low pass filter.
         // This code is based off the reference implementation and creates an AABB aligned
@@ -240,6 +243,49 @@ export class SplatMaterial2D {
 
     static buildFragmentShader() {
 
+        // Original CUDA code for splat intersection, for reference
+        /*
+            const float2 xy = collected_xy[j];
+            const float3 Tu = collected_Tu[j];
+            const float3 Tv = collected_Tv[j];
+            const float3 Tw = collected_Tw[j];
+            float3 k = pix.x * Tw - Tu;
+            float3 l = pix.y * Tw - Tv;
+            float3 p = cross(k, l);
+            if (p.z == 0.0) continue;
+            float2 s = {p.x / p.z, p.y / p.z};
+            float rho3d = (s.x * s.x + s.y * s.y);
+            float2 d = {xy.x - pixf.x, xy.y - pixf.y};
+            float rho2d = FilterInvSquare * (d.x * d.x + d.y * d.y);
+
+            // compute intersection and depth
+            float rho = min(rho3d, rho2d);
+            float depth = (rho3d <= rho2d) ? (s.x * Tw.x + s.y * Tw.y) + Tw.z : Tw.z;
+            if (depth < near_n) continue;
+            float4 nor_o = collected_normal_opacity[j];
+            float normal[3] = {nor_o.x, nor_o.y, nor_o.z};
+            float opa = nor_o.w;
+
+            float power = -0.5f * rho;
+            if (power > 0.0f)
+                continue;
+
+            // Eq. (2) from 3D Gaussian splatting paper.
+            // Obtain alpha by multiplying with Gaussian opacity
+            // and its exponential falloff from mean.
+            // Avoid numerical instabilities (see paper appendix).
+            float alpha = min(0.99f, opa * exp(power));
+            if (alpha < 1.0f / 255.0f)
+                continue;
+            float test_T = T * (1 - alpha);
+            if (test_T < 0.0001f)
+            {
+                done = true;
+                continue;
+            }
+
+            float w = alpha * T;
+        */
         let fragmentShaderSource = `
             precision highp float;
             #include <common>
@@ -253,48 +299,6 @@ export class SplatMaterial2D {
             varying vec2 vQuadCenter;
             varying vec2 vFragCoord;
 
-            /*
-                const float2 xy = collected_xy[j];
-                const float3 Tu = collected_Tu[j];
-                const float3 Tv = collected_Tv[j];
-                const float3 Tw = collected_Tw[j];
-                float3 k = pix.x * Tw - Tu;
-                float3 l = pix.y * Tw - Tv;
-                float3 p = cross(k, l);
-                if (p.z == 0.0) continue;
-                float2 s = {p.x / p.z, p.y / p.z};
-                float rho3d = (s.x * s.x + s.y * s.y);
-                float2 d = {xy.x - pixf.x, xy.y - pixf.y};
-                float rho2d = FilterInvSquare * (d.x * d.x + d.y * d.y);
-
-                // compute intersection and depth
-                float rho = min(rho3d, rho2d);
-                float depth = (rho3d <= rho2d) ? (s.x * Tw.x + s.y * Tw.y) + Tw.z : Tw.z;
-                if (depth < near_n) continue;
-                float4 nor_o = collected_normal_opacity[j];
-                float normal[3] = {nor_o.x, nor_o.y, nor_o.z};
-                float opa = nor_o.w;
-
-                float power = -0.5f * rho;
-                if (power > 0.0f)
-                    continue;
-
-                // Eq. (2) from 3D Gaussian splatting paper.
-                // Obtain alpha by multiplying with Gaussian opacity
-                // and its exponential falloff from mean.
-                // Avoid numerical instabilities (see paper appendix).
-                float alpha = min(0.99f, opa * exp(power));
-                if (alpha < 1.0f / 255.0f)
-                    continue;
-                float test_T = T * (1 - alpha);
-                if (test_T < 0.0001f)
-                {
-                    done = true;
-                    continue;
-                }
-
-                float w = alpha * T;
-            */
             void main () {
 
                 const float FilterInvSquare = 2.0;
