@@ -108,6 +108,10 @@ export class DropInViewer extends THREE.Group {
         return this.viewer.removeSplatScenes(indexes, showLoadingUI);
     }
 
+    getSceneCount() {
+        return this.viewer.getSceneCount();
+    }
+
     dispose() {
         return this.viewer.dispose();
     }
