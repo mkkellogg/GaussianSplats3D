@@ -77,9 +77,9 @@
   
       // You can modify the transform components (position, quaternion, scale) of a SplatScene
       // directly like any three.js object OR you can just attach them to another three.js object
-      // and they will be transformed accordingly. Below we are going with the latetr approach.
-      // The splat scenes at index 1 & 2 are children of viewer.splatMesh, so we re-parent them
-      // to meshA and meshB respectively.
+      // and they will be transformed accordingly. Below we are going with the latter approach.
+      // The splat scenes at index 1 & 2 are (by default) children of viewer.splatMesh, so we
+      // re-parent them to meshA and meshB respectively.
       meshA.add(viewer.getSplatScene(1));
       meshB.add(viewer.getSplatScene(2));
 

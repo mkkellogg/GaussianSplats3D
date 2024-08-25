@@ -357,10 +357,10 @@ The third option is to use the included nodejs script:
 node util/create-ksplat.js [path to .PLY or .SPLAT] [output file] [compression level = 0] [alpha removal threshold = 1] [scene center = "0,0,0"] [block size = 5.0] [bucket size = 256] [spherical harmonics level = 0]
 ```
 
-For the nodejs script, it may be necessary to increase the heap size for larger scenes:
+For the nodejs script, it may be necessary to increase the heap size for larger scenes. Use the parameter `--max-old-space-size=[heap size in MB]` to do so:
 
 ```
-node util/create-ksplat.js --max-old-space-size=8192 ...
+node util/create-ksplat.js --max-old-space-size=8192 [... remaining arguments]
 ```
 
 Currently supported values for `compressionLevel` are `0`, `1`, or `2`. `0` means no compression and `1` means compression of scale, rotation, position, and spherical harmonics coefficient values from 32-bit to 16-bit. `2` is similar to `1` except spherical harmonics coefficients are compressed to 8-bit.

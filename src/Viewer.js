@@ -1079,7 +1079,7 @@ export class Viewer {
                     });
                 }
 
-                this.updateSplatSort(true).then((sortRunning) => {
+                this.runSplatSort(true).then((sortRunning) => {
                     if (!this.sortWorker || !sortRunning) {
                         this.splatRenderReady = true;
                         removeSplatProcessingTask();
@@ -1354,7 +1354,7 @@ export class Viewer {
                     this.splatMesh.updateTransforms();
                     this.splatRenderReady = false;
 
-                    this.updateSplatSort(true)
+                    this.runSplatSort(true)
                     .then(() => {
                         if (checkForEarlyExit()) {
                             this.splatRenderReady = true;
@@ -1570,7 +1570,7 @@ export class Viewer {
                 Viewer.setCameraPositionFromZoom(this.camera, this.camera, this.controls);
             }
         }
-        this.updateSplatSort();
+        this.runSplatSort();
         this.updateForRendererSizeChanges();
         this.updateSplatMesh();
         this.updateMeshCursor();
@@ -1767,7 +1767,7 @@ export class Viewer {
         }
     }
 
-    updateSplatSort = function() {
+    runSplatSort = function() {
 
         const mvpMatrix = new THREE.Matrix4();
         const cameraPositionArray = [];
