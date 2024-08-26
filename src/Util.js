@@ -67,6 +67,13 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
     return new AbortablePromise((resolve, reject) => {
         fetch(path, { signal })
         .then(async (data) => {
+            // Handle error conditions where data is still returned
+            if (!data.ok) {
+                const errorText = await data.text();
+                reject(new Error(`Fetch failed: ${data.status} ${data.statusText} ${errorText}`));
+                return;
+            }
+
             const reader = data.body.getReader();
             let bytesDownloaded = 0;
             let _fileSize = data.headers.get('Content-Length');
@@ -103,7 +110,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
                     }
                 } catch (error) {
                     reject(error);
-                    break;
+                    return;
                 }
             }
         })
