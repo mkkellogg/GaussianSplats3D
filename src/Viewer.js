@@ -863,7 +863,6 @@ export class Viewer {
                 .then(() => {
                     progressiveLoadedSectionBuilding = false;
                     if (queuedBuild.firstBuild) {
-                        progressiveLoadFirstSectionBuildPromise.reject = null;
                         progressiveLoadFirstSectionBuildPromise.resolve();
                     } else if (queuedBuild.finalBuild) {
                         splatSceneDownloadAndBuildPromise.resolve();
@@ -891,10 +890,10 @@ export class Viewer {
             }
         };
 
-        let splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onDownloadProgress, true,
-                                                                             onProgressiveLoadSectionProgress, format);
+        const splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onDownloadProgress, true,
+                                                                               onProgressiveLoadSectionProgress, format);
 
-        const progressiveLoadFirstSectionBuildPromise = abortablePromiseWithExtractedComponents(splatSceneDownloadPromise.abortHandler);
+        let progressiveLoadFirstSectionBuildPromise = abortablePromiseWithExtractedComponents(splatSceneDownloadPromise.abortHandler);
         const splatSceneDownloadAndBuildPromise = abortablePromiseWithExtractedComponents();
 
         this.addSplatSceneDownloadPromise(splatSceneDownloadPromise);
