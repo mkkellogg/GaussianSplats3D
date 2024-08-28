@@ -863,8 +863,11 @@ export class Viewer {
                 .then(() => {
                     progressiveLoadedSectionBuilding = false;
                     if (queuedBuild.firstBuild) {
-                        progressiveLoadFirstSectionBuildPromise.reject = null;
-                        progressiveLoadFirstSectionBuildPromise.resolve();
+                        if (progressiveLoadFirstSectionBuildPromise) {
+                            const resolve = progressiveLoadFirstSectionBuildPromise.resolve;
+                            progressiveLoadFirstSectionBuildPromise = null;
+                            resolve();
+                        }
                     } else if (queuedBuild.finalBuild) {
                         splatSceneDownloadAndBuildPromise.resolve();
                         this.clearSplatSceneDownloadAndBuildPromise();
@@ -891,10 +894,10 @@ export class Viewer {
             }
         };
 
-        let splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onDownloadProgress, true,
-                                                                             onProgressiveLoadSectionProgress, format);
+        const splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onDownloadProgress, true,
+                                                                               onProgressiveLoadSectionProgress, format);
 
-        const progressiveLoadFirstSectionBuildPromise = abortablePromiseWithExtractedComponents(splatSceneDownloadPromise.abortHandler);
+        let progressiveLoadFirstSectionBuildPromise = abortablePromiseWithExtractedComponents(splatSceneDownloadPromise.abortHandler);
         const splatSceneDownloadAndBuildPromise = abortablePromiseWithExtractedComponents();
 
         this.addSplatSceneDownloadPromise(splatSceneDownloadPromise);
@@ -907,7 +910,11 @@ export class Viewer {
             this.clearSplatSceneDownloadAndBuildPromise();
             this.removeSplatSceneDownloadPromise(splatSceneDownloadPromise);
             const error = (e instanceof AbortedPromiseError) ? e : new Error(`Viewer::addSplatScene -> Could not load one or more scenes`);
-            progressiveLoadFirstSectionBuildPromise.reject(error);
+            if (progressiveLoadFirstSectionBuildPromise) {
+                const reject = progressiveLoadFirstSectionBuildPromise.reject;
+                progressiveLoadFirstSectionBuildPromise = null;
+                reject(error);
+            }
             if (onDownloadException) onDownloadException(error);
         });
 
