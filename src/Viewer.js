@@ -424,6 +424,11 @@ export class Viewer {
         this.renderMode = renderMode;
     }
 
+    setActiveSphericalHarmonicsDegrees(activeSphericalHarmonicsDegrees) {
+        this.splatMesh.material.uniforms.sphericalHarmonicsDegree.value = activeSphericalHarmonicsDegrees;
+        this.splatMesh.material.uniformsNeedUpdate = true;
+    }
+
     onSplatMeshChanged(callback) {
         this.onSplatMeshChangedCallback = callback;
     }
