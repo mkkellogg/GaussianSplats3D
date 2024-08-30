@@ -187,6 +187,9 @@ export class Viewer {
         }
         this.splatRenderMode = options.splatRenderMode;
 
+        // Customize the speed at which the scene is revealed
+        this.sceneFadeInRateMultiplier = options.sceneFadeInRateMultiplier || 1.0;
+
         this.onSplatMeshChangedCallback = null;
         this.createSplatMesh();
 
@@ -265,7 +268,7 @@ export class Viewer {
         this.splatMesh = new SplatMesh(this.splatRenderMode, this.dynamicScene, this.enableOptionalEffects,
                                        this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort,
                                        this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize, this.logLevel,
-                                       this.sphericalHarmonicsDegree);
+                                       this.sphericalHarmonicsDegree, this.sceneFadeInRateMultiplier);
         this.splatMesh.frustumCulled = false;
         if (this.onSplatMeshChangedCallback) this.onSplatMeshChangedCallback();
     }

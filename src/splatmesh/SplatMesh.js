@@ -49,7 +49,7 @@ export class SplatMesh extends THREE.Mesh {
     constructor(splatRenderMode = SplatRenderMode.ThreeD, dynamicMode = false, enableOptionalEffects = false,
                 halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true,
                 integerBasedDistancesComputation = false, antialiased = false, maxScreenSpaceSplatSize = 1024, logLevel = LogLevel.None,
-                sphericalHarmonicsDegree = 0) {
+                sphericalHarmonicsDegree = 0, sceneFadeInRateMultiplier = 1.0) {
         super(dummyGeometry, dummyMaterial);
 
         // Reference to a Three.js renderer
@@ -97,6 +97,8 @@ export class SplatMesh extends THREE.Mesh {
         // Degree 0 means no spherical harmonics
         this.sphericalHarmonicsDegree = sphericalHarmonicsDegree;
         this.minSphericalHarmonicsDegree = 0;
+
+        this.sceneFadeInRateMultiplier = sceneFadeInRateMultiplier;
 
         // The individual splat scenes stored in this splat mesh, each containing their own transform
         this.scenes = [];
@@ -1193,8 +1195,8 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     updateVisibleRegionFadeDistance(sceneRevealMode = SceneRevealMode.Default) {
-        const fastFadeRate = SCENE_FADEIN_RATE_FAST;
-        const gradualFadeRate = SCENE_FADEIN_RATE_GRADUAL;
+        const fastFadeRate = SCENE_FADEIN_RATE_FAST * this.sceneFadeInRateMultiplier;
+        const gradualFadeRate = SCENE_FADEIN_RATE_GRADUAL * this.sceneFadeInRateMultiplier;
         const defaultFadeInRate = this.finalBuild ? fastFadeRate : gradualFadeRate;
         const fadeInRate = sceneRevealMode === SceneRevealMode.Default ? defaultFadeInRate : gradualFadeRate;
         this.visibleRegionFadeStartRadius = (this.visibleRegionRadius - this.visibleRegionFadeStartRadius) *
