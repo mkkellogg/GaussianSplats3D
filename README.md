@@ -330,6 +330,7 @@ Advanced `Viewer` parameters
 | `plyInMemoryCompressionLevel` | Level to compress `.ply` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 2.
 | `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and used to populate data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s). Defaults to `false`.
 | `splatRenderMode` | Determine which splat rendering mode to enable. Valid values are defined in the `SplatRenderMode` enum: `ThreeD` and `TwoD`. `ThreeD` is the original/traditional mode and `TwoD` is the new mode described here: https://surfsplatting.github.io/
+| `sceneFadeInRateMultiplier` | Customize the speed at which the scene is revealed. Default is 1.0.
 <br>
 
 ### Creating KSPLAT files
