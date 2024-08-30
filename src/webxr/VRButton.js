@@ -14,7 +14,7 @@ all copies or substantial portions of the Software.
 
 export class VRButton {
 
-    static createButton( renderer ) {
+    static createButton( renderer, sessionInit = {} ) {
 
         const button = document.createElement( 'button' );
 
@@ -60,7 +60,15 @@ export class VRButton {
             // ('local' is always available for immersive sessions and doesn't need to
             // be requested separately.)
 
-            const sessionInit = { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking', 'layers'] };
+            const sessionOptions = {
+                ...sessionInit,
+                optionalFeatures: [
+                    'local-floor',
+                    'bounded-floor',
+                    'layers',
+                    ...( sessionInit.optionalFeatures || [] )
+                ],
+            };
 
             button.onmouseenter = function() {
 
@@ -78,7 +86,7 @@ export class VRButton {
 
                 if ( currentSession === null ) {
 
-                    navigator.xr.requestSession( 'immersive-vr', sessionInit ).then( onSessionStarted );
+                    navigator.xr.requestSession( 'immersive-vr', sessionOptions ).then( onSessionStarted );
 
                 } else {
 
@@ -86,7 +94,7 @@ export class VRButton {
 
                     if ( navigator.xr.offerSession !== undefined ) {
 
-                        navigator.xr.offerSession( 'immersive-vr', sessionInit )
+                        navigator.xr.offerSession( 'immersive-vr', sessionOptions )
                             .then( onSessionStarted )
                             .catch( ( err ) => {
 
@@ -102,7 +110,7 @@ export class VRButton {
 
             if ( navigator.xr.offerSession !== undefined ) {
 
-                navigator.xr.offerSession( 'immersive-vr', sessionInit )
+                navigator.xr.offerSession( 'immersive-vr', sessionOptions )
                     .then( onSessionStarted )
                     .catch( ( err ) => {
 
