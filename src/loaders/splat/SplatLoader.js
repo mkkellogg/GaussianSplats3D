@@ -114,7 +114,7 @@ export class SplatLoader {
         };
 
         if (onProgress) onProgress(0, '0%', LoaderStatus.Downloading);
-        return fetchWithProgress(fileName, localOnProgress, true).then(() => {
+        return fetchWithProgress(fileName, localOnProgress, false).then(() => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             return loadPromise.promise.then((splatData) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
@@ -128,7 +128,8 @@ export class SplatLoader {
                                                                                                    bucketSize);
                             return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
                         } else {
-                            return SplatBuffer.generateFromUncompressedSplatArrays([splatData], minimumAlpha, 0, new THREE.Vector3());
+                            return SplatBuffer.generateFromUncompressedSplatArrays([splatData], minimumAlpha,
+                                                                                    compressionLevel, new THREE.Vector3());
                         }
                     });
                 }

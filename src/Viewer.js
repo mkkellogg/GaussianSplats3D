@@ -163,6 +163,12 @@ export class Viewer {
         }
         this.plyInMemoryCompressionLevel = options.plyInMemoryCompressionLevel;
 
+        // Level to compress SPLAT files when loading them for direct rendering (not exporting to .ksplat)
+        if (options.splatInMemoryCompressionLevel === undefined || options.splatInMemoryCompressionLevel === null) {
+            options.splatInMemoryCompressionLevel = 2;
+        }
+        this.splatInMemoryCompressionLevel = options.splatInMemoryCompressionLevel;
+
         // When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to
         // populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified
         // it will need to be re-populated from the splat buffer(s). Default is false.
@@ -1034,7 +1040,7 @@ export class Viewer {
                                     progressiveBuild = false, onSectionBuilt = undefined, format) {
         if (format === SceneFormat.Splat) {
             return SplatLoader.loadFromURL(path, onProgress, progressiveBuild,
-                                           onSectionBuilt, splatAlphaRemovalThreshold, 0, false);
+                                           onSectionBuilt, splatAlphaRemovalThreshold, this.splatInMemoryCompressionLevel, true);
         } else if (format === SceneFormat.KSplat) {
             return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
         } else if (format === SceneFormat.Ply) {

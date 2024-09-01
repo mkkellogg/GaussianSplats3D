@@ -103,10 +103,12 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
                         percent = bytesDownloaded / fileSize * 100;
                         percentLabel = `${percent.toFixed(2)}%`;
                     }
-                    if (saveChunks) chunks.push(chunk);
+                    if (saveChunks) {
+                        chunks.push(chunk);
+                    }
                     if (onProgress) {
-                        const cancelSaveChucnks = onProgress(percent, percentLabel, chunk, fileSize);
-                        if (cancelSaveChucnks) saveChunks = false;
+                        const cancelSaveChunks = onProgress(percent, percentLabel, chunk, fileSize);
+                        if (cancelSaveChunks) saveChunks = false;
                     }
                 } catch (error) {
                     reject(error);
