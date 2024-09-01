@@ -3,12 +3,13 @@ import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { SplatParser } from './SplatParser.js';
 import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
+import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
 
 export class SplatLoader {
 
-    static loadFromURL(fileName, onProgress, progressiveLoad, onStreamedSectionProgress, minimumAlpha, compressionLevel,
+    static loadFromURL(fileName, onProgress, progressiveLoad, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
                        optimizeSplatData, sectionSize, sceneCenter, blockSize, bucketSize) {
 
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
@@ -21,7 +22,9 @@ export class SplatLoader {
         let maxSplatCount = 0;
         let splatCount = 0;
 
-        const progressiveLoadPromise = nativePromiseWithExtractedComponents();
+        let standardLoadUncompressedSplatArray;
+
+        const loadPromise = nativePromiseWithExtractedComponents();
 
         let numBytesStreamed = 0;
         let numBytesLoaded = 0;
@@ -30,12 +33,14 @@ export class SplatLoader {
         const localOnProgress = (percent, percentStr, chunk, fileSize) => {
             const loadComplete = percent >= 100;
             if (!fileSize) progressiveLoad = false;
-            if (progressiveLoad) {
-                if (!progressiveLoadBufferIn) {
-                    maxSplatCount = fileSize / SplatParser.RowSizeBytes;
-                    progressiveLoadBufferIn = new ArrayBuffer(fileSize);
-                    const bytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[0].BytesPerSplat;
-                    const splatBufferSizeBytes = splatDataOffsetBytes + bytesPerSplat * maxSplatCount;
+
+            if (!progressiveLoadBufferIn) {
+                maxSplatCount = fileSize / SplatParser.RowSizeBytes;
+                progressiveLoadBufferIn = new ArrayBuffer(fileSize);
+                const bytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[0].BytesPerSplat;
+                const splatBufferSizeBytes = splatDataOffsetBytes + bytesPerSplat * maxSplatCount;
+
+                if (progressiveLoad) {
                     progressiveLoadBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                     SplatBuffer.writeHeaderToBuffer({
                         versionMajor: SplatBuffer.CurrentMajorVersion,
@@ -47,21 +52,33 @@ export class SplatLoader {
                         compressionLevel: 0,
                         sceneCenter: new THREE.Vector3()
                     }, progressiveLoadBufferOut);
+                } else {
+                    standardLoadUncompressedSplatArray = new UncompressedSplatArray(0);
                 }
+            }
 
-                if (chunk) {
-                    chunks.push(chunk);
-                    new Uint8Array(progressiveLoadBufferIn, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
-                    numBytesLoaded += chunk.byteLength;
+            if (chunk) {
+                chunks.push(chunk);
+                new Uint8Array(progressiveLoadBufferIn, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
+                numBytesLoaded += chunk.byteLength;
 
-                    const bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
-                    if (bytesLoadedSinceLastSection > progressiveLoadSectionSizeBytes || loadComplete) {
-                        const bytesToUpdate = loadComplete ? bytesLoadedSinceLastSection : progressiveLoadSectionSizeBytes;
-                        const addedSplatCount = bytesToUpdate / SplatParser.RowSizeBytes;
-                        const newSplatCount = splatCount + addedSplatCount;
+                const bytesLoadedSinceLastSection = numBytesLoaded - numBytesStreamed;
+                if (bytesLoadedSinceLastSection > progressiveLoadSectionSizeBytes || loadComplete) {
+                    const bytesToUpdate = loadComplete ? bytesLoadedSinceLastSection : progressiveLoadSectionSizeBytes;
+                    const addedSplatCount = bytesToUpdate / SplatParser.RowSizeBytes;
+                    const newSplatCount = splatCount + addedSplatCount;
+
+                    if (progressiveLoad) {
                         SplatParser.parseToUncompressedSplatBufferSection(splatCount, newSplatCount - 1, progressiveLoadBufferIn, 0,
-                                                                          progressiveLoadBufferOut, splatDataOffsetBytes);
-                        splatCount = newSplatCount;
+                                                                            progressiveLoadBufferOut, splatDataOffsetBytes);
+                    } else {
+                        SplatParser.parseToUncompressedSplatArraySection(splatCount, newSplatCount - 1, progressiveLoadBufferIn, 0,
+                                                                            standardLoadUncompressedSplatArray);
+                    }
+
+                    splatCount = newSplatCount;
+
+                    if (progressiveLoad) {
                         if (!progressiveLoadSplatBuffer) {
                             SplatBuffer.writeSectionHeaderToBuffer({
                                 maxSplatCount: maxSplatCount,
@@ -77,26 +94,44 @@ export class SplatLoader {
                             progressiveLoadSplatBuffer = new SplatBuffer(progressiveLoadBufferOut, false);
                         }
                         progressiveLoadSplatBuffer.updateLoadedCounts(1, splatCount);
-                        onStreamedSectionProgress(progressiveLoadSplatBuffer, loadComplete);
-                        numBytesStreamed += progressiveLoadSectionSizeBytes;
+                        onProgressiveLoadSectionProgress(progressiveLoadSplatBuffer, loadComplete);
                     }
-                }
-                if (loadComplete) {
-                    progressiveLoadPromise.resolve(progressiveLoadSplatBuffer);
+
+                    numBytesStreamed += progressiveLoadSectionSizeBytes;
                 }
             }
+
+            if (loadComplete) {
+                if (progressiveLoad) {
+                    loadPromise.resolve(progressiveLoadSplatBuffer);
+                } else {
+                    loadPromise.resolve(standardLoadUncompressedSplatArray);
+                }
+            }
+
             if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
             return progressiveLoad;
         };
 
-        return fetchWithProgress(fileName, localOnProgress, true).then((fullBuffer) => {
+        if (onProgress) onProgress(0, '0%', LoaderStatus.Downloading);
+        return fetchWithProgress(fileName, localOnProgress, true).then(() => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = progressiveLoad ? progressiveLoadPromise.promise :
-                SplatLoader.loadFromFileData(fullBuffer, minimumAlpha, compressionLevel, optimizeSplatData,
-                                             sectionSize, sceneCenter, blockSize, bucketSize);
-            return loadPromise.then((splatBuffer) => {
+            return loadPromise.promise.then((splatData) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                return splatBuffer;
+                if (progressiveLoad) {
+                    return splatData;
+                } else {
+                    return delayedExecute(() => {
+                        if (optimizeSplatData) {
+                            const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
+                                                                                                   sectionSize, sceneCenter, blockSize,
+                                                                                                   bucketSize);
+                            return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
+                        } else {
+                            return SplatBuffer.generateFromUncompressedSplatArrays([splatData], minimumAlpha, 0, new THREE.Vector3());
+                        }
+                    });
+                }
             });
         });
     }

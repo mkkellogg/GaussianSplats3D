@@ -57,7 +57,7 @@ export class PlyLoader {
         let header = null;
         let chunks = [];
 
-        const standardLoadUncompressedSplatArray = new UncompressedSplatArray();
+        let standardLoadUncompressedSplatArray;
 
         const textDecoder = new TextDecoder();
         const inriaV1PlyParser = new INRIAV1PlyParser();
@@ -108,6 +108,8 @@ export class PlyLoader {
                             compressionLevel: 0,
                             sceneCenter: new THREE.Vector3()
                         }, progressiveLoadBufferOut);
+                    } else {
+                        standardLoadUncompressedSplatArray = new UncompressedSplatArray(outSphericalHarmonicsDegree);
                     }
 
                     numBytesStreamed = header.headerSizeBytes;
@@ -224,19 +226,21 @@ export class PlyLoader {
             if (onProgress) onProgress(percent, percentLabel, LoaderStatus.Downloading);
         };
 
+        if (onProgress) onProgress(0, '0%', LoaderStatus.Downloading);
         return fetchWithProgress(fileName, localOnProgress, false).then(() => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             return loadPromise.promise.then((splatData) => {
+                if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
                 if (progressiveLoad) {
-                    if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
                     return splatData;
                 } else {
-                    const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel, sectionSize,
-                                                                                           sceneCenter, blockSize, bucketSize);
-                    return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
+                    return delayedExecute(() => {
+                        const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel, sectionSize,
+                                                                                               sceneCenter, blockSize, bucketSize);
+                        return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
+                    });
                 }
             });
-
         });
     }
 
