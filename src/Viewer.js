@@ -1043,14 +1043,14 @@ export class Viewer {
         try {
             if (format === SceneFormat.Splat) {
                 return SplatLoader.loadFromURL(path, onProgress, progressiveBuild,
-                                            onSectionBuilt, splatAlphaRemovalThreshold,
-                                            this.inMemoryCompressionLevel, this.optimizeSplatData);
+                                               onSectionBuilt, splatAlphaRemovalThreshold,
+                                               this.inMemoryCompressionLevel, this.optimizeSplatData);
             } else if (format === SceneFormat.KSplat) {
                 return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
             } else if (format === SceneFormat.Ply) {
                 return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
-                                            splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
-                                            this.optimizeSplatData, this.sphericalHarmonicsDegree);
+                                             splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
+                                             this.optimizeSplatData, this.sphericalHarmonicsDegree);
             }
         } catch (e) {
             if (e instanceof DirectLoadError) {
