@@ -5,12 +5,26 @@ import { SplatParser } from './SplatParser.js';
 import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
 import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { LoaderStatus } from '../LoaderStatus.js';
+import { DirectLoadError } from '../DirectLoadError.js';
 import { Constants } from '../../Constants.js';
+
+function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
+    if (optimizeSplatData) {
+        const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
+                                                                               sectionSize, sceneCenter,
+                                                                               blockSize, bucketSize);
+        return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
+    } else {
+        return SplatBuffer.generateFromUncompressedSplatArrays([splatData], minimumAlpha, 0, new THREE.Vector3());
+    }
+}
 
 export class SplatLoader {
 
     static loadFromURL(fileName, onProgress, progressiveLoad, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
-                       optimizeSplatData, sectionSize, sceneCenter, blockSize, bucketSize) {
+                       optimizeSplatData = true, sectionSize, sceneCenter, blockSize, bucketSize) {
+
+        if (progressiveLoad) optimizeSplatData = false;
 
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
         const progressiveLoadSectionSizeBytes = Constants.ProgressiveLoadSectionSize;
@@ -32,7 +46,9 @@ export class SplatLoader {
 
         const localOnProgress = (percent, percentStr, chunk, fileSize) => {
             const loadComplete = percent >= 100;
-            if (!fileSize) progressiveLoad = false;
+            if (!fileSize) {
+                throw new DirectLoadError('Cannon directly load .splat because no file size info is available.');
+            }
 
             if (!progressiveLoadBufferIn) {
                 maxSplatCount = fileSize / SplatParser.RowSizeBytes;
@@ -94,7 +110,9 @@ export class SplatLoader {
                             progressiveLoadSplatBuffer = new SplatBuffer(progressiveLoadBufferOut, false);
                         }
                         progressiveLoadSplatBuffer.updateLoadedCounts(1, splatCount);
-                        onProgressiveLoadSectionProgress(progressiveLoadSplatBuffer, loadComplete);
+                        if (onProgressiveLoadSectionProgress) {
+                            onProgressiveLoadSectionProgress(progressiveLoadSplatBuffer, loadComplete);
+                        }
                     }
 
                     numBytesStreamed += progressiveLoadSectionSizeBytes;
@@ -122,15 +140,8 @@ export class SplatLoader {
                     return splatData;
                 } else {
                     return delayedExecute(() => {
-                        if (optimizeSplatData) {
-                            const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
-                                                                                                   sectionSize, sceneCenter, blockSize,
-                                                                                                   bucketSize);
-                            return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
-                        } else {
-                            return SplatBuffer.generateFromUncompressedSplatArrays([splatData], minimumAlpha,
-                                                                                    compressionLevel, new THREE.Vector3());
-                        }
+                        return finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel,
+                                        sectionSize, sceneCenter, blockSize, bucketSize);
                     });
                 }
             });
@@ -141,14 +152,8 @@ export class SplatLoader {
                             sectionSize, sceneCenter, blockSize, bucketSize) {
         return delayedExecute(() => {
             const splatArray = SplatParser.parseStandardSplatToUncompressedSplatArray(splatFileData);
-            if (optimizeSplatData) {
-                const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
-                                                                                       sectionSize, sceneCenter, blockSize,
-                                                                                       bucketSize);
-                return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
-            } else {
-                return SplatBuffer.generateFromUncompressedSplatArrays([splatArray], minimumAlpha, 0, new THREE.Vector3());
-            }
+            return finalize(splatArray, optimizeSplatData, minimumAlpha, compressionLevel,
+                            sectionSize, sceneCenter, blockSize, bucketSize);
         });
     }
 

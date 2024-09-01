@@ -288,7 +288,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'logLevel': GaussianSplats3D.LogLevel.None,
     'sphericalHarmonicsDegree': 0,
     `enableOptionalEffects`: false,
-    `plyInMemoryCompressionLevel`: 2
+    `inMemoryCompressionLevel`: 2
     `freeIntermediateSplatData`: false
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
@@ -328,8 +328,8 @@ Advanced `Viewer` parameters
 | `logLevel` | Verbosity of the console logging. Defaults to `GaussianSplats3D.LogLevel.None`.
 | `sphericalHarmonicsDegree` | Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene). Valid values are 0, 1, or 2. Default value is 0.
 | `enableOptionalEffects` | When true, allows for usage of extra properties and attributes during rendering for effects such as opacity adjustment. Default is `false` for performance reasons. These properties are separate from transform properties (scale, rotation, position) that are enabled by the `dynamicScene` parameter.
-| `plyInMemoryCompressionLevel` | Level to compress `.ply` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 2.
-| `splatInMemoryCompressionLevel` | Level to compress `.splat` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 2.
+| `inMemoryCompressionLevel` | Level to compress `.ply` or `.ksplat` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 0.
+| `optimizeSplatData` | Reorder splat data in memory after loading is complete to optimize cache utilization. Default is `true`. Does not apply if splat scene is progressively loaded.
 | `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and used to populate data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s). Defaults to `false`.
 | `splatRenderMode` | Determine which splat rendering mode to enable. Valid values are defined in the `SplatRenderMode` enum: `ThreeD` and `TwoD`. `ThreeD` is the original/traditional mode and `TwoD` is the new mode described here: https://surfsplatting.github.io/
 | `sceneFadeInRateMultiplier` | Customize the speed at which the scene is revealed. Default is 1.0.
@@ -345,9 +345,13 @@ const compressionLevel = 1;
 const splatAlphaRemovalThreshold = 5; // out of 255
 const sphericalHarmonicsDegree = 1;
 GaussianSplats3D.PlyLoader.loadFromURL('<path to .ply or .splat file>',
+                                        onProgress,
+                                        progressiveLoad,
+                                        onProgressiveLoadSectionProgress,
+                                        minimumAlpha,
                                         compressionLevel,
-                                        splatAlphaRemovalThreshold,
-                                        sphericalHarmonicsDegree)
+                                        optimizeSplatData,
+                                        outSphericalHarmonicsDegree)
 .then((splatBuffer) => {
     GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
 });

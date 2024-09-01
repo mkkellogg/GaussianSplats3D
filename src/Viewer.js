@@ -20,6 +20,7 @@ import { VRButton } from './webxr/VRButton.js';
 import { ARButton } from './webxr/ARButton.js';
 import { delayedExecute, abortablePromiseWithExtractedComponents } from './Util.js';
 import { LoaderStatus } from './loaders/LoaderStatus.js';
+import { DirectLoadError } from '../DirectLoadError.js';
 import { RenderMode } from './RenderMode.js';
 import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
@@ -158,16 +159,17 @@ export class Viewer {
         this.enableSIMDInSort = options.enableSIMDInSort;
 
         // Level to compress PLY files when loading them for direct rendering (not exporting to .ksplat)
-        if (options.plyInMemoryCompressionLevel === undefined || options.plyInMemoryCompressionLevel === null) {
-            options.plyInMemoryCompressionLevel = 2;
+        if (options.inMemoryCompressionLevel === undefined || options.inMemoryCompressionLevel === null) {
+            options.inMemoryCompressionLevel = 0;
         }
-        this.plyInMemoryCompressionLevel = options.plyInMemoryCompressionLevel;
+        this.inMemoryCompressionLevel = options.inMemoryCompressionLevel;
 
-        // Level to compress SPLAT files when loading them for direct rendering (not exporting to .ksplat)
-        if (options.splatInMemoryCompressionLevel === undefined || options.splatInMemoryCompressionLevel === null) {
-            options.splatInMemoryCompressionLevel = 2;
+        // Reorder splat data in memory after loading is complete to optimize cache utilization. Default is true.
+        // Does not apply if splat scene is progressively loaded.
+        if (options.optimizeSplatData === undefined || options.optimizeSplatData === null) {
+            options.optimizeSplatData = true;
         }
-        this.splatInMemoryCompressionLevel = options.splatInMemoryCompressionLevel;
+        this.optimizeSplatData = options.optimizeSplatData;
 
         // When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to
         // populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified
@@ -734,7 +736,7 @@ export class Viewer {
         }
 
         const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
-        const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad;
+        const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad && !this.optimizeSplatData;
         const showLoadingUI = (options.showLoadingUI !== undefined && options.showLoadingUI !== null) ? options.showLoadingUI : true;
 
         let loadingUITaskId = null;
@@ -1038,14 +1040,24 @@ export class Viewer {
      */
     downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
                                     progressiveBuild = false, onSectionBuilt = undefined, format) {
-        if (format === SceneFormat.Splat) {
-            return SplatLoader.loadFromURL(path, onProgress, progressiveBuild,
-                                           onSectionBuilt, splatAlphaRemovalThreshold, this.splatInMemoryCompressionLevel, true);
-        } else if (format === SceneFormat.KSplat) {
-            return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
-        } else if (format === SceneFormat.Ply) {
-            return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
-                                         splatAlphaRemovalThreshold, this.plyInMemoryCompressionLevel, this.sphericalHarmonicsDegree);
+        try {
+            if (format === SceneFormat.Splat) {
+                return SplatLoader.loadFromURL(path, onProgress, progressiveBuild,
+                                            onSectionBuilt, splatAlphaRemovalThreshold,
+                                            this.inMemoryCompressionLevel, this.optimizeSplatData);
+            } else if (format === SceneFormat.KSplat) {
+                return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
+            } else if (format === SceneFormat.Ply) {
+                return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
+                                            splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
+                                            this.optimizeSplatData, this.sphericalHarmonicsDegree);
+            }
+        } catch (e) {
+            if (e instanceof DirectLoadError) {
+                throw new Error('File type or server does not support progressive loading.');
+            } else {
+                throw e;
+            }
         }
 
         throw new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`);
@@ -1183,7 +1195,7 @@ export class Viewer {
                 if (showLoadingUIForSplatTreeBuild && splatCount >= MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER) {
                     if (!finished && !splatOptimizingTaskId) {
                         this.loadingSpinner.setMinimized(true, true);
-                        splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing splats...');
+                        splatOptimizingTaskId = this.loadingSpinner.addTask('Optimizing data structures...');
                     }
                 }
             };
