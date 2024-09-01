@@ -8,6 +8,7 @@ import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents
 import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 import { LoaderStatus } from '../LoaderStatus.js';
+import { DirectLoadError } from '../DirectLoadError.js';
 import { Constants } from '../../Constants.js';
 import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 
@@ -28,10 +29,23 @@ function storeChunksInBuffer(chunks, buffer) {
     return buffer;
 }
 
+function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
+    if (optimizeSplatData) {
+        const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel,
+                                                                               sectionSize, sceneCenter,
+                                                                               blockSize, bucketSize);
+        return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
+    } else {
+        return SplatBuffer.generateFromUncompressedSplatArrays([splatData], minimumAlpha, 0, new THREE.Vector3());
+    }
+}
+
 export class PlyLoader {
 
     static loadFromURL(fileName, onProgress, progressiveLoad, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
-                       outSphericalHarmonicsDegree = 0, sectionSize, sceneCenter, blockSize, bucketSize) {
+                       optimizeSplatData = true, outSphericalHarmonicsDegree = 0, sectionSize, sceneCenter, blockSize, bucketSize) {
+
+        if (progressiveLoad) optimizeSplatData = false;
 
         const progressiveLoadSectionSizeBytes = Constants.ProgressiveLoadSectionSize;
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
@@ -89,7 +103,7 @@ export class PlyLoader {
                         maxSplatCount = header.vertexElement.count;
                         compressed = true;
                     } else {
-                        throw new Error('PlyLoader.loadFromURL() -> Selected Ply format cannot be progressively loaded.');
+                        throw new DirectLoadError('PlyLoader.loadFromURL() -> Selected Ply format cannot be directly loaded.');
                     }
                     outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
 
@@ -192,7 +206,9 @@ export class PlyLoader {
                                 progressiveLoadSplatBuffer = new SplatBuffer(progressiveLoadBufferOut, false);
                             }
                             progressiveLoadSplatBuffer.updateLoadedCounts(1, splatCount);
-                            onProgressiveLoadSectionProgress(progressiveLoadSplatBuffer, loadComplete);
+                            if (onProgressiveLoadSectionProgress) {
+                                onProgressiveLoadSectionProgress(progressiveLoadSplatBuffer, loadComplete);
+                            }
                         }
 
                         numBytesStreamed += progressiveLoadSectionSizeBytes;
@@ -235,9 +251,8 @@ export class PlyLoader {
                     return splatData;
                 } else {
                     return delayedExecute(() => {
-                        const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel, sectionSize,
-                                                                                               sceneCenter, blockSize, bucketSize);
-                        return splatBufferGenerator.generateFromUncompressedSplatArray(splatData);
+                        return finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel,
+                                        sectionSize, sceneCenter, blockSize, bucketSize);
                     });
                 }
             });
@@ -250,9 +265,8 @@ export class PlyLoader {
             return PlyParser.parseToUncompressedSplatArray(plyFileData, outSphericalHarmonicsDegree);
         })
         .then((splatArray) => {
-            const splatBufferGenerator = SplatBufferGenerator.getStandardGenerator(minimumAlpha, compressionLevel, sectionSize,
-                                                                                   sceneCenter, blockSize, bucketSize);
-            return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
+            return finalize(splatArray, optimizeSplatData, minimumAlpha, compressionLevel,
+                            sectionSize, sceneCenter, blockSize, bucketSize);
         });
     }
 }
