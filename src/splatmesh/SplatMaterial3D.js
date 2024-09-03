@@ -18,7 +18,7 @@ export class SplatMaterial3D {
      * @return {THREE.ShaderMaterial}
      */
     static build(dynamicMode = false, enableOptionalEffects = false, antialiased = false,
-                 maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
+        maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
 
         const customVertexVars = `
             uniform vec2 covariancesTextureSize;
@@ -37,12 +37,12 @@ export class SplatMaterial3D {
         `;
 
         let vertexShaderSource = SplatMaterial.buildVertexShaderBase(dynamicMode, enableOptionalEffects,
-                                                                     maxSphericalHarmonicsDegree, customVertexVars);
+            maxSphericalHarmonicsDegree, customVertexVars);
         vertexShaderSource += SplatMaterial3D.buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize);
         const fragmentShaderSource = SplatMaterial3D.buildFragmentShader();
 
         const uniforms = SplatMaterial.getUniforms(dynamicMode, enableOptionalEffects,
-                                                   maxSphericalHarmonicsDegree, splatScale, pointCloudModeEnabled);
+            maxSphericalHarmonicsDegree, splatScale, pointCloudModeEnabled);
 
         uniforms['covariancesTextureSize'] = {
             'type': 'v2',
@@ -60,6 +60,15 @@ export class SplatMaterial3D {
             'type': 'i',
             'value': 0
         };
+        // Add the crop box uniforms with a default size of 2x2x2
+        uniforms['boxMin'] = {
+            'type': 'v3',
+            'value': new THREE.Vector3(-2, -2, -2) // Default box min (-1 to 1)
+        };
+        uniforms['boxMax'] = {
+            'type': 'v3',
+            'value': new THREE.Vector3(2, 2, 2) // Default box max (1 to -1)
+        };
 
         const material = new THREE.ShaderMaterial({
             uniforms: uniforms,
@@ -72,7 +81,6 @@ export class SplatMaterial3D {
             depthWrite: false,
             side: THREE.DoubleSide
         });
-
         return material;
     }
 
@@ -224,14 +232,26 @@ export class SplatMaterial3D {
             #include <common>
  
             uniform vec3 debugColor;
+            uniform vec3 boxMin;  // Add the crop box minimum uniform
+            uniform vec3 boxMax;  // Add the crop box maximum uniform
 
             varying vec4 vColor;
             varying vec2 vUv;
             varying vec2 vPosition;
+            varying vec3 vWorldPosition;  // Use the world position passed from the vertex shader
+
         `;
 
         fragmentShaderSource += `
             void main () {
+                // Crop box logic: discard fragments outside the crop box
+                if (vWorldPosition.x < boxMin.x || vWorldPosition.x > boxMax.x ||
+                    vWorldPosition.y < boxMin.y || vWorldPosition.y > boxMax.y ||
+                    vWorldPosition.z < boxMin.z || vWorldPosition.z > boxMax.z) {
+                    discard;
+                }
+
+                    
                 // Compute the positional squared distance from the center of the splat to the current fragment.
                 float A = dot(vPosition, vPosition);
                 // Since the positional data in vPosition has been scaled by sqrt(8), the squared result will be

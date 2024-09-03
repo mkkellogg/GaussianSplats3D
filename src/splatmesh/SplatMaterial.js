@@ -14,29 +14,30 @@ export class SplatMaterial {
         uniform highp sampler2D sphericalHarmonicsTextureR;
         uniform highp sampler2D sphericalHarmonicsTextureG;
         uniform highp sampler2D sphericalHarmonicsTextureB;
+        varying vec3 vWorldPosition;  // Declare the varying here
     `;
 
-    if (enableOptionalEffects || dynamicMode) {
-        vertexShaderSource += `
+        if (enableOptionalEffects || dynamicMode) {
+            vertexShaderSource += `
             uniform highp usampler2D sceneIndexesTexture;
             uniform vec2 sceneIndexesTextureSize;
         `;
-    }
+        }
 
-    if (enableOptionalEffects) {
-        vertexShaderSource += `
+        if (enableOptionalEffects) {
+            vertexShaderSource += `
             uniform float sceneOpacity[${Constants.MaxScenes}];
             uniform int sceneVisibility[${Constants.MaxScenes}];
         `;
-    }
+        }
 
-    if (dynamicMode) {
-        vertexShaderSource += `
+        if (dynamicMode) {
+            vertexShaderSource += `
             uniform highp mat4 transforms[${Constants.MaxScenes}];
         `;
-    }
+        }
 
-    vertexShaderSource += `
+        vertexShaderSource += `
         ${customVars}
         uniform vec2 focal;
         uniform float orthoZoom;
@@ -123,7 +124,12 @@ export class SplatMaterial {
             float fOddOffset = float(oddOffset);
 
             uvec4 sampledCenterColor = texture(centersColorsTexture, getDataUV(1, 0, centersColorsTextureSize));
-            vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));`;
+            vec3 splatCenter = uintBitsToFloat(uvec3(sampledCenterColor.gba));
+
+            // Calculate the world position using the modelMatrix, not the modelViewMatrix
+            vWorldPosition = (modelMatrix * vec4(splatCenter, 1.0)).xyz;
+            
+            `;
 
         if (dynamicMode || enableOptionalEffects) {
             vertexShaderSource += `
@@ -341,7 +347,7 @@ export class SplatMaterial {
     }
 
     static getUniforms(dynamicMode = false, enableOptionalEffects = false, maxSphericalHarmonicsDegree = 0,
-                       splatScale = 1.0, pointCloudModeEnabled = false) {
+        splatScale = 1.0, pointCloudModeEnabled = false) {
 
         const uniforms = {
             'sceneCenter': {
@@ -462,7 +468,7 @@ export class SplatMaterial {
             for (let i = 0; i < Constants.MaxScenes; i++) {
                 sceneOpacity.push(1.0);
             }
-            uniforms['sceneOpacity'] ={
+            uniforms['sceneOpacity'] = {
                 'type': 'f',
                 'value': sceneOpacity
             };
@@ -471,7 +477,7 @@ export class SplatMaterial {
             for (let i = 0; i < Constants.MaxScenes; i++) {
                 sceneVisibility.push(1);
             }
-            uniforms['sceneVisibility'] ={
+            uniforms['sceneVisibility'] = {
                 'type': 'i',
                 'value': sceneVisibility
             };
