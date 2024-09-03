@@ -2057,7 +2057,7 @@ export class SplatMesh extends THREE.Mesh {
         return intMatrixArray;
     }
 
-    computeBoundingBox(sceneIndex) {
+    computeBoundingBox(applySceneTransforms = false, sceneIndex) {
         let splatCount = this.getSplatCount();
         if (sceneIndex !== undefined && sceneIndex !== null) {
             if (sceneIndex < 0 || sceneIndex >= this.scenes.length) {
@@ -2067,7 +2067,8 @@ export class SplatMesh extends THREE.Mesh {
         }
 
         const floatCenters = new Float32Array(splatCount * 3);
-        this.fillSplatDataArrays(null, null, null, floatCenters, null, null, false, undefined, undefined, undefined, undefined, sceneIndex);
+        this.fillSplatDataArrays(null, null, null, floatCenters, null, null, applySceneTransforms,
+                                 undefined, undefined, undefined, undefined, sceneIndex);
 
         const min = new THREE.Vector3();
         const max = new THREE.Vector3();
