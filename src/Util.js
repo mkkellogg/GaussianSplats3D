@@ -59,15 +59,12 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
     const abortController = new AbortController();
     const signal = abortController.signal;
     let aborted = false;
-    let rejectFunc = null;
     const abortHandler = (reason) => {
-        abortController.abort(reason);
-        rejectFunc(new AbortedPromiseError('Fetch aborted.'));
+        abortController.abort(new AbortedPromiseError(reason));
         aborted = true;
     };
 
     return new AbortablePromise((resolve, reject) => {
-        rejectFunc = reject;
         fetch(path, { signal })
         .then(async (data) => {
             const reader = data.body.getReader();
@@ -109,6 +106,9 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
                     break;
                 }
             }
+        })
+        .catch((error) => {
+            reject(error);
         });
     }, abortHandler);
 

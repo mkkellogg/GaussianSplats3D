@@ -5,7 +5,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <title>3D Gaussian Splats - Dynamic scenes example</title>
+  <title>3D Gaussian Splats - Drop-in example</title>
+  <script type="text/javascript" src="js/util.js"></script>
   <script type="importmap">
     {
         "imports": {
@@ -31,13 +32,68 @@
     import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
     import * as THREE from 'three';
 
-    const viewer = new GaussianSplats3D.Viewer({
-      'cameraUp': [0, -1, -0.54],
-      'initialCameraPosition': [-7.14242, -2.25111, -2.36519],
-      'initialCameraLookAt': [1.52976, 2.27776, 1.65898],
+    function setupRenderer() {
+      const renderWidth = 800;
+      const renderHeight = 600;
+
+      const rootElement = document.createElement('div');
+      rootElement.style.width = renderWidth + 'px';
+      rootElement.style.height = renderHeight + 'px';
+      rootElement.style.position = 'relative';
+      rootElement.style.left = '50%';
+      rootElement.style.top = '50%';
+      rootElement.style.transform = 'translate(-50%, -50%)';
+      document.body.appendChild(rootElement);
+
+      const renderer = new THREE.WebGLRenderer({
+          antialias: false
+      });
+      renderer.setSize(renderWidth, renderHeight);
+      rootElement.appendChild(renderer.domElement);
+
+      return {
+        'renderer': renderer,
+        'renderWidth': renderWidth,
+        'renderHeight': renderHeight
+      }
+    }
+
+    function setupCamera(renderWidth, renderHeight) {
+      const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
+      camera.position.copy(new THREE.Vector3().fromArray([-1, -4, 6]));
+      camera.lookAt(new THREE.Vector3().fromArray([0, 4, -0]));
+      camera.up = new THREE.Vector3().fromArray([0, -1, -0.6]).normalize();
+      return camera;
+    }
+
+    function setupThreeScene() {
+      const threeScene = new THREE.Scene();
+      const boxColor = 0xBBBBBB;
+      const boxGeometry = new THREE.BoxGeometry(2, 2, 2);
+      const boxMesh = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({'color': boxColor}));
+      threeScene.add(boxMesh);
+      boxMesh.position.set(3, 2, 2);
+      return threeScene;
+    }
+
+    function setupControls(camera, renderer) {
+      const controls = new GaussianSplats3D.OrbitControls(camera, renderer.domElement);
+      controls.rotateSpeed = 0.5;
+      controls.maxPolarAngle = Math.PI * .75;
+      controls.minPolarAngle = 0.1;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      return controls;
+    }
+
+    const {renderer, renderWidth, renderHeight} = setupRenderer();
+    const camera = setupCamera(renderWidth, renderHeight);
+    const threeScene = setupThreeScene();
+    const controls = setupControls(camera, renderer);
+
+    const viewer = new GaussianSplats3D.DropInViewer({
       'dynamicScene': true
     });
-
     viewer.addSplatScenes([
         {
           'path': 'assets/data/garden/garden.ksplat',
@@ -52,7 +108,8 @@
           'splatAlphaRemovalThreshold': 20,
         }
     ], true).then(() => {
-      viewer.start();
+
+      threeScene.add(viewer);
 
       const bonsaiCount = 2;
       const bonsaiStartIndex = 1;
@@ -72,8 +129,8 @@
       const meshB = new THREE.Mesh(sphereGeometry, material);
 
       // add splat mesh parent objects to the scene
-      viewer.splatMesh.add(meshA);
-      viewer.splatMesh.add(meshB);
+      threeScene.add(meshA);
+      threeScene.add(meshB);
   
       // You can modify the transform components (position, quaternion, scale) of a SplatScene
       // directly like any three.js object OR you can just attach them to another three.js object
@@ -89,21 +146,27 @@
         requestAnimationFrame(update);
         const timeDelta = performance.now() / 1000.0 - startTime;
         for (let i = bonsaiStartIndex; i < bonsaiStartIndex + bonsaiCount; i++) {
+
           // calculate parent mesh positions & orientations
           const angle = timeDelta * 0.25 + (Math.PI * 2) * (i /bonsaiCount);
           const height = Math.cos(timeDelta + (Math.PI * 2) * (i / bonsaiCount)) * 0.5 + 3;
           rotationQuaternion.setFromAxisAngle(rotationAxis, angle);
           horizontalOffsetVector.set(3, 0, 0).applyQuaternion(rotationQuaternion);
+
           // apply mesh position, orientation and scale
           const mesh = (i % 2 === 0) ? meshA : meshB;
           mesh.position.copy(rotationAxis).multiplyScalar(height).add(horizontalOffsetVector).add(orbitCenter);
           mesh.quaternion.copy(baseQuaternion).premultiply(rotationQuaternion);
           mesh.scale.copy(scale);
+
+          // perform standard three.js update and render
+          controls.update();
+          renderer.render(threeScene, camera);
+
         }
       }
-
-    })
-
+    });
+    
   </script>
 </body>
 
