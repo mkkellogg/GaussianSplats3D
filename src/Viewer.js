@@ -20,7 +20,7 @@ import { VRButton } from './webxr/VRButton.js';
 import { ARButton } from './webxr/ARButton.js';
 import { delayedExecute, abortablePromiseWithExtractedComponents } from './Util.js';
 import { LoaderStatus } from './loaders/LoaderStatus.js';
-import { DirectLoadError } from '../DirectLoadError.js';
+import { DirectLoadError } from './loaders/DirectLoadError.js';
 import { RenderMode } from './RenderMode.js';
 import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
@@ -169,7 +169,7 @@ export class Viewer {
         if (options.optimizeSplatData === undefined || options.optimizeSplatData === null) {
             options.optimizeSplatData = true;
         }
-        this.optimizeSplatData = options.optimizeSplatData;
+        this.optimizeSplatData = options.optimizeSplatData || false;
 
         // When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to
         // populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified

@@ -42,18 +42,19 @@ function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, 
 
 export class PlyLoader {
 
-    static loadFromURL(fileName, onProgress, progressiveLoad, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
+    static loadFromURL(fileName, onProgress, directLoad, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
                        optimizeSplatData = true, outSphericalHarmonicsDegree = 0, sectionSize, sceneCenter, blockSize, bucketSize) {
 
-        if (progressiveLoad) optimizeSplatData = false;
+        const directLoadOriginalValue = directLoad;
+        if (optimizeSplatData) directLoad = false;
 
-        const progressiveLoadSectionSizeBytes = Constants.ProgressiveLoadSectionSize;
+        const directLoadSectionSizeBytes = Constants.ProgressiveLoadSectionSize;
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
         const sectionCount = 1;
 
-        let progressiveLoadBufferIn;
-        let progressiveLoadBufferOut;
-        let progressiveLoadSplatBuffer;
+        let directLoadBufferIn;
+        let directLoadBufferOut;
+        let directLoadSplatBuffer;
         let compressedPlyHeaderChunksBuffer;
         let maxSplatCount = 0;
         let splatCount = 0;
@@ -103,15 +104,19 @@ export class PlyLoader {
                         maxSplatCount = header.vertexElement.count;
                         compressed = true;
                     } else {
-                        throw new DirectLoadError('PlyLoader.loadFromURL() -> Selected Ply format cannot be directly loaded.');
+                        if (directLoadOriginalValue) {
+                            throw new DirectLoadError('PlyLoader.loadFromURL() -> Selected Ply format cannot be directly loaded.');
+                        } else {
+                            directLoad = false;
+                        }
                     }
                     outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
 
                     const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree];
                     const splatBufferSizeBytes = splatDataOffsetBytes + shDescriptor.BytesPerSplat * maxSplatCount;
 
-                    if (progressiveLoad) {
-                        progressiveLoadBufferOut = new ArrayBuffer(splatBufferSizeBytes);
+                    if (directLoad) {
+                        directLoadBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                         SplatBuffer.writeHeaderToBuffer({
                             versionMajor: SplatBuffer.CurrentMajorVersion,
                             versionMinor: SplatBuffer.CurrentMinorVersion,
@@ -121,7 +126,7 @@ export class PlyLoader {
                             splatCount: splatCount,
                             compressionLevel: 0,
                             sceneCenter: new THREE.Vector3()
-                        }, progressiveLoadBufferOut);
+                        }, directLoadBufferOut);
                     } else {
                         standardLoadUncompressedSplatArray = new UncompressedSplatArray(outSphericalHarmonicsDegree);
                     }
@@ -146,31 +151,31 @@ export class PlyLoader {
 
                 if (chunks.length > 0) {
 
-                    progressiveLoadBufferIn = storeChunksInBuffer(chunks, progressiveLoadBufferIn);
+                    directLoadBufferIn = storeChunksInBuffer(chunks, directLoadBufferIn);
 
                     const bytesLoadedSinceLastStreamedSection = numBytesDownloaded - numBytesStreamed;
-                    if (bytesLoadedSinceLastStreamedSection > progressiveLoadSectionSizeBytes || loadComplete) {
+                    if (bytesLoadedSinceLastStreamedSection > directLoadSectionSizeBytes || loadComplete) {
                         const numBytesToProcess = numBytesDownloaded - numBytesParsed;
                         const addedSplatCount = Math.floor(numBytesToProcess / header.bytesPerSplat);
                         const numBytesToParse = addedSplatCount * header.bytesPerSplat;
                         const numBytesLeftOver = numBytesToProcess - numBytesToParse;
                         const newSplatCount = splatCount + addedSplatCount;
                         const parsedDataViewOffset = numBytesParsed - chunks[0].startBytes;
-                        const dataToParse = new DataView(progressiveLoadBufferIn, parsedDataViewOffset, numBytesToParse);
+                        const dataToParse = new DataView(directLoadBufferIn, parsedDataViewOffset, numBytesToParse);
 
                         const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree];
                         const outOffset = splatCount * shDescriptor.BytesPerSplat + splatDataOffsetBytes;
 
-                        if (progressiveLoad) {
+                        if (directLoad) {
                             if (compressed) {
                                 PlayCanvasCompressedPlyParser.parseToUncompressedSplatBufferSection(header.chunkElement,
                                                                                                     header.vertexElement, 0,
                                                                                                     addedSplatCount - 1, splatCount,
                                                                                                     dataToParse, 0,
-                                                                                                    progressiveLoadBufferOut, outOffset);
+                                                                                                    directLoadBufferOut, outOffset);
                             } else {
                                 inriaV1PlyParser.parseToUncompressedSplatBufferSection(header, 0, addedSplatCount - 1, dataToParse,
-                                                                                       0, progressiveLoadBufferOut, outOffset,
+                                                                                       0, directLoadBufferOut, outOffset,
                                                                                        outSphericalHarmonicsDegree);
                             }
                         } else {
@@ -189,8 +194,8 @@ export class PlyLoader {
 
                         splatCount = newSplatCount;
 
-                        if (progressiveLoad) {
-                            if (!progressiveLoadSplatBuffer) {
+                        if (directLoad) {
+                            if (!directLoadSplatBuffer) {
                                 SplatBuffer.writeSectionHeaderToBuffer({
                                     maxSplatCount: maxSplatCount,
                                     splatCount: splatCount,
@@ -202,16 +207,16 @@ export class PlyLoader {
                                     fullBucketCount: 0,
                                     partiallyFilledBucketCount: 0,
                                     sphericalHarmonicsDegree: outSphericalHarmonicsDegree
-                                }, 0, progressiveLoadBufferOut, SplatBuffer.HeaderSizeBytes);
-                                progressiveLoadSplatBuffer = new SplatBuffer(progressiveLoadBufferOut, false);
+                                }, 0, directLoadBufferOut, SplatBuffer.HeaderSizeBytes);
+                                directLoadSplatBuffer = new SplatBuffer(directLoadBufferOut, false);
                             }
-                            progressiveLoadSplatBuffer.updateLoadedCounts(1, splatCount);
+                            directLoadSplatBuffer.updateLoadedCounts(1, splatCount);
                             if (onProgressiveLoadSectionProgress) {
-                                onProgressiveLoadSectionProgress(progressiveLoadSplatBuffer, loadComplete);
+                                onProgressiveLoadSectionProgress(directLoadSplatBuffer, loadComplete);
                             }
                         }
 
-                        numBytesStreamed += progressiveLoadSectionSizeBytes;
+                        numBytesStreamed += directLoadSectionSizeBytes;
                         numBytesParsed += numBytesToParse;
 
                         if (numBytesLeftOver === 0) {
@@ -231,8 +236,8 @@ export class PlyLoader {
                 }
 
                 if (loadComplete) {
-                    if (progressiveLoad) {
-                        loadPromise.resolve(progressiveLoadSplatBuffer);
+                    if (directLoad) {
+                        loadPromise.resolve(directLoadSplatBuffer);
                     } else {
                         loadPromise.resolve(standardLoadUncompressedSplatArray);
                     }
@@ -247,7 +252,7 @@ export class PlyLoader {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             return loadPromise.promise.then((splatData) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                if (progressiveLoad) {
+                if (directLoad) {
                     return splatData;
                 } else {
                     return delayedExecute(() => {
