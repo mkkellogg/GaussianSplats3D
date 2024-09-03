@@ -209,16 +209,16 @@ export function createSortWorker(splatCount, useSharedMemory, enableSIMDInSort, 
     let sourceWasm = SorterWasm;
 
     // iOS makes choosing the right WebAssembly configuration tricky :(
-    let iOSSemVer = isIOS() ? getIOSSemever() : null;
+    const iOSSemVer = isIOS() ? getIOSSemever() : null;
     if (!enableSIMDInSort && !useSharedMemory) {
         sourceWasm = SorterWasmNoSIMD;
-        if (iOSSemVer && iOSSemVer.major < 16 && iOSSemVer.minor < 4) {
+        if (iOSSemVer && iOSSemVer.major <= 16 && iOSSemVer.minor < 4) {
             sourceWasm = SorterWasmNoSIMDNonShared;
         }
     } else if (!enableSIMDInSort) {
         sourceWasm = SorterWasmNoSIMD;
     } else if (!useSharedMemory) {
-        if (iOSSemVer && iOSSemVer.major < 16 && iOSSemVer.minor < 4) {
+        if (iOSSemVer && iOSSemVer.major <= 16 && iOSSemVer.minor < 4) {
             sourceWasm = SorterWasmNonShared;
         }
     }
