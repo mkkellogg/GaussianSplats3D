@@ -1846,7 +1846,7 @@ export class SplatMesh extends THREE.Mesh {
      */
     fillSplatDataArrays(covariances, scales, rotations, centers, colors, sphericalHarmonics, applySceneTransform,
                         covarianceCompressionLevel = 0, scaleRotationCompressionLevel = 0, sphericalHarmonicsCompressionLevel = 1,
-                        srcStart, srcEnd, destStart = 0) {
+                        srcStart, srcEnd, destStart = 0, sceneIndex) {
         const scaleOverride = new THREE.Vector3();
         scaleOverride.x = undefined;
         scaleOverride.y = undefined;
@@ -1857,7 +1857,13 @@ export class SplatMesh extends THREE.Mesh {
         }
         const tempTransform = new THREE.Matrix4();
 
-        for (let i = 0; i < this.scenes.length; i++) {
+        let startSceneIndex = 0;
+        let endSceneIndex = this.scenes.length - 1;
+        if (sceneIndex !== undefined && sceneIndex !== null && sceneIndex >= 0 && sceneIndex <= this.scenes.length) {
+            startSceneIndex = sceneIndex;
+            endSceneIndex = sceneIndex;
+        }
+        for (let i = startSceneIndex; i <= endSceneIndex; i++) {
             if (applySceneTransform === undefined || applySceneTransform === null) {
                 applySceneTransform = this.dynamicMode ? false : true;
             }
@@ -2049,5 +2055,35 @@ export class SplatMesh extends THREE.Mesh {
             intMatrixArray[i] = Math.round(matrixElements[i] * 1000.0);
         }
         return intMatrixArray;
+    }
+
+    computeBoundingBox(sceneIndex) {
+        let splatCount = this.getSplatCount();
+        if (sceneIndex !== undefined && sceneIndex !== null) {
+            if (sceneIndex < 0 || sceneIndex >= this.scenes.length) {
+                throw new Error('SplatMesh::computeBoundingBox() -> Invalid scene index.');
+            }
+            splatCount = this.scenes[sceneIndex].splatBuffer.getSplatCount();
+        }
+
+        const floatCenters = new Float32Array(splatCount * 3);
+        this.fillSplatDataArrays(null, null, null, floatCenters, null, null, false, undefined, undefined, undefined, undefined, sceneIndex);
+
+        const min = new THREE.Vector3();
+        const max = new THREE.Vector3();
+        for (let i = 0; i < splatCount; i++) {
+            const offset = i * 3;
+            const x = floatCenters[offset];
+            const y = floatCenters[offset + 1];
+            const z = floatCenters[offset + 2];
+            if (i === 0 || x < min.x) min.x = x;
+            if (i === 0 || y < min.y) min.y = y;
+            if (i === 0 || z < min.z) min.z = z;
+            if (i === 0 || x > max.x) max.x = x;
+            if (i === 0 || y > max.y) max.y = y;
+            if (i === 0 || z > max.z) max.z = z;
+        }
+
+        return new THREE.Box3(min, max);
     }
 }
