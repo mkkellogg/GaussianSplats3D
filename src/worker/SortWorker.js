@@ -212,13 +212,13 @@ export function createSortWorker(splatCount, useSharedMemory, enableSIMDInSort, 
     let iOSSemVer = isIOS() ? getIOSSemever() : null;
     if (!enableSIMDInSort && !useSharedMemory) {
         sourceWasm = SorterWasmNoSIMD;
-        if (iOSSemVer && iOSSemVer.major < 16) {
+        if (iOSSemVer && iOSSemVer.major < 16 && iOSSemVer.minor < 4) {
             sourceWasm = SorterWasmNoSIMDNonShared;
         }
     } else if (!enableSIMDInSort) {
         sourceWasm = SorterWasmNoSIMD;
     } else if (!useSharedMemory) {
-        if (iOSSemVer && iOSSemVer.major < 16) {
+        if (iOSSemVer && iOSSemVer.major < 16 && iOSSemVer.minor < 4) {
             sourceWasm = SorterWasmNonShared;
         }
     }

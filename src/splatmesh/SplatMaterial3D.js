@@ -203,7 +203,7 @@ export class SplatMaterial3D {
 
         vertexShaderSource += `
             vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) *
-                            basisViewport * 2.0 * inverseFocalAdjustment;
+                             basisViewport * 2.0 * inverseFocalAdjustment;
 
             vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
             gl_Position = quadPos;

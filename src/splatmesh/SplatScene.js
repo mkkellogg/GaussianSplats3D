@@ -3,19 +3,19 @@ import * as THREE from 'three';
 /**
  * SplatScene: Descriptor for a single splat scene managed by an instance of SplatMesh.
  */
-export class SplatScene {
+export class SplatScene extends THREE.Object3D {
 
     constructor(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
                 scale = new THREE.Vector3(1, 1, 1), minimumAlpha = 1, opacity = 1.0, visible = true) {
+        super();
         this.splatBuffer = splatBuffer;
-        this.position = position.clone();
-        this.quaternion = quaternion.clone();
-        this.scale = scale.clone();
+        this.position.copy(position);
+        this.quaternion.copy(quaternion);
+        this.scale.copy(scale);
         this.transform = new THREE.Matrix4();
         this.minimumAlpha = minimumAlpha;
         this.opacity = opacity;
         this.visible = visible;
-        this.updateTransform();
     }
 
     copyTransformData(otherScene) {
@@ -25,7 +25,13 @@ export class SplatScene {
         this.transform.copy(otherScene.transform);
     }
 
-    updateTransform() {
-        this.transform.compose(this.position, this.quaternion, this.scale);
+    updateTransform(dynamicMode) {
+        if (dynamicMode) {
+            if (this.matrixWorldAutoUpdate) this.updateWorldMatrix(true, false);
+            this.transform.copy(this.matrixWorld);
+        } else {
+            if (this.matrixAutoUpdate) this.updateMatrix();
+            this.transform.copy(this.matrix);
+        }
     }
 }
