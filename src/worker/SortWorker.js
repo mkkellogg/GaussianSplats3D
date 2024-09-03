@@ -212,12 +212,15 @@ export function createSortWorker(splatCount, useSharedMemory, enableSIMDInSort, 
     const iOSSemVer = isIOS() ? getIOSSemever() : null;
     if (!enableSIMDInSort && !useSharedMemory) {
         sourceWasm = SorterWasmNoSIMD;
+        // Testing on various devices has shown that even when shared memory is disabled, the WASM module with shared
+        // memory can still be used most of the time -- the exception seems to be iOS devices below 16.4
         if (iOSSemVer && iOSSemVer.major <= 16 && iOSSemVer.minor < 4) {
             sourceWasm = SorterWasmNoSIMDNonShared;
         }
     } else if (!enableSIMDInSort) {
         sourceWasm = SorterWasmNoSIMD;
     } else if (!useSharedMemory) {
+        // Same issue with shared memory as above on iOS devices
         if (iOSSemVer && iOSSemVer.major <= 16 && iOSSemVer.minor < 4) {
             sourceWasm = SorterWasmNonShared;
         }

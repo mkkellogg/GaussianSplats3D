@@ -1824,7 +1824,7 @@ export class Viewer {
             if (this.sortRunning) return Promise.resolve(true);
             if (this.splatMesh.getSplatCount() <= 0) {
                 this.splatRenderCount = 0;
-                return false;
+                return Promise.resolve(false);
             }
 
             let angleDiff = 0;
