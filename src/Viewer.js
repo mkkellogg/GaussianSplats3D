@@ -158,7 +158,7 @@ export class Viewer {
         if (options.enableSIMDInSort === undefined || options.enableSIMDInSort === null) options.enableSIMDInSort = true;
         this.enableSIMDInSort = options.enableSIMDInSort;
 
-        // Level to compress PLY files when loading them for direct rendering (not exporting to .ksplat)
+        // Level to compress non KSPLAT files when loading them for direct rendering
         if (options.inMemoryCompressionLevel === undefined || options.inMemoryCompressionLevel === null) {
             options.inMemoryCompressionLevel = 0;
         }
@@ -1424,7 +1424,9 @@ export class Viewer {
      */
     stop() {
         if (this.selfDrivenMode && this.selfDrivenModeRunning) {
-            if (!this.webXRMode) {
+            if (this.webXRMode) {
+                this.renderer.setAnimationLoop(null);
+            } else {
                 cancelAnimationFrame(this.requestFrameId);
             }
             this.selfDrivenModeRunning = false;
@@ -1534,6 +1536,9 @@ export class Viewer {
         const changeEpsilon = 0.0001;
 
         return function() {
+            if (!this.initialized || !this.splatRenderReady) return false;
+            if (this.isDisposingOrDisposed()) return false;
+
             let shouldRender = false;
             let cameraChanged = false;
             if (this.camera) {
@@ -1566,6 +1571,7 @@ export class Viewer {
 
         return function() {
             if (!this.initialized || !this.splatRenderReady) return;
+            if (this.isDisposingOrDisposed()) return;
 
             const hasRenderables = (threeScene) => {
                 for (let child of threeScene.children) {
@@ -1590,7 +1596,10 @@ export class Viewer {
 
     update(renderer, camera) {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
+
         if (!this.initialized || !this.splatRenderReady) return;
+        if (this.isDisposingOrDisposed()) return;
+
         if (this.controls) {
             this.controls.update();
             if (this.camera.isOrthographicCamera && !this.usingExternalCamera) {
