@@ -200,6 +200,9 @@ export class Viewer {
         // Customize the speed at which the scene is revealed
         this.sceneFadeInRateMultiplier = options.sceneFadeInRateMultiplier || 1.0;
 
+        // Set the range for the counting sort used to sort the splats
+        this.splatSortDepthMapRange = options.splatSortDepthMapRange || Constants.DefaultSortDepthMapRange;
+
         this.onSplatMeshChangedCallback = null;
         this.createSplatMesh();
 
@@ -1226,7 +1229,7 @@ export class Viewer {
             const splatCount = splatMesh.getSplatCount();
             const maxSplatCount = splatMesh.getMaxSplatCount();
             this.sortWorker = createSortWorker(maxSplatCount, this.sharedMemoryForWorkers, this.enableSIMDInSort,
-                                               this.integerBasedSort, this.splatMesh.dynamicMode);
+                                               this.integerBasedSort, this.splatMesh.dynamicMode, this.splatSortDepthMapRange);
             this.sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;

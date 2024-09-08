@@ -24,6 +24,7 @@ function sortWorker(self) {
     let modelViewProjOffset;
     let countsZero;
     let sortedIndexesOut;
+    let depthMapRange;
 
     let Constants;
 
@@ -49,12 +50,12 @@ function sortWorker(self) {
             }
         }
 
-        if (!countsZero) countsZero = new Uint32Array(Constants.DepthMapRange);
+        if (!countsZero) countsZero = new Uint32Array(depthMapRange);
         new Float32Array(wasmMemory, modelViewProjOffset, 16).set(modelViewProj);
-        new Uint32Array(wasmMemory, frequenciesOffset, Constants.DepthMapRange).set(countsZero);
+        new Uint32Array(wasmMemory, frequenciesOffset, depthMapRange).set(countsZero);
         wasmInstance.exports.sortIndexes(indexesToSortOffset, centersOffset, precomputedDistancesOffset,
                                          mappedDistancesOffset, frequenciesOffset, modelViewProjOffset,
-                                         sortedIndexesOffset, sceneIndexesOffset, transformsOffset, Constants.DepthMapRange,
+                                         sortedIndexesOffset, sceneIndexesOffset, transformsOffset, depthMapRange,
                                          splatSortCount, splatRenderCount, splatCount, usePrecomputedDistances, integerBasedSort,
                                          dynamicMode);
 
@@ -120,6 +121,7 @@ function sortWorker(self) {
             useSharedMemory = e.data.init.useSharedMemory;
             integerBasedSort = e.data.init.integerBasedSort;
             dynamicMode = e.data.init.dynamicMode;
+            depthMapRange = e.data.init.depthMapRange;
 
             const CENTERS_BYTES_PER_ENTRY = integerBasedSort ? (Constants.BytesPerInt * 4) : (Constants.BytesPerFloat * 4);
 
@@ -133,7 +135,7 @@ function sortWorker(self) {
                                                           (splatCount * Constants.BytesPerInt) : (splatCount * Constants.BytesPerFloat);
             const memoryRequiredForMappedDistances = splatCount * Constants.BytesPerInt;
             const memoryRequiredForSortedIndexes = splatCount * Constants.BytesPerInt;
-            const memoryRequiredForIntermediateSortBuffers = Constants.DepthMapRange * Constants.BytesPerInt * 2;
+            const memoryRequiredForIntermediateSortBuffers = depthMapRange * Constants.BytesPerInt * 2;
             const memoryRequiredforTransformIndexes = dynamicMode ? (splatCount * Constants.BytesPerInt) : 0;
             const memoryRequiredforTransforms = dynamicMode ? (Constants.MaxScenes * matrixSize) : 0;
             const extraMemory = Constants.MemoryPageSize * 32;
@@ -197,7 +199,8 @@ function sortWorker(self) {
     };
 }
 
-export function createSortWorker(splatCount, useSharedMemory, enableSIMDInSort, integerBasedSort, dynamicMode) {
+export function createSortWorker(splatCount, useSharedMemory, enableSIMDInSort,
+                                 integerBasedSort, dynamicMode, depthMapRange = Constants.DefaultSortDepthMapRange) {
     const worker = new Worker(
         URL.createObjectURL(
             new Blob(['(', sortWorker.toString(), ')(self)'], {
@@ -239,11 +242,11 @@ export function createSortWorker(splatCount, useSharedMemory, enableSIMDInSort, 
             'useSharedMemory': useSharedMemory,
             'integerBasedSort': integerBasedSort,
             'dynamicMode': dynamicMode,
+            'depthMapRange': depthMapRange,
             // Super hacky
             'Constants': {
                 'BytesPerFloat': Constants.BytesPerFloat,
                 'BytesPerInt': Constants.BytesPerInt,
-                'DepthMapRange': Constants.DepthMapRange,
                 'MemoryPageSize': Constants.MemoryPageSize,
                 'MaxScenes': Constants.MaxScenes
             }
