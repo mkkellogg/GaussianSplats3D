@@ -1,6 +1,6 @@
 export class Constants {
 
-    static DefaultSortDepthMapRange = 65536;
+    static DefaultSplatSortDistanceMapPrecision = 16;
     static MemoryPageSize = 65536;
     static BytesPerFloat = 4;
     static BytesPerInt = 4;

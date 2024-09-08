@@ -12,7 +12,7 @@ import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './splatmesh/SplatMesh.js';
 import { createSortWorker } from './worker/SortWorker.js';
 import { Constants } from './Constants.js';
-import { getCurrentTime, isIOS, getIOSSemever } from './Util.js';
+import { getCurrentTime, isIOS, getIOSSemever, clamp } from './Util.js';
 import { AbortablePromise, AbortedPromiseError } from './AbortablePromise.js';
 import { SceneFormat } from './loaders/SceneFormat.js';
 import { WebXRMode } from './webxr/WebXRMode.js';
@@ -201,7 +201,8 @@ export class Viewer {
         this.sceneFadeInRateMultiplier = options.sceneFadeInRateMultiplier || 1.0;
 
         // Set the range for the depth map for the counting sort used to sort the splats
-        this.splatSortDepthMapRange = options.splatSortDepthMapRange || Constants.DefaultSortDepthMapRange;
+        this.splatSortDistanceMapPrecision = options.splatSortDistanceMapPrecision || Constants.DefaultSplatSortDistanceMapPrecision;
+        this.splatSortDistanceMapPrecision = clamp(this.splatSortDistanceMapPrecision, 10, 24);
 
         this.onSplatMeshChangedCallback = null;
         this.createSplatMesh();
@@ -1229,7 +1230,7 @@ export class Viewer {
             const splatCount = splatMesh.getSplatCount();
             const maxSplatCount = splatMesh.getMaxSplatCount();
             this.sortWorker = createSortWorker(maxSplatCount, this.sharedMemoryForWorkers, this.enableSIMDInSort,
-                                               this.integerBasedSort, this.splatMesh.dynamicMode, this.splatSortDepthMapRange);
+                                               this.integerBasedSort, this.splatMesh.dynamicMode, this.splatSortDistanceMapPrecision);
             this.sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;

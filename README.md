@@ -333,7 +333,7 @@ Advanced `Viewer` parameters
 | `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and used to populate data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s). Defaults to `false`.
 | `splatRenderMode` | Determine which splat rendering mode to enable. Valid values are defined in the `SplatRenderMode` enum: `ThreeD` and `TwoD`. `ThreeD` is the original/traditional mode and `TwoD` is the new mode described here: https://surfsplatting.github.io/
 | `sceneFadeInRateMultiplier` | Customize the speed at which the scene is revealed. Default is 1.0.
-| `splatSortDepthMapRange` | Specify the range for the depth map for the counting sort used to sort the splats. Defaults to 65536.
+| `splatSortDistanceMapPrecision` | Specify the precision for the distance map used in the splat sort algorithm. Defaults to 16.
 <br>
 
 ### Creating KSPLAT files
