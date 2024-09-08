@@ -200,7 +200,7 @@ export class Viewer {
         // Customize the speed at which the scene is revealed
         this.sceneFadeInRateMultiplier = options.sceneFadeInRateMultiplier || 1.0;
 
-        // Set the range for the counting sort used to sort the splats
+        // Set the range for the depth map for the counting sort used to sort the splats
         this.splatSortDepthMapRange = options.splatSortDepthMapRange || Constants.DefaultSortDepthMapRange;
 
         this.onSplatMeshChangedCallback = null;
