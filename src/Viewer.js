@@ -1459,10 +1459,15 @@ export class Viewer {
         this.disposing = true;
         this.disposePromise = Promise.all(waitPromises).finally(() => {
             this.stop();
-            if (this.controls) {
-                this.controls.dispose();
-                this.controls = null;
+            if (this.orthographicControls) {
+                this.orthographicControls.dispose();
+                this.orthographicControls = null;
             }
+            if (this.perspectiveControls) {
+                this.perspectiveControls.dispose();
+                this.perspectiveControls = null;
+            }
+            this.controls = null;
             if (this.splatMesh) {
                 this.splatMesh.dispose();
                 this.splatMesh = null;
