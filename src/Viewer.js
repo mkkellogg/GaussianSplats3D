@@ -169,7 +169,7 @@ export class Viewer {
         if (options.optimizeSplatData === undefined || options.optimizeSplatData === null) {
             options.optimizeSplatData = true;
         }
-        this.optimizeSplatData = options.optimizeSplatData || false;
+        this.optimizeSplatData = options.optimizeSplatData;
 
         // When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and is used to
         // populate the data textures will be freed. This will reduces memory usage, but if that data needs to be modified
@@ -202,7 +202,8 @@ export class Viewer {
 
         // Set the range for the depth map for the counting sort used to sort the splats
         this.splatSortDistanceMapPrecision = options.splatSortDistanceMapPrecision || Constants.DefaultSplatSortDistanceMapPrecision;
-        this.splatSortDistanceMapPrecision = clamp(this.splatSortDistanceMapPrecision, 10, 24);
+        const maxPrecision = this.integerBasedSort ? 20 : 24;
+        this.splatSortDistanceMapPrecision = clamp(this.splatSortDistanceMapPrecision, 10, maxPrecision);
 
         this.onSplatMeshChangedCallback = null;
         this.createSplatMesh();
@@ -740,7 +741,7 @@ export class Viewer {
         }
 
         const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
-        const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad && !this.optimizeSplatData;
+        const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad;
         const showLoadingUI = (options.showLoadingUI !== undefined && options.showLoadingUI !== null) ? options.showLoadingUI : true;
 
         let loadingUITaskId = null;
@@ -915,7 +916,7 @@ export class Viewer {
         const splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onDownloadProgress, true,
                                                                                onProgressiveLoadSectionProgress, format);
 
-        let progressiveLoadFirstSectionBuildPromise = abortablePromiseWithExtractedComponents(splatSceneDownloadPromise.abortHandler);
+        const progressiveLoadFirstSectionBuildPromise = abortablePromiseWithExtractedComponents(splatSceneDownloadPromise.abortHandler);
         const splatSceneDownloadAndBuildPromise = abortablePromiseWithExtractedComponents();
 
         this.addSplatSceneDownloadPromise(splatSceneDownloadPromise);
@@ -1044,17 +1045,19 @@ export class Viewer {
      */
     downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
                                     progressiveBuild = false, onSectionBuilt = undefined, format) {
+
+        const optimizeSplatData = progressiveBuild ? false : this.optimizeSplatData;
         try {
             if (format === SceneFormat.Splat) {
                 return SplatLoader.loadFromURL(path, onProgress, progressiveBuild,
                                                onSectionBuilt, splatAlphaRemovalThreshold,
-                                               this.inMemoryCompressionLevel, this.optimizeSplatData);
+                                               this.inMemoryCompressionLevel, optimizeSplatData);
             } else if (format === SceneFormat.KSplat) {
                 return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
             } else if (format === SceneFormat.Ply) {
                 return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
                                              splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
-                                             this.optimizeSplatData, this.sphericalHarmonicsDegree);
+                                             optimizeSplatData, this.sphericalHarmonicsDegree);
             }
         } catch (e) {
             if (e instanceof DirectLoadError) {
@@ -1545,8 +1548,7 @@ export class Viewer {
         const changeEpsilon = 0.0001;
 
         return function() {
-            if (!this.initialized || !this.splatRenderReady) return false;
-            if (this.isDisposingOrDisposed()) return false;
+            if (!this.initialized || !this.splatRenderReady || this.isDisposingOrDisposed()) return false;
 
             let shouldRender = false;
             let cameraChanged = false;
@@ -1579,8 +1581,7 @@ export class Viewer {
     render = function() {
 
         return function() {
-            if (!this.initialized || !this.splatRenderReady) return;
-            if (this.isDisposingOrDisposed()) return;
+            if (!this.initialized || !this.splatRenderReady || this.isDisposingOrDisposed()) return;
 
             const hasRenderables = (threeScene) => {
                 for (let child of threeScene.children) {
@@ -1606,8 +1607,7 @@ export class Viewer {
     update(renderer, camera) {
         if (this.dropInMode) this.updateForDropInMode(renderer, camera);
 
-        if (!this.initialized || !this.splatRenderReady) return;
-        if (this.isDisposingOrDisposed()) return;
+        if (!this.initialized || !this.splatRenderReady || this.isDisposingOrDisposed()) return;
 
         if (this.controls) {
             this.controls.update();

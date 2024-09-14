@@ -7,6 +7,7 @@ import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { LoaderStatus } from '../LoaderStatus.js';
 import { DirectLoadError } from '../DirectLoadError.js';
 import { Constants } from '../../Constants.js';
+import { InternalLoadType } from '../InternalLoadType.js';
 
 function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
     if (optimizeSplatData) {
@@ -21,11 +22,11 @@ function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, 
 
 export class SplatLoader {
 
-    static loadFromURL(fileName, onProgress, directLoad, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
+    static loadFromURL(fileName, onProgress, loadDirectoToSplatBuffer, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
                        optimizeSplatData = true, sectionSize, sceneCenter, blockSize, bucketSize) {
 
-        const directLoadOriginalValue = directLoad;
-        if (optimizeSplatData) directLoad = false;
+        let internalLoadType = loadDirectoToSplatBuffer ? InternalLoadType.DirectToSplatBuffer : InternalLoadType.DirectToSplatArray;
+        if (optimizeSplatData) internalLoadType = InternalLoadType.DirectToSplatArray;
 
         const splatDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
         const directLoadSectionSizeBytes = Constants.ProgressiveLoadSectionSize;
@@ -47,11 +48,24 @@ export class SplatLoader {
 
         const localOnProgress = (percent, percentStr, chunk, fileSize) => {
             const loadComplete = percent >= 100;
+
+            if (chunk) {
+                chunks.push(chunk);
+            }
+
+            if (internalLoadType === InternalLoadType.DownloadBeforeProcessing) {
+                if (loadComplete) {
+                    loadPromise.resolve(chunks);
+                }
+                return;
+            }
+
             if (!fileSize) {
-                if (directLoadOriginalValue) {
+                if (loadDirectoToSplatBuffer) {
                     throw new DirectLoadError('Cannon directly load .splat because no file size info is available.');
                 } else {
-                    directLoad = false;
+                    internalLoadType = InternalLoadType.DownloadBeforeProcessing;
+                    return;
                 }
             }
 
@@ -61,7 +75,7 @@ export class SplatLoader {
                 const bytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[0].BytesPerSplat;
                 const splatBufferSizeBytes = splatDataOffsetBytes + bytesPerSplat * maxSplatCount;
 
-                if (directLoad) {
+                if (internalLoadType === InternalLoadType.DirectToSplatBuffer) {
                     directLoadBufferOut = new ArrayBuffer(splatBufferSizeBytes);
                     SplatBuffer.writeHeaderToBuffer({
                         versionMajor: SplatBuffer.CurrentMajorVersion,
@@ -79,7 +93,6 @@ export class SplatLoader {
             }
 
             if (chunk) {
-                chunks.push(chunk);
                 new Uint8Array(directLoadBufferIn, numBytesLoaded, chunk.byteLength).set(new Uint8Array(chunk));
                 numBytesLoaded += chunk.byteLength;
 
@@ -89,7 +102,7 @@ export class SplatLoader {
                     const addedSplatCount = bytesToUpdate / SplatParser.RowSizeBytes;
                     const newSplatCount = splatCount + addedSplatCount;
 
-                    if (directLoad) {
+                    if (internalLoadType === InternalLoadType.DirectToSplatBuffer) {
                         SplatParser.parseToUncompressedSplatBufferSection(splatCount, newSplatCount - 1, directLoadBufferIn, 0,
                                                                             directLoadBufferOut, splatDataOffsetBytes);
                     } else {
@@ -99,7 +112,7 @@ export class SplatLoader {
 
                     splatCount = newSplatCount;
 
-                    if (directLoad) {
+                    if (internalLoadType === InternalLoadType.DirectToSplatBuffer) {
                         if (!directLoadSplatBuffer) {
                             SplatBuffer.writeSectionHeaderToBuffer({
                                 maxSplatCount: maxSplatCount,
@@ -125,7 +138,7 @@ export class SplatLoader {
             }
 
             if (loadComplete) {
-                if (directLoad) {
+                if (internalLoadType === InternalLoadType.DirectToSplatBuffer) {
                     loadPromise.resolve(directLoadSplatBuffer);
                 } else {
                     loadPromise.resolve(standardLoadUncompressedSplatArray);
@@ -133,7 +146,6 @@ export class SplatLoader {
             }
 
             if (onProgress) onProgress(percent, percentStr, LoaderStatus.Downloading);
-            return directLoad;
         };
 
         if (onProgress) onProgress(0, '0%', LoaderStatus.Downloading);
@@ -141,7 +153,12 @@ export class SplatLoader {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             return loadPromise.promise.then((splatData) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
-                if (directLoad) {
+                if (internalLoadType === InternalLoadType.DownloadBeforeProcessing) {
+                    return new Blob(chunks).arrayBuffer().then((splatData) => {
+                        return SplatLoader.loadFromFileData(splatData, minimumAlpha, compressionLevel, optimizeSplatData,
+                                                            sectionSize, sceneCenter, blockSize, bucketSize);
+                    });
+                } else if (internalLoadType === InternalLoadType.DirectToSplatBuffer) {
                     return splatData;
                 } else {
                     return delayedExecute(() => {

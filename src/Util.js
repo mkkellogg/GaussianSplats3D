@@ -107,8 +107,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
                         chunks.push(chunk);
                     }
                     if (onProgress) {
-                        const cancelSaveChunks = onProgress(percent, percentLabel, chunk, fileSize);
-                        if (cancelSaveChunks) saveChunks = false;
+                        onProgress(percent, percentLabel, chunk, fileSize);
                     }
                 } catch (error) {
                     reject(error);

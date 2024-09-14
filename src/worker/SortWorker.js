@@ -135,7 +135,8 @@ function sortWorker(self) {
                                                           (splatCount * Constants.BytesPerInt) : (splatCount * Constants.BytesPerFloat);
             const memoryRequiredForMappedDistances = splatCount * Constants.BytesPerInt;
             const memoryRequiredForSortedIndexes = splatCount * Constants.BytesPerInt;
-            const memoryRequiredForIntermediateSortBuffers = distanceMapRange * Constants.BytesPerInt * 2;
+            const memoryRequiredForIntermediateSortBuffers = integerBasedSort ? (distanceMapRange * Constants.BytesPerInt * 2) :
+                                                                                (distanceMapRange * Constants.BytesPerFloat * 2);
             const memoryRequiredforTransformIndexes = dynamicMode ? (splatCount * Constants.BytesPerInt) : 0;
             const memoryRequiredforTransforms = dynamicMode ? (Constants.MaxScenes * matrixSize) : 0;
             const extraMemory = Constants.MemoryPageSize * 32;
