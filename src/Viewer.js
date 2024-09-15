@@ -224,10 +224,13 @@ export class Viewer {
         this.sortWorker = null;
         this.sortRunning = false;
         this.splatRenderCount = 0;
+        this.splatSortCount = 0;
+        this.lastSplatSortCount = 0;
         this.sortWorkerIndexesToSort = null;
         this.sortWorkerSortedIndexes = null;
         this.sortWorkerPrecomputedDistances = null;
         this.sortWorkerTransforms = null;
+        this.preSortPosts = [];
         this.runAfterNextSort = [];
 
         this.selfDrivenModeRunning = false;
@@ -808,7 +811,7 @@ export class Viewer {
             };
             return this.addSplatBuffers([splatBuffer], [addSplatBufferOptions],
                                          finalBuild, firstBuild && showLoadingUI, showLoadingUI,
-                                         progressiveLoad, progressiveLoad).then(() => {
+                                         progressiveLoad).then(() => {
                 if (!progressiveLoad && options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
                 splatBuffersAddedUIUpdate(firstBuild, finalBuild);
             });
@@ -1005,7 +1008,7 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingUI) this.loadingSpinner.removeTask(loadingUITaskId);
                 if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-                this.addSplatBuffers(splatBuffers, sceneOptions, true, showLoadingUI, showLoadingUI, false, false).then(() => {
+                this.addSplatBuffers(splatBuffers, sceneOptions, true, showLoadingUI, showLoadingUI, false).then(() => {
                     if (onProgress) onProgress(100, '100%', LoaderStatus.Processing);
                     this.clearSplatSceneDownloadAndBuildPromise();
                     resolve();
@@ -1081,12 +1084,10 @@ export class Viewer {
     addSplatBuffers = function() {
 
         return function(splatBuffers, splatBufferOptions = [], finalBuild = true, showLoadingUI = true,
-                        showLoadingUIForSplatTreeBuild = true, replaceExisting = false,
-                        enableRenderBeforeFirstSort = false, preserveVisibleRegion = true) {
+                        showLoadingUIForSplatTreeBuild = true, replaceExisting = false, preserveVisibleRegion = true) {
 
             if (this.isDisposingOrDisposed()) return Promise.resolve();
 
-            this.splatRenderReady = false;
             let splatProcessingTaskId = null;
 
             const removeSplatProcessingTask = () => {
@@ -1094,45 +1095,6 @@ export class Viewer {
                     this.loadingSpinner.removeTask(splatProcessingTaskId);
                     splatProcessingTaskId = null;
                 }
-            };
-
-            const finish = (buildResults, resolver) => {
-                if (this.isDisposingOrDisposed()) return;
-
-                // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs splat centers and
-                // transform indexes so that it can calculate those distance values.
-                if (!this.gpuAcceleratedSort && this.sortWorker) {
-                    this.sortWorker.postMessage({
-                        'centers': buildResults.centers.buffer,
-                        'sceneIndexes': buildResults.sceneIndexes.buffer,
-                        'range': {
-                            'from': buildResults.from,
-                            'to': buildResults.to,
-                            'count': buildResults.count
-                        }
-                    });
-                }
-
-                this.runSplatSort(true).then((sortRunning) => {
-                    if (!this.sortWorker || !sortRunning) {
-                        this.splatRenderReady = true;
-                        removeSplatProcessingTask();
-                        resolver();
-                    } else {
-                        if (enableRenderBeforeFirstSort) {
-                            this.splatRenderReady = true;
-                        } else {
-                            this.runAfterNextSort.push(() => {
-                                this.splatRenderReady = true;
-                            });
-                        }
-                        this.runAfterNextSort.push(() => {
-                            removeSplatProcessingTask();
-                            resolver();
-                        });
-                    }
-                });
-
             };
 
             return new Promise((resolve) => {
@@ -1146,12 +1108,38 @@ export class Viewer {
                         const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild,
                                                                         showLoadingUIForSplatTreeBuild, replaceExisting,
                                                                         preserveVisibleRegion);
+                        // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs
+                        // splat centers and transform indexes so that it can calculate those distance values.
+                        if (!this.gpuAcceleratedSort) {
+                            this.preSortPosts.push({
+                                'centers': buildResults.centers.buffer,
+                                'sceneIndexes': buildResults.sceneIndexes.buffer,
+                                'range': {
+                                    'from': buildResults.from,
+                                    'to': buildResults.to,
+                                    'count': buildResults.count
+                                }
+                            });
+                        }
+
                         const maxSplatCount = this.splatMesh.getMaxSplatCount();
                         if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) this.disposeSortWorker();
                         const sortWorkerSetupPromise = (!this.sortWorker && maxSplatCount > 0) ?
                                                          this.setupSortWorker(this.splatMesh) : Promise.resolve();
                         sortWorkerSetupPromise.then(() => {
-                            finish(buildResults, resolve);
+                            if (this.isDisposingOrDisposed()) return;
+                            if (this.sortWorker) {
+                                if (!this.sortRunning) {
+                                    this.runSplatSort(true, true);
+                                } else if (finalBuild) {
+                                    this.sortPromise.then(() => {
+                                        this.runSplatSort(true, true);
+                                    });
+                                }
+                            }
+                            this.splatRenderReady = true;
+                            removeSplatProcessingTask();
+                            resolve();
                         });
                     }
                 }, true);
@@ -1243,6 +1231,9 @@ export class Viewer {
                         const sortedIndexes = new Uint32Array(e.data.sortedIndexes.buffer, 0, e.data.splatRenderCount);
                         this.splatMesh.updateRenderIndexes(sortedIndexes, e.data.splatRenderCount);
                     }
+
+                    this.lastSplatSortCount = this.splatSortCount;
+
                     this.lastSortTime = e.data.sortTime;
                     this.sortPromiseResolver();
                     this.sortPromiseResolver = null;
@@ -1837,7 +1828,7 @@ export class Viewer {
             }
         ];
 
-        return function(force = false) {
+        return function(force = false, forceSortAll = false) {
             if (!this.initialized) return Promise.resolve(false);
             if (this.sortRunning) return Promise.resolve(true);
             if (this.splatMesh.getSplatCount() <= 0) {
@@ -1863,7 +1854,8 @@ export class Viewer {
             }
 
             this.sortRunning = true;
-            const { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
+            let { splatRenderCount, shouldSortAll } = this.gatherSceneNodesForSort();
+            shouldSortAll = shouldSortAll || forceSortAll;
             this.splatRenderCount = splatRenderCount;
 
             mvpMatrix.copy(this.camera.matrixWorld).invert();
@@ -1871,17 +1863,17 @@ export class Viewer {
             mvpMatrix.premultiply(mvpCamera.projectionMatrix);
             mvpMatrix.multiply(this.splatMesh.matrixWorld);
 
-            let gpuAcceleratedSortPromise = Promise.resolve();
+            let gpuAcceleratedSortPromise = Promise.resolve(true);
             if (this.gpuAcceleratedSort && (queuedSorts.length <= 1 || queuedSorts.length % 2 === 0)) {
                 gpuAcceleratedSortPromise = this.splatMesh.computeDistancesOnGPU(mvpMatrix, this.sortWorkerPrecomputedDistances);
             }
 
             gpuAcceleratedSortPromise.then(() => {
-                if (this.splatMesh.dynamicMode || shouldSortAll) {
-                    queuedSorts.push(this.splatRenderCount);
-                } else {
-                    if (queuedSorts.length === 0) {
-                        for (let partialSort of partialSorts) {
+                if (queuedSorts.length === 0) {
+                    if (this.splatMesh.dynamicMode || shouldSortAll) {
+                        queuedSorts.push(this.splatRenderCount);
+                    } else {
+                            for (let partialSort of partialSorts) {
                             if (angleDiff < partialSort.angleThreshold) {
                                 for (let sortFraction of partialSort.sortFractions) {
                                     queuedSorts.push(Math.floor(this.splatRenderCount * sortFraction));
@@ -1893,6 +1885,7 @@ export class Viewer {
                     }
                 }
                 let sortCount = Math.min(queuedSorts.shift(), this.splatRenderCount);
+                this.splatSortCount = sortCount;
 
                 cameraPositionArray[0] = this.camera.position.x;
                 cameraPositionArray[1] = this.camera.position.y;
@@ -1920,6 +1913,12 @@ export class Viewer {
                     this.sortPromiseResolver = resolve;
                 });
 
+                if (this.preSortPosts.length > 0) {
+                    this.preSortPosts.forEach((message) => {
+                        this.sortWorker.postMessage(message);
+                    });
+                    this.preSortPosts = [];
+                }
                 this.sortWorker.postMessage({
                     'sort': sortMessage
                 });
@@ -1928,6 +1927,8 @@ export class Viewer {
                     lastSortViewPos.copy(this.camera.position);
                     lastSortViewDir.copy(sortViewDir);
                 }
+
+                return true;
             });
 
             return gpuAcceleratedSortPromise;

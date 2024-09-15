@@ -375,14 +375,14 @@ export class SplatMesh extends THREE.Mesh {
             this.globalSplatIndexToSceneIndexMap = indexMaps.sceneIndexMap;
         }
 
-        const splatCount = this.getSplatCount();
+        const splatBufferSplatCount = this.getSplatCount(true);
         if (this.enableDistancesComputationOnGPU) this.setupDistancesComputationTransformFeedback();
         const dataUpdateResults = this.refreshGPUDataFromSplatBuffers(isUpdateBuild);
 
         for (let i = 0; i < this.scenes.length; i++) {
             this.lastBuildScenes[i] = this.scenes[i];
         }
-        this.lastBuildSplatCount = splatCount;
+        this.lastBuildSplatCount = splatBufferSplatCount;
         this.lastBuildMaxSplatCount = this.getMaxSplatCount();
         this.lastBuildSceneCount = this.scenes.length;
 
@@ -582,7 +582,7 @@ export class SplatMesh extends THREE.Mesh {
      * @return {object}
      */
     refreshGPUDataFromSplatBuffers(sinceLastBuildOnly) {
-        const splatCount = this.getSplatCount();
+        const splatCount = this.getSplatCount(true);
         this.refreshDataTexturesFromSplatBuffers(sinceLastBuildOnly);
         const updateStart = sinceLastBuildOnly ? this.lastBuildSplatCount : 0;
         const { centers, sceneIndexes } = this.getDataForDistancesComputation(updateStart, splatCount - 1);
@@ -615,7 +615,7 @@ export class SplatMesh extends THREE.Mesh {
      * @param {boolean} sinceLastBuildOnly Specify whether or not to only update for splats that have been added since the last build.
      */
     refreshDataTexturesFromSplatBuffers(sinceLastBuildOnly) {
-        const splatCount = this.getSplatCount();
+        const splatCount = this.getSplatCount(true);
         const fromSplat = this.lastBuildSplatCount;
         const toSplat = splatCount - 1;
 
@@ -632,7 +632,7 @@ export class SplatMesh extends THREE.Mesh {
 
     setupDataTextures() {
         const maxSplatCount = this.getMaxSplatCount();
-        const splatCount = this.getSplatCount();
+        const splatCount = this.getSplatCount(true);
 
         this.disposeTextures();
 
@@ -1166,7 +1166,7 @@ export class SplatMesh extends THREE.Mesh {
     }
 
     updateVisibleRegion(sinceLastBuildOnly) {
-        const splatCount = this.getSplatCount();
+        const splatCount = this.getSplatCount(true);
         const tempCenter = new THREE.Vector3();
         if (!sinceLastBuildOnly) {
             const avgCenter = new THREE.Vector3();
@@ -1227,6 +1227,7 @@ export class SplatMesh extends THREE.Mesh {
         geometry.attributes.splatIndex.needsUpdate = true;
         if (renderSplatCount > 0 && this.firstRenderTime === -1) this.firstRenderTime = performance.now();
         geometry.instanceCount = renderSplatCount;
+        geometry.setDrawRange(0, renderSplatCount);
     }
 
     /**
@@ -1298,8 +1299,9 @@ export class SplatMesh extends THREE.Mesh {
         return this.splatDataTextures;
     }
 
-    getSplatCount() {
-        return SplatMesh.getTotalSplatCountForScenes(this.scenes);
+    getSplatCount(includeSinceLastBuild = false) {
+        if (!includeSinceLastBuild) return this.lastBuildSplatCount;
+        else return SplatMesh.getTotalSplatCountForScenes(this.scenes);
     }
 
     static getTotalSplatCountForScenes(scenes) {

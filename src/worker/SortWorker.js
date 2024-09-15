@@ -25,7 +25,7 @@ function sortWorker(self) {
     let countsZero;
     let sortedIndexesOut;
     let distanceMapRange;
-
+    let uploadedSplatCount;
     let Constants;
 
     function sort(splatSortCount, splatRenderCount, modelViewProj,
@@ -95,12 +95,10 @@ function sortWorker(self) {
                 new Uint32Array(wasmMemory, sceneIndexesOffset + e.data.range.from * 4,
                                 e.data.range.count).set(new Uint32Array(sceneIndexes));
             }
-            self.postMessage({
-                'centerDataSet': true,
-            });
+            uploadedSplatCount = e.data.range.from + e.data.range.count;
         } else if (e.data.sort) {
-            const renderCount = e.data.sort.splatRenderCount || 0;
-            const sortCount = e.data.sort.splatSortCount || 0;
+            const renderCount = Math.min(e.data.sort.splatRenderCount || 0, uploadedSplatCount);
+            const sortCount = Math.min(e.data.sort.splatSortCount || 0, uploadedSplatCount);
             const usePrecomputedDistances = e.data.sort.usePrecomputedDistances;
 
             let copyIndexesToSort;
@@ -122,6 +120,7 @@ function sortWorker(self) {
             integerBasedSort = e.data.init.integerBasedSort;
             dynamicMode = e.data.init.dynamicMode;
             distanceMapRange = e.data.init.distanceMapRange;
+            uploadedSplatCount = 0;
 
             const CENTERS_BYTES_PER_ENTRY = integerBasedSort ? (Constants.BytesPerInt * 4) : (Constants.BytesPerFloat * 4);
 
