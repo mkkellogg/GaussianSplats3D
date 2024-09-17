@@ -32,7 +32,7 @@ export class SplatPartitioner {
             const sectionFilter = sectionFilters[s];
             for (let i = 0; i < splatArray.splatCount; i++) {
                 if (sectionFilter(i)) {
-                    sectionSplats.addSplatFromArray(splatArray, i);
+                    sectionSplats.addSplat(splatArray.splats[i]);
                 }
             }
             newArrays.push(sectionSplats);

@@ -22,13 +22,22 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
     - WASM splat sort: Implemented in C++ using WASM SIMD instructions
     - Partially GPU accelerated splat sort: Uses transform feedback to pre-calculate splat distances
 
+## Tips
+
+- Progressively loaded `.ply` and `.splat` files will not have certain optimizations such as cache-optimized splat ordering applied to them. For optimial performance, convert these file types to `.ksplat` or load them non-progressively.
+- Converting your scenes to `.ksplat` will result in the fastest loading times since its format matches the internal format for splat data.
+- Scenes with large dimensions or high splat density will cause issues with the default settings. For those scenes, you can try a couple of things:
+  - Set the viewer parameter `integerBasedSort` to `false` to force a slower, floating-point based splat sort.
+  - Experiment with a larger value for viewer parameter `splatSortDistanceMapPrecision`, to adjust the precision for the distance map in the splat sort. Larger precision values will result in reduced performance, but often can alleviate visual artifacts that arise when the precision is too low.
+
+
 ## Known issues
 
 - Splat sort runs on the CPU – would be great to figure out a GPU-based approach
 - Artifacts are visible when you move or rotate too fast (due to CPU-based splat sort)
 - Sub-optimal performance on mobile devices
 - Custom `.ksplat` file format still needs work, especially around compression
-- The default, integer based splat sort does not work well for larger scenes. In that case a value of `false` for the `integerBasedSort` viewer parameter can force a slower, floating-point based sort
+- Scenes with very large dimensions will probably crash (often with an `Index out of bounds` error from the splat sort). Changing `splatSortDistanceMapPrecision` or `integerBasedSort` will probably not help in those cases.
 
 ## Limitations
 
@@ -288,7 +297,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'logLevel': GaussianSplats3D.LogLevel.None,
     'sphericalHarmonicsDegree': 0,
     `enableOptionalEffects`: false,
-    `plyInMemoryCompressionLevel`: 2
+    `inMemoryCompressionLevel`: 2
     `freeIntermediateSplatData`: false
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
@@ -317,9 +326,11 @@ Advanced `Viewer` parameters
 | `enableSIMDInSort` | Enable the usage of SIMD WebAssembly instructions for the splat sort. Default is `true`.
 | `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
 | `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
+| `splatSortDistanceMapPrecision` | Specify the precision for the distance map used in the splat sort algorithm. Defaults to 16 (16-bit). A lower precision is faster, but may result in visual artifacts in larger or denser scenes.
 | `halfPrecisionCovariancesOnGPU` | Tells the viewer to use 16-bit floating point values when storing splat covariance data in textures, instead of 32-bit. Defaults to `false`.
 | `dynamicScene` | Tells the viewer to not make any optimizations that depend on the scene being static. Additionally all splat data retrieved from the viewer's splat mesh will not have their respective scene transform applied to them by default.
 | `webXRMode` | Tells the viewer whether or not to enable built-in Web VR or Web AR. Valid values are defined in the `WebXRMode` enum: `None`, `VR`, and `AR`. Defaults to `None`.
+| `webXRSessionInit` | Tells the viewer to build a WebXR session with some options. Defaults with {}. For more details : https://developer.mozilla.org/en-US/docs/Web/API/XRSystem/requestSession#options
 | `renderMode` | Controls when the viewer renders the scene. Valid values are defined in the `RenderMode` enum: `Always`, `OnChange`, and `Never`. Defaults to `Always`.
 | `sceneRevealMode` | Controls the fade-in effect used when the scene is loaded. Valid values are defined in the `SceneRevealMode` enum: `Default`, `Gradual`, and `Instant`. `Default` results in a nice, slow fade-in effect for progressively loaded scenes, and a fast fade-in for non progressively loaded scenes. `Gradual` will force a slow fade-in for all scenes. `Instant` will force all loaded scene data to be immediately visible.
 | `antialiased` |  When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at substantially different resolutions than that at which they were rendered during training. This will only work correctly for models that were trained using a process that utilizes this compensation calculation. For more details: https://github.com/nerfstudio-project/gsplat/pull/117, https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
@@ -327,9 +338,11 @@ Advanced `Viewer` parameters
 | `logLevel` | Verbosity of the console logging. Defaults to `GaussianSplats3D.LogLevel.None`.
 | `sphericalHarmonicsDegree` | Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene). Valid values are 0, 1, or 2. Default value is 0.
 | `enableOptionalEffects` | When true, allows for usage of extra properties and attributes during rendering for effects such as opacity adjustment. Default is `false` for performance reasons. These properties are separate from transform properties (scale, rotation, position) that are enabled by the `dynamicScene` parameter.
-| `plyInMemoryCompressionLevel` | Level to compress `.ply` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 2.
+| `inMemoryCompressionLevel` | Level to compress `.ply` or `.ksplat` files when loading them for direct rendering (not exporting to `.ksplat`). Valid values are the same as `.ksplat` compression levels (0, 1, or 2). Default is 0.
+| `optimizeSplatData` | Reorder splat data in memory after loading is complete to optimize cache utilization. Default is `true`. Does not apply if splat scene is progressively loaded.
 | `freeIntermediateSplatData` | When true, the intermediate splat data that is the result of decompressing splat bufffer(s) and used to populate data textures will be freed. This will reduces memory usage, but if that data needs to be modified it will need to be re-populated from the splat buffer(s). Defaults to `false`.
 | `splatRenderMode` | Determine which splat rendering mode to enable. Valid values are defined in the `SplatRenderMode` enum: `ThreeD` and `TwoD`. `ThreeD` is the original/traditional mode and `TwoD` is the new mode described here: https://surfsplatting.github.io/
+| `sceneFadeInRateMultiplier` | Customize the speed at which the scene is revealed. Default is 1.0.
 <br>
 
 ### Creating KSPLAT files
@@ -342,8 +355,12 @@ const compressionLevel = 1;
 const splatAlphaRemovalThreshold = 5; // out of 255
 const sphericalHarmonicsDegree = 1;
 GaussianSplats3D.PlyLoader.loadFromURL('<path to .ply or .splat file>',
+                                        onProgress,
+                                        progressiveLoad,
+                                        onProgressiveLoadSectionProgress,
+                                        minimumAlpha,
                                         compressionLevel,
-                                        splatAlphaRemovalThreshold,
+                                        optimizeSplatData,
                                         sphericalHarmonicsDegree)
 .then((splatBuffer) => {
     GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+const _axis = new THREE.Vector3();
+
 export class ArrowHelper extends THREE.Object3D {
 
     constructor(dir = new THREE.Vector3(0, 0, 1), origin = new THREE.Vector3(0, 0, 0), length = 1,

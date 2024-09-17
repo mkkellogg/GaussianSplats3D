@@ -60,13 +60,20 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
     const signal = abortController.signal;
     let aborted = false;
     const abortHandler = (reason) => {
-        abortController.abort(new AbortedPromiseError(reason));
+        abortController.abort(reason);
         aborted = true;
     };
 
     return new AbortablePromise((resolve, reject) => {
         fetch(path, { signal })
         .then(async (data) => {
+            // Handle error conditions where data is still returned
+            if (!data.ok) {
+                const errorText = await data.text();
+                reject(new Error(`Fetch failed: ${data.status} ${data.statusText} ${errorText}`));
+                return;
+            }
+
             const reader = data.body.getReader();
             let bytesDownloaded = 0;
             let _fileSize = data.headers.get('Content-Length');
@@ -96,19 +103,20 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
                         percent = bytesDownloaded / fileSize * 100;
                         percentLabel = `${percent.toFixed(2)}%`;
                     }
-                    if (saveChunks) chunks.push(chunk);
+                    if (saveChunks) {
+                        chunks.push(chunk);
+                    }
                     if (onProgress) {
-                        const cancelSaveChucnks = onProgress(percent, percentLabel, chunk, fileSize);
-                        if (cancelSaveChucnks) saveChunks = false;
+                        onProgress(percent, percentLabel, chunk, fileSize);
                     }
                 } catch (error) {
                     reject(error);
-                    break;
+                    return;
                 }
             }
         })
         .catch((error) => {
-            reject(error);
+            reject(new AbortedPromiseError(error));
         });
     }, abortHandler);
 
