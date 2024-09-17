@@ -22,14 +22,22 @@ When I started, web-based viewers were already available -- A WebGL-based viewer
     - WASM splat sort: Implemented in C++ using WASM SIMD instructions
     - Partially GPU accelerated splat sort: Uses transform feedback to pre-calculate splat distances
 
+## Tips
+
+- Progressively loaded `.ply` and `.splat` files will not have certain optimizations such as cache-optimized splat ordering applied to them. For optimial performance, convert these file types to `.ksplat` or load them non-progressively.
+- Converting your scenes to `.ksplat` will result in the fastest loading times since its format matches the internal format for splat data.
+- Scenes with large dimensions or high splat density will cause issues with the default settings. For those scenes, you can try a couple of things:
+  - Set the viewer parameter `integerBasedSort` to `false` to force a slower, floating-point based splat sort.
+  - Experiment with a larger value for viewer parameter `splatSortDistanceMapPrecision`, to adjust the precision for the distance map in the splat sort. Larger precision values will result in reduced performance, but often can alleviate visual artifacts that arise when the precision is too low.
+
+
 ## Known issues
 
 - Splat sort runs on the CPU – would be great to figure out a GPU-based approach
 - Artifacts are visible when you move or rotate too fast (due to CPU-based splat sort)
 - Sub-optimal performance on mobile devices
 - Custom `.ksplat` file format still needs work, especially around compression
-- The default, integer based splat sort does not work well for larger scenes. In that case a value of `false` for the `integerBasedSort` viewer parameter can force a slower, floating-point based sort
-- The default precision (16-bit) for the distance map in the splat sort may not work well for larger scenes, or scenes with a dense splat arrangement. For those scenes the viewer parameter `splatSortDistanceMapPrecision` can be used to adjust that value. Larger precision values will result in reduced performance, but often can alleviate visual artifacts that arise when the precision is too low.
+- Scenes with very large dimensions will probably crash (often with an `Index out of bounds` error from the splat sort). Changing `splatSortDistanceMapPrecision` or `integerBasedSort` will probably not help in those cases.
 
 ## Limitations
 
