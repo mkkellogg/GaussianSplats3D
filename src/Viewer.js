@@ -230,7 +230,7 @@ export class Viewer {
         this.sortWorkerSortedIndexes = null;
         this.sortWorkerPrecomputedDistances = null;
         this.sortWorkerTransforms = null;
-        this.preSortPosts = [];
+        this.preSortMessages = [];
         this.runAfterNextSort = [];
 
         this.selfDrivenModeRunning = false;
@@ -811,7 +811,7 @@ export class Viewer {
             };
             return this.addSplatBuffers([splatBuffer], [addSplatBufferOptions],
                                          finalBuild, firstBuild && showLoadingUI, showLoadingUI,
-                                         progressiveLoad).then(() => {
+                                         progressiveLoad, progressiveLoad).then(() => {
                 if (!progressiveLoad && options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
                 splatBuffersAddedUIUpdate(firstBuild, finalBuild);
             });
@@ -1008,7 +1008,7 @@ export class Viewer {
             .then((splatBuffers) => {
                 if (showLoadingUI) this.loadingSpinner.removeTask(loadingUITaskId);
                 if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
-                this.addSplatBuffers(splatBuffers, sceneOptions, true, showLoadingUI, showLoadingUI, false).then(() => {
+                this.addSplatBuffers(splatBuffers, sceneOptions, true, showLoadingUI, showLoadingUI, false, false).then(() => {
                     if (onProgress) onProgress(100, '100%', LoaderStatus.Processing);
                     this.clearSplatSceneDownloadAndBuildPromise();
                     resolve();
@@ -1084,12 +1084,12 @@ export class Viewer {
     addSplatBuffers = function() {
 
         return function(splatBuffers, splatBufferOptions = [], finalBuild = true, showLoadingUI = true,
-                        showLoadingUIForSplatTreeBuild = true, replaceExisting = false, preserveVisibleRegion = true) {
+                        showLoadingUIForSplatTreeBuild = true, replaceExisting = false,
+                        enableRenderBeforeFirstSort = false, preserveVisibleRegion = true) {
 
             if (this.isDisposingOrDisposed()) return Promise.resolve();
 
             let splatProcessingTaskId = null;
-
             const removeSplatProcessingTask = () => {
                 if (splatProcessingTaskId !== null) {
                     this.loadingSpinner.removeTask(splatProcessingTaskId);
@@ -1097,6 +1097,7 @@ export class Viewer {
                 }
             };
 
+            this.splatRenderReady = false;
             return new Promise((resolve) => {
                 if (showLoadingUI) {
                     splatProcessingTaskId = this.loadingSpinner.addTask('Processing splats...');
@@ -1108,10 +1109,13 @@ export class Viewer {
                         const buildResults = this.addSplatBuffersToMesh(splatBuffers, splatBufferOptions, finalBuild,
                                                                         showLoadingUIForSplatTreeBuild, replaceExisting,
                                                                         preserveVisibleRegion);
+
+                        const maxSplatCount = this.splatMesh.getMaxSplatCount();
+                        if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) this.disposeSortWorker();
                         // If we aren't calculating the splat distances from the center on the GPU, the sorting worker needs
                         // splat centers and transform indexes so that it can calculate those distance values.
                         if (!this.gpuAcceleratedSort) {
-                            this.preSortPosts.push({
+                            this.preSortMessages.push({
                                 'centers': buildResults.centers.buffer,
                                 'sceneIndexes': buildResults.sceneIndexes.buffer,
                                 'range': {
@@ -1121,25 +1125,29 @@ export class Viewer {
                                 }
                             });
                         }
-
-                        const maxSplatCount = this.splatMesh.getMaxSplatCount();
-                        if (this.sortWorker && this.sortWorker.maxSplatCount !== maxSplatCount) this.disposeSortWorker();
                         const sortWorkerSetupPromise = (!this.sortWorker && maxSplatCount > 0) ?
                                                          this.setupSortWorker(this.splatMesh) : Promise.resolve();
                         sortWorkerSetupPromise.then(() => {
                             if (this.isDisposingOrDisposed()) return;
-                            if (this.sortWorker) {
-                                if (!this.sortRunning) {
-                                    this.runSplatSort(true, true);
-                                } else if (finalBuild) {
-                                    this.sortPromise.then(() => {
-                                        this.runSplatSort(true, true);
+                            this.runSplatSort(true, true).then((sortRunning) => {
+                                if (!this.sortWorker || !sortRunning) {
+                                    this.splatRenderReady = true;
+                                    removeSplatProcessingTask();
+                                    resolve();
+                                } else {
+                                    if (enableRenderBeforeFirstSort) {
+                                        this.splatRenderReady = true;
+                                    } else {
+                                        this.runAfterNextSort.push(() => {
+                                            this.splatRenderReady = true;
+                                        });
+                                    }
+                                    this.runAfterNextSort.push(() => {
+                                        removeSplatProcessingTask();
+                                        resolve();
                                     });
                                 }
-                            }
-                            this.splatRenderReady = true;
-                            removeSplatProcessingTask();
-                            resolve();
+                            });
                         });
                     }
                 }, true);
@@ -1289,6 +1297,7 @@ export class Viewer {
             this.sortPromiseResolver();
             this.sortPromiseResolver = null;
         }
+        this.preSortMessages = [];
         this.sortRunning = false;
     }
 
@@ -1913,11 +1922,11 @@ export class Viewer {
                     this.sortPromiseResolver = resolve;
                 });
 
-                if (this.preSortPosts.length > 0) {
-                    this.preSortPosts.forEach((message) => {
+                if (this.preSortMessages.length > 0) {
+                    this.preSortMessages.forEach((message) => {
                         this.sortWorker.postMessage(message);
                     });
-                    this.preSortPosts = [];
+                    this.preSortMessages = [];
                 }
                 this.sortWorker.postMessage({
                     'sort': sortMessage

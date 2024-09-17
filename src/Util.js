@@ -60,7 +60,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
     const signal = abortController.signal;
     let aborted = false;
     const abortHandler = (reason) => {
-        abortController.abort(new AbortedPromiseError(reason));
+        abortController.abort(reason);
         aborted = true;
     };
 
@@ -116,7 +116,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
             }
         })
         .catch((error) => {
-            reject(error);
+            reject(new AbortedPromiseError(error));
         });
     }, abortHandler);
 
