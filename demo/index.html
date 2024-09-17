@@ -294,10 +294,10 @@
 
     function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize, outSphericalHarmonicsDegree = 0) {
       if (format === GaussianSplats3D.SceneFormat.Ply) {
-        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, outSphericalHarmonicsDegree, sectionSize, sceneCenter, blockSize, bucketSize);
+        return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, true, outSphericalHarmonicsDegree, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
-          return GaussianSplats3D.SplatLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize);
+          return GaussianSplats3D.SplatLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, true, sectionSize, sceneCenter, blockSize, bucketSize);
         } else {
           return GaussianSplats3D.KSplatLoader.loadFromFileData(fileBufferData.data);
         }

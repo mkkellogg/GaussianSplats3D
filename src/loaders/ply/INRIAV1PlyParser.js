@@ -82,6 +82,16 @@ export class INRIAV1PlyParser {
         }
     }
 
+    parseToUncompressedSplatArraySection(header, fromSplat, toSplat, splatData, splatDataOffset,
+                                         splatArray, outSphericalHarmonicsDegree = 0) {
+        outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
+        for (let i = fromSplat; i <= toSplat; i++) {
+            const parsedSplat = INRIAV1PlyParser.parseToUncompressedSplat(splatData, i, header,
+                                                                          splatDataOffset, outSphericalHarmonicsDegree);
+            splatArray.addSplat(parsedSplat);
+        }
+    }
+
     decodeSectionSplatData(sectionSplatData, splatCount, sectionHeader, outSphericalHarmonicsDegree) {
         outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, sectionHeader.sphericalHarmonicsDegree);
         const splatArray = new UncompressedSplatArray(outSphericalHarmonicsDegree);

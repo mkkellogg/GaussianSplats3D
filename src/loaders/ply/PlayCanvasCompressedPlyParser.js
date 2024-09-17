@@ -378,6 +378,22 @@ export class PlayCanvasCompressedPlyParser {
     }
   }
 
+  static parseToUncompressedSplatArraySection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
+                                              vertexDataBuffer, veretxReadOffset, splatArray, propertyFilter = null) {
+
+    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, veretxReadOffset, fromIndex, toIndex, propertyFilter);
+
+    const { positionExtremes, scaleExtremes, position, rotation, scale, color } =
+      PlayCanvasCompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
+
+    for (let i = fromIndex; i <= toIndex; ++i) {
+      const tempSplat = UncompressedSplatArray.createSplat();
+      PlayCanvasCompressedPlyParser.decompressSplat(i, chunkSplatIndexOffset, position, positionExtremes,
+                                                    scale, scaleExtremes, rotation, color, tempSplat);
+      splatArray.addSplat(tempSplat);
+    }
+  }
+
   static parseToUncompressedSplatArray(plyBuffer) {
     const { chunkElement, vertexElement } = PlayCanvasCompressedPlyParser.readPly(plyBuffer);
 
