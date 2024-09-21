@@ -117,6 +117,9 @@ export class Viewer {
         // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
         this.antialiased = options.antialiased || false;
 
+        // This constant is added to the projected 2D screen-space splat scales
+        this.kernel2DSize = (options.kernel2DSize === undefined) ? 0.3 : options.kernel2DSize;
+
         this.webXRMode = options.webXRMode || WebXRMode.None;
         if (this.webXRMode !== WebXRMode.None) {
             this.gpuAcceleratedSort = false;
@@ -286,7 +289,7 @@ export class Viewer {
         this.splatMesh = new SplatMesh(this.splatRenderMode, this.dynamicScene, this.enableOptionalEffects,
                                        this.halfPrecisionCovariancesOnGPU, this.devicePixelRatio, this.gpuAcceleratedSort,
                                        this.integerBasedSort, this.antialiased, this.maxScreenSpaceSplatSize, this.logLevel,
-                                       this.sphericalHarmonicsDegree, this.sceneFadeInRateMultiplier);
+                                       this.sphericalHarmonicsDegree, this.sceneFadeInRateMultiplier, this.kernel2DSize);
         this.splatMesh.frustumCulled = false;
         if (this.onSplatMeshChangedCallback) this.onSplatMeshChangedCallback();
     }
