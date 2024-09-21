@@ -18,7 +18,8 @@ export class SplatMaterial3D {
      * @return {THREE.ShaderMaterial}
      */
     static build(dynamicMode = false, enableOptionalEffects = false, antialiased = false,
-                 maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
+                 maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0,
+                 kernel2DSize = 0.3) {
 
         const customVertexVars = `
             uniform vec2 covariancesTextureSize;
@@ -38,7 +39,7 @@ export class SplatMaterial3D {
 
         let vertexShaderSource = SplatMaterial.buildVertexShaderBase(dynamicMode, enableOptionalEffects,
                                                                      maxSphericalHarmonicsDegree, customVertexVars);
-        vertexShaderSource += SplatMaterial3D.buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize);
+        vertexShaderSource += SplatMaterial3D.buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize, kernel2DSize);
         const fragmentShaderSource = SplatMaterial3D.buildFragmentShader();
 
         const uniforms = SplatMaterial.getUniforms(dynamicMode, enableOptionalEffects,
@@ -76,7 +77,7 @@ export class SplatMaterial3D {
         return material;
     }
 
-    static buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize) {
+    static buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize, kernel2DSize) {
         let vertexShaderSource = `
 
             vec4 sampledCovarianceA;
@@ -136,16 +137,16 @@ export class SplatMaterial3D {
         if (antialiased) {
             vertexShaderSource += `
                 float detOrig = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
-                cov2Dm[0][0] += 0.3;
-                cov2Dm[1][1] += 0.3;
+                cov2Dm[0][0] += ${kernel2DSize};
+                cov2Dm[1][1] += ${kernel2DSize};
                 float detBlur = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
                 vColor.a *= sqrt(max(detOrig / detBlur, 0.0));
                 if (vColor.a < minAlpha) return;
             `;
         } else {
             vertexShaderSource += `
-                cov2Dm[0][0] += 0.3;
-                cov2Dm[1][1] += 0.3;
+                cov2Dm[0][0] += ${kernel2DSize};
+                cov2Dm[1][1] += ${kernel2DSize};
             `;
         }
 
