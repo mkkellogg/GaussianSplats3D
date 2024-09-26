@@ -724,6 +724,8 @@ export class Viewer {
      *         scale (Array<number>):      Scene's scale, defaults to [1, 1, 1]
      *
      *         onProgress:                 Function to be called as file data are received, or other processing occurs
+     * 
+     *         headers:                    Optional headers to be sent along with splat requests
      *
      * }
      * @return {AbortablePromise}
@@ -819,7 +821,7 @@ export class Viewer {
 
         const loadFunc = progressiveLoad ? this.downloadAndBuildSingleSplatSceneProgressiveLoad.bind(this) :
                                            this.downloadAndBuildSingleSplatSceneStandardLoad.bind(this);
-        return loadFunc(path, format, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
+        return loadFunc(path, format, options.headers, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
     }
 
     /**
@@ -834,9 +836,9 @@ export class Viewer {
      * @param {function} onException Function to be called when exception occurs
      * @return {AbortablePromise}
      */
-    downloadAndBuildSingleSplatSceneStandardLoad(path, format, splatAlphaRemovalThreshold, buildFunc, onProgress, onException) {
+    downloadAndBuildSingleSplatSceneStandardLoad(path, format, headers, splatAlphaRemovalThreshold, buildFunc, onProgress, onException) {
 
-        const downloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold,
+        const downloadPromise = this.downloadSplatSceneToSplatBuffer(path, headers, splatAlphaRemovalThreshold,
                                                                      onProgress, false, undefined, format);
         const downloadAndBuildPromise = abortablePromiseWithExtractedComponents(downloadPromise.abortHandler);
 
@@ -873,7 +875,7 @@ export class Viewer {
      * @param {function} onDownloadException Function to be called when exception occurs at any point during the full download
      * @return {AbortablePromise}
      */
-    downloadAndBuildSingleSplatSceneProgressiveLoad(path, format, splatAlphaRemovalThreshold, buildFunc,
+    downloadAndBuildSingleSplatSceneProgressiveLoad(path, format, headers, splatAlphaRemovalThreshold, buildFunc,
                                                     onDownloadProgress, onDownloadException) {
         let progressiveLoadedSectionBuildCount = 0;
         let progressiveLoadedSectionBuilding = false;
@@ -916,7 +918,7 @@ export class Viewer {
             }
         };
 
-        const splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold, onDownloadProgress, true,
+        const splatSceneDownloadPromise = this.downloadSplatSceneToSplatBuffer(path, headers, splatAlphaRemovalThreshold, onDownloadProgress, true,
                                                                                onProgressiveLoadSectionProgress, format);
 
         const progressiveLoadFirstSectionBuildPromise = abortablePromiseWithExtractedComponents(splatSceneDownloadPromise.abortHandler);
@@ -944,6 +946,8 @@ export class Viewer {
      * @param {Array<object>} sceneOptions Array of per-scene options: {
      *
      *         path: Path to splat scene to be loaded
+     * 
+     *         headers: Optional headers to be sent along with splat requests
      *
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
      *                                     value (valid range: 0 - 255), defaults to 1
@@ -997,7 +1001,7 @@ export class Viewer {
         for (let i = 0; i < sceneOptions.length; i++) {
             const options = sceneOptions[i];
             const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(options.path);
-            const baseDownloadPromise = this.downloadSplatSceneToSplatBuffer(options.path, options.splatAlphaRemovalThreshold,
+            const baseDownloadPromise = this.downloadSplatSceneToSplatBuffer(options.path, options.headers, options.splatAlphaRemovalThreshold,
                                                                              onLoadProgress.bind(this, i), false, undefined, format);
             baseDownloadPromises.push(baseDownloadPromise);
             nativeDownloadPromises.push(baseDownloadPromise.promise);
@@ -1037,6 +1041,7 @@ export class Viewer {
     /**
      * Download a splat scene and convert to SplatBuffer instance.
      * @param {string} path Path to splat scene to be loaded
+     * @param {Headers} headers Headers to be sent along with the load request
      * @param {number} splatAlphaRemovalThreshold Ignore any splats with an alpha less than the specified
      *                                            value (valid range: 0 - 255), defaults to 1
      *
@@ -1046,19 +1051,19 @@ export class Viewer {
      * @param {string} format File format of the scene
      * @return {AbortablePromise}
      */
-    downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
+    downloadSplatSceneToSplatBuffer(path, headers, splatAlphaRemovalThreshold = 1, onProgress = undefined,
                                     progressiveBuild = false, onSectionBuilt = undefined, format) {
 
         const optimizeSplatData = progressiveBuild ? false : this.optimizeSplatData;
         try {
             if (format === SceneFormat.Splat) {
-                return SplatLoader.loadFromURL(path, onProgress, progressiveBuild,
+                return SplatLoader.loadFromURL(path, headers, onProgress, progressiveBuild,
                                                onSectionBuilt, splatAlphaRemovalThreshold,
                                                this.inMemoryCompressionLevel, optimizeSplatData);
             } else if (format === SceneFormat.KSplat) {
-                return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
+                return KSplatLoader.loadFromURL(path, headers, onProgress, progressiveBuild, onSectionBuilt);
             } else if (format === SceneFormat.Ply) {
-                return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
+                return PlyLoader.loadFromURL(path, headers, onProgress, progressiveBuild, onSectionBuilt,
                                              splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
                                              optimizeSplatData, this.sphericalHarmonicsDegree);
             }

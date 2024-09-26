@@ -43,7 +43,7 @@ function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, 
 
 export class PlyLoader {
 
-    static loadFromURL(fileName, onProgress, loadDirectoToSplatBuffer, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
+    static loadFromURL(fileName, headers, onProgress, loadDirectoToSplatBuffer, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
                        optimizeSplatData = true, outSphericalHarmonicsDegree = 0, sectionSize, sceneCenter, blockSize, bucketSize) {
 
         let internalLoadType = loadDirectoToSplatBuffer ? InternalLoadType.DirectToSplatBuffer : InternalLoadType.DirectToSplatArray;
@@ -256,7 +256,7 @@ export class PlyLoader {
         };
 
         if (onProgress) onProgress(0, '0%', LoaderStatus.Downloading);
-        return fetchWithProgress(fileName, localOnProgress, false).then(() => {
+        return fetchWithProgress(fileName, headers, localOnProgress, false).then(() => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             return loadPromise.promise.then((splatData) => {
                 if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
