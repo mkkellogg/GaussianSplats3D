@@ -334,6 +334,7 @@ Advanced `Viewer` parameters
 | `renderMode` | Controls when the viewer renders the scene. Valid values are defined in the `RenderMode` enum: `Always`, `OnChange`, and `Never`. Defaults to `Always`.
 | `sceneRevealMode` | Controls the fade-in effect used when the scene is loaded. Valid values are defined in the `SceneRevealMode` enum: `Default`, `Gradual`, and `Instant`. `Default` results in a nice, slow fade-in effect for progressively loaded scenes, and a fast fade-in for non progressively loaded scenes. `Gradual` will force a slow fade-in for all scenes. `Instant` will force all loaded scene data to be immediately visible.
 | `antialiased` |  When true, will perform additional steps during rendering to address artifacts caused by the rendering of gaussians at substantially different resolutions than that at which they were rendered during training. This will only work correctly for models that were trained using a process that utilizes this compensation calculation. For more details: https://github.com/nerfstudio-project/gsplat/pull/117, https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
+| `kernel2DSize` | A constant added to the size of the 2D screen-space gaussian kernel used in rendering splats. Default value is 0.3.
 | `focalAdjustment` | Hacky, non-scientific parameter for tweaking focal length related calculations. For scenes with very small gaussians & small details, increasing this value can help improve visual quality. Default value is 1.0.
 | `logLevel` | Verbosity of the console logging. Defaults to `GaussianSplats3D.LogLevel.None`.
 | `sphericalHarmonicsDegree` | Degree of spherical harmonics to utilize in rendering splats (assuming the data is present in the splat scene). Valid values are 0, 1, or 2. Default value is 0.
@@ -361,7 +362,8 @@ GaussianSplats3D.PlyLoader.loadFromURL('<path to .ply or .splat file>',
                                         minimumAlpha,
                                         compressionLevel,
                                         optimizeSplatData,
-                                        sphericalHarmonicsDegree)
+                                        sphericalHarmonicsDegree,
+                                        headers)
 .then((splatBuffer) => {
     GaussianSplats3D.KSplatLoader.downloadFile(splatBuffer, 'converted_file.ksplat');
 });
