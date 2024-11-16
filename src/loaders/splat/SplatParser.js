@@ -55,6 +55,25 @@ export class SplatParser {
         }
     }
 
+    static parseToUncompressedSplatArraySection(fromSplat, toSplat, fromBuffer, fromOffset, splatArray) {
+
+        for (let i = fromSplat; i <= toSplat; i++) {
+            const inBase = i * SplatParser.RowSizeBytes + fromOffset;
+            const inCenter = new Float32Array(fromBuffer, inBase, 3);
+            const inScale = new Float32Array(fromBuffer, inBase + SplatParser.CenterSizeBytes, 3);
+            const inColor = new Uint8Array(fromBuffer, inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes, 4);
+            const inRotation = new Uint8Array(fromBuffer, inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes +
+                                              SplatParser.RotationSizeBytes, 4);
+
+            const quat = new THREE.Quaternion((inRotation[1] - 128) / 128, (inRotation[2] - 128) / 128,
+                                              (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
+            quat.normalize();
+
+            splatArray.addSplatFromComonents(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
+                                             quat.w, quat.x, quat.y, quat.z, inColor[0], inColor[1], inColor[2], inColor[3]);
+        }
+    }
+
     static parseStandardSplatToUncompressedSplatArray(inBuffer) {
         // Standard .splat row layout:
         // XYZ - Position (Float32)
