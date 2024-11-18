@@ -1,30 +1,29 @@
 import * as THREE from 'three';
-import { OrbitControls } from './OrbitControls.js';
-import { PlyLoader } from './loaders/ply/PlyLoader.js';
-import { SplatLoader } from './loaders/splat/SplatLoader.js';
-import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
-import { sceneFormatFromPath } from './loaders/Utils.js';
-import { LoadingSpinner } from './ui/LoadingSpinner.js';
-import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
-import { InfoPanel } from './ui/InfoPanel.js';
-import { SceneHelper } from './SceneHelper.js';
-import { Raycaster } from './raycaster/Raycaster.js';
-import { SplatMesh } from './splatmesh/SplatMesh.js';
-import { createSortWorker } from './worker/SortWorker.js';
-import { Constants } from './Constants.js';
-import { getCurrentTime, isIOS, getIOSSemever, clamp } from './Util.js';
 import { AbortablePromise, AbortedPromiseError } from './AbortablePromise.js';
-import { SceneFormat } from './loaders/SceneFormat.js';
-import { WebXRMode } from './webxr/WebXRMode.js';
-import { VRButton } from './webxr/VRButton.js';
-import { ARButton } from './webxr/ARButton.js';
-import { delayedExecute, abortablePromiseWithExtractedComponents } from './Util.js';
-import { LoaderStatus } from './loaders/LoaderStatus.js';
-import { DirectLoadError } from './loaders/DirectLoadError.js';
-import { RenderMode } from './RenderMode.js';
+import { Constants } from './Constants.js';
 import { LogLevel } from './LogLevel.js';
+import { OrbitControls } from './OrbitControls.js';
+import { RenderMode } from './RenderMode.js';
+import { SceneHelper } from './SceneHelper.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
 import { SplatRenderMode } from './SplatRenderMode.js';
+import { abortablePromiseWithExtractedComponents, clamp, delayedExecute, fetchWithProgress, getCurrentTime, getIOSSemever, isIOS, makeProgressiveFetchFunction } from './Util.js';
+import { DirectLoadError } from './loaders/DirectLoadError.js';
+import { LoaderStatus } from './loaders/LoaderStatus.js';
+import { SceneFormat } from './loaders/SceneFormat.js';
+import { sceneFormatFromPath } from './loaders/Utils.js';
+import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
+import { PlyLoader } from './loaders/ply/PlyLoader.js';
+import { SplatLoader } from './loaders/splat/SplatLoader.js';
+import { Raycaster } from './raycaster/Raycaster.js';
+import { SplatMesh } from './splatmesh/SplatMesh.js';
+import { InfoPanel } from './ui/InfoPanel.js';
+import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
+import { LoadingSpinner } from './ui/LoadingSpinner.js';
+import { ARButton } from './webxr/ARButton.js';
+import { VRButton } from './webxr/VRButton.js';
+import { WebXRMode } from './webxr/WebXRMode.js';
+import { createSortWorker } from './worker/SortWorker.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -279,6 +278,8 @@ export class Viewer {
         this.disposing = false;
         this.disposed = false;
         this.disposePromise = null;
+
+        this.fetchWithProgress = options.fetch ? makeProgressiveFetchFunction(options.fetch) : fetchWithProgress;
         if (!this.dropInMode) this.init();
     }
 
@@ -1054,13 +1055,17 @@ export class Viewer {
             if (format === SceneFormat.Splat) {
                 return SplatLoader.loadFromURL(path, onProgress, progressiveBuild,
                                                onSectionBuilt, splatAlphaRemovalThreshold,
-                                               this.inMemoryCompressionLevel, optimizeSplatData);
+                                               this.inMemoryCompressionLevel, optimizeSplatData,
+                                               undefined, undefined, undefined, undefined,
+                                               this.fetchWithProgress );
             } else if (format === SceneFormat.KSplat) {
-                return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt);
+                return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, this.fetchWithProgress);
             } else if (format === SceneFormat.Ply) {
                 return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt,
                                              splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
-                                             optimizeSplatData, this.sphericalHarmonicsDegree);
+                                             optimizeSplatData, this.sphericalHarmonicsDegree, undefined,
+                                             undefined, undefined, undefined,
+                                             this.fetchWithProgress );
             }
         } catch (e) {
             if (e instanceof DirectLoadError) {

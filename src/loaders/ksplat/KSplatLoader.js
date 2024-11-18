@@ -1,7 +1,7 @@
-import { SplatBuffer } from '../SplatBuffer.js';
-import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
-import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
+import { fetchWithProgress as defaultFetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
+import { LoaderStatus } from '../LoaderStatus.js';
+import { SplatBuffer } from '../SplatBuffer.js';
 
 export class KSplatLoader {
 
@@ -19,7 +19,7 @@ export class KSplatLoader {
         }
     };
 
-    static loadFromURL(fileName, externalOnProgress, loadDirectoToSplatBuffer, onSectionBuilt) {
+    static loadFromURL(fileName, externalOnProgress, loadDirectoToSplatBuffer, onSectionBuilt, fetchWithProgress=defaultFetchWithProgress) {
         let directLoadBuffer;
         let directLoadSplatBuffer;
 

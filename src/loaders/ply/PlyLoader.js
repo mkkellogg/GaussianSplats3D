@@ -1,17 +1,17 @@
 import * as THREE from 'three';
-import { PlyParser } from './PlyParser.js';
-import { PlyParserUtils } from './PlyParserUtils.js';
+import { Constants } from '../../Constants.js';
+import { fetchWithProgress as defaultFetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
+import { DirectLoadError } from '../DirectLoadError.js';
+import { InternalLoadType } from '../InternalLoadType.js';
+import { LoaderStatus } from '../LoaderStatus.js';
+import { SplatBuffer } from '../SplatBuffer.js';
+import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
+import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 import { INRIAV1PlyParser } from './INRIAV1PlyParser.js';
 import { PlayCanvasCompressedPlyParser } from './PlayCanvasCompressedPlyParser.js';
 import { PlyFormat } from './PlyFormat.js';
-import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
-import { SplatBuffer } from '../SplatBuffer.js';
-import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
-import { LoaderStatus } from '../LoaderStatus.js';
-import { DirectLoadError } from '../DirectLoadError.js';
-import { Constants } from '../../Constants.js';
-import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
-import { InternalLoadType } from '../InternalLoadType.js';
+import { PlyParser } from './PlyParser.js';
+import { PlyParserUtils } from './PlyParserUtils.js';
 
 function storeChunksInBuffer(chunks, buffer) {
     let inBytes = 0;
@@ -44,7 +44,7 @@ function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, 
 export class PlyLoader {
 
     static loadFromURL(fileName, onProgress, loadDirectoToSplatBuffer, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
-                       optimizeSplatData = true, outSphericalHarmonicsDegree = 0, sectionSize, sceneCenter, blockSize, bucketSize) {
+                       optimizeSplatData = true, outSphericalHarmonicsDegree = 0, sectionSize, sceneCenter, blockSize, bucketSize, fetchWithProgress = defaultFetchWithProgress) {
 
         let internalLoadType = loadDirectoToSplatBuffer ? InternalLoadType.DirectToSplatBuffer : InternalLoadType.DirectToSplatArray;
         if (optimizeSplatData) internalLoadType = InternalLoadType.DirectToSplatArray;

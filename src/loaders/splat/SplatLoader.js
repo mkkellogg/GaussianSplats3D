@@ -1,13 +1,13 @@
 import * as THREE from 'three';
+import { Constants } from '../../Constants.js';
+import { fetchWithProgress as defaultFetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
+import { DirectLoadError } from '../DirectLoadError.js';
+import { InternalLoadType } from '../InternalLoadType.js';
+import { LoaderStatus } from '../LoaderStatus.js';
 import { SplatBuffer } from '../SplatBuffer.js';
 import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
-import { SplatParser } from './SplatParser.js';
-import { fetchWithProgress, delayedExecute, nativePromiseWithExtractedComponents } from '../../Util.js';
 import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
-import { LoaderStatus } from '../LoaderStatus.js';
-import { DirectLoadError } from '../DirectLoadError.js';
-import { Constants } from '../../Constants.js';
-import { InternalLoadType } from '../InternalLoadType.js';
+import { SplatParser } from './SplatParser.js';
 
 function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize) {
     if (optimizeSplatData) {
@@ -23,7 +23,7 @@ function finalize(splatData, optimizeSplatData, minimumAlpha, compressionLevel, 
 export class SplatLoader {
 
     static loadFromURL(fileName, onProgress, loadDirectoToSplatBuffer, onProgressiveLoadSectionProgress, minimumAlpha, compressionLevel,
-                       optimizeSplatData = true, sectionSize, sceneCenter, blockSize, bucketSize) {
+                       optimizeSplatData = true, sectionSize, sceneCenter, blockSize, bucketSize, fetchWithProgress = defaultFetchWithProgress) {
 
         let internalLoadType = loadDirectoToSplatBuffer ? InternalLoadType.DirectToSplatBuffer : InternalLoadType.DirectToSplatArray;
         if (optimizeSplatData) internalLoadType = InternalLoadType.DirectToSplatArray;
