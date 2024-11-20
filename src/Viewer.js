@@ -11,7 +11,6 @@ import {
   abortablePromiseWithExtractedComponents,
   clamp,
   delayedExecute,
-  fetchWithProgress,
   getCurrentTime,
   getIOSSemever,
   isIOS,
@@ -24,6 +23,7 @@ import { sceneFormatFromPath } from './loaders/Utils.js';
 import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
 import { PlyLoader } from './loaders/ply/PlyLoader.js';
 import { SplatLoader } from './loaders/splat/SplatLoader.js';
+import { GLTFLoader } from './loaders/splat/gltf/GLTFLoader.js';
 import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './splatmesh/SplatMesh.js';
 import { InfoPanel } from './ui/InfoPanel.js';
@@ -339,9 +339,9 @@ export class Viewer {
     this.disposed = false;
     this.disposePromise = null;
 
-    this.fetchWithProgress = options.fetch ?
-      makeProgressiveFetchFunction(options.fetch) :
-      fetchWithProgress;
+    this.fetch = options.fetch || ((url, opts) => fetch(url, opts));
+    this.fetchWithProgress = makeProgressiveFetchFunction(this.fetch);
+
     if (!this.dropInMode) this.init();
   }
 
@@ -1388,6 +1388,8 @@ export class Viewer {
           undefined,
           this.fetchWithProgress,
         );
+      } else if (format === SceneFormat.GLTF) {
+        return new GLTFLoader(this).loadFromURL(path);
       }
     } catch (e) {
       if (e instanceof DirectLoadError) {
