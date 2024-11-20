@@ -1,9 +1,1 @@
-git stash -u
 npx rollup -c && git add ./build && npm run fix-js && git add src
-EXIT=$?
-if [ "$EXIT" != 0 ]
-then
- git reset --hard HEAD
-fi
-git stash pop || true;
-exit $EXIT
