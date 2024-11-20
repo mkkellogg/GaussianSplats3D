@@ -1,4 +1,4 @@
-git stash
+git stash -u
 npx rollup -c && git add ./build && npm run fix-js && git add src && git commit --amend --no-verify --no-edit
 EXIT=$?
 if [ "$EXIT" != 0 ]
