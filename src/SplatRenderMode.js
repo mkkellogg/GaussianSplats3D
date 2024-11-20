@@ -1,4 +1,4 @@
 export const SplatRenderMode = {
-    ThreeD: 0,
-    TwoD: 1
+  ThreeD: 0,
+  TwoD: 1,
 };

@@ -3,49 +3,59 @@ import { fadeElement } from './Util.js';
 const STANDARD_FADE_DURATION = 500;
 
 export class LoadingSpinner {
+  static elementIDGen = 0;
 
-    static elementIDGen = 0;
+  constructor(message, container) {
+    this.taskIDGen = 0;
+    this.elementID = LoadingSpinner.elementIDGen++;
 
-    constructor(message, container) {
+    this.tasks = [];
 
-        this.taskIDGen = 0;
-        this.elementID = LoadingSpinner.elementIDGen++;
+    this.message = message || 'Loading...';
+    this.container = container || document.body;
 
-        this.tasks = [];
+    this.spinnerContainerOuter = document.createElement('div');
+    this.spinnerContainerOuter.className = `spinnerOuterContainer${this.elementID}`;
+    this.spinnerContainerOuter.style.display = 'none';
 
-        this.message = message || 'Loading...';
-        this.container = container || document.body;
+    this.spinnerContainerPrimary = document.createElement('div');
+    this.spinnerContainerPrimary.className = `spinnerContainerPrimary${this.elementID}`;
+    this.spinnerPrimary = document.createElement('div');
+    this.spinnerPrimary.classList.add(
+      `spinner${this.elementID}`,
+      `spinnerPrimary${this.elementID}`,
+    );
+    this.messageContainerPrimary = document.createElement('div');
+    this.messageContainerPrimary.classList.add(
+      `messageContainer${this.elementID}`,
+      `messageContainerPrimary${this.elementID}`,
+    );
+    this.messageContainerPrimary.innerHTML = this.message;
 
-        this.spinnerContainerOuter = document.createElement('div');
-        this.spinnerContainerOuter.className = `spinnerOuterContainer${this.elementID}`;
-        this.spinnerContainerOuter.style.display = 'none';
+    this.spinnerContainerMin = document.createElement('div');
+    this.spinnerContainerMin.className = `spinnerContainerMin${this.elementID}`;
+    this.spinnerMin = document.createElement('div');
+    this.spinnerMin.classList.add(
+      `spinner${this.elementID}`,
+      `spinnerMin${this.elementID}`,
+    );
+    this.messageContainerMin = document.createElement('div');
+    this.messageContainerMin.classList.add(
+      `messageContainer${this.elementID}`,
+      `messageContainerMin${this.elementID}`,
+    );
+    this.messageContainerMin.innerHTML = this.message;
 
-        this.spinnerContainerPrimary = document.createElement('div');
-        this.spinnerContainerPrimary.className = `spinnerContainerPrimary${this.elementID}`;
-        this.spinnerPrimary = document.createElement('div');
-        this.spinnerPrimary.classList.add(`spinner${this.elementID}`, `spinnerPrimary${this.elementID}`);
-        this.messageContainerPrimary = document.createElement('div');
-        this.messageContainerPrimary.classList.add(`messageContainer${this.elementID}`, `messageContainerPrimary${this.elementID}`);
-        this.messageContainerPrimary.innerHTML = this.message;
+    this.spinnerContainerPrimary.appendChild(this.spinnerPrimary);
+    this.spinnerContainerPrimary.appendChild(this.messageContainerPrimary);
+    this.spinnerContainerOuter.appendChild(this.spinnerContainerPrimary);
 
-        this.spinnerContainerMin = document.createElement('div');
-        this.spinnerContainerMin.className = `spinnerContainerMin${this.elementID}`;
-        this.spinnerMin = document.createElement('div');
-        this.spinnerMin.classList.add(`spinner${this.elementID}`, `spinnerMin${this.elementID}`);
-        this.messageContainerMin = document.createElement('div');
-        this.messageContainerMin.classList.add(`messageContainer${this.elementID}`, `messageContainerMin${this.elementID}`);
-        this.messageContainerMin.innerHTML = this.message;
+    this.spinnerContainerMin.appendChild(this.spinnerMin);
+    this.spinnerContainerMin.appendChild(this.messageContainerMin);
+    this.spinnerContainerOuter.appendChild(this.spinnerContainerMin);
 
-        this.spinnerContainerPrimary.appendChild(this.spinnerPrimary);
-        this.spinnerContainerPrimary.appendChild(this.messageContainerPrimary);
-        this.spinnerContainerOuter.appendChild(this.spinnerContainerPrimary);
-
-        this.spinnerContainerMin.appendChild(this.spinnerMin);
-        this.spinnerContainerMin.appendChild(this.messageContainerMin);
-        this.spinnerContainerOuter.appendChild(this.spinnerContainerMin);
-
-        const style = document.createElement('style');
-        style.innerHTML = `
+    const style = document.createElement('style');
+    style.innerHTML = `
 
             .spinnerOuterContainer${this.elementID} {
                 width: 100%;
@@ -147,98 +157,119 @@ export class LoadingSpinner {
             }
 
         `;
-        this.spinnerContainerOuter.appendChild(style);
-        this.container.appendChild(this.spinnerContainerOuter);
+    this.spinnerContainerOuter.appendChild(style);
+    this.container.appendChild(this.spinnerContainerOuter);
 
-        this.setMinimized(false, true);
+    this.setMinimized(false, true);
 
-        this.fadeTransitions = [];
+    this.fadeTransitions = [];
+  }
+
+  addTask(message) {
+    const newTask = {
+      message: message,
+      id: this.taskIDGen++,
+    };
+    this.tasks.push(newTask);
+    this.update();
+    return newTask.id;
+  }
+
+  removeTask(id) {
+    let index = 0;
+    for (let task of this.tasks) {
+      if (task.id === id) {
+        this.tasks.splice(index, 1);
+        break;
+      }
+      index++;
     }
+    this.update();
+  }
 
-    addTask(message) {
-        const newTask = {
-            'message': message,
-            'id': this.taskIDGen++
-        };
-        this.tasks.push(newTask);
-        this.update();
-        return newTask.id;
-    }
+  removeAllTasks() {
+    this.tasks = [];
+    this.update();
+  }
 
-    removeTask(id) {
-        let index = 0;
-        for (let task of this.tasks) {
-            if (task.id === id) {
-                this.tasks.splice(index, 1);
-                break;
-            }
-            index++;
-        }
-        this.update();
+  setMessageForTask(id, message) {
+    for (let task of this.tasks) {
+      if (task.id === id) {
+        task.message = message;
+        break;
+      }
     }
+    this.update();
+  }
 
-    removeAllTasks() {
-        this.tasks = [];
-        this.update();
+  update() {
+    if (this.tasks.length > 0) {
+      this.show();
+      this.setMessage(this.tasks[this.tasks.length - 1].message);
+    } else {
+      this.hide();
     }
+  }
 
-    setMessageForTask(id, message) {
-        for (let task of this.tasks) {
-            if (task.id === id) {
-                task.message = message;
-                break;
-            }
-        }
-        this.update();
-    }
+  show() {
+    this.spinnerContainerOuter.style.display = 'block';
+    this.visible = true;
+  }
 
-    update() {
-        if (this.tasks.length > 0) {
-            this.show();
-            this.setMessage(this.tasks[this.tasks.length - 1].message);
-        } else {
-            this.hide();
-        }
-    }
+  hide() {
+    this.spinnerContainerOuter.style.display = 'none';
+    this.visible = false;
+  }
 
-    show() {
-        this.spinnerContainerOuter.style.display = 'block';
-        this.visible = true;
+  setContainer(container) {
+    if (
+      this.container &&
+      this.spinnerContainerOuter.parentElement === this.container
+    ) {
+      this.container.removeChild(this.spinnerContainerOuter);
     }
+    if (container) {
+      this.container = container;
+      this.container.appendChild(this.spinnerContainerOuter);
+      this.spinnerContainerOuter.style.zIndex = this.container.style.zIndex + 1;
+    }
+  }
 
-    hide() {
-        this.spinnerContainerOuter.style.display = 'none';
-        this.visible = false;
-    }
+  setMinimized(minimized, instant) {
+    const showHideSpinner = (
+      element,
+      show,
+      instant,
+      displayStyle,
+      fadeTransitionsIndex,
+    ) => {
+      if (instant) {
+        element.style.display = show ? displayStyle : 'none';
+      } else {
+        this.fadeTransitions[fadeTransitionsIndex] = fadeElement(
+          element,
+          !show,
+          displayStyle,
+          STANDARD_FADE_DURATION,
+          () => {
+            this.fadeTransitions[fadeTransitionsIndex] = null;
+          },
+        );
+      }
+    };
+    showHideSpinner(
+      this.spinnerContainerPrimary,
+      !minimized,
+      instant,
+      'block',
+      0,
+    );
+    showHideSpinner(this.spinnerContainerMin, minimized, instant, 'flex', 1);
+    this.minimized = minimized;
+  }
 
-    setContainer(container) {
-        if (this.container && this.spinnerContainerOuter.parentElement === this.container) {
-            this.container.removeChild(this.spinnerContainerOuter);
-        }
-        if (container) {
-            this.container = container;
-            this.container.appendChild(this.spinnerContainerOuter);
-            this.spinnerContainerOuter.style.zIndex = this.container.style.zIndex + 1;
-        }
-    }
-
-    setMinimized(minimized, instant) {
-        const showHideSpinner = (element, show, instant, displayStyle, fadeTransitionsIndex) => {
-            if (instant) {
-                element.style.display = show ? displayStyle : 'none';
-            } else {
-                this.fadeTransitions[fadeTransitionsIndex] = fadeElement(element, !show, displayStyle, STANDARD_FADE_DURATION, () => {
-                    this.fadeTransitions[fadeTransitionsIndex] = null;
-                });
-            }
-        };
-        showHideSpinner(this.spinnerContainerPrimary, !minimized, instant, 'block', 0);
-        showHideSpinner(this.spinnerContainerMin, minimized, instant, 'flex', 1);
-        this.minimized = minimized;
-    }
-
-    setMessage(msg) {
-        this.messageContainerPrimary.innerHTML = msg;
-        this.messageContainerMin.innerHTML = msg;
-    }
+  setMessage(msg) {
+    this.messageContainerPrimary.innerHTML = msg;
+    this.messageContainerMin.innerHTML = msg;
+  }
 }

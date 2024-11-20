@@ -2,9 +2,13 @@ import * as THREE from 'three';
 import { Constants } from '../Constants.js';
 
 export class SplatMaterial {
-
-    static buildVertexShaderBase(dynamicMode = false, enableOptionalEffects = false, maxSphericalHarmonicsDegree = 0, customVars = '') {
-        let vertexShaderSource = `
+  static buildVertexShaderBase(
+    dynamicMode = false,
+    enableOptionalEffects = false,
+    maxSphericalHarmonicsDegree = 0,
+    customVars = '',
+  ) {
+    let vertexShaderSource = `
         precision highp float;
         #include <common>
 
@@ -21,14 +25,14 @@ export class SplatMaterial {
     `;
 
     if (enableOptionalEffects) {
-        vertexShaderSource += `
+      vertexShaderSource += `
             uniform float sceneOpacity[${Constants.MaxScenes}];
             uniform int sceneVisibility[${Constants.MaxScenes}];
         `;
     }
 
     if (dynamicMode) {
-        vertexShaderSource += `
+      vertexShaderSource += `
             uniform highp mat4 transforms[${Constants.MaxScenes}];
         `;
     }
@@ -126,8 +130,8 @@ export class SplatMaterial {
             }
             `;
 
-        if (enableOptionalEffects) {
-            vertexShaderSource += `
+    if (enableOptionalEffects) {
+      vertexShaderSource += `
                 float splatOpacityFromScene = sceneOpacity[sceneIndex];
                 int sceneVisible = sceneVisibility[sceneIndex];
                 if (splatOpacityFromScene <= 0.01 || sceneVisible == 0) {
@@ -135,18 +139,18 @@ export class SplatMaterial {
                     return;
                 }
             `;
-        }
+    }
 
-        if (dynamicMode) {
-            vertexShaderSource += `
+    if (dynamicMode) {
+      vertexShaderSource += `
                 mat4 transform = transforms[sceneIndex];
                 mat4 transformModelViewMatrix = modelViewMatrix * transform;
             `;
-        } else {
-            vertexShaderSource += `mat4 transformModelViewMatrix = modelViewMatrix;`;
-        }
+    } else {
+      vertexShaderSource += `mat4 transformModelViewMatrix = modelViewMatrix;`;
+    }
 
-        vertexShaderSource += `
+    vertexShaderSource += `
             float sh8BitCompressionRangeMinForScene = sphericalHarmonics8BitCompressionRangeMin[sceneIndex];
             float sh8BitCompressionRangeMaxForScene = sphericalHarmonics8BitCompressionRangeMax[sceneIndex];
             float sh8BitCompressionRangeForScene = sh8BitCompressionRangeMaxForScene - sh8BitCompressionRangeMinForScene;
@@ -169,46 +173,45 @@ export class SplatMaterial {
             vColor = uintToRGBAVec(sampledCenterColor.r);
         `;
 
-        // Proceed to sampling and rendering 1st degree spherical harmonics
-        if (maxSphericalHarmonicsDegree >= 1) {
-
-            vertexShaderSource += `   
+    // Proceed to sampling and rendering 1st degree spherical harmonics
+    if (maxSphericalHarmonicsDegree >= 1) {
+      vertexShaderSource += `   
             if (sphericalHarmonicsDegree >= 1) {
             `;
 
-            if (dynamicMode) {
-                vertexShaderSource += `
+      if (dynamicMode) {
+        vertexShaderSource += `
                     vec3 worldViewDir = normalize(splatCenter - vec3(inverse(transform) * vec4(cameraPosition, 1.0)));
                 `;
-            } else {
-                vertexShaderSource += `
+      } else {
+        vertexShaderSource += `
                     vec3 worldViewDir = normalize(splatCenter - cameraPosition);
                 `;
-            }
+      }
 
-            vertexShaderSource += `
+      vertexShaderSource += `
                 vec3 sh1;
                 vec3 sh2;
                 vec3 sh3;
             `;
 
-            if (maxSphericalHarmonicsDegree >= 2) {
-                vertexShaderSource += `
+      if (maxSphericalHarmonicsDegree >= 2) {
+        vertexShaderSource += `
                     vec3 sh4;
                     vec3 sh5;
                     vec3 sh6;
                     vec3 sh7;
                     vec3 sh8;
                 `;
-            }
+      }
 
-            // Determining how to sample spherical harmonics textures to get the coefficients for calculations for a given degree
-            // depends on how many total degrees (maxSphericalHarmonicsDegree) are present in the textures. This is because that
-            // number affects how they are packed in the textures, and therefore the offset & stride required to access them.
+      // Determining how to sample spherical harmonics textures to get the coefficients for calculations for a given degree
+      // depends on how many total degrees (maxSphericalHarmonicsDegree) are present in the textures. This is because that
+      // number affects how they are packed in the textures, and therefore the offset & stride required to access them.
 
-            // Sample spherical harmonics textures with 1 degree worth of data for 1st degree calculations, and store in sh1, sh2, and sh3
-            if (maxSphericalHarmonicsDegree === 1) {
-                vertexShaderSource += `
+      // Sample spherical harmonics textures with 1 degree worth of data for 1st degree calculations, and store in sh1, sh2, and sh3
+      if (maxSphericalHarmonicsDegree === 1) {
+        vertexShaderSource += `
                     if (sphericalHarmonicsMultiTextureMode == 0) {
                         vec2 shUV = getDataUVF(nearestEvenIndex, 2.5, doubleOddOffset, sphericalHarmonicsTextureSize);
                         vec4 sampledSH0123 = texture(sphericalHarmonicsTexture, shUV);
@@ -231,9 +234,9 @@ export class SplatMaterial {
                         sh3 = vec3(sampledSH01B.rg, sampledSH23B.r);
                     }
                 `;
-            // Sample spherical harmonics textures with 2 degrees worth of data for 1st degree calculations, and store in sh1, sh2, and sh3
-            } else if (maxSphericalHarmonicsDegree === 2) {
-                vertexShaderSource += `
+        // Sample spherical harmonics textures with 2 degrees worth of data for 1st degree calculations, and store in sh1, sh2, and sh3
+      } else if (maxSphericalHarmonicsDegree === 2) {
+        vertexShaderSource += `
                     vec4 sampledSH0123;
                     vec4 sampledSH4567;
                     vec4 sampledSH891011;
@@ -258,10 +261,10 @@ export class SplatMaterial {
                         sh3 = vec3(sampledSH0123B.rgb);
                     }
                 `;
-            }
+      }
 
-            // Perform 1st degree spherical harmonics calculations
-            vertexShaderSource += `
+      // Perform 1st degree spherical harmonics calculations
+      vertexShaderSource += `
                     if (sphericalHarmonics8BitMode == 1) {
                         sh1 = sh1 * sh8BitCompressionRangeForScene + vec8BitSHShift;
                         sh2 = sh2 * sh8BitCompressionRangeForScene + vec8BitSHShift;
@@ -273,10 +276,9 @@ export class SplatMaterial {
                     vColor.rgb += SH_C1 * (-sh1 * y + sh2 * z - sh3 * x);
             `;
 
-            // Proceed to sampling and rendering 2nd degree spherical harmonics
-            if (maxSphericalHarmonicsDegree >= 2) {
-
-                vertexShaderSource += `
+      // Proceed to sampling and rendering 2nd degree spherical harmonics
+      if (maxSphericalHarmonicsDegree >= 2) {
+        vertexShaderSource += `
                     if (sphericalHarmonicsDegree >= 2) {
                         float xx = x * x;
                         float yy = y * y;
@@ -286,10 +288,10 @@ export class SplatMaterial {
                         float xz = x * z;
                 `;
 
-                // Sample spherical harmonics textures with 2 degrees worth of data for 2nd degree calculations,
-                // and store in sh4, sh5, sh6, sh7, and sh8
-                if (maxSphericalHarmonicsDegree === 2) {
-                    vertexShaderSource += `
+        // Sample spherical harmonics textures with 2 degrees worth of data for 2nd degree calculations,
+        // and store in sh4, sh5, sh6, sh7, and sh8
+        if (maxSphericalHarmonicsDegree === 2) {
+          vertexShaderSource += `
                         if (sphericalHarmonicsMultiTextureMode == 0) {
                             vec4 sampledSH12131415 = texture(sphericalHarmonicsTexture, getDataUV(6, 3, sphericalHarmonicsTextureSize));
                             vec4 sampledSH16171819 = texture(sphericalHarmonicsTexture, getDataUV(6, 4, sphericalHarmonicsTextureSize));
@@ -310,10 +312,10 @@ export class SplatMaterial {
                             sh8 = vec3(sampledSH4567B.gba);
                         }
                     `;
-                }
+        }
 
-                // Perform 2nd degree spherical harmonics calculations
-                vertexShaderSource += `
+        // Perform 2nd degree spherical harmonics calculations
+        vertexShaderSource += `
                         if (sphericalHarmonics8BitMode == 1) {
                             sh4 = sh4 * sh8BitCompressionRangeForScene + vec8BitSHShift;
                             sh5 = sh5 * sh8BitCompressionRangeForScene + vec8BitSHShift;
@@ -330,22 +332,22 @@ export class SplatMaterial {
                             (SH_C2[4] * (xx - yy)) * sh8;
                     }
                 `;
-            }
+      }
 
-            vertexShaderSource += `
+      vertexShaderSource += `
 
                 vColor.rgb = clamp(vColor.rgb, vec3(0.), vec3(1.));
 
             }
 
             `;
-        }
-
-        return vertexShaderSource;
     }
 
-    static getVertexShaderFadeIn() {
-        return `
+    return vertexShaderSource;
+  }
+
+  static getVertexShaderFadeIn() {
+    return `
             if (fadeInComplete == 0) {
                 float opacityAdjust = 1.0;
                 float centerDist = length(splatCenter - sceneCenter);
@@ -360,170 +362,177 @@ export class SplatMaterial {
                 vColor.a *= opacityAdjust;
             }
         `;
+  }
+
+  static getUniforms(
+    dynamicMode = false,
+    enableOptionalEffects = false,
+    maxSphericalHarmonicsDegree = 0,
+    splatScale = 1.0,
+    pointCloudModeEnabled = false,
+  ) {
+    const uniforms = {
+      sceneCenter: {
+        type: 'v3',
+        value: new THREE.Vector3(),
+      },
+      fadeInComplete: {
+        type: 'i',
+        value: 0,
+      },
+      orthographicMode: {
+        type: 'i',
+        value: 0,
+      },
+      visibleRegionFadeStartRadius: {
+        type: 'f',
+        value: 0.0,
+      },
+      visibleRegionRadius: {
+        type: 'f',
+        value: 0.0,
+      },
+      currentTime: {
+        type: 'f',
+        value: 0.0,
+      },
+      firstRenderTime: {
+        type: 'f',
+        value: 0.0,
+      },
+      centersColorsTexture: {
+        type: 't',
+        value: null,
+      },
+      sphericalHarmonicsTexture: {
+        type: 't',
+        value: null,
+      },
+      sphericalHarmonicsTextureR: {
+        type: 't',
+        value: null,
+      },
+      sphericalHarmonicsTextureG: {
+        type: 't',
+        value: null,
+      },
+      sphericalHarmonicsTextureB: {
+        type: 't',
+        value: null,
+      },
+      sphericalHarmonics8BitCompressionRangeMin: {
+        type: 'f',
+        value: [],
+      },
+      sphericalHarmonics8BitCompressionRangeMax: {
+        type: 'f',
+        value: [],
+      },
+      focal: {
+        type: 'v2',
+        value: new THREE.Vector2(),
+      },
+      orthoZoom: {
+        type: 'f',
+        value: 1.0,
+      },
+      inverseFocalAdjustment: {
+        type: 'f',
+        value: 1.0,
+      },
+      viewport: {
+        type: 'v2',
+        value: new THREE.Vector2(),
+      },
+      basisViewport: {
+        type: 'v2',
+        value: new THREE.Vector2(),
+      },
+      debugColor: {
+        type: 'v3',
+        value: new THREE.Color(),
+      },
+      centersColorsTextureSize: {
+        type: 'v2',
+        value: new THREE.Vector2(1024, 1024),
+      },
+      sphericalHarmonicsDegree: {
+        type: 'i',
+        value: maxSphericalHarmonicsDegree,
+      },
+      sphericalHarmonicsTextureSize: {
+        type: 'v2',
+        value: new THREE.Vector2(1024, 1024),
+      },
+      sphericalHarmonics8BitMode: {
+        type: 'i',
+        value: 0,
+      },
+      sphericalHarmonicsMultiTextureMode: {
+        type: 'i',
+        value: 0,
+      },
+      splatScale: {
+        type: 'f',
+        value: splatScale,
+      },
+      pointCloudModeEnabled: {
+        type: 'i',
+        value: pointCloudModeEnabled ? 1 : 0,
+      },
+      sceneIndexesTexture: {
+        type: 't',
+        value: null,
+      },
+      sceneIndexesTextureSize: {
+        type: 'v2',
+        value: new THREE.Vector2(1024, 1024),
+      },
+      sceneCount: {
+        type: 'i',
+        value: 1,
+      },
+    };
+    for (let i = 0; i < Constants.MaxScenes; i++) {
+      uniforms.sphericalHarmonics8BitCompressionRangeMin.value.push(
+        -Constants.SphericalHarmonics8BitCompressionRange / 2.0,
+      );
+      uniforms.sphericalHarmonics8BitCompressionRangeMax.value.push(
+        Constants.SphericalHarmonics8BitCompressionRange / 2.0,
+      );
     }
 
-    static getUniforms(dynamicMode = false, enableOptionalEffects = false, maxSphericalHarmonicsDegree = 0,
-                       splatScale = 1.0, pointCloudModeEnabled = false) {
+    if (enableOptionalEffects) {
+      const sceneOpacity = [];
+      for (let i = 0; i < Constants.MaxScenes; i++) {
+        sceneOpacity.push(1.0);
+      }
+      uniforms['sceneOpacity'] = {
+        type: 'f',
+        value: sceneOpacity,
+      };
 
-        const uniforms = {
-            'sceneCenter': {
-                'type': 'v3',
-                'value': new THREE.Vector3()
-            },
-            'fadeInComplete': {
-                'type': 'i',
-                'value': 0
-            },
-            'orthographicMode': {
-                'type': 'i',
-                'value': 0
-            },
-            'visibleRegionFadeStartRadius': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'visibleRegionRadius': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'currentTime': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'firstRenderTime': {
-                'type': 'f',
-                'value': 0.0
-            },
-            'centersColorsTexture': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTexture': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTextureR': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTextureG': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonicsTextureB': {
-                'type': 't',
-                'value': null
-            },
-            'sphericalHarmonics8BitCompressionRangeMin': {
-                'type': 'f',
-                'value': []
-            },
-            'sphericalHarmonics8BitCompressionRangeMax': {
-                'type': 'f',
-                'value': []
-            },
-            'focal': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
-            },
-            'orthoZoom': {
-                'type': 'f',
-                'value': 1.0
-            },
-            'inverseFocalAdjustment': {
-                'type': 'f',
-                'value': 1.0
-            },
-            'viewport': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
-            },
-            'basisViewport': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
-            },
-            'debugColor': {
-                'type': 'v3',
-                'value': new THREE.Color()
-            },
-            'centersColorsTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
-            },
-            'sphericalHarmonicsDegree': {
-                'type': 'i',
-                'value': maxSphericalHarmonicsDegree
-            },
-            'sphericalHarmonicsTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
-            },
-            'sphericalHarmonics8BitMode': {
-                'type': 'i',
-                'value': 0
-            },
-            'sphericalHarmonicsMultiTextureMode': {
-                'type': 'i',
-                'value': 0
-            },
-            'splatScale': {
-                'type': 'f',
-                'value': splatScale
-            },
-            'pointCloudModeEnabled': {
-                'type': 'i',
-                'value': pointCloudModeEnabled ? 1 : 0
-            },
-            'sceneIndexesTexture': {
-                'type': 't',
-                'value': null
-            },
-            'sceneIndexesTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
-            },
-            'sceneCount': {
-                'type': 'i',
-                'value': 1
-            }
-        };
-        for (let i = 0; i < Constants.MaxScenes; i++) {
-            uniforms.sphericalHarmonics8BitCompressionRangeMin.value.push(-Constants.SphericalHarmonics8BitCompressionRange / 2.0);
-            uniforms.sphericalHarmonics8BitCompressionRangeMax.value.push(Constants.SphericalHarmonics8BitCompressionRange / 2.0);
-        }
-
-        if (enableOptionalEffects) {
-            const sceneOpacity = [];
-            for (let i = 0; i < Constants.MaxScenes; i++) {
-                sceneOpacity.push(1.0);
-            }
-            uniforms['sceneOpacity'] ={
-                'type': 'f',
-                'value': sceneOpacity
-            };
-
-            const sceneVisibility = [];
-            for (let i = 0; i < Constants.MaxScenes; i++) {
-                sceneVisibility.push(1);
-            }
-            uniforms['sceneVisibility'] ={
-                'type': 'i',
-                'value': sceneVisibility
-            };
-        }
-
-        if (dynamicMode) {
-            const transformMatrices = [];
-            for (let i = 0; i < Constants.MaxScenes; i++) {
-                transformMatrices.push(new THREE.Matrix4());
-            }
-            uniforms['transforms'] = {
-                'type': 'mat4',
-                'value': transformMatrices
-            };
-        }
-
-        return uniforms;
+      const sceneVisibility = [];
+      for (let i = 0; i < Constants.MaxScenes; i++) {
+        sceneVisibility.push(1);
+      }
+      uniforms['sceneVisibility'] = {
+        type: 'i',
+        value: sceneVisibility,
+      };
     }
 
+    if (dynamicMode) {
+      const transformMatrices = [];
+      for (let i = 0; i < Constants.MaxScenes; i++) {
+        transformMatrices.push(new THREE.Matrix4());
+      }
+      uniforms['transforms'] = {
+        type: 'mat4',
+        value: transformMatrices,
+      };
+    }
+
+    return uniforms;
+  }
 }

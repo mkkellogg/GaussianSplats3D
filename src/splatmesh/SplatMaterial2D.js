@@ -2,22 +2,25 @@ import * as THREE from 'three';
 import { SplatMaterial } from './SplatMaterial.js';
 
 export class SplatMaterial2D {
-
-    /**
-     * Build the Three.js material that is used to render the splats.
-     * @param {number} dynamicMode If true, it means the scene geometry represented by this splat mesh is not stationary or
-     *                             that the splat count might change
-     * @param {boolean} enableOptionalEffects When true, allows for usage of extra properties and attributes in the shader for effects
-     *                                        such as opacity adjustment. Default is false for performance reasons.
-     * @param {number} splatScale Value by which all splats are scaled in screen-space (default is 1.0)
-     * @param {number} pointCloudModeEnabled Render all splats as screen-space circles
-     * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
-     * @return {THREE.ShaderMaterial}
-     */
-    static build(dynamicMode = false, enableOptionalEffects = false, splatScale = 1.0,
-                 pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
-
-        const customVertexVars = `
+  /**
+   * Build the Three.js material that is used to render the splats.
+   * @param {number} dynamicMode If true, it means the scene geometry represented by this splat mesh is not stationary or
+   *                             that the splat count might change
+   * @param {boolean} enableOptionalEffects When true, allows for usage of extra properties and attributes in the shader for effects
+   *                                        such as opacity adjustment. Default is false for performance reasons.
+   * @param {number} splatScale Value by which all splats are scaled in screen-space (default is 1.0)
+   * @param {number} pointCloudModeEnabled Render all splats as screen-space circles
+   * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
+   * @return {THREE.ShaderMaterial}
+   */
+  static build(
+    dynamicMode = false,
+    enableOptionalEffects = false,
+    splatScale = 1.0,
+    pointCloudModeEnabled = false,
+    maxSphericalHarmonicsDegree = 0,
+  ) {
+    const customVertexVars = `
             uniform vec2 scaleRotationsTextureSize;
             uniform highp sampler2D scaleRotationsTexture;
             varying mat3 vT;
@@ -25,42 +28,50 @@ export class SplatMaterial2D {
             varying vec2 vFragCoord;
         `;
 
-        let vertexShaderSource = SplatMaterial.buildVertexShaderBase(dynamicMode, enableOptionalEffects,
-                                                                     maxSphericalHarmonicsDegree, customVertexVars);
-        vertexShaderSource += SplatMaterial2D.buildVertexShaderProjection();
-        const fragmentShaderSource = SplatMaterial2D.buildFragmentShader();
+    let vertexShaderSource = SplatMaterial.buildVertexShaderBase(
+      dynamicMode,
+      enableOptionalEffects,
+      maxSphericalHarmonicsDegree,
+      customVertexVars,
+    );
+    vertexShaderSource += SplatMaterial2D.buildVertexShaderProjection();
+    const fragmentShaderSource = SplatMaterial2D.buildFragmentShader();
 
-        const uniforms = SplatMaterial.getUniforms(dynamicMode, enableOptionalEffects,
-                                                   maxSphericalHarmonicsDegree, splatScale, pointCloudModeEnabled);
+    const uniforms = SplatMaterial.getUniforms(
+      dynamicMode,
+      enableOptionalEffects,
+      maxSphericalHarmonicsDegree,
+      splatScale,
+      pointCloudModeEnabled,
+    );
 
-        uniforms['scaleRotationsTexture'] = {
-            'type': 't',
-            'value': null
-        };
-        uniforms['scaleRotationsTextureSize'] = {
-            'type': 'v2',
-            'value': new THREE.Vector2(1024, 1024)
-        };
+    uniforms['scaleRotationsTexture'] = {
+      type: 't',
+      value: null,
+    };
+    uniforms['scaleRotationsTextureSize'] = {
+      type: 'v2',
+      value: new THREE.Vector2(1024, 1024),
+    };
 
-        const material = new THREE.ShaderMaterial({
-            uniforms: uniforms,
-            vertexShader: vertexShaderSource,
-            fragmentShader: fragmentShaderSource,
-            transparent: true,
-            alphaTest: 1.0,
-            blending: THREE.NormalBlending,
-            depthTest: true,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        });
+    const material = new THREE.ShaderMaterial({
+      uniforms: uniforms,
+      vertexShader: vertexShaderSource,
+      fragmentShader: fragmentShaderSource,
+      transparent: true,
+      alphaTest: 1.0,
+      blending: THREE.NormalBlending,
+      depthTest: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
 
-        return material;
-    }
+    return material;
+  }
 
-    static buildVertexShaderProjection() {
-
-        // Original CUDA code for calculating splat-to-screen transformation, for reference
-        /*
+  static buildVertexShaderProjection() {
+    // Original CUDA code for calculating splat-to-screen transformation, for reference
+    /*
             glm::mat3 R = quat_to_rotmat(rot);
             glm::mat3 S = scale_to_mat(scale, mod);
             glm::mat3 L = R * S;
@@ -89,9 +100,9 @@ export class SplatMaterial2D {
             normal = transformVec4x3({L[2].x, L[2].y, L[2].z}, viewmatrix);
         */
 
-        // Compute a 2D-to-2D mapping matrix from a tangent plane into a image plane
-        // given a 2D gaussian parameters. T = WH (from the paper: https://arxiv.org/pdf/2403.17888)
-        let vertexShaderSource = `
+    // Compute a 2D-to-2D mapping matrix from a tangent plane into a image plane
+    // given a 2D gaussian parameters. T = WH (from the paper: https://arxiv.org/pdf/2403.17888)
+    let vertexShaderSource = `
 
             vec4 scaleRotationA = texture(scaleRotationsTexture, getDataUVF(nearestEvenIndex, 1.5,
                                                                             oddOffset, scaleRotationsTextureSize));
@@ -126,8 +137,8 @@ export class SplatMaterial2D {
             vec3 normal = vec3(viewMatrix * vec4(L[0][2], L[1][2], L[2][2], 0.0));
         `;
 
-        // Original CUDA code for projection to 2D, for reference
-        /*
+    // Original CUDA code for projection to 2D, for reference
+    /*
             float3 T0 = {T[0][0], T[0][1], T[0][2]};
             float3 T1 = {T[1][0], T[1][1], T[1][2]};
             float3 T3 = {T[2][0], T[2][1], T[2][2]};
@@ -152,11 +163,11 @@ export class SplatMaterial2D {
             return true;
         */
 
-        // Computing the bounding box of the 2D Gaussian and its center
-        // The center of the bounding box is used to create a low pass filter.
-        // This code is based off the reference implementation and creates an AABB aligned
-        // with the screen for the quad to be rendered.
-        const referenceQuadGeneration = `
+    // Computing the bounding box of the 2D Gaussian and its center
+    // The center of the bounding box is used to create a low pass filter.
+    // This code is based off the reference implementation and creates an AABB aligned
+    // with the screen for the quad to be rendered.
+    const referenceQuadGeneration = `
             vec3 T0 = vec3(T[0][0], T[0][1], T[0][2]);
             vec3 T1 = vec3(T[1][0], T[1][1], T[1][2]);
             vec3 T3 = vec3(T[2][0], T[2][1], T[2][2]);
@@ -188,15 +199,15 @@ export class SplatMaterial2D {
             vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
         `;
 
-        const useRefImplementation = false;
-        if (useRefImplementation) {
-            vertexShaderSource += referenceQuadGeneration;
-        } else {
-            // Create a quad that is aligned with the eigen vectors of the projected gaussian for rendering.
-            // This is a different approach than the reference implementation, similar to how the rendering of
-            // 3D gaussians in this viewer differs from the reference implementation. If the quad is too small
-            // (smaller than a pixel), then revert to the reference implementation.
-            vertexShaderSource += `
+    const useRefImplementation = false;
+    if (useRefImplementation) {
+      vertexShaderSource += referenceQuadGeneration;
+    } else {
+      // Create a quad that is aligned with the eigen vectors of the projected gaussian for rendering.
+      // This is a different approach than the reference implementation, similar to how the rendering of
+      // 3D gaussians in this viewer differs from the reference implementation. If the quad is too small
+      // (smaller than a pixel), then revert to the reference implementation.
+      vertexShaderSource += `
 
                 mat4 splat2World4 = mat4(vec4(L[0], 0.0),
                                         vec4(L[1], 0.0),
@@ -233,18 +244,17 @@ export class SplatMaterial2D {
                     vFragCoord = (quadPos.xy * 0.5 + 0.5) * viewport;
                 }
             `;
-        }
-
-        vertexShaderSource += SplatMaterial.getVertexShaderFadeIn();
-        vertexShaderSource += `}`;
-
-        return vertexShaderSource;
     }
 
-    static buildFragmentShader() {
+    vertexShaderSource += SplatMaterial.getVertexShaderFadeIn();
+    vertexShaderSource += `}`;
 
-        // Original CUDA code for splat intersection, for reference
-        /*
+    return vertexShaderSource;
+  }
+
+  static buildFragmentShader() {
+    // Original CUDA code for splat intersection, for reference
+    /*
             const float2 xy = collected_xy[j];
             const float3 Tu = collected_Tu[j];
             const float3 Tv = collected_Tv[j];
@@ -286,7 +296,7 @@ export class SplatMaterial2D {
 
             float w = alpha * T;
         */
-        let fragmentShaderSource = `
+    let fragmentShaderSource = `
             precision highp float;
             #include <common>
 
@@ -343,6 +353,6 @@ export class SplatMaterial2D {
             }
         `;
 
-        return fragmentShaderSource;
-    }
+    return fragmentShaderSource;
+  }
 }

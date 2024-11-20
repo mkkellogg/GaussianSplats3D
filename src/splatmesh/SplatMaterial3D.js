@@ -2,25 +2,30 @@ import * as THREE from 'three';
 import { SplatMaterial } from './SplatMaterial.js';
 
 export class SplatMaterial3D {
-
-    /**
-     * Build the Three.js material that is used to render the splats.
-     * @param {number} dynamicMode If true, it means the scene geometry represented by this splat mesh is not stationary or
-     *                             that the splat count might change
-     * @param {boolean} enableOptionalEffects When true, allows for usage of extra properties and attributes in the shader for effects
-     *                                        such as opacity adjustment. Default is false for performance reasons.
-     * @param {boolean} antialiased If true, calculate compensation factor to deal with gaussians being rendered at a significantly
-     *                              different resolution than that of their training
-     * @param {number} maxScreenSpaceSplatSize The maximum clip space splat size
-     * @param {number} splatScale Value by which all splats are scaled in screen-space (default is 1.0)
-     * @param {number} pointCloudModeEnabled Render all splats as screen-space circles
-     * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
-     * @return {THREE.ShaderMaterial}
-     */
-    static build(dynamicMode = false, enableOptionalEffects = false, antialiased = false,
-                 maxScreenSpaceSplatSize = 2048, splatScale = 1.0, pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
-
-        const customVertexVars = `
+  /**
+   * Build the Three.js material that is used to render the splats.
+   * @param {number} dynamicMode If true, it means the scene geometry represented by this splat mesh is not stationary or
+   *                             that the splat count might change
+   * @param {boolean} enableOptionalEffects When true, allows for usage of extra properties and attributes in the shader for effects
+   *                                        such as opacity adjustment. Default is false for performance reasons.
+   * @param {boolean} antialiased If true, calculate compensation factor to deal with gaussians being rendered at a significantly
+   *                              different resolution than that of their training
+   * @param {number} maxScreenSpaceSplatSize The maximum clip space splat size
+   * @param {number} splatScale Value by which all splats are scaled in screen-space (default is 1.0)
+   * @param {number} pointCloudModeEnabled Render all splats as screen-space circles
+   * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
+   * @return {THREE.ShaderMaterial}
+   */
+  static build(
+    dynamicMode = false,
+    enableOptionalEffects = false,
+    antialiased = false,
+    maxScreenSpaceSplatSize = 2048,
+    splatScale = 1.0,
+    pointCloudModeEnabled = false,
+    maxSphericalHarmonicsDegree = 0,
+  ) {
+    const customVertexVars = `
             uniform vec2 covariancesTextureSize;
             uniform highp sampler2D covariancesTexture;
             uniform highp usampler2D covariancesTextureHalfFloat;
@@ -36,48 +41,65 @@ export class SplatMaterial3D {
             }
         `;
 
-        let vertexShaderSource = SplatMaterial.buildVertexShaderBase(dynamicMode, enableOptionalEffects,
-                                                                     maxSphericalHarmonicsDegree, customVertexVars);
-        vertexShaderSource += SplatMaterial3D.buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize);
-        const fragmentShaderSource = SplatMaterial3D.buildFragmentShader();
+    let vertexShaderSource = SplatMaterial.buildVertexShaderBase(
+      dynamicMode,
+      enableOptionalEffects,
+      maxSphericalHarmonicsDegree,
+      customVertexVars,
+    );
+    vertexShaderSource += SplatMaterial3D.buildVertexShaderProjection(
+      antialiased,
+      enableOptionalEffects,
+      maxScreenSpaceSplatSize,
+    );
+    const fragmentShaderSource = SplatMaterial3D.buildFragmentShader();
 
-        const uniforms = SplatMaterial.getUniforms(dynamicMode, enableOptionalEffects,
-                                                   maxSphericalHarmonicsDegree, splatScale, pointCloudModeEnabled);
+    const uniforms = SplatMaterial.getUniforms(
+      dynamicMode,
+      enableOptionalEffects,
+      maxSphericalHarmonicsDegree,
+      splatScale,
+      pointCloudModeEnabled,
+    );
 
-        uniforms['covariancesTextureSize'] = {
-            'type': 'v2',
-            'value': new THREE.Vector2(1024, 1024)
-        };
-        uniforms['covariancesTexture'] = {
-            'type': 't',
-            'value': null
-        };
-        uniforms['covariancesTextureHalfFloat'] = {
-            'type': 't',
-            'value': null
-        };
-        uniforms['covariancesAreHalfFloat'] = {
-            'type': 'i',
-            'value': 0
-        };
+    uniforms['covariancesTextureSize'] = {
+      type: 'v2',
+      value: new THREE.Vector2(1024, 1024),
+    };
+    uniforms['covariancesTexture'] = {
+      type: 't',
+      value: null,
+    };
+    uniforms['covariancesTextureHalfFloat'] = {
+      type: 't',
+      value: null,
+    };
+    uniforms['covariancesAreHalfFloat'] = {
+      type: 'i',
+      value: 0,
+    };
 
-        const material = new THREE.ShaderMaterial({
-            uniforms: uniforms,
-            vertexShader: vertexShaderSource,
-            fragmentShader: fragmentShaderSource,
-            transparent: true,
-            alphaTest: 1.0,
-            blending: THREE.NormalBlending,
-            depthTest: true,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        });
+    const material = new THREE.ShaderMaterial({
+      uniforms: uniforms,
+      vertexShader: vertexShaderSource,
+      fragmentShader: fragmentShaderSource,
+      transparent: true,
+      alphaTest: 1.0,
+      blending: THREE.NormalBlending,
+      depthTest: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
 
-        return material;
-    }
+    return material;
+  }
 
-    static buildVertexShaderProjection(antialiased, enableOptionalEffects, maxScreenSpaceSplatSize) {
-        let vertexShaderSource = `
+  static buildVertexShaderProjection(
+    antialiased,
+    enableOptionalEffects,
+    maxScreenSpaceSplatSize,
+  ) {
+    let vertexShaderSource = `
 
             vec4 sampledCovarianceA;
             vec4 sampledCovarianceB;
@@ -133,8 +155,8 @@ export class SplatMaterial3D {
             mat3 cov2Dm = transpose(T) * Vrk * T;
             `;
 
-        if (antialiased) {
-            vertexShaderSource += `
+    if (antialiased) {
+      vertexShaderSource += `
                 float detOrig = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
                 cov2Dm[0][0] += 0.3;
                 cov2Dm[1][1] += 0.3;
@@ -142,14 +164,14 @@ export class SplatMaterial3D {
                 vColor.a *= sqrt(max(detOrig / detBlur, 0.0));
                 if (vColor.a < minAlpha) return;
             `;
-        } else {
-            vertexShaderSource += `
+    } else {
+      vertexShaderSource += `
                 cov2Dm[0][0] += 0.3;
                 cov2Dm[1][1] += 0.3;
             `;
-        }
+    }
 
-        vertexShaderSource += `
+    vertexShaderSource += `
 
             // We are interested in the upper-left 2x2 portion of the projected 3D covariance matrix because
             // we only care about the X and Y values. We want the X-diagonal, cov2Dm[0][0],
@@ -191,17 +213,21 @@ export class SplatMaterial3D {
             vec2 eigenVector2 = vec2(eigenVector1.y, -eigenVector1.x);
 
             // We use sqrt(8) standard deviations instead of 3 to eliminate more of the splat with a very low opacity.
-            vec2 basisVector1 = eigenVector1 * splatScale * min(sqrt8 * sqrt(eigenValue1), ${parseInt(maxScreenSpaceSplatSize)}.0);
-            vec2 basisVector2 = eigenVector2 * splatScale * min(sqrt8 * sqrt(eigenValue2), ${parseInt(maxScreenSpaceSplatSize)}.0);
+            vec2 basisVector1 = eigenVector1 * splatScale * min(sqrt8 * sqrt(eigenValue1), ${parseInt(
+              maxScreenSpaceSplatSize,
+            )}.0);
+            vec2 basisVector2 = eigenVector2 * splatScale * min(sqrt8 * sqrt(eigenValue2), ${parseInt(
+              maxScreenSpaceSplatSize,
+            )}.0);
             `;
 
-        if (enableOptionalEffects) {
-            vertexShaderSource += `
+    if (enableOptionalEffects) {
+      vertexShaderSource += `
                 vColor.a *= splatOpacityFromScene;
             `;
-        }
+    }
 
-        vertexShaderSource += `
+    vertexShaderSource += `
             vec2 ndcOffset = vec2(vPosition.x * basisVector1 + vPosition.y * basisVector2) *
                              basisViewport * 2.0 * inverseFocalAdjustment;
 
@@ -212,14 +238,14 @@ export class SplatMaterial3D {
             vPosition *= sqrt8;
         `;
 
-        vertexShaderSource += SplatMaterial.getVertexShaderFadeIn();
-        vertexShaderSource += `}`;
+    vertexShaderSource += SplatMaterial.getVertexShaderFadeIn();
+    vertexShaderSource += `}`;
 
-        return vertexShaderSource;
-    }
+    return vertexShaderSource;
+  }
 
-    static buildFragmentShader() {
-        let fragmentShaderSource = `
+  static buildFragmentShader() {
+    let fragmentShaderSource = `
             precision highp float;
             #include <common>
  
@@ -230,7 +256,7 @@ export class SplatMaterial3D {
             varying vec2 vPosition;
         `;
 
-        fragmentShaderSource += `
+    fragmentShaderSource += `
             void main () {
                 // Compute the positional squared distance from the center of the splat to the current fragment.
                 float A = dot(vPosition, vPosition);
@@ -250,7 +276,6 @@ export class SplatMaterial3D {
             }
         `;
 
-        return fragmentShaderSource;
-    }
-
+    return fragmentShaderSource;
+  }
 }

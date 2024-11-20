@@ -1,2 +1,0 @@
-npx rollup -c
-git add ./build

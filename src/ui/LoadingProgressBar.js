@@ -1,32 +1,30 @@
 export class LoadingProgressBar {
+  constructor(container) {
+    this.idGen = 0;
 
-    constructor(container) {
+    this.tasks = [];
 
-        this.idGen = 0;
+    this.container = container || document.body;
 
-        this.tasks = [];
+    this.progressBarContainerOuter = document.createElement('div');
+    this.progressBarContainerOuter.className = 'progressBarOuterContainer';
+    this.progressBarContainerOuter.style.display = 'none';
 
-        this.container = container || document.body;
+    this.progressBarBox = document.createElement('div');
+    this.progressBarBox.className = 'progressBarBox';
 
-        this.progressBarContainerOuter = document.createElement('div');
-        this.progressBarContainerOuter.className = 'progressBarOuterContainer';
-        this.progressBarContainerOuter.style.display = 'none';
+    this.progressBarBackground = document.createElement('div');
+    this.progressBarBackground.className = 'progressBarBackground';
 
-        this.progressBarBox = document.createElement('div');
-        this.progressBarBox.className = 'progressBarBox';
+    this.progressBar = document.createElement('div');
+    this.progressBar.className = 'progressBar';
 
-        this.progressBarBackground = document.createElement('div');
-        this.progressBarBackground.className = 'progressBarBackground';
+    this.progressBarBackground.appendChild(this.progressBar);
+    this.progressBarBox.appendChild(this.progressBarBackground);
+    this.progressBarContainerOuter.appendChild(this.progressBarBox);
 
-        this.progressBar = document.createElement('div');
-        this.progressBar.className = 'progressBar';
-
-        this.progressBarBackground.appendChild(this.progressBar);
-        this.progressBarBox.appendChild(this.progressBarBackground);
-        this.progressBarContainerOuter.appendChild(this.progressBarBox);
-
-        const style = document.createElement('style');
-        style.innerHTML = `
+    const style = document.createElement('style');
+    style.innerHTML = `
 
             .progressBarOuterContainer {
                 width: 100%;
@@ -72,31 +70,34 @@ export class LoadingProgressBar {
             }
 
         `;
-        this.progressBarContainerOuter.appendChild(style);
-        this.container.appendChild(this.progressBarContainerOuter);
-    }
+    this.progressBarContainerOuter.appendChild(style);
+    this.container.appendChild(this.progressBarContainerOuter);
+  }
 
-    show() {
-        this.progressBarContainerOuter.style.display = 'block';
-    }
+  show() {
+    this.progressBarContainerOuter.style.display = 'block';
+  }
 
-    hide() {
-        this.progressBarContainerOuter.style.display = 'none';
-    }
+  hide() {
+    this.progressBarContainerOuter.style.display = 'none';
+  }
 
-    setProgress(progress) {
-        this.progressBar.style.width = progress + '%';
-    }
+  setProgress(progress) {
+    this.progressBar.style.width = progress + '%';
+  }
 
-    setContainer(container) {
-        if (this.container && this.progressBarContainerOuter.parentElement === this.container) {
-            this.container.removeChild(this.progressBarContainerOuter);
-        }
-        if (container) {
-            this.container = container;
-            this.container.appendChild(this.progressBarContainerOuter);
-            this.progressBarContainerOuter.style.zIndex = this.container.style.zIndex + 1;
-        }
+  setContainer(container) {
+    if (
+      this.container &&
+      this.progressBarContainerOuter.parentElement === this.container
+    ) {
+      this.container.removeChild(this.progressBarContainerOuter);
     }
-
+    if (container) {
+      this.container = container;
+      this.container.appendChild(this.progressBarContainerOuter);
+      this.progressBarContainerOuter.style.zIndex =
+        this.container.style.zIndex + 1;
+    }
+  }
 }

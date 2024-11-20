@@ -21,7 +21,7 @@
     "watch": "npx npm-watch ",
     "demo": "node util/server.js -d ./build/demo",
     "fix-styling": "npx stylelint **/*.scss --fix",
-    "fix-js": "npx eslint src --fix",
+    "fix-js": "npm run prettify && npx eslint src --fix",
     "lint": "npx eslint 'src/**/*.js' || true",
     "prettify": "npx prettier --write 'src/**/*.js'",
     "prepare": "husky"
