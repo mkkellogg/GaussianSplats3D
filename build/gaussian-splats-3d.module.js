@@ -11,10 +11,10 @@ import { Ray as Ray$1, Plane, MathUtils, EventDispatcher, Vector3, MOUSE, TOUCH,
  * very thoroughly and the implementation is kinda janky. If you can at all help it, please avoid using it :)
  */
 class AbortablePromise {
-
     static idGen = 0;
-
+    
     constructor(promiseFunc, abortHandler) {
+        console.log("plop");
 
         let resolver;
         let rejecter;
