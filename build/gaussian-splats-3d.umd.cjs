@@ -6019,13 +6019,14 @@
     Splat: 0,
     KSplat: 1,
     Ply: 2,
+    GLTF: 3,
   };
 
   const sceneFormatFromPath = (path) => {
     if (path.endsWith('.ply')) return SceneFormat.Ply;
     else if (path.endsWith('.splat')) return SceneFormat.Splat;
     else if (path.endsWith('.ksplat')) return SceneFormat.KSplat;
-    else if (path.endsWith('.gltf')) return SceneFormat.KSplat;
+    else if (path.endsWith('.gltf')) return SceneFormat.GLTF;
     return null;
   };
 
@@ -7815,21 +7816,21 @@
           splatBuffers,
           row,
           shBuffers,
-          shDegree
+          shDegree,
         );
         splatArray.addSplat(newSplat);
       }
       return splatArray;
     }
 
-    static parseToUncompressedSplat = (function () {
+    static parseToUncompressedSplat = (function() {
       const tempRotation = new THREE__namespace.Quaternion();
 
       const OFFSET = UncompressedSplatArray.OFFSET;
 
       const SH_C0 = 0.28209479177387814;
 
-      return function (splatBuffers, row, shBuffers, shDegree) {
+      return function(splatBuffers, row, shBuffers, shDegree) {
         const newSplat = UncompressedSplatArray.createSplat(0);
 
         // center
@@ -7912,134 +7913,158 @@
   }
 
   function finalize(splatData, minimumAlpha = 1) {
-      return SplatBuffer.generateFromUncompressedSplatArrays([splatData], minimumAlpha, 0, new THREE__namespace.Vector3());
+    return SplatBuffer.generateFromUncompressedSplatArrays(
+      [splatData],
+      minimumAlpha,
+      0,
+      new THREE__namespace.Vector3(),
+    );
   }
 
   function getBaseUrl(url) {
-      return url.substring(0, url.lastIndexOf("/") + 1);
+    return url.substring(0, url.lastIndexOf('/') + 1);
   }
 
   function getFilePaths(gltf, gltfUrl) {
-      const baseUrl = getBaseUrl(gltfUrl);
+    const baseUrl = getBaseUrl(gltfUrl);
 
-      try {
-          const attributes = gltf.meshes[0].primitives[0].attributes;
-          const extensions = gltf.meshes[0].primitives[0].extensions.OPF_mesh_primitive_custom_attributes.attributes;
+    try {
+      const attributes = gltf.meshes[0].primitives[0].attributes;
+      const extensions =
+        gltf.meshes[0].primitives[0].extensions
+          .OPF_mesh_primitive_custom_attributes.attributes;
 
-          const attributeMapping = {
-              POSITION: attributes.POSITION,
-              opacity: extensions.opacity,
-              scale: extensions.scale,
-              rotation: extensions.rotation,
-              // 0th order
-              sh_band_0: extensions.sh_band_0,
-              // 1st order
-              sh_band_1_0: extensions.sh_band_1_triplet_0,
-              sh_band_1_1: extensions.sh_band_1_triplet_1,
-              sh_band_1_2: extensions.sh_band_1_triplet_2,
-              // 2nd order
-              sh_band_2_0: extensions.sh_band_2_triplet_0,
-              sh_band_2_1: extensions.sh_band_2_triplet_1,
-              sh_band_2_2: extensions.sh_band_2_triplet_2,
-              sh_band_2_3: extensions.sh_band_2_triplet_3,
-              sh_band_2_4: extensions.sh_band_2_triplet_4,
-          };
+      const attributeMapping = {
+        POSITION: attributes.POSITION,
+        opacity: extensions.opacity,
+        scale: extensions.scale,
+        rotation: extensions.rotation,
+        // 0th order
+        sh_band_0: extensions.sh_band_0,
+        // 1st order
+        sh_band_1_0: extensions.sh_band_1_triplet_0,
+        sh_band_1_1: extensions.sh_band_1_triplet_1,
+        sh_band_1_2: extensions.sh_band_1_triplet_2,
+        // 2nd order
+        sh_band_2_0: extensions.sh_band_2_triplet_0,
+        sh_band_2_1: extensions.sh_band_2_triplet_1,
+        sh_band_2_2: extensions.sh_band_2_triplet_2,
+        sh_band_2_3: extensions.sh_band_2_triplet_3,
+        sh_band_2_4: extensions.sh_band_2_triplet_4,
+      };
 
-          return Object.fromEntries(Object.entries(attributeMapping).map(([key, index]) => {
-              const bufferIndex = gltf.bufferViews[gltf.accessors[index].bufferView].buffer;
-              return [key, baseUrl + gltf.buffers[bufferIndex].uri];
-          }));
-
-      } catch (error) {
-          console.error("Error processing GLTF structure:", error);
-          return {};
-      }
+      return Object.fromEntries(
+        Object.entries(attributeMapping).map(([key, index]) => {
+          const bufferIndex =
+            gltf.bufferViews[gltf.accessors[index].bufferView].buffer;
+          return [key, baseUrl + gltf.buffers[bufferIndex].uri];
+        }),
+      );
+    } catch (error) {
+      console.error('Error processing GLTF structure:', error);
+      return {};
+    }
   }
 
   class GLTFLoader {
-      /**
-       * 
-       * @param {import('../../../Viewer.js').Viewer} viewer 
-       */
-      constructor(viewer){
-          this.viewer=viewer;
+    /**
+     *
+     * @param {import('../../../Viewer.js').Viewer} viewer
+     */
+    constructor(viewer) {
+      this.viewer = viewer;
+    }
+    async loadFromURL(url = 'http://localhost:8081/gaussian/gltf/pcl.gltf') {
+      try {
+        const gltf = await this.fetchGLTF(url);
+        const filePaths = getFilePaths(gltf, url);
+        const splatBuffers = await this.fetchBuffers(filePaths, [
+          'POSITION',
+          'opacity',
+          'scale',
+          'rotation',
+          'sh_band_0',
+        ]);
+        const shBuffers = await this.fetchBuffers(filePaths, [
+          'sh_band_1_0',
+          'sh_band_1_1',
+          'sh_band_1_2',
+          'sh_band_2_0',
+          'sh_band_2_1',
+          'sh_band_2_2',
+          'sh_band_2_3',
+          'sh_band_2_4',
+          // TODO: higher order bands
+        ]);
+        const splatCount = this.getSplatCountFromGLTF(gltf);
+
+        return this.loadFromBufferData(splatCount, splatBuffers, shBuffers);
+      } catch (error) {
+        console.error('Error loading GLTF from URL:', error);
+        return null;
       }
-      async loadFromURL(url = 'http://localhost:8081/gaussian/gltf/pcl.gltf') {
-          try {
-              const gltf = await this.fetchGLTF(url);
-              const filePaths = getFilePaths(gltf, url);
-              const splatBuffers = await this.fetchBuffers(filePaths, [
-                  'POSITION', 'opacity', 'scale', 'rotation', 'sh_band_0'
-              ]);
-              const shBuffers = await this.fetchBuffers(filePaths, [
-                  'sh_band_1_0', 'sh_band_1_1', 'sh_band_1_2',
-                  'sh_band_2_0', 'sh_band_2_1', 'sh_band_2_2', 'sh_band_2_3', 'sh_band_2_4',
-                  // TODO: higher order bands
-              ]);
-              const splatCount = this.getSplatCountFromGLTF(gltf);
+    }
 
-              return this.loadFromBufferData(splatCount, splatBuffers, shBuffers);
-          } catch (error) {
-              console.error("Error loading GLTF from URL:", error);
-              return null;
-          }
+    fetch(url) {
+      return this.viewer.fetch(url);
+    }
+
+    async fetchGLTF(url) {
+      try {
+        const response = await this.fetch(url);
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching GLTF:', error);
+        return null;
       }
+    }
 
-      fetch(url) {
-          return this.viewer.fetch(url)
+    async fetchBuffers(filePaths, bufferNames) {
+      // const componentTypeMap = {
+      //     5120: Int8Array,
+      //     5121: Uint8Array,
+      //     5122: Int16Array,
+      //     5123: Uint16Array,
+      //     5125: Uint32Array,
+      //     5126: Float32Array
+      // };
+
+      try {
+        const bufferPromises = bufferNames.map(async (name) => {
+          const response = await this.fetch(filePaths[name]);
+          const buffer = await response.arrayBuffer();
+
+          // TODO: check component type rather than assuming float32
+          return { [name]: new Float32Array(buffer) };
+        });
+
+        const bufferData = await Promise.all(bufferPromises);
+        return Object.assign({}, ...bufferData);
+      } catch (error) {
+        console.error('Error fetching buffers:', error);
+        return {};
       }
+    }
 
-      async fetchGLTF(url) {
-          try {
-              const response = await this.fetch(url);
-              return await response.json();
-          } catch (error) {
-              console.error("Error fetching GLTF:", error);
-              return null;
-          }
+    getSplatCountFromGLTF(gltf) {
+      try {
+        return gltf.accessors[gltf.meshes[0].primitives[0].attributes.POSITION]
+          .count;
+      } catch (error) {
+        console.error('Error determining splat count:', error);
+        return 0;
       }
+    }
 
-      async fetchBuffers(filePaths, bufferNames) {
-
-          // const componentTypeMap = {
-          //     5120: Int8Array,
-          //     5121: Uint8Array,
-          //     5122: Int16Array,
-          //     5123: Uint16Array,
-          //     5125: Uint32Array,
-          //     5126: Float32Array
-          // };
-
-          try {
-              const bufferPromises = bufferNames.map(async (name) => {
-                  const response = await this.fetch(filePaths[name]);
-                  const buffer = await response.arrayBuffer();
-                  
-                  // TODO: check component type rather than assuming float32
-                  return { [name]: new Float32Array(buffer) };
-              });
-
-              const bufferData = await Promise.all(bufferPromises);
-              return Object.assign({}, ...bufferData);
-          } catch (error) {
-              console.error("Error fetching buffers:", error);
-              return {};
-          }
-      }
-
-      getSplatCountFromGLTF(gltf) {
-          try {
-              return gltf.accessors[gltf.meshes[0].primitives[0].attributes.POSITION].count;
-          } catch (error) {
-              console.error("Error determining splat count:", error);
-              return 0;
-          }
-      }
-
-      async loadFromBufferData(splatCount, splatBuffers, shBuffers = []) {
-          return delayedExecute(() => new GLTFParser().parseToUncompressedSplatArray(splatCount, splatBuffers, shBuffers))
-              .then(finalize);
-      }
+    async loadFromBufferData(splatCount, splatBuffers, shBuffers = []) {
+      return delayedExecute(() =>
+        new GLTFParser().parseToUncompressedSplatArray(
+          splatCount,
+          splatBuffers,
+          shBuffers,
+        ),
+      ).then(finalize);
+    }
   }
 
   const VectorRight = new THREE__namespace.Vector3(1, 0, 0);
@@ -15951,11 +15976,8 @@
             this.fetchWithProgress,
           );
         } else if (format === SceneFormat.GLTF) {
-          return new GLTFLoader(this).loadFromURL(
-            path
-          );
+          return new GLTFLoader(this).loadFromURL(path);
         }
-
       } catch (e) {
         if (e instanceof DirectLoadError) {
           throw new Error(
