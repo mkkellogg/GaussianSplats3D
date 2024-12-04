@@ -54,7 +54,7 @@ export const rgbaArrayToInteger = function(arr, offset) {
     return arr[offset] + (arr[offset + 1] << 8) + (arr[offset + 2] << 16) + (arr[offset + 3] << 24);
 };
 
-export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
+export const fetchWithProgress = function(path, onProgress, saveChunks = true, headers) {
 
     const abortController = new AbortController();
     const signal = abortController.signal;
@@ -65,7 +65,9 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
     };
 
     return new AbortablePromise((resolve, reject) => {
-        fetch(path, { signal })
+        const fetchOptions = { signal };
+        if (headers) fetchOptions.headers = headers;
+         fetch(path, fetchOptions)
         .then(async (data) => {
             // Handle error conditions where data is still returned
             if (!data.ok) {
