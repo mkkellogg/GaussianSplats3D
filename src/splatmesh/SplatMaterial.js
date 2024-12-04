@@ -140,7 +140,7 @@ export class SplatMaterial {
         if (dynamicMode) {
             vertexShaderSource += `
                 mat4 transform = transforms[sceneIndex];
-                mat4 transformModelViewMatrix = modelViewMatrix * transform;
+                mat4 transformModelViewMatrix = viewMatrix * transform;
             `;
         } else {
             vertexShaderSource += `mat4 transformModelViewMatrix = modelViewMatrix;`;
