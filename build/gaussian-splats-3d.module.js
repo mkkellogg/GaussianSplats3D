@@ -136,7 +136,7 @@ const rgbaArrayToInteger = function(arr, offset) {
 };
 
 const makeProgressiveFetchFunction =
-  (get = fetch) =>
+  (get = globalThis.fetch) =>
   (path, onProgress, saveChunks = true) => {
     const abortController = new AbortController();
     const signal = abortController.signal;
