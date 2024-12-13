@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 
 export class SplatGeometry {
-
     /**
      * Build the Three.js geometry that will be used to render the splats. The geometry is instanced and is made up of
      * vertices for a single quad as well as an attribute buffer for the splat indexes.
@@ -9,7 +8,6 @@ export class SplatGeometry {
      * @return {THREE.InstancedBufferGeometry}
      */
     static build(maxSplatCount) {
-
         const baseGeometry = new THREE.BufferGeometry();
         baseGeometry.setIndex([0, 1, 2, 0, 2, 3]);
 

@@ -1,5 +1,4 @@
 export class Constants {
-
     static DefaultSplatSortDistanceMapPrecision = 16;
     static MemoryPageSize = 65536;
     static BytesPerFloat = 4;

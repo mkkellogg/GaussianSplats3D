@@ -4,44 +4,39 @@ import { Hit } from './Hit.js';
 import { SplatRenderMode } from '../SplatRenderMode.js';
 
 export class Raycaster {
-
     constructor(origin, direction, raycastAgainstTrueSplatEllipsoid = false) {
         this.ray = new Ray(origin, direction);
         this.raycastAgainstTrueSplatEllipsoid = raycastAgainstTrueSplatEllipsoid;
     }
 
-    setFromCameraAndScreenPosition = function() {
-
+    setFromCameraAndScreenPosition = (function () {
         const ndcCoords = new THREE.Vector2();
 
-        return function(camera, screenPosition, screenDimensions) {
-            ndcCoords.x = screenPosition.x / screenDimensions.x * 2.0 - 1.0;
-            ndcCoords.y = (screenDimensions.y - screenPosition.y) / screenDimensions.y * 2.0 - 1.0;
+        return function (camera, screenPosition, screenDimensions) {
+            ndcCoords.x = (screenPosition.x / screenDimensions.x) * 2.0 - 1.0;
+            ndcCoords.y = ((screenDimensions.y - screenPosition.y) / screenDimensions.y) * 2.0 - 1.0;
             if (camera.isPerspectiveCamera) {
                 this.ray.origin.setFromMatrixPosition(camera.matrixWorld);
-                this.ray.direction.set(ndcCoords.x, ndcCoords.y, 0.5 ).unproject(camera).sub(this.ray.origin).normalize();
+                this.ray.direction.set(ndcCoords.x, ndcCoords.y, 0.5).unproject(camera).sub(this.ray.origin).normalize();
                 this.camera = camera;
             } else if (camera.isOrthographicCamera) {
-                this.ray.origin.set(ndcCoords.x, ndcCoords.y,
-                                   (camera.near + camera.far) / (camera.near - camera.far)).unproject(camera);
+                this.ray.origin.set(ndcCoords.x, ndcCoords.y, (camera.near + camera.far) / (camera.near - camera.far)).unproject(camera);
                 this.ray.direction.set(0, 0, -1).transformDirection(camera.matrixWorld);
                 this.camera = camera;
             } else {
                 throw new Error('Raycaster::setFromCameraAndScreenPosition() -> Unsupported camera type');
             }
         };
+    })();
 
-    }();
-
-    intersectSplatMesh = function() {
-
+    intersectSplatMesh = (function () {
         const toLocal = new THREE.Matrix4();
         const fromLocal = new THREE.Matrix4();
         const sceneTransform = new THREE.Matrix4();
         const localRay = new Ray();
         const tempPoint = new THREE.Vector3();
 
-        return function(splatMesh, outHits = []) {
+        return function (splatMesh, outHits = []) {
             const splatTree = splatMesh.getSplatTree();
 
             if (!splatTree) return;
@@ -81,11 +76,9 @@ export class Raycaster {
 
             return outHits;
         };
+    })();
 
-    }();
-
-    castRayAtSplatTreeNode = function() {
-
+    castRayAtSplatTreeNode = (function () {
         const tempColor = new THREE.Vector4();
         const tempCenter = new THREE.Vector3();
         const tempScale = new THREE.Vector3();
@@ -101,13 +94,12 @@ export class Raycaster {
         const fromSphereSpace = new THREE.Matrix4();
         const tempRay = new Ray();
 
-        return function(ray, splatTree, node, outHits = []) {
+        return function (ray, splatTree, node, outHits = []) {
             if (!ray.intersectBox(node.boundingBox)) {
                 return;
             }
             if (node.data && node.data.indexes && node.data.indexes.length > 0) {
                 for (let i = 0; i < node.data.indexes.length; i++) {
-
                     const splatGlobalIndex = node.data.indexes[i];
                     const splatSceneIndex = splatTree.splatMesh.getSceneIndexForSplat(splatGlobalIndex);
                     const splatScene = splatTree.splatMesh.getScene(splatSceneIndex);
@@ -117,13 +109,16 @@ export class Raycaster {
                     splatTree.splatMesh.getSplatCenter(splatGlobalIndex, tempCenter);
                     splatTree.splatMesh.getSplatScaleAndRotation(splatGlobalIndex, tempScale, tempRotation);
 
-                    if (tempScale.x <= scaleEpsilon || tempScale.y <= scaleEpsilon ||
-                        splatTree.splatMesh.splatRenderMode === SplatRenderMode.ThreeD && tempScale.z <= scaleEpsilon) {
+                    if (
+                        tempScale.x <= scaleEpsilon ||
+                        tempScale.y <= scaleEpsilon ||
+                        (splatTree.splatMesh.splatRenderMode === SplatRenderMode.ThreeD && tempScale.z <= scaleEpsilon)
+                    ) {
                         continue;
                     }
 
                     if (!this.raycastAgainstTrueSplatEllipsoid) {
-                        let radius = (tempScale.x + tempScale.y);
+                        let radius = tempScale.x + tempScale.y;
                         let componentCount = 2;
                         if (splatTree.splatMesh.splatRenderMode === SplatRenderMode.ThreeD) {
                             radius += tempScale.z;
@@ -153,7 +148,7 @@ export class Raycaster {
                         }
                     }
                 }
-             }
+            }
             if (node.children && node.children.length > 0) {
                 for (let child of node.children) {
                     this.castRayAtSplatTreeNode(ray, splatTree, child, outHits);
@@ -161,6 +156,5 @@ export class Raycaster {
             }
             return outHits;
         };
-
-    }();
+    })();
 }

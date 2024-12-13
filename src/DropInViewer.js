@@ -6,7 +6,6 @@ import { Viewer } from './Viewer.js';
  * any other Three.js scene object (Mesh, Object3D, etc.)
  */
 export class DropInViewer extends THREE.Group {
-
     constructor(options = {}) {
         super();
 
@@ -28,7 +27,6 @@ export class DropInViewer extends THREE.Group {
         this.viewer.onSplatMeshChanged(() => {
             this.updateSplatMesh();
         });
-
     }
 
     updateSplatMesh() {
@@ -132,5 +130,4 @@ export class DropInViewer extends THREE.Group {
         mesh.frustumCulled = false;
         return mesh;
     }
-
 }

@@ -3,7 +3,6 @@ import { SplatBuffer } from '../SplatBuffer.js';
 import { UncompressedSplatArray } from '../UncompressedSplatArray.js';
 
 export class SplatParser {
-
     static RowSizeBytes = 32;
     static CenterSizeBytes = 12;
     static ScaleSizeBytes = 12;
@@ -11,7 +10,6 @@ export class SplatParser {
     static ColorSizeBytes = 4;
 
     static parseToUncompressedSplatBufferSection(fromSplat, toSplat, fromBuffer, fromOffset, toBuffer, toOffset) {
-
         const outBytesPerCenter = SplatBuffer.CompressionLevels[0].BytesPerCenter;
         const outBytesPerScale = SplatBuffer.CompressionLevels[0].BytesPerScale;
         const outBytesPerRotation = SplatBuffer.CompressionLevels[0].BytesPerRotation;
@@ -22,11 +20,18 @@ export class SplatParser {
             const inCenter = new Float32Array(fromBuffer, inBase, 3);
             const inScale = new Float32Array(fromBuffer, inBase + SplatParser.CenterSizeBytes, 3);
             const inColor = new Uint8Array(fromBuffer, inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes, 4);
-            const inRotation = new Uint8Array(fromBuffer, inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes +
-                                              SplatParser.RotationSizeBytes, 4);
+            const inRotation = new Uint8Array(
+                fromBuffer,
+                inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes + SplatParser.RotationSizeBytes,
+                4
+            );
 
-            const quat = new THREE.Quaternion((inRotation[1] - 128) / 128, (inRotation[2] - 128) / 128,
-                                              (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
+            const quat = new THREE.Quaternion(
+                (inRotation[1] - 128) / 128,
+                (inRotation[2] - 128) / 128,
+                (inRotation[3] - 128) / 128,
+                (inRotation[0] - 128) / 128
+            );
             quat.normalize();
 
             const outBase = i * outBytesPerSplat + toOffset;
@@ -56,21 +61,41 @@ export class SplatParser {
     }
 
     static parseToUncompressedSplatArraySection(fromSplat, toSplat, fromBuffer, fromOffset, splatArray) {
-
         for (let i = fromSplat; i <= toSplat; i++) {
             const inBase = i * SplatParser.RowSizeBytes + fromOffset;
             const inCenter = new Float32Array(fromBuffer, inBase, 3);
             const inScale = new Float32Array(fromBuffer, inBase + SplatParser.CenterSizeBytes, 3);
             const inColor = new Uint8Array(fromBuffer, inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes, 4);
-            const inRotation = new Uint8Array(fromBuffer, inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes +
-                                              SplatParser.RotationSizeBytes, 4);
+            const inRotation = new Uint8Array(
+                fromBuffer,
+                inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes + SplatParser.RotationSizeBytes,
+                4
+            );
 
-            const quat = new THREE.Quaternion((inRotation[1] - 128) / 128, (inRotation[2] - 128) / 128,
-                                              (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
+            const quat = new THREE.Quaternion(
+                (inRotation[1] - 128) / 128,
+                (inRotation[2] - 128) / 128,
+                (inRotation[3] - 128) / 128,
+                (inRotation[0] - 128) / 128
+            );
             quat.normalize();
 
-            splatArray.addSplatFromComonents(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
-                                             quat.w, quat.x, quat.y, quat.z, inColor[0], inColor[1], inColor[2], inColor[3]);
+            splatArray.addSplatFromComonents(
+                inCenter[0],
+                inCenter[1],
+                inCenter[2],
+                inScale[0],
+                inScale[1],
+                inScale[2],
+                quat.w,
+                quat.x,
+                quat.y,
+                quat.z,
+                inColor[0],
+                inColor[1],
+                inColor[2],
+                inColor[3]
+            );
         }
     }
 
@@ -90,18 +115,38 @@ export class SplatParser {
             const inCenter = new Float32Array(inBuffer, inBase, 3);
             const inScale = new Float32Array(inBuffer, inBase + SplatParser.CenterSizeBytes, 3);
             const inColor = new Uint8Array(inBuffer, inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes, 4);
-            const inRotation = new Uint8Array(inBuffer, inBase + SplatParser.CenterSizeBytes +
-                                              SplatParser.ScaleSizeBytes + SplatParser.ColorSizeBytes, 4);
+            const inRotation = new Uint8Array(
+                inBuffer,
+                inBase + SplatParser.CenterSizeBytes + SplatParser.ScaleSizeBytes + SplatParser.ColorSizeBytes,
+                4
+            );
 
-            const quat = new THREE.Quaternion((inRotation[1] - 128) / 128, (inRotation[2] - 128) / 128,
-                                              (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
+            const quat = new THREE.Quaternion(
+                (inRotation[1] - 128) / 128,
+                (inRotation[2] - 128) / 128,
+                (inRotation[3] - 128) / 128,
+                (inRotation[0] - 128) / 128
+            );
             quat.normalize();
 
-            splatArray.addSplatFromComonents(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
-                                             quat.w, quat.x, quat.y, quat.z, inColor[0], inColor[1], inColor[2], inColor[3]);
+            splatArray.addSplatFromComonents(
+                inCenter[0],
+                inCenter[1],
+                inCenter[2],
+                inScale[0],
+                inScale[1],
+                inScale[2],
+                quat.w,
+                quat.x,
+                quat.y,
+                quat.z,
+                inColor[0],
+                inColor[1],
+                inColor[2],
+                inColor[3]
+            );
         }
 
         return splatArray;
     }
-
 }

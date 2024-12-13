@@ -3,7 +3,7 @@ module.exports = {
       'browser': true,
       'es2021': true,
     },
-    'extends': 'google',
+    'extends': ['google', 'prettier'],
     'overrides': [
       {
         'env': {
@@ -22,7 +22,7 @@ module.exports = {
       'sourceType': 'module',
     },
     'rules': {
-      "indent": ["error", 4],
+      "indent": ["error", 2, { "SwitchCase": 1 }],
       "max-len": ["error", 140],
       "object-curly-spacing": ["off"],
       "comma-dangle": ["off"],

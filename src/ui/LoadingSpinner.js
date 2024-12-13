@@ -3,11 +3,9 @@ import { fadeElement } from './Util.js';
 const STANDARD_FADE_DURATION = 500;
 
 export class LoadingSpinner {
-
     static elementIDGen = 0;
 
     constructor(message, container) {
-
         this.taskIDGen = 0;
         this.elementID = LoadingSpinner.elementIDGen++;
 
@@ -157,8 +155,8 @@ export class LoadingSpinner {
 
     addTask(message) {
         const newTask = {
-            'message': message,
-            'id': this.taskIDGen++
+            message: message,
+            id: this.taskIDGen++
         };
         this.tasks.push(newTask);
         this.update();

@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { delayedExecute } from '../Util.js';
 
 class SplatTreeNode {
-
     static idGen = 0;
 
     constructor(min, max, depth, id) {
@@ -15,11 +14,9 @@ class SplatTreeNode {
         this.data = null;
         this.id = id || SplatTreeNode.idGen++;
     }
-
 }
 
 class SplatSubTree {
-
     constructor(maxDepth, maxCentersPerNode) {
         this.maxDepth = maxDepth;
         this.maxCentersPerNode = maxCentersPerNode;
@@ -37,7 +34,7 @@ class SplatSubTree {
         const convertedNode = new SplatTreeNode(minVector, maxVector, workerSubTreeNode.depth, workerSubTreeNode.id);
         if (workerSubTreeNode.data.indexes) {
             convertedNode.data = {
-                'indexes': []
+                indexes: []
             };
             for (let index of workerSubTreeNode.data.indexes) {
                 convertedNode.data.indexes.push(index);
@@ -59,7 +56,6 @@ class SplatSubTree {
         convertedSubTree.splatMesh = splatMesh;
         convertedSubTree.rootNode = SplatSubTree.convertWorkerSubTreeNode(workerSubTree.rootNode);
 
-
         const visitLeavesFromNode = (node, visitFunc) => {
             if (node.children.length === 0) visitFunc(node);
             for (let child of node.children) {
@@ -79,25 +75,27 @@ class SplatSubTree {
 }
 
 function createSplatTreeWorker(self) {
-
     let WorkerSplatTreeNodeIDGen = 0;
 
     class WorkerBox3 {
-
         constructor(min, max) {
             this.min = [min[0], min[1], min[2]];
             this.max = [max[0], max[1], max[2]];
         }
 
         containsPoint(point) {
-            return point[0] >= this.min[0] && point[0] <= this.max[0] &&
-                   point[1] >= this.min[1] && point[1] <= this.max[1] &&
-                   point[2] >= this.min[2] && point[2] <= this.max[2];
+            return (
+                point[0] >= this.min[0] &&
+                point[0] <= this.max[0] &&
+                point[1] >= this.min[1] &&
+                point[1] <= this.max[1] &&
+                point[2] >= this.min[2] &&
+                point[2] <= this.max[2]
+            );
         }
     }
 
     class WorkerSplatSubTree {
-
         constructor(maxDepth, maxCentersPerNode) {
             this.maxDepth = maxDepth;
             this.maxCentersPerNode = maxCentersPerNode;
@@ -110,26 +108,21 @@ function createSplatTreeWorker(self) {
             this.splatMesh = null;
             this.disposed = false;
         }
-
     }
 
     class WorkerSplatTreeNode {
-
         constructor(min, max, depth, id) {
             this.min = [min[0], min[1], min[2]];
             this.max = [max[0], max[1], max[2]];
-            this.center = [(max[0] - min[0]) * 0.5 + min[0],
-                           (max[1] - min[1]) * 0.5 + min[1],
-                           (max[2] - min[2]) * 0.5 + min[2]];
+            this.center = [(max[0] - min[0]) * 0.5 + min[0], (max[1] - min[1]) * 0.5 + min[1], (max[2] - min[2]) * 0.5 + min[2]];
             this.depth = depth;
             this.children = [];
             this.data = null;
             this.id = id || WorkerSplatTreeNodeIDGen++;
         }
-
     }
 
-    processSplatTreeNode = function(tree, node, indexToCenter, sceneCenters) {
+    processSplatTreeNode = function (tree, node, indexToCenter, sceneCenters) {
         const splatCount = node.data.indexes.length;
 
         if (splatCount < tree.maxCentersPerNode || node.depth > tree.maxDepth) {
@@ -149,36 +142,46 @@ function createSplatTreeWorker(self) {
             return;
         }
 
-        const nodeDimensions = [node.max[0] - node.min[0],
-                                node.max[1] - node.min[1],
-                                node.max[2] - node.min[2]];
-        const halfDimensions = [nodeDimensions[0] * 0.5,
-                                nodeDimensions[1] * 0.5,
-                                nodeDimensions[2] * 0.5];
-        const nodeCenter = [node.min[0] + halfDimensions[0],
-                            node.min[1] + halfDimensions[1],
-                            node.min[2] + halfDimensions[2]];
+        const nodeDimensions = [node.max[0] - node.min[0], node.max[1] - node.min[1], node.max[2] - node.min[2]];
+        const halfDimensions = [nodeDimensions[0] * 0.5, nodeDimensions[1] * 0.5, nodeDimensions[2] * 0.5];
+        const nodeCenter = [node.min[0] + halfDimensions[0], node.min[1] + halfDimensions[1], node.min[2] + halfDimensions[2]];
 
         const childrenBounds = [
             // top section, clockwise from upper-left (looking from above, +Y)
-            new WorkerBox3([nodeCenter[0] - halfDimensions[0], nodeCenter[1], nodeCenter[2] - halfDimensions[2]],
-                           [nodeCenter[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2]]),
-            new WorkerBox3([nodeCenter[0], nodeCenter[1], nodeCenter[2] - halfDimensions[2]],
-                           [nodeCenter[0] + halfDimensions[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2]]),
-            new WorkerBox3([nodeCenter[0], nodeCenter[1], nodeCenter[2]],
-                           [nodeCenter[0] + halfDimensions[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2] + halfDimensions[2]]),
-            new WorkerBox3([nodeCenter[0] - halfDimensions[0], nodeCenter[1], nodeCenter[2]],
-                           [nodeCenter[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2] + halfDimensions[2]]),
+            new WorkerBox3(
+                [nodeCenter[0] - halfDimensions[0], nodeCenter[1], nodeCenter[2] - halfDimensions[2]],
+                [nodeCenter[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2]]
+            ),
+            new WorkerBox3(
+                [nodeCenter[0], nodeCenter[1], nodeCenter[2] - halfDimensions[2]],
+                [nodeCenter[0] + halfDimensions[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2]]
+            ),
+            new WorkerBox3(
+                [nodeCenter[0], nodeCenter[1], nodeCenter[2]],
+                [nodeCenter[0] + halfDimensions[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2] + halfDimensions[2]]
+            ),
+            new WorkerBox3(
+                [nodeCenter[0] - halfDimensions[0], nodeCenter[1], nodeCenter[2]],
+                [nodeCenter[0], nodeCenter[1] + halfDimensions[1], nodeCenter[2] + halfDimensions[2]]
+            ),
 
             // bottom section, clockwise from lower-left (looking from above, +Y)
-            new WorkerBox3([nodeCenter[0] - halfDimensions[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2] - halfDimensions[2]],
-                           [nodeCenter[0], nodeCenter[1], nodeCenter[2]]),
-            new WorkerBox3([nodeCenter[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2] - halfDimensions[2]],
-                           [nodeCenter[0] + halfDimensions[0], nodeCenter[1], nodeCenter[2]]),
-            new WorkerBox3([nodeCenter[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2]],
-                           [nodeCenter[0] + halfDimensions[0], nodeCenter[1], nodeCenter[2] + halfDimensions[2]]),
-            new WorkerBox3([nodeCenter[0] - halfDimensions[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2]],
-                           [nodeCenter[0], nodeCenter[1], nodeCenter[2] + halfDimensions[2]]),
+            new WorkerBox3(
+                [nodeCenter[0] - halfDimensions[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2] - halfDimensions[2]],
+                [nodeCenter[0], nodeCenter[1], nodeCenter[2]]
+            ),
+            new WorkerBox3(
+                [nodeCenter[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2] - halfDimensions[2]],
+                [nodeCenter[0] + halfDimensions[0], nodeCenter[1], nodeCenter[2]]
+            ),
+            new WorkerBox3(
+                [nodeCenter[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2]],
+                [nodeCenter[0] + halfDimensions[0], nodeCenter[1], nodeCenter[2] + halfDimensions[2]]
+            ),
+            new WorkerBox3(
+                [nodeCenter[0] - halfDimensions[0], nodeCenter[1] - halfDimensions[1], nodeCenter[2]],
+                [nodeCenter[0], nodeCenter[1], nodeCenter[2] + halfDimensions[2]]
+            )
         ];
 
         const splatCounts = [];
@@ -206,7 +209,7 @@ function createSplatTreeWorker(self) {
         for (let i = 0; i < childrenBounds.length; i++) {
             const childNode = new WorkerSplatTreeNode(childrenBounds[i].min, childrenBounds[i].max, node.depth + 1);
             childNode.data = {
-                'indexes': baseIndexes[i]
+                indexes: baseIndexes[i]
             };
             node.children.push(childNode);
         }
@@ -219,12 +222,11 @@ function createSplatTreeWorker(self) {
     };
 
     const buildSubTree = (sceneCenters, maxDepth, maxCentersPerNode) => {
-
         const sceneMin = [0, 0, 0];
         const sceneMax = [0, 0, 0];
         const indexes = [];
         const centerCount = Math.floor(sceneCenters.length / 4);
-        for ( let i = 0; i < centerCount; i ++) {
+        for (let i = 0; i < centerCount; i++) {
             const base = i * 4;
             const x = sceneCenters[base];
             const y = sceneCenters[base + 1];
@@ -243,7 +245,7 @@ function createSplatTreeWorker(self) {
         subTree.sceneMax = sceneMax;
         subTree.rootNode = new WorkerSplatTreeNode(subTree.sceneMin, subTree.sceneMax, 0);
         subTree.rootNode.data = {
-            'indexes': indexes
+            indexes: indexes
         };
 
         return subTree;
@@ -253,7 +255,7 @@ function createSplatTreeWorker(self) {
         const indexToCenter = [];
         for (let sceneCenters of allCenters) {
             const centerCount = Math.floor(sceneCenters.length / 4);
-            for ( let i = 0; i < centerCount; i ++) {
+            for (let i = 0; i < centerCount; i++) {
                 const base = i * 4;
                 const index = Math.round(sceneCenters[base + 3]);
                 indexToCenter[index] = base;
@@ -266,7 +268,7 @@ function createSplatTreeWorker(self) {
             processSplatTreeNode(subTree, subTree.rootNode, indexToCenter, sceneCenters);
         }
         self.postMessage({
-            'subTrees': subTrees
+            subTrees: subTrees
         });
     }
 
@@ -278,22 +280,25 @@ function createSplatTreeWorker(self) {
 }
 
 function workerProcessCenters(splatTreeWorker, centers, transferBuffers, maxDepth, maxCentersPerNode) {
-    splatTreeWorker.postMessage({
-        'process': {
-            'centers': centers,
-            'maxDepth': maxDepth,
-            'maxCentersPerNode': maxCentersPerNode
-        }
-    }, transferBuffers);
+    splatTreeWorker.postMessage(
+        {
+            process: {
+                centers: centers,
+                maxDepth: maxDepth,
+                maxCentersPerNode: maxCentersPerNode
+            }
+        },
+        transferBuffers
+    );
 }
 
 function checkAndCreateWorker() {
     const splatTreeWorker = new Worker(
         URL.createObjectURL(
             new Blob(['(', createSplatTreeWorker.toString(), ')(self)'], {
-                type: 'application/javascript',
-            }),
-        ),
+                type: 'application/javascript'
+            })
+        )
     );
     return splatTreeWorker;
 }
@@ -302,14 +307,12 @@ function checkAndCreateWorker() {
  * SplatTree: Octree tailored to splat data from a SplatMesh instance
  */
 export class SplatTree {
-
     constructor(maxDepth, maxCentersPerNode) {
         this.maxDepth = maxDepth;
         this.maxCentersPerNode = maxCentersPerNode;
         this.subTrees = [];
         this.splatMesh = null;
     }
-
 
     dispose() {
         this.diposeSplatTreeWorker();
@@ -319,7 +322,7 @@ export class SplatTree {
     diposeSplatTreeWorker() {
         if (this.splatTreeWorker) this.splatTreeWorker.terminate();
         this.splatTreeWorker = null;
-    };
+    }
 
     /**
      * Construct this instance of SplatTree from an instance of SplatMesh.
@@ -332,7 +335,7 @@ export class SplatTree {
      *                                           the format produced by the splat tree builder worker starts and ends.
      * @return {undefined}
      */
-    processSplatMesh = function(splatMesh, filterFunc = () => true, onIndexesUpload, onSplatTreeConstruction) {
+    processSplatMesh = function (splatMesh, filterFunc = () => true, onIndexesUpload, onSplatTreeConstruction) {
         if (!this.splatTreeWorker) this.splatTreeWorker = checkAndCreateWorker();
 
         this.splatMesh = splatMesh;
@@ -358,7 +361,6 @@ export class SplatTree {
         };
 
         return new Promise((resolve) => {
-
             const checkForEarlyExit = () => {
                 if (this.disposed) {
                     this.diposeSplatTreeWorker();
@@ -371,7 +373,6 @@ export class SplatTree {
             if (onIndexesUpload) onIndexesUpload(false);
 
             delayedExecute(() => {
-
                 if (checkForEarlyExit()) return;
 
                 const allCenters = [];
@@ -390,15 +391,12 @@ export class SplatTree {
                 }
 
                 this.splatTreeWorker.onmessage = (e) => {
-
                     if (checkForEarlyExit()) return;
 
                     if (e.data.subTrees) {
-
                         if (onSplatTreeConstruction) onSplatTreeConstruction(false);
 
                         delayedExecute(() => {
-
                             if (checkForEarlyExit()) return;
 
                             for (let workerSubTree of e.data.subTrees) {
@@ -412,7 +410,6 @@ export class SplatTree {
                             delayedExecute(() => {
                                 resolve();
                             });
-
                         });
                     }
                 };
@@ -423,15 +420,11 @@ export class SplatTree {
                     const transferBuffers = allCenters.map((array) => array.buffer);
                     workerProcessCenters(this.splatTreeWorker, allCenters, transferBuffers, this.maxDepth, this.maxCentersPerNode);
                 });
-
             });
-
         });
-
     };
 
     countLeaves() {
-
         let leafCount = 0;
         this.visitLeaves(() => {
             leafCount++;
@@ -441,7 +434,6 @@ export class SplatTree {
     }
 
     visitLeaves(visitFunc) {
-
         const visitLeavesFromNode = (node, visitFunc) => {
             if (node.children.length === 0) visitFunc(node);
             for (let child of node.children) {
@@ -453,5 +445,4 @@ export class SplatTree {
             visitLeavesFromNode(subTree.rootNode, visitFunc);
         }
     }
-
 }

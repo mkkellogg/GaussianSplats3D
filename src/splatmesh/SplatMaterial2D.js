@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { SplatMaterial } from './SplatMaterial.js';
 
 export class SplatMaterial2D {
-
     /**
      * Build the Three.js material that is used to render the splats.
      * @param {number} dynamicMode If true, it means the scene geometry represented by this splat mesh is not stationary or
@@ -14,9 +13,13 @@ export class SplatMaterial2D {
      * @param {number} maxSphericalHarmonicsDegree Degree of spherical harmonics to utilize in rendering splats
      * @return {THREE.ShaderMaterial}
      */
-    static build(dynamicMode = false, enableOptionalEffects = false, splatScale = 1.0,
-                 pointCloudModeEnabled = false, maxSphericalHarmonicsDegree = 0) {
-
+    static build(
+        dynamicMode = false,
+        enableOptionalEffects = false,
+        splatScale = 1.0,
+        pointCloudModeEnabled = false,
+        maxSphericalHarmonicsDegree = 0
+    ) {
         const customVertexVars = `
             uniform vec2 scaleRotationsTextureSize;
             uniform highp sampler2D scaleRotationsTexture;
@@ -25,21 +28,30 @@ export class SplatMaterial2D {
             varying vec2 vFragCoord;
         `;
 
-        let vertexShaderSource = SplatMaterial.buildVertexShaderBase(dynamicMode, enableOptionalEffects,
-                                                                     maxSphericalHarmonicsDegree, customVertexVars);
+        let vertexShaderSource = SplatMaterial.buildVertexShaderBase(
+            dynamicMode,
+            enableOptionalEffects,
+            maxSphericalHarmonicsDegree,
+            customVertexVars
+        );
         vertexShaderSource += SplatMaterial2D.buildVertexShaderProjection();
         const fragmentShaderSource = SplatMaterial2D.buildFragmentShader();
 
-        const uniforms = SplatMaterial.getUniforms(dynamicMode, enableOptionalEffects,
-                                                   maxSphericalHarmonicsDegree, splatScale, pointCloudModeEnabled);
+        const uniforms = SplatMaterial.getUniforms(
+            dynamicMode,
+            enableOptionalEffects,
+            maxSphericalHarmonicsDegree,
+            splatScale,
+            pointCloudModeEnabled
+        );
 
         uniforms['scaleRotationsTexture'] = {
-            'type': 't',
-            'value': null
+            type: 't',
+            value: null
         };
         uniforms['scaleRotationsTextureSize'] = {
-            'type': 'v2',
-            'value': new THREE.Vector2(1024, 1024)
+            type: 'v2',
+            value: new THREE.Vector2(1024, 1024)
         };
 
         const material = new THREE.ShaderMaterial({
@@ -58,7 +70,6 @@ export class SplatMaterial2D {
     }
 
     static buildVertexShaderProjection() {
-
         // Original CUDA code for calculating splat-to-screen transformation, for reference
         /*
             glm::mat3 R = quat_to_rotmat(rot);
@@ -242,7 +253,6 @@ export class SplatMaterial2D {
     }
 
     static buildFragmentShader() {
-
         // Original CUDA code for splat intersection, for reference
         /*
             const float2 xy = collected_xy[j];
