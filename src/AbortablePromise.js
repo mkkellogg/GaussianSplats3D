@@ -8,11 +8,9 @@
  * very thoroughly and the implementation is kinda janky. If you can at all help it, please avoid using it :)
  */
 export class AbortablePromise {
-
     static idGen = 0;
 
     constructor(promiseFunc, abortHandler) {
-
         let resolver;
         let rejecter;
         this.promise = new Promise((resolve, reject) => {
@@ -39,41 +37,39 @@ export class AbortablePromise {
     then(onResolve) {
         return new AbortablePromise((resolve, reject) => {
             this.promise = this.promise
-            .then((...args) => {
-                const onResolveResult = onResolve(...args);
-                if (onResolveResult instanceof Promise || onResolveResult instanceof AbortablePromise) {
-                    onResolveResult.then((...args2) => {
-                        resolve(...args2);
-                    });
-                } else {
-                    resolve(onResolveResult);
-                }
-            })
-            .catch((error) => {
-                reject(error);
-            });
+                .then((...args) => {
+                    const onResolveResult = onResolve(...args);
+                    if (onResolveResult instanceof Promise || onResolveResult instanceof AbortablePromise) {
+                        onResolveResult.then((...args2) => {
+                            resolve(...args2);
+                        });
+                    } else {
+                        resolve(onResolveResult);
+                    }
+                })
+                .catch((error) => {
+                    reject(error);
+                });
         }, this.abortHandler);
     }
 
     catch(onFail) {
         return new AbortablePromise((resolve) => {
-            this.promise = this.promise.then((...args) => {
-                resolve(...args);
-            })
-            .catch(onFail);
+            this.promise = this.promise
+                .then((...args) => {
+                    resolve(...args);
+                })
+                .catch(onFail);
         }, this.abortHandler);
     }
 
     abort(reason) {
         if (this.abortHandler) this.abortHandler(reason);
     }
-
 }
 
 export class AbortedPromiseError extends Error {
-
     constructor(msg) {
         super(msg);
     }
-
 }

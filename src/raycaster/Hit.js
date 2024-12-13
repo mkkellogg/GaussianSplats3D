@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 
 export class Hit {
-
     constructor() {
         this.origin = new THREE.Vector3();
         this.normal = new THREE.Vector3();
@@ -24,5 +23,4 @@ export class Hit {
         hitClone.splatIndex = this.splatIndex;
         return hitClone;
     }
-
 }

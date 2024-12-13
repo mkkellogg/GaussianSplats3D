@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { Constants } from '../Constants.js';
 
 export class SplatMaterial {
-
     static buildVertexShaderBase(dynamicMode = false, enableOptionalEffects = false, maxSphericalHarmonicsDegree = 0, customVars = '') {
         let vertexShaderSource = `
         precision highp float;
@@ -20,20 +19,20 @@ export class SplatMaterial {
         uniform int sceneCount;
     `;
 
-    if (enableOptionalEffects) {
-        vertexShaderSource += `
+        if (enableOptionalEffects) {
+            vertexShaderSource += `
             uniform float sceneOpacity[${Constants.MaxScenes}];
             uniform int sceneVisibility[${Constants.MaxScenes}];
         `;
-    }
+        }
 
-    if (dynamicMode) {
-        vertexShaderSource += `
+        if (dynamicMode) {
+            vertexShaderSource += `
             uniform highp mat4 transforms[${Constants.MaxScenes}];
         `;
-    }
+        }
 
-    vertexShaderSource += `
+        vertexShaderSource += `
         ${customVars}
         uniform vec2 focal;
         uniform float orthoZoom;
@@ -171,7 +170,6 @@ export class SplatMaterial {
 
         // Proceed to sampling and rendering 1st degree spherical harmonics
         if (maxSphericalHarmonicsDegree >= 1) {
-
             vertexShaderSource += `   
             if (sphericalHarmonicsDegree >= 1) {
             `;
@@ -231,7 +229,8 @@ export class SplatMaterial {
                         sh3 = vec3(sampledSH01B.rg, sampledSH23B.r);
                     }
                 `;
-            // Sample spherical harmonics textures with 2 degrees worth of data for 1st degree calculations, and store in sh1, sh2, and sh3
+                // Sample spherical harmonics textures with 2 degrees worth of data for 1st degree calculations,
+                // and store in sh1, sh2, and sh3
             } else if (maxSphericalHarmonicsDegree === 2) {
                 vertexShaderSource += `
                     vec4 sampledSH0123;
@@ -275,7 +274,6 @@ export class SplatMaterial {
 
             // Proceed to sampling and rendering 2nd degree spherical harmonics
             if (maxSphericalHarmonicsDegree >= 2) {
-
                 vertexShaderSource += `
                     if (sphericalHarmonicsDegree >= 2) {
                         float xx = x * x;
@@ -362,129 +360,133 @@ export class SplatMaterial {
         `;
     }
 
-    static getUniforms(dynamicMode = false, enableOptionalEffects = false, maxSphericalHarmonicsDegree = 0,
-                       splatScale = 1.0, pointCloudModeEnabled = false) {
-
+    static getUniforms(
+        dynamicMode = false,
+        enableOptionalEffects = false,
+        maxSphericalHarmonicsDegree = 0,
+        splatScale = 1.0,
+        pointCloudModeEnabled = false
+    ) {
         const uniforms = {
-            'sceneCenter': {
-                'type': 'v3',
-                'value': new THREE.Vector3()
+            sceneCenter: {
+                type: 'v3',
+                value: new THREE.Vector3()
             },
-            'fadeInComplete': {
-                'type': 'i',
-                'value': 0
+            fadeInComplete: {
+                type: 'i',
+                value: 0
             },
-            'orthographicMode': {
-                'type': 'i',
-                'value': 0
+            orthographicMode: {
+                type: 'i',
+                value: 0
             },
-            'visibleRegionFadeStartRadius': {
-                'type': 'f',
-                'value': 0.0
+            visibleRegionFadeStartRadius: {
+                type: 'f',
+                value: 0.0
             },
-            'visibleRegionRadius': {
-                'type': 'f',
-                'value': 0.0
+            visibleRegionRadius: {
+                type: 'f',
+                value: 0.0
             },
-            'currentTime': {
-                'type': 'f',
-                'value': 0.0
+            currentTime: {
+                type: 'f',
+                value: 0.0
             },
-            'firstRenderTime': {
-                'type': 'f',
-                'value': 0.0
+            firstRenderTime: {
+                type: 'f',
+                value: 0.0
             },
-            'centersColorsTexture': {
-                'type': 't',
-                'value': null
+            centersColorsTexture: {
+                type: 't',
+                value: null
             },
-            'sphericalHarmonicsTexture': {
-                'type': 't',
-                'value': null
+            sphericalHarmonicsTexture: {
+                type: 't',
+                value: null
             },
-            'sphericalHarmonicsTextureR': {
-                'type': 't',
-                'value': null
+            sphericalHarmonicsTextureR: {
+                type: 't',
+                value: null
             },
-            'sphericalHarmonicsTextureG': {
-                'type': 't',
-                'value': null
+            sphericalHarmonicsTextureG: {
+                type: 't',
+                value: null
             },
-            'sphericalHarmonicsTextureB': {
-                'type': 't',
-                'value': null
+            sphericalHarmonicsTextureB: {
+                type: 't',
+                value: null
             },
-            'sphericalHarmonics8BitCompressionRangeMin': {
-                'type': 'f',
-                'value': []
+            sphericalHarmonics8BitCompressionRangeMin: {
+                type: 'f',
+                value: []
             },
-            'sphericalHarmonics8BitCompressionRangeMax': {
-                'type': 'f',
-                'value': []
+            sphericalHarmonics8BitCompressionRangeMax: {
+                type: 'f',
+                value: []
             },
-            'focal': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
+            focal: {
+                type: 'v2',
+                value: new THREE.Vector2()
             },
-            'orthoZoom': {
-                'type': 'f',
-                'value': 1.0
+            orthoZoom: {
+                type: 'f',
+                value: 1.0
             },
-            'inverseFocalAdjustment': {
-                'type': 'f',
-                'value': 1.0
+            inverseFocalAdjustment: {
+                type: 'f',
+                value: 1.0
             },
-            'viewport': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
+            viewport: {
+                type: 'v2',
+                value: new THREE.Vector2()
             },
-            'basisViewport': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
+            basisViewport: {
+                type: 'v2',
+                value: new THREE.Vector2()
             },
-            'debugColor': {
-                'type': 'v3',
-                'value': new THREE.Color()
+            debugColor: {
+                type: 'v3',
+                value: new THREE.Color()
             },
-            'centersColorsTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
+            centersColorsTextureSize: {
+                type: 'v2',
+                value: new THREE.Vector2(1024, 1024)
             },
-            'sphericalHarmonicsDegree': {
-                'type': 'i',
-                'value': maxSphericalHarmonicsDegree
+            sphericalHarmonicsDegree: {
+                type: 'i',
+                value: maxSphericalHarmonicsDegree
             },
-            'sphericalHarmonicsTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
+            sphericalHarmonicsTextureSize: {
+                type: 'v2',
+                value: new THREE.Vector2(1024, 1024)
             },
-            'sphericalHarmonics8BitMode': {
-                'type': 'i',
-                'value': 0
+            sphericalHarmonics8BitMode: {
+                type: 'i',
+                value: 0
             },
-            'sphericalHarmonicsMultiTextureMode': {
-                'type': 'i',
-                'value': 0
+            sphericalHarmonicsMultiTextureMode: {
+                type: 'i',
+                value: 0
             },
-            'splatScale': {
-                'type': 'f',
-                'value': splatScale
+            splatScale: {
+                type: 'f',
+                value: splatScale
             },
-            'pointCloudModeEnabled': {
-                'type': 'i',
-                'value': pointCloudModeEnabled ? 1 : 0
+            pointCloudModeEnabled: {
+                type: 'i',
+                value: pointCloudModeEnabled ? 1 : 0
             },
-            'sceneIndexesTexture': {
-                'type': 't',
-                'value': null
+            sceneIndexesTexture: {
+                type: 't',
+                value: null
             },
-            'sceneIndexesTextureSize': {
-                'type': 'v2',
-                'value': new THREE.Vector2(1024, 1024)
+            sceneIndexesTextureSize: {
+                type: 'v2',
+                value: new THREE.Vector2(1024, 1024)
             },
-            'sceneCount': {
-                'type': 'i',
-                'value': 1
+            sceneCount: {
+                type: 'i',
+                value: 1
             }
         };
         for (let i = 0; i < Constants.MaxScenes; i++) {
@@ -497,18 +499,18 @@ export class SplatMaterial {
             for (let i = 0; i < Constants.MaxScenes; i++) {
                 sceneOpacity.push(1.0);
             }
-            uniforms['sceneOpacity'] ={
-                'type': 'f',
-                'value': sceneOpacity
+            uniforms['sceneOpacity'] = {
+                type: 'f',
+                value: sceneOpacity
             };
 
             const sceneVisibility = [];
             for (let i = 0; i < Constants.MaxScenes; i++) {
                 sceneVisibility.push(1);
             }
-            uniforms['sceneVisibility'] ={
-                'type': 'i',
-                'value': sceneVisibility
+            uniforms['sceneVisibility'] = {
+                type: 'i',
+                value: sceneVisibility
             };
         }
 
@@ -518,12 +520,11 @@ export class SplatMaterial {
                 transformMatrices.push(new THREE.Matrix4());
             }
             uniforms['transforms'] = {
-                'type': 'mat4',
-                'value': transformMatrices
+                type: 'mat4',
+                value: transformMatrices
             };
         }
 
         return uniforms;
     }
-
 }

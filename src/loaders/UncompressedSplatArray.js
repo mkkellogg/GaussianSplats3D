@@ -3,7 +3,6 @@ import { getSphericalHarmonicsComponentCountForDegree } from '../Util.js';
 const BASE_COMPONENT_COUNT = 14;
 
 export class UncompressedSplatArray {
-
     static OFFSET = {
         X: 0,
         Y: 1,

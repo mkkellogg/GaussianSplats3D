@@ -1,7 +1,5 @@
 export class InfoPanel {
-
     constructor(container) {
-
         this.container = container || document.body;
 
         this.infoCells = {};
@@ -101,10 +99,22 @@ export class InfoPanel {
         this.visible = false;
     }
 
-    update = function(renderDimensions, cameraPosition, cameraLookAtPosition, cameraUp, orthographicCamera,
-                      meshCursorPosition, currentFPS, splatCount, splatRenderCount,
-                      splatRenderCountPct, lastSortTime, focalAdjustment, splatScale, pointCloudMode) {
-
+    update = function (
+        renderDimensions,
+        cameraPosition,
+        cameraLookAtPosition,
+        cameraUp,
+        orthographicCamera,
+        meshCursorPosition,
+        currentFPS,
+        splatCount,
+        splatRenderCount,
+        splatRenderCountPct,
+        lastSortTime,
+        focalAdjustment,
+        splatScale,
+        pointCloudMode
+    ) {
         const cameraPosString = `${cameraPosition.x.toFixed(5)}, ${cameraPosition.y.toFixed(5)}, ${cameraPosition.z.toFixed(5)}`;
         if (this.infoCells.cameraPosition.innerHTML !== cameraPosString) {
             this.infoCells.cameraPosition.innerHTML = cameraPosString;
@@ -136,8 +146,7 @@ export class InfoPanel {
         this.infoCells.fps.innerHTML = currentFPS;
         this.infoCells.renderWindow.innerHTML = `${renderDimensions.x} x ${renderDimensions.y}`;
 
-        this.infoCells.renderSplatCount.innerHTML =
-            `${splatRenderCount} splats out of ${splatCount} (${splatRenderCountPct.toFixed(2)}%)`;
+        this.infoCells.renderSplatCount.innerHTML = `${splatRenderCount} splats out of ${splatCount} (${splatRenderCountPct.toFixed(2)}%)`;
 
         this.infoCells.sortTime.innerHTML = `${lastSortTime.toFixed(3)} ms`;
         this.infoCells.focalAdjustment.innerHTML = `${focalAdjustment.toFixed(3)}`;
@@ -165,5 +174,4 @@ export class InfoPanel {
         this.infoPanelContainer.style.display = 'none';
         this.visible = false;
     }
-
 }

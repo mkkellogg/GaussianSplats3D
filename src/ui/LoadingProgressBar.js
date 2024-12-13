@@ -1,7 +1,5 @@
 export class LoadingProgressBar {
-
     constructor(container) {
-
         this.idGen = 0;
 
         this.tasks = [];
@@ -98,5 +96,4 @@ export class LoadingProgressBar {
             this.progressBarContainerOuter.style.zIndex = this.container.style.zIndex + 1;
         }
     }
-
 }

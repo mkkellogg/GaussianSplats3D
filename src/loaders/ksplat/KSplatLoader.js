@@ -4,20 +4,19 @@ import { LoaderStatus } from '../LoaderStatus.js';
 import { Constants } from '../../Constants.js';
 
 export class KSplatLoader {
-
-   static checkVersion(buffer) {
+    static checkVersion(buffer) {
         const minVersionMajor = SplatBuffer.CurrentMajorVersion;
         const minVersionMinor = SplatBuffer.CurrentMinorVersion;
         const header = SplatBuffer.parseHeader(buffer);
-        if (header.versionMajor === minVersionMajor &&
-            header.versionMinor >= minVersionMinor ||
-            header.versionMajor > minVersionMajor) {
-           return true;
+        if ((header.versionMajor === minVersionMajor && header.versionMinor >= minVersionMinor) || header.versionMajor > minVersionMajor) {
+            return true;
         } else {
-            throw new Error(`KSplat version not supported: v${header.versionMajor}.${header.versionMinor}. ` +
-                            `Minimum required: v${minVersionMajor}.${minVersionMinor}`);
+            throw new Error(
+                `KSplat version not supported: v${header.versionMajor}.${header.versionMinor}. ` +
+                    `Minimum required: v${minVersionMajor}.${minVersionMinor}`
+            );
         }
-    };
+    }
 
     static loadFromURL(fileName, externalOnProgress, loadDirectoToSplatBuffer, onSectionBuilt, headers) {
         let directLoadBuffer;
@@ -82,15 +81,18 @@ export class KSplatLoader {
                     sectionHeadersLoading = false;
                     sectionHeadersLoaded = true;
                     sectionHeadersBuffer = new ArrayBuffer(header.maxSectionCount * SplatBuffer.SectionHeaderSizeBytes);
-                    new Uint8Array(sectionHeadersBuffer).set(new Uint8Array(bufferData, SplatBuffer.HeaderSizeBytes,
-                                                                            header.maxSectionCount * SplatBuffer.SectionHeaderSizeBytes));
+                    new Uint8Array(sectionHeadersBuffer).set(
+                        new Uint8Array(bufferData, SplatBuffer.HeaderSizeBytes, header.maxSectionCount * SplatBuffer.SectionHeaderSizeBytes)
+                    );
                     sectionHeaders = SplatBuffer.parseSectionHeaders(header, sectionHeadersBuffer, 0, false);
                     let totalSectionStorageStorageByes = 0;
                     for (let i = 0; i < header.maxSectionCount; i++) {
                         totalSectionStorageStorageByes += sectionHeaders[i].storageSizeBytes;
                     }
-                    const totalStorageSizeBytes = SplatBuffer.HeaderSizeBytes + header.maxSectionCount *
-                                                  SplatBuffer.SectionHeaderSizeBytes + totalSectionStorageStorageByes;
+                    const totalStorageSizeBytes =
+                        SplatBuffer.HeaderSizeBytes +
+                        header.maxSectionCount * SplatBuffer.SectionHeaderSizeBytes +
+                        totalSectionStorageStorageByes;
                     if (!directLoadBuffer) {
                         directLoadBuffer = new ArrayBuffer(totalStorageSizeBytes);
                         let offset = 0;
@@ -110,8 +112,12 @@ export class KSplatLoader {
                 });
             };
 
-            if (!sectionHeadersLoading && !sectionHeadersLoaded && headerLoaded &&
-                numBytesLoaded >= SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount) {
+            if (
+                !sectionHeadersLoading &&
+                !sectionHeadersLoaded &&
+                headerLoaded &&
+                numBytesLoaded >= SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes * header.maxSectionCount
+            ) {
                 performLoad();
             }
         };
@@ -122,14 +128,12 @@ export class KSplatLoader {
             const checkAndLoadFunc = () => {
                 loadSectionQueued = false;
                 if (sectionHeadersLoaded) {
-
                     if (loadComplete) return;
 
                     downloadComplete = numBytesLoaded >= totalBytesToDownload;
 
                     let bytesLoadedSinceLastSection = numBytesLoaded - numBytesProgressivelyLoaded;
                     if (bytesLoadedSinceLastSection > Constants.ProgressiveLoadSectionSize || downloadComplete) {
-
                         numBytesProgressivelyLoaded += Constants.ProgressiveLoadSectionSize;
                         loadComplete = numBytesProgressivelyLoaded >= totalBytesToDownload;
 
@@ -141,8 +145,10 @@ export class KSplatLoader {
                         let loadedSplatCount = 0;
                         for (let i = 0; i < header.maxSectionCount; i++) {
                             const sectionHeader = sectionHeaders[i];
-                            const bucketsDataOffset = sectionBase + sectionHeader.partiallyFilledBucketCount * 4 +
-                                                    sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
+                            const bucketsDataOffset =
+                                sectionBase +
+                                sectionHeader.partiallyFilledBucketCount * 4 +
+                                sectionHeader.bucketStorageSizeBytes * sectionHeader.bucketCount;
                             const bytesRequiredToReachSectionSplatData = baseDataOffset + bucketsDataOffset;
                             if (numBytesProgressivelyLoaded >= bytesRequiredToReachSectionSplatData) {
                                 reachedSections++;
@@ -163,8 +169,8 @@ export class KSplatLoader {
 
                         onSectionBuilt(directLoadSplatBuffer, loadComplete);
 
-                        const percentComplete = numBytesProgressivelyLoaded / totalBytesToDownload * 100;
-                        const percentLabel = (percentComplete).toFixed(2) + '%';
+                        const percentComplete = (numBytesProgressivelyLoaded / totalBytesToDownload) * 100;
+                        const percentLabel = percentComplete.toFixed(2) + '%';
 
                         if (externalOnProgress) externalOnProgress(percentComplete, percentLabel, LoaderStatus.Downloading);
 
@@ -213,13 +219,12 @@ export class KSplatLoader {
         });
     }
 
-    static downloadFile = function() {
-
+    static downloadFile = (function () {
         let downLoadLink;
 
-        return function(splatBuffer, fileName) {
+        return function (splatBuffer, fileName) {
             const blob = new Blob([splatBuffer.bufferData], {
-                type: 'application/octet-stream',
+                type: 'application/octet-stream'
             });
 
             if (!downLoadLink) {
@@ -230,7 +235,5 @@ export class KSplatLoader {
             downLoadLink.href = URL.createObjectURL(blob);
             downLoadLink.click();
         };
-
-    }();
-
+    })();
 }

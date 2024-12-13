@@ -4,9 +4,15 @@ import * as THREE from 'three';
  * SplatScene: Descriptor for a single splat scene managed by an instance of SplatMesh.
  */
 export class SplatScene extends THREE.Object3D {
-
-    constructor(splatBuffer, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(),
-                scale = new THREE.Vector3(1, 1, 1), minimumAlpha = 1, opacity = 1.0, visible = true) {
+    constructor(
+        splatBuffer,
+        position = new THREE.Vector3(),
+        quaternion = new THREE.Quaternion(),
+        scale = new THREE.Vector3(1, 1, 1),
+        minimumAlpha = 1,
+        opacity = 1.0,
+        visible = true
+    ) {
         super();
         this.splatBuffer = splatBuffer;
         this.position.copy(position);

@@ -13,34 +13,27 @@ all copies or substantial portions of the Software.
 */
 
 export class VRButton {
+    static createButton(renderer, sessionInit = {}) {
+        const button = document.createElement('button');
 
-    static createButton( renderer, sessionInit = {} ) {
-
-        const button = document.createElement( 'button' );
-
-        function showEnterVR( /* device */ ) {
-
+        function showEnterVR(/* device */) {
             let currentSession = null;
 
-            async function onSessionStarted( session ) {
+            async function onSessionStarted(session) {
+                session.addEventListener('end', onSessionEnded);
 
-                session.addEventListener( 'end', onSessionEnded );
-
-                await renderer.xr.setSession( session );
+                await renderer.xr.setSession(session);
                 button.textContent = 'EXIT VR';
 
                 currentSession = session;
-
             }
 
-            function onSessionEnded( /* event */ ) {
-
-                currentSession.removeEventListener( 'end', onSessionEnded );
+            function onSessionEnded(/* event */) {
+                currentSession.removeEventListener('end', onSessionEnded);
 
                 button.textContent = 'ENTER VR';
 
                 currentSession = null;
-
             }
 
             //
@@ -62,68 +55,45 @@ export class VRButton {
 
             const sessionOptions = {
                 ...sessionInit,
-                optionalFeatures: [
-                    'local-floor',
-                    'bounded-floor',
-                    'layers',
-                    ...( sessionInit.optionalFeatures || [] )
-                ],
+                optionalFeatures: ['local-floor', 'bounded-floor', 'layers', ...(sessionInit.optionalFeatures || [])]
             };
 
-            button.onmouseenter = function() {
-
+            button.onmouseenter = function () {
                 button.style.opacity = '1.0';
-
             };
 
-            button.onmouseleave = function() {
-
+            button.onmouseleave = function () {
                 button.style.opacity = '0.5';
-
             };
 
-            button.onclick = function() {
-
-                if ( currentSession === null ) {
-
-                    navigator.xr.requestSession( 'immersive-vr', sessionOptions ).then( onSessionStarted );
-
+            button.onclick = function () {
+                if (currentSession === null) {
+                    navigator.xr.requestSession('immersive-vr', sessionOptions).then(onSessionStarted);
                 } else {
-
                     currentSession.end();
 
-                    if ( navigator.xr.offerSession !== undefined ) {
-
-                        navigator.xr.offerSession( 'immersive-vr', sessionOptions )
-                            .then( onSessionStarted )
-                            .catch( ( err ) => {
-
-                                console.warn( err );
-
-                            } );
-
+                    if (navigator.xr.offerSession !== undefined) {
+                        navigator.xr
+                            .offerSession('immersive-vr', sessionOptions)
+                            .then(onSessionStarted)
+                            .catch((err) => {
+                                console.warn(err);
+                            });
                     }
-
                 }
-
             };
 
-            if ( navigator.xr.offerSession !== undefined ) {
-
-                navigator.xr.offerSession( 'immersive-vr', sessionOptions )
-                    .then( onSessionStarted )
-                    .catch( ( err ) => {
-
-                        console.warn( err );
-
-                    } );
-
+            if (navigator.xr.offerSession !== undefined) {
+                navigator.xr
+                    .offerSession('immersive-vr', sessionOptions)
+                    .then(onSessionStarted)
+                    .catch((err) => {
+                        console.warn(err);
+                    });
             }
-
         }
 
         function disableButton() {
-
             button.style.display = '';
 
             button.style.cursor = 'auto';
@@ -134,29 +104,23 @@ export class VRButton {
             button.onmouseleave = null;
 
             button.onclick = null;
-
         }
 
         function showWebXRNotFound() {
-
             disableButton();
 
             button.textContent = 'VR NOT SUPPORTED';
-
         }
 
-        function showVRNotAllowed( exception ) {
-
+        function showVRNotAllowed(exception) {
             disableButton();
 
-            console.warn( 'Exception when trying to call xr.isSessionSupported', exception );
+            console.warn('Exception when trying to call xr.isSessionSupported', exception);
 
             button.textContent = 'VR NOT ALLOWED';
-
         }
 
-        function stylizeElement( element ) {
-
+        function stylizeElement(element) {
             element.style.position = 'absolute';
             element.style.bottom = '20px';
             element.style.padding = '12px 6px';
@@ -169,76 +133,58 @@ export class VRButton {
             element.style.opacity = '0.5';
             element.style.outline = 'none';
             element.style.zIndex = '999';
-
         }
 
-        if ( 'xr' in navigator ) {
-
+        if ('xr' in navigator) {
             button.id = 'VRButton';
             button.style.display = 'none';
 
-            stylizeElement( button );
+            stylizeElement(button);
 
-            navigator.xr.isSessionSupported( 'immersive-vr' ).then( function( supported ) {
+            navigator.xr
+                .isSessionSupported('immersive-vr')
+                .then(function (supported) {
+                    supported ? showEnterVR() : showWebXRNotFound();
 
-                supported ? showEnterVR() : showWebXRNotFound();
-
-                if ( supported && VRButton.xrSessionIsGranted ) {
-
-                    button.click();
-
-                }
-
-            } ).catch( showVRNotAllowed );
+                    if (supported && VRButton.xrSessionIsGranted) {
+                        button.click();
+                    }
+                })
+                .catch(showVRNotAllowed);
 
             return button;
-
         } else {
+            const message = document.createElement('a');
 
-            const message = document.createElement( 'a' );
-
-            if ( window.isSecureContext === false ) {
-
-                message.href = document.location.href.replace( /^http:/, 'https:' );
+            if (window.isSecureContext === false) {
+                message.href = document.location.href.replace(/^http:/, 'https:');
                 message.innerHTML = 'WEBXR NEEDS HTTPS'; // TODO Improve message
-
             } else {
-
                 message.href = 'https://immersiveweb.dev/';
                 message.innerHTML = 'WEBXR NOT AVAILABLE';
-
             }
 
             message.style.left = 'calc(50% - 90px)';
             message.style.width = '180px';
             message.style.textDecoration = 'none';
 
-            stylizeElement( message );
+            stylizeElement(message);
 
             return message;
-
         }
-
     }
 
     static registerSessionGrantedListener() {
-
-        if ( typeof navigator !== 'undefined' && 'xr' in navigator ) {
-
+        if (typeof navigator !== 'undefined' && 'xr' in navigator) {
             // WebXRViewer (based on Firefox) has a bug where addEventListener
             // throws a silent exception and aborts execution entirely.
-            if ( /WebXRViewer\//i.test( navigator.userAgent ) ) return;
+            if (/WebXRViewer\//i.test(navigator.userAgent)) return;
 
-            navigator.xr.addEventListener( 'sessiongranted', () => {
-
+            navigator.xr.addEventListener('sessiongranted', () => {
                 VRButton.xrSessionIsGranted = true;
-
-            } );
-
+            });
         }
-
     }
-
 }
 
 VRButton.xrSessionIsGranted = false;

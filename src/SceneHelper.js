@@ -3,7 +3,6 @@ import { ArrowHelper } from './ArrowHelper.js';
 import { disposeAllMeshes } from './Util.js';
 
 export class SceneHelper {
-
     constructor(threeScene) {
         this.threeScene = threeScene;
         this.splatRenderTarget = null;
@@ -21,8 +20,7 @@ export class SceneHelper {
         this.splatRenderTarget = new THREE.WebGLRenderTarget(width, height, {
             format: THREE.RGBAFormat,
             stencilBuffer: false,
-            depthBuffer: true,
-
+            depthBuffer: true
         });
         this.splatRenderTarget.depthTexture = new THREE.DepthTexture(width, height);
         this.splatRenderTarget.depthTexture.format = THREE.DepthFormat;
@@ -37,14 +35,14 @@ export class SceneHelper {
 
     setupRenderTargetCopyObjects() {
         const uniforms = {
-            'sourceColorTexture': {
-                'type': 't',
-                'value': null
+            sourceColorTexture: {
+                type: 't',
+                value: null
             },
-            'sourceDepthTexture': {
-                'type': 't',
-                'value': null
-            },
+            sourceDepthTexture: {
+                type: 't',
+                value: null
+            }
         };
         const renderTargetCopyMaterial = new THREE.ShaderMaterial({
             vertexShader: `
@@ -92,7 +90,7 @@ export class SceneHelper {
     setupMeshCursor() {
         if (!this.meshCursor) {
             const coneGeometry = new THREE.ConeGeometry(0.5, 1.5, 32);
-            const coneMaterial = new THREE.MeshBasicMaterial({color: 0xFFFFFF});
+            const coneMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
             const downArrow = new THREE.Mesh(coneGeometry, coneMaterial);
             downArrow.rotation.set(0, 0, Math.PI);
@@ -145,7 +143,7 @@ export class SceneHelper {
 
     setupFocusMarker() {
         if (!this.focusMarker) {
-            const sphereGeometry = new THREE.SphereGeometry(.5, 32, 32);
+            const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
             const focusMarkerMaterial = SceneHelper.buildFocusMarkerMaterial();
             focusMarkerMaterial.depthTest = false;
             focusMarkerMaterial.depthWrite = false;
@@ -161,13 +159,12 @@ export class SceneHelper {
         }
     }
 
-    updateFocusMarker = function() {
-
+    updateFocusMarker = (function () {
         const tempPosition = new THREE.Vector3();
         const tempMatrix = new THREE.Matrix4();
         const toCamera = new THREE.Vector3();
 
-        return function(position, camera, viewport) {
+        return function (position, camera, viewport) {
             tempMatrix.copy(camera.matrixWorld).invert();
             tempPosition.copy(position).applyMatrix4(tempMatrix);
             tempPosition.normalize().multiplyScalar(10);
@@ -180,8 +177,7 @@ export class SceneHelper {
             this.focusMarker.material.uniforms.viewport.value.copy(viewport);
             this.focusMarker.material.uniformsNeedUpdate = true;
         };
-
-    }();
+    })();
 
     setFocusMarkerVisibility(visible) {
         this.focusMarker.visible = visible;
@@ -200,7 +196,7 @@ export class SceneHelper {
         if (!this.controlPlane) {
             const planeGeometry = new THREE.PlaneGeometry(1, 1);
             planeGeometry.rotateX(-Math.PI / 2);
-            const planeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
+            const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
             planeMaterial.transparent = true;
             planeMaterial.opacity = 0.6;
             planeMaterial.depthTest = false;
@@ -233,18 +229,16 @@ export class SceneHelper {
         this.controlPlane.visible = visible;
     }
 
-    positionAndOrientControlPlane = function() {
-
+    positionAndOrientControlPlane = (function () {
         const tempQuaternion = new THREE.Quaternion();
         const defaultUp = new THREE.Vector3(0, 1, 0);
 
-        return function(position, up) {
+        return function (position, up) {
             tempQuaternion.setFromUnitVectors(defaultUp, up);
             this.controlPlane.position.copy(position);
             this.controlPlane.quaternion.copy(tempQuaternion);
         };
-
-    }();
+    })();
 
     addDebugMeshes() {
         this.debugRoot = this.createDebugMeshes();
@@ -288,7 +282,7 @@ export class SceneHelper {
         const boxGeometry = new THREE.BoxGeometry(3, 3, 3);
         const debugMeshRoot = new THREE.Object3D();
 
-        let boxColor = 0xBBBBBB;
+        let boxColor = 0xbbbbbb;
         const createMesh = (position) => {
             let boxMesh = new THREE.Mesh(boxGeometry, SceneHelper.buildDebugMaterial(boxColor));
             boxMesh.renderOrder = renderOrder;
@@ -332,10 +326,10 @@ export class SceneHelper {
         `;
 
         const uniforms = {
-            'color': {
-                'type': 'v3',
-                'value': new THREE.Color(color)
-            },
+            color: {
+                type: 'v3',
+                value: new THREE.Color(color)
+            }
         };
 
         const material = new THREE.ShaderMaterial({
@@ -413,20 +407,20 @@ export class SceneHelper {
         `;
 
         const uniforms = {
-            'color': {
-                'type': 'v3',
-                'value': new THREE.Color(color)
+            color: {
+                type: 'v3',
+                value: new THREE.Color(color)
             },
-            'realFocusPosition': {
-                'type': 'v3',
-                'value': new THREE.Vector3()
+            realFocusPosition: {
+                type: 'v3',
+                value: new THREE.Vector3()
             },
-            'viewport': {
-                'type': 'v2',
-                'value': new THREE.Vector2()
+            viewport: {
+                type: 'v2',
+                value: new THREE.Vector2()
             },
-            'opacity': {
-                'value': 0.0
+            opacity: {
+                value: 0.0
             }
         };
 

@@ -3,7 +3,6 @@ import { UncompressedSplatArray } from './UncompressedSplatArray.js';
 import { SplatBuffer } from './SplatBuffer.js';
 
 export class SplatPartitioner {
-
     constructor(sectionCount, sectionFilters, groupingParameters, partitionGenerator) {
         this.sectionCount = sectionCount;
         this.sectionFilters = sectionFilters;
@@ -43,11 +42,13 @@ export class SplatPartitioner {
         };
     }
 
-    static getStandardPartitioner(partitionSize = 0, sceneCenter = new THREE.Vector3(),
-                                  blockSize = SplatBuffer.BucketBlockSize, bucketSize = SplatBuffer.BucketSize) {
-
+    static getStandardPartitioner(
+        partitionSize = 0,
+        sceneCenter = new THREE.Vector3(),
+        blockSize = SplatBuffer.BucketBlockSize,
+        bucketSize = SplatBuffer.BucketSize
+    ) {
         const partitionGenerator = (splatArray) => {
-
             const OFFSET_X = UncompressedSplatArray.OFFSET.X;
             const OFFSET_Y = UncompressedSplatArray.OFFSET.Y;
             const OFFSET_Z = UncompressedSplatArray.OFFSET.Z;
@@ -78,19 +79,19 @@ export class SplatPartitioner {
             partitionSize = Math.min(splatArray.splatCount, partitionSize);
             const patitionCount = Math.ceil(splatArray.splatCount / partitionSize);
             let currentStartSplat = 0;
-            for (let i = 0; i < patitionCount; i ++) {
+            for (let i = 0; i < patitionCount; i++) {
                 let startSplat = currentStartSplat;
                 sectionFilters.push((splatIndex) => {
                     return splatIndex >= startSplat && splatIndex < startSplat + partitionSize;
                 });
                 groupingParameters.push({
-                    'blocksSize': blockSize,
-                    'bucketSize': bucketSize,
+                    blocksSize: blockSize,
+                    bucketSize: bucketSize
                 });
                 currentStartSplat += partitionSize;
             }
             return {
-                'sectionCount': sectionFilters.length,
+                sectionCount: sectionFilters.length,
                 sectionFilters,
                 groupingParameters
             };

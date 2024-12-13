@@ -1,17 +1,17 @@
 import { PlyFormat } from './PlyFormat.js';
 
-const [
-        FieldSizeIdDouble, FieldSizeIdInt, FieldSizeIdUInt, FieldSizeIdFloat, FieldSizeIdShort, FieldSizeIdUShort, FieldSizeIdUChar
-      ] = [0, 1, 2, 3, 4, 5, 6];
+const [FieldSizeIdDouble, FieldSizeIdInt, FieldSizeIdUInt, FieldSizeIdFloat, FieldSizeIdShort, FieldSizeIdUShort, FieldSizeIdUChar] = [
+    0, 1, 2, 3, 4, 5, 6
+];
 
 const FieldSizeStringMap = {
-    'double': FieldSizeIdDouble,
-    'int': FieldSizeIdInt,
-    'uint': FieldSizeIdUInt,
-    'float': FieldSizeIdFloat,
-    'short': FieldSizeIdShort,
-    'ushort': FieldSizeIdUShort,
-    'uchar': FieldSizeIdUChar,
+    double: FieldSizeIdDouble,
+    int: FieldSizeIdInt,
+    uint: FieldSizeIdUInt,
+    float: FieldSizeIdFloat,
+    short: FieldSizeIdShort,
+    ushort: FieldSizeIdUShort,
+    uchar: FieldSizeIdUChar
 };
 
 const FieldSize = {
@@ -21,18 +21,15 @@ const FieldSize = {
     [FieldSizeIdFloat]: 4,
     [FieldSizeIdShort]: 2,
     [FieldSizeIdUShort]: 2,
-    [FieldSizeIdUChar]: 1,
+    [FieldSizeIdUChar]: 1
 };
 
 export class PlyParserUtils {
-
     static HeaderEndToken = 'end_header';
 
-    constructor() {
-    }
+    constructor() {}
 
     decodeSectionHeader(headerLines, fieldNameIdMap, headerStartLine = 0) {
-
         const extractedLines = [];
 
         let processingSection = false;
@@ -113,23 +110,22 @@ export class PlyParserUtils {
         const sphericalHarmonics = this.decodeSphericalHarmonicsFromSectionHeader(allFieldNames, fieldNameIdMap);
 
         return {
-            'headerLines': extractedLines,
-            'headerStartLine': headerStartLine,
-            'headerEndLine': headerEndLine,
-            'fieldTypes': fieldTypes,
-            'fieldIds': fieldIds,
-            'fieldOffsets': fieldOffsets,
-            'bytesPerVertex': bytesPerVertex,
-            'vertexCount': vertexCount,
-            'dataSizeBytes': bytesPerVertex * vertexCount,
-            'endOfHeader': endOfHeader,
-            'sectionName': sectionName,
-            'sphericalHarmonicsDegree': sphericalHarmonics.degree,
-            'sphericalHarmonicsCoefficientsPerChannel': sphericalHarmonics.coefficientsPerChannel,
-            'sphericalHarmonicsDegree1Fields': sphericalHarmonics.degree1Fields,
-            'sphericalHarmonicsDegree2Fields': sphericalHarmonics.degree2Fields
+            headerLines: extractedLines,
+            headerStartLine: headerStartLine,
+            headerEndLine: headerEndLine,
+            fieldTypes: fieldTypes,
+            fieldIds: fieldIds,
+            fieldOffsets: fieldOffsets,
+            bytesPerVertex: bytesPerVertex,
+            vertexCount: vertexCount,
+            dataSizeBytes: bytesPerVertex * vertexCount,
+            endOfHeader: endOfHeader,
+            sectionName: sectionName,
+            sphericalHarmonicsDegree: sphericalHarmonics.degree,
+            sphericalHarmonicsCoefficientsPerChannel: sphericalHarmonics.coefficientsPerChannel,
+            sphericalHarmonicsDegree1Fields: sphericalHarmonics.degree1Fields,
+            sphericalHarmonicsDegree2Fields: sphericalHarmonics.degree2Fields
         };
-
     }
 
     decodeSphericalHarmonicsFromSectionHeader(fieldNames, fieldNameIdMap) {
@@ -160,10 +156,10 @@ export class PlyParserUtils {
         }
 
         return {
-            'degree': degree,
-            'coefficientsPerChannel': coefficientsPerChannel,
-            'degree1Fields': degree1Fields,
-            'degree2Fields': degree2Fields
+            degree: degree,
+            coefficientsPerChannel: coefficientsPerChannel,
+            degree1Fields: degree1Fields,
+            degree2Fields: degree2Fields
         };
     }
 

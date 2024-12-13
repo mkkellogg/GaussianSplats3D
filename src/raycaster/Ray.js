@@ -5,7 +5,6 @@ const VectorUp = new THREE.Vector3(0, 1, 0);
 const VectorBackward = new THREE.Vector3(0, 0, 1);
 
 export class Ray {
-
     constructor(origin = new THREE.Vector3(), direction = new THREE.Vector3()) {
         this.origin = new THREE.Vector3();
         this.direction = new THREE.Vector3();
@@ -18,20 +17,23 @@ export class Ray {
     }
 
     boxContainsPoint(box, point, epsilon) {
-        return point.x < box.min.x - epsilon || point.x > box.max.x + epsilon ||
-               point.y < box.min.y - epsilon || point.y > box.max.y + epsilon ||
-               point.z < box.min.z - epsilon || point.z > box.max.z + epsilon ? false : true;
+        return point.x < box.min.x - epsilon ||
+            point.x > box.max.x + epsilon ||
+            point.y < box.min.y - epsilon ||
+            point.y > box.max.y + epsilon ||
+            point.z < box.min.z - epsilon ||
+            point.z > box.max.z + epsilon
+            ? false
+            : true;
     }
 
-    intersectBox = function() {
-
+    intersectBox = (function () {
         const planeIntersectionPoint = new THREE.Vector3();
         const planeIntersectionPointArray = [];
         const originArray = [];
         const directionArray = [];
 
-        return function(box, outHit) {
-
+        return function (box, outHit) {
             originArray[0] = this.origin.x;
             originArray[1] = this.origin.y;
             originArray[2] = this.origin.z;
@@ -60,11 +62,13 @@ export class Ray {
                 if (toSide * multiplier < 0) {
                     const idx1 = (i + 1) % 3;
                     const idx2 = (i + 2) % 3;
-                    planeIntersectionPointArray[2] = directionArray[idx1] / directionArray[i] * toSide + originArray[idx1];
-                    planeIntersectionPointArray[1] = directionArray[idx2] / directionArray[i] * toSide + originArray[idx2];
-                    planeIntersectionPoint.set(planeIntersectionPointArray[i],
-                                               planeIntersectionPointArray[idx2],
-                                               planeIntersectionPointArray[idx1]);
+                    planeIntersectionPointArray[2] = (directionArray[idx1] / directionArray[i]) * toSide + originArray[idx1];
+                    planeIntersectionPointArray[1] = (directionArray[idx2] / directionArray[i]) * toSide + originArray[idx2];
+                    planeIntersectionPoint.set(
+                        planeIntersectionPointArray[i],
+                        planeIntersectionPointArray[idx2],
+                        planeIntersectionPointArray[idx1]
+                    );
                     if (this.boxContainsPoint(box, planeIntersectionPoint, 0.0001)) {
                         if (outHit) {
                             outHit.origin.copy(planeIntersectionPoint);
@@ -78,14 +82,12 @@ export class Ray {
 
             return false;
         };
+    })();
 
-    }();
-
-    intersectSphere = function() {
-
+    intersectSphere = (function () {
         const toSphereCenterVec = new THREE.Vector3();
 
-        return function(center, radius, outHit) {
+        return function (center, radius, outHit) {
             toSphereCenterVec.copy(center).sub(this.origin);
             const toClosestApproach = toSphereCenterVec.dot(this.direction);
             const toClosestApproachSq = toClosestApproach * toClosestApproach;
@@ -109,6 +111,5 @@ export class Ray {
             }
             return true;
         };
-
-    }();
+    })();
 }

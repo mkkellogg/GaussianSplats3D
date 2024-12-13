@@ -5,9 +5,7 @@ import { PlyParserUtils } from './PlyParserUtils.js';
 import { PlyFormat } from './PlyFormat.js';
 
 export class PlyParser {
-
     static parseToUncompressedSplatArray(plyBuffer, outSphericalHarmonicsDegree = 0) {
-
         const plyFormat = PlyParserUtils.determineHeaderFormatFromPlyBuffer(plyBuffer);
 
         if (plyFormat === PlyFormat.PlayCanvasCompressed) {
@@ -18,5 +16,4 @@ export class PlyParser {
             return new INRIAV2PlyParser().parseToUncompressedSplatArray(plyBuffer, outSphericalHarmonicsDegree);
         }
     }
-
 }
