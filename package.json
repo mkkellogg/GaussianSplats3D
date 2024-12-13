@@ -23,6 +23,7 @@
         "fix-styling": "npx stylelint **/*.scss --fix",
         "fix-js": "npx eslint src --fix",
         "lint": "npx eslint 'src/**/*.js' || true",
+        "format": "npm run prettify && npm run fix-js",
         "prettify": "npx prettier --write 'src/**/*.js'"
     },
     "watch": {

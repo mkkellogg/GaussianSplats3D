@@ -22,7 +22,7 @@ module.exports = {
       'sourceType': 'module',
     },
     'rules': {
-      "indent": ["error", 2, { "SwitchCase": 1 }],
+      "indent": ["error", 4, { "SwitchCase": 1 }],
       "max-len": ["error", 140],
       "object-curly-spacing": ["off"],
       "comma-dangle": ["off"],
@@ -35,4 +35,3 @@ module.exports = {
       "valid-jsdoc" : ["off"]
     },
   };
-  
