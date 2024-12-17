@@ -64,6 +64,16 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true, h
         aborted = true;
     };
 
+    let onProgressCalledAtComplete = false;
+    const localOnProgress = (percent, percentLabel, chunk, fileSize) => {
+        if (onProgress && !onProgressCalledAtComplete) {
+            onProgress(percent, percentLabel, chunk, fileSize);
+            if (percent === 100) {
+                onProgressCalledAtComplete = true;
+            }
+        }
+    };
+
     return new AbortablePromise((resolve, reject) => {
         const fetchOptions = { signal };
         if (headers) fetchOptions.headers = headers;
@@ -87,9 +97,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true, h
                 try {
                     const { value: chunk, done } = await reader.read();
                     if (done) {
-                        if (onProgress) {
-                            onProgress(100, '100%', chunk, fileSize);
-                        }
+                        localOnProgress(100, '100%', chunk, fileSize);
                         if (saveChunks) {
                             const buffer = new Blob(chunks).arrayBuffer();
                             resolve(buffer);
@@ -108,9 +116,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true, h
                     if (saveChunks) {
                         chunks.push(chunk);
                     }
-                    if (onProgress) {
-                        onProgress(percent, percentLabel, chunk, fileSize);
-                    }
+                    localOnProgress(percent, percentLabel, chunk, fileSize);
                 } catch (error) {
                     reject(error);
                     return;
