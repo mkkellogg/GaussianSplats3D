@@ -299,11 +299,10 @@ export class PlayCanvasCompressedPlyParser {
   }
 
   static getElementStorageArrays(chunkElement, vertexElement, shElement) {
-    const storageArrays =  {
-      
-    };
+    const storageArrays = {};
 
-    if (vertexElement) { const minR = getElementPropStorage(chunkElement, 'min_r');
+    if (vertexElement) {
+      const minR = getElementPropStorage(chunkElement, 'min_r');
       const minG = getElementPropStorage(chunkElement, 'min_g');
       const minB = getElementPropStorage(chunkElement, 'min_b');
       const maxR = getElementPropStorage(chunkElement, 'max_r');
@@ -420,19 +419,12 @@ export class PlayCanvasCompressedPlyParser {
 
   static decompressSphericalHarmonics = function() {
 
-    const sh = [];
-
-    const shCountMap = [0, 9, 24, 45];
     const shCoeffMap = [0, 3, 8, 15];
-    // const shIndexMap = [0, 1, 2, 9, 10, 11, 12, 13, 24, 25, 26, 27, 28, 29, 30,
-    //                     3, 4, 5, 14, 15, 16, 17, 18, 31, 32, 33, 34, 35, 36, 37,
-    //                     6, 7, 8, 19, 20, 21, 22, 23, 38, 39, 40, 41, 42, 43, 44
-    // ]
 
     const shIndexMap = [0, 1, 2, 9, 10, 11, 12, 13, 24, 25, 26, 27, 28, 29, 30,
                         3, 4, 5, 14, 15, 16, 17, 18, 31, 32, 33, 34, 35, 36, 37,
                         6, 7, 8, 19, 20, 21, 22, 23, 38, 39, 40, 41, 42, 43, 44
-    ]
+    ];
 
     return function(index, shArray, outSphericalHarmonicsDegree, readSphericalHarmonicsDegree, outSplat) {
       outSplat = outSplat || UncompressedSplatArray.createSplat();
@@ -453,9 +445,9 @@ export class PlayCanvasCompressedPlyParser {
   }();
 
   static parseToUncompressedSplatBufferSection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
-                                               vertexDataBuffer, vertexReadOffset, outBuffer, outOffset, propertyFilter = null) {
+                                               vertexDataBuffer, outBuffer, outOffset, propertyFilter = null) {
 
-    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, vertexReadOffset, fromIndex, toIndex, propertyFilter);
+    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, 0, fromIndex, toIndex, propertyFilter);
 
     const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[0].BytesPerSplat;
 
@@ -473,9 +465,9 @@ export class PlayCanvasCompressedPlyParser {
   }
 
   static parseToUncompressedSplatArraySection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
-                                              vertexDataBuffer, vertexReadOffset, splatArray, propertyFilter = null) {
+                                              vertexDataBuffer, splatArray, propertyFilter = null) {
 
-    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, vertexReadOffset, fromIndex, toIndex, propertyFilter);
+    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, 0, fromIndex, toIndex, propertyFilter);
 
     const { positionExtremes, scaleExtremes, colorExtremes, position, rotation, scale, color } =
       PlayCanvasCompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
@@ -497,7 +489,9 @@ export class PlayCanvasCompressedPlyParser {
     const shArrays = Object.values(sh);
 
     for (let i = fromIndex; i <= toIndex; ++i) {
-      PlayCanvasCompressedPlyParser.decompressSphericalHarmonics(i, shArrays, outSphericalHarmonicsDegree, readSphericalHarmonicsDegree, splatArray.splats[i]);
+      PlayCanvasCompressedPlyParser.decompressSphericalHarmonics(
+        i, shArrays, outSphericalHarmonicsDegree, readSphericalHarmonicsDegree, splatArray.splats[i]
+      );
     }
   }
 
