@@ -76,6 +76,7 @@ export class PlayCanvasCompressedPlyParser {
     let element;
     let chunkElement;
     let vertexElement;
+    let shElement;
 
     const headerLines = headerText.split('\n').filter((line) => !line.startsWith('comment '));
 
@@ -99,6 +100,7 @@ export class PlayCanvasCompressedPlyParser {
           };
           if (element.name === 'chunk') chunkElement = element;
           else if (element.name === 'vertex') vertexElement = element;
+          else if (element.name === 'sh') shElement = element;
           break;
         case 'property': {
           if (!DataTypeMap.has(words[1])) {
@@ -130,12 +132,27 @@ export class PlayCanvasCompressedPlyParser {
       if (done) break;
     }
 
+    let sphericalHarmonicsDegree = 0;
+    let sphericalHarmonicsPerSplat = 0;
+    if (shElement) {
+      sphericalHarmonicsPerSplat = shElement.properties.length;
+      if (shElement.properties.length >= 45) {
+        sphericalHarmonicsDegree = 3;
+      } else if (shElement.properties.length >= 24) {
+        sphericalHarmonicsDegree = 2;
+      } else if (shElement.properties.length >= 9) {
+        sphericalHarmonicsDegree = 1;
+      }
+    }
+
     return {
       'chunkElement': chunkElement,
       'vertexElement': vertexElement,
+      'shElement': shElement,
       'bytesPerSplat': bytesPerSplat,
       'headerSizeBytes': headerText.indexOf(HeaderEndToken) + HeaderEndToken.length + 1,
-      'sphericalHarmonicsDegree': 0
+      'sphericalHarmonicsDegree': sphericalHarmonicsDegree,
+      'sphericalHarmonicsPerSplat': sphericalHarmonicsPerSplat
     };
   }
 
@@ -281,52 +298,72 @@ export class PlayCanvasCompressedPlyParser {
     };
   }
 
-  static getElementStorageArrays(chunkElement, vertexElement) {
-    const minX = getElementPropStorage(chunkElement, 'min_x');
-    const minY = getElementPropStorage(chunkElement, 'min_y');
-    const minZ = getElementPropStorage(chunkElement, 'min_z');
-    const maxX = getElementPropStorage(chunkElement, 'max_x');
-    const maxY = getElementPropStorage(chunkElement, 'max_y');
-    const maxZ = getElementPropStorage(chunkElement, 'max_z');
-    const minScaleX = getElementPropStorage(chunkElement, 'min_scale_x');
-    const minScaleY = getElementPropStorage(chunkElement, 'min_scale_y');
-    const minScaleZ = getElementPropStorage(chunkElement, 'min_scale_z');
-    const maxScaleX = getElementPropStorage(chunkElement, 'max_scale_x');
-    const maxScaleY = getElementPropStorage(chunkElement, 'max_scale_y');
-    const maxScaleZ = getElementPropStorage(chunkElement, 'max_scale_z');
-    const minR = getElementPropStorage(chunkElement, 'min_r');
-    const minG = getElementPropStorage(chunkElement, 'min_g');
-    const minB = getElementPropStorage(chunkElement, 'min_b');
-    const maxR = getElementPropStorage(chunkElement, 'max_r');
-    const maxG = getElementPropStorage(chunkElement, 'max_g');
-    const maxB = getElementPropStorage(chunkElement, 'max_b');
-    const position = getElementPropStorage(vertexElement, 'packed_position');
-    const rotation = getElementPropStorage(vertexElement, 'packed_rotation');
-    const scale = getElementPropStorage(vertexElement, 'packed_scale');
-    const color = getElementPropStorage(vertexElement, 'packed_color');
-    return {
-      positionExtremes: {
-        minX, maxX,
-        minY, maxY,
-        minZ, maxZ
-      },
-      scaleExtremes: {
-        minScaleX, maxScaleX, minScaleY,
-        maxScaleY, minScaleZ, maxScaleZ
-      },
-      colorExtremes: {
+  static getElementStorageArrays(chunkElement, vertexElement, shElement) {
+    const storageArrays =  {
+      
+    };
+
+    if (vertexElement) { const minR = getElementPropStorage(chunkElement, 'min_r');
+      const minG = getElementPropStorage(chunkElement, 'min_g');
+      const minB = getElementPropStorage(chunkElement, 'min_b');
+      const maxR = getElementPropStorage(chunkElement, 'max_r');
+      const maxG = getElementPropStorage(chunkElement, 'max_g');
+      const maxB = getElementPropStorage(chunkElement, 'max_b');
+      const minX = getElementPropStorage(chunkElement, 'min_x');
+      const minY = getElementPropStorage(chunkElement, 'min_y');
+      const minZ = getElementPropStorage(chunkElement, 'min_z');
+      const maxX = getElementPropStorage(chunkElement, 'max_x');
+      const maxY = getElementPropStorage(chunkElement, 'max_y');
+      const maxZ = getElementPropStorage(chunkElement, 'max_z');
+      const minScaleX = getElementPropStorage(chunkElement, 'min_scale_x');
+      const minScaleY = getElementPropStorage(chunkElement, 'min_scale_y');
+      const minScaleZ = getElementPropStorage(chunkElement, 'min_scale_z');
+      const maxScaleX = getElementPropStorage(chunkElement, 'max_scale_x');
+      const maxScaleY = getElementPropStorage(chunkElement, 'max_scale_y');
+      const maxScaleZ = getElementPropStorage(chunkElement, 'max_scale_z');
+      const position = getElementPropStorage(vertexElement, 'packed_position');
+      const rotation = getElementPropStorage(vertexElement, 'packed_rotation');
+      const scale = getElementPropStorage(vertexElement, 'packed_scale');
+      const color = getElementPropStorage(vertexElement, 'packed_color');
+
+      storageArrays['colorExtremes'] = {
         minR, maxR,
         minG, maxG,
         minB, maxB
-      },
-      position,
-      rotation,
-      scale,
-      color
-    };
+      };
+      storageArrays['positionExtremes'] = {
+        minX, maxX,
+        minY, maxY,
+        minZ, maxZ
+      };
+      storageArrays['scaleExtremes'] = {
+        minScaleX, maxScaleX, minScaleY,
+        maxScaleY, minScaleZ, maxScaleZ
+      };
+      storageArrays['position'] = position;
+      storageArrays['rotation'] = rotation;
+      storageArrays['scale'] = scale;
+      storageArrays['color'] = color;
+    }
+
+    if (shElement) {
+      const shStorageArrays = {};
+      for (let i = 0; i < 45; i++) {
+        const fRestKey = `f_rest_${i}`;
+        const fRest = getElementPropStorage(shElement, fRestKey);
+        if (fRest) {
+          shStorageArrays[fRestKey] = fRest;
+        } else {
+          break;
+        }
+      }
+      storageArrays['sh'] = shStorageArrays;
+    }
+
+    return storageArrays;
   }
 
-  static decompressSplat = function() {
+  static decompressBaseSplat = function() {
 
     const p = new THREE.Vector3();
     const r = new THREE.Quaternion();
@@ -381,10 +418,44 @@ export class PlayCanvasCompressedPlyParser {
 
   }();
 
-  static parseToUncompressedSplatBufferSection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
-                                               vertexDataBuffer, veretxReadOffset, outBuffer, outOffset, propertyFilter = null) {
+  static decompressSphericalHarmonics = function() {
 
-    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, veretxReadOffset, fromIndex, toIndex, propertyFilter);
+    const sh = [];
+
+    const shCountMap = [0, 9, 24, 45];
+    const shCoeffMap = [0, 3, 8, 15];
+    // const shIndexMap = [0, 1, 2, 9, 10, 11, 12, 13, 24, 25, 26, 27, 28, 29, 30,
+    //                     3, 4, 5, 14, 15, 16, 17, 18, 31, 32, 33, 34, 35, 36, 37,
+    //                     6, 7, 8, 19, 20, 21, 22, 23, 38, 39, 40, 41, 42, 43, 44
+    // ]
+
+    const shIndexMap = [0, 1, 2, 9, 10, 11, 12, 13, 24, 25, 26, 27, 28, 29, 30,
+                        3, 4, 5, 14, 15, 16, 17, 18, 31, 32, 33, 34, 35, 36, 37,
+                        6, 7, 8, 19, 20, 21, 22, 23, 38, 39, 40, 41, 42, 43, 44
+    ]
+
+    return function(index, shArray, outSphericalHarmonicsDegree, readSphericalHarmonicsDegree, outSplat) {
+      outSplat = outSplat || UncompressedSplatArray.createSplat();
+      let outSHCoeff = shCoeffMap[outSphericalHarmonicsDegree];
+      let readSHCoeff = shCoeffMap[readSphericalHarmonicsDegree];
+      for (let j = 0; j < 3; ++j) {
+        for (let k = 0; k < 15; ++k) {
+          const outIndex = shIndexMap[j * 15 + k];
+          if (k < outSHCoeff && k < readSHCoeff) {
+            outSplat[UncompressedSplatArray.OFFSET.FRC0 + outIndex] = (shArray[j * readSHCoeff + k][index] * (8 / 255) - 4);
+          }
+        }
+      }
+
+      return outSplat;
+    };
+
+  }();
+
+  static parseToUncompressedSplatBufferSection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
+                                               vertexDataBuffer, vertexReadOffset, outBuffer, outOffset, propertyFilter = null) {
+
+    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, vertexReadOffset, fromIndex, toIndex, propertyFilter);
 
     const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[0].BytesPerSplat;
 
@@ -394,26 +465,39 @@ export class PlayCanvasCompressedPlyParser {
     const tempSplat = UncompressedSplatArray.createSplat();
 
     for (let i = fromIndex; i <= toIndex; ++i) {
-      PlayCanvasCompressedPlyParser.decompressSplat(i, chunkSplatIndexOffset, position, positionExtremes,
-                                                    scale, scaleExtremes, rotation, colorExtremes, color, tempSplat);
+      PlayCanvasCompressedPlyParser.decompressBaseSplat(i, chunkSplatIndexOffset, position, positionExtremes,
+                                                        scale, scaleExtremes, rotation, colorExtremes, color, tempSplat);
       const outBase = i * outBytesPerSplat + outOffset;
       SplatBuffer.writeSplatDataToSectionBuffer(tempSplat, outBuffer, outBase, 0, 0);
     }
   }
 
   static parseToUncompressedSplatArraySection(chunkElement, vertexElement, fromIndex, toIndex, chunkSplatIndexOffset,
-                                              vertexDataBuffer, veretxReadOffset, splatArray, propertyFilter = null) {
+                                              vertexDataBuffer, vertexReadOffset, splatArray, propertyFilter = null) {
 
-    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, veretxReadOffset, fromIndex, toIndex, propertyFilter);
+    PlayCanvasCompressedPlyParser.readElementData(vertexElement, vertexDataBuffer, vertexReadOffset, fromIndex, toIndex, propertyFilter);
 
     const { positionExtremes, scaleExtremes, colorExtremes, position, rotation, scale, color } =
       PlayCanvasCompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
 
     for (let i = fromIndex; i <= toIndex; ++i) {
       const tempSplat = UncompressedSplatArray.createSplat();
-      PlayCanvasCompressedPlyParser.decompressSplat(i, chunkSplatIndexOffset, position, positionExtremes,
-                                                    scale, scaleExtremes, rotation, colorExtremes, color, tempSplat);
+      PlayCanvasCompressedPlyParser.decompressBaseSplat(i, chunkSplatIndexOffset, position, positionExtremes,
+                                                        scale, scaleExtremes, rotation, colorExtremes, color, tempSplat);
       splatArray.addSplat(tempSplat);
+    }
+  }
+
+  static parseSphericalHarmonicsToUncompressedSplatArraySection(chunkElement, shElement, fromIndex, toIndex,
+    vertexDataBuffer, vertexReadOffset, outSphericalHarmonicsDegree, readSphericalHarmonicsDegree, splatArray, propertyFilter = null) {
+
+    PlayCanvasCompressedPlyParser.readElementData(shElement, vertexDataBuffer, vertexReadOffset, fromIndex, toIndex, propertyFilter);
+
+    const { sh } = PlayCanvasCompressedPlyParser.getElementStorageArrays(chunkElement, undefined, shElement);
+    const shArrays = Object.values(sh);
+
+    for (let i = fromIndex; i <= toIndex; ++i) {
+      PlayCanvasCompressedPlyParser.decompressSphericalHarmonics(i, shArrays, outSphericalHarmonicsDegree, readSphericalHarmonicsDegree, splatArray.splats[i]);
     }
   }
 
@@ -430,8 +514,8 @@ export class PlayCanvasCompressedPlyParser {
       splatArray.addDefaultSplat();
       const newSplat = splatArray.getSplat(splatArray.splatCount - 1);
 
-      PlayCanvasCompressedPlyParser.decompressSplat(i, 0, position, positionExtremes, scale,
-                                                    scaleExtremes, rotation, colorExtremes, color, newSplat);
+      PlayCanvasCompressedPlyParser.decompressBaseSplat(i, 0, position, positionExtremes, scale,
+                                                        scaleExtremes, rotation, colorExtremes, color, newSplat);
     }
 
     const mat = new THREE.Matrix4();
