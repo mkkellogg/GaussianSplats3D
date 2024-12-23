@@ -857,8 +857,7 @@ export class Viewer {
             if (onException) onException();
             this.clearSplatSceneDownloadAndBuildPromise();
             this.removeSplatSceneDownloadPromise(downloadPromise);
-            const error = (e instanceof AbortedPromiseError) ? e : new Error(`Viewer::addSplatScene -> Could not load file ${path}`);
-            downloadAndBuildPromise.reject(error);
+            downloadAndBuildPromise.reject(this.updateError(e, `Viewer::addSplatScene -> Could not load file ${path}`));
         });
 
         this.addSplatSceneDownloadPromise(downloadPromise);
@@ -938,7 +937,7 @@ export class Viewer {
         .catch((e) => {
             this.clearSplatSceneDownloadAndBuildPromise();
             this.removeSplatSceneDownloadPromise(splatSceneDownloadPromise);
-            const error = (e instanceof AbortedPromiseError) ? e : new Error(`Viewer::addSplatScene -> Could not load one or more scenes`);
+            const error = this.updateError(e, `Viewer::addSplatScene -> Could not load one or more scenes`);
             progressiveLoadFirstSectionBuildPromise.reject(error);
             if (onDownloadException) onDownloadException(error);
         });
@@ -1030,9 +1029,7 @@ export class Viewer {
             .catch((e) => {
                 if (showLoadingUI) this.loadingSpinner.removeTask(loadingUITaskId);
                 this.clearSplatSceneDownloadAndBuildPromise();
-                const error = (e instanceof AbortedPromiseError) ? e :
-                               new Error(`Viewer::addSplatScenes -> Could not load one or more splat scenes.`);
-                reject(error);
+                reject(this.updateError(e, `Viewer::addSplatScenes -> Could not load one or more splat scenes.`));
             })
             .finally(() => {
                 this.removeSplatSceneDownloadPromise(downloadAndBuildPromise);
@@ -1075,11 +1072,7 @@ export class Viewer {
                                              this.inMemoryCompressionLevel, optimizeSplatData, this.sphericalHarmonicsDegree, headers);
             }
         } catch (e) {
-            if (e instanceof DirectLoadError) {
-                throw new Error('File type or server does not support progressive loading.');
-            } else {
-                throw e;
-            }
+            throw this.updateError(e, null);
         }
 
         throw new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`);
@@ -1299,6 +1292,14 @@ export class Viewer {
                 }
             };
         });
+    }
+
+    updateError(error, defaultMessage) {
+        if (error instanceof AbortedPromiseError) return error;
+        if (error instanceof DirectLoadError) {
+            return new Error('File type or server does not support progressive loading.');
+        }
+        return defaultMessage ? new Error(defaultMessage) : error;
     }
 
     disposeSortWorker() {
