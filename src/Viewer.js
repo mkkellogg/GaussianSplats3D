@@ -3,6 +3,7 @@ import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './loaders/ply/PlyLoader.js';
 import { SplatLoader } from './loaders/splat/SplatLoader.js';
 import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
+import { SpzLoader } from './loaders/spz/SpzLoader.js';
 import { sceneFormatFromPath } from './loaders/Utils.js';
 import { LoadingSpinner } from './ui/LoadingSpinner.js';
 import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
@@ -1070,6 +1071,9 @@ export class Viewer {
             } else if (format === SceneFormat.Ply) {
                 return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, splatAlphaRemovalThreshold,
                                              this.inMemoryCompressionLevel, optimizeSplatData, this.sphericalHarmonicsDegree, headers);
+            } else if (format === SceneFormat.Spz) {
+                return SpzLoader.loadFromURL(path, onProgress, splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
+                                             optimizeSplatData, this.sphericalHarmonicsDegree, headers);
             }
         } catch (e) {
             throw this.updateError(e, null);
