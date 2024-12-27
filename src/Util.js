@@ -157,20 +157,24 @@ export const disposeAllMeshes = (object3D) => {
 export const delayedExecute = (func, fast) => {
     return new Promise((resolve) => {
         window.setTimeout(() => {
-            resolve(func());
+            resolve(func ? func() : undefined);
         }, fast ? 1 : 50);
     });
 };
 
 
 export const getSphericalHarmonicsComponentCountForDegree = (sphericalHarmonicsDegree = 0) => {
-    switch (sphericalHarmonicsDegree) {
-        case 1:
-            return 9;
-        case 2:
-            return 24;
+    let shCoeffPerSplat = 0;
+    if (sphericalHarmonicsDegree === 1) {
+        shCoeffPerSplat = 9;
+    } else if (sphericalHarmonicsDegree === 2) {
+        shCoeffPerSplat = 24;
+    } else if (sphericalHarmonicsDegree === 3) {
+        shCoeffPerSplat = 45;
+    } else if (sphericalHarmonicsDegree > 3) {
+        throw new Error('getSphericalHarmonicsComponentCountForDegree() -> Invalid spherical harmonics degree');
     }
-    return 0;
+    return shCoeffPerSplat;
 };
 
 export const nativePromiseWithExtractedComponents = () => {
