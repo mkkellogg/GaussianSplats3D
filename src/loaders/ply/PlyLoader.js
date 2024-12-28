@@ -47,9 +47,13 @@ export class PlyLoader {
                        minimumAlpha, compressionLevel, optimizeSplatData = true, outSphericalHarmonicsDegree = 0,
                        headers, sectionSize, sceneCenter, blockSize, bucketSize) {
 
-        let internalLoadType = progressiveLoadToSplatBuffer ? InternalLoadType.ProgressiveToSplatBuffer :
-                                                          InternalLoadType.ProgressiveToSplatArray;
-        if (optimizeSplatData) internalLoadType = InternalLoadType.ProgressiveToSplatArray;
+        let internalLoadType;
+        if (!progressiveLoadToSplatBuffer && !optimizeSplatData) {
+            internalLoadType = InternalLoadType.DownloadBeforeProcessing;
+        } else {
+            if (optimizeSplatData) internalLoadType = InternalLoadType.ProgressiveToSplatArray;
+            else internalLoadType = InternalLoadType.ProgressiveToSplatBuffer;
+        }
 
         const directLoadSectionSizeBytes = Constants.ProgressiveLoadSectionSize;
         const splatBufferDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
@@ -81,7 +85,6 @@ export class PlyLoader {
         let standardLoadUncompressedSplatArray;
 
         const textDecoder = new TextDecoder();
-        const inriaV1PlyParser = new INRIAV1PlyParser();
 
         const localOnProgress = (percent, percentLabel, chunkData) => {
             const loadComplete = percent >= 100;
@@ -106,7 +109,7 @@ export class PlyLoader {
                     if (PlyParserUtils.checkTextForEndHeader(headerText)) {
                         plyFormat = PlyParserUtils.determineHeaderFormatFromHeaderText(headerText);
                         if (plyFormat === PlyFormat.INRIAV1) {
-                            header = inriaV1PlyParser.decodeHeaderText(headerText);
+                            header = INRIAV1PlyParser.decodeHeaderText(headerText);
                             outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
                             maxSplatCount = header.splatCount;
                             readyToLoadSplatData = true;
@@ -196,7 +199,7 @@ export class PlyLoader {
                                         processedBaseSplatCount, dataToParse, directLoadBufferOut, outOffset
                                     );
                                 } else {
-                                    inriaV1PlyParser.parseToUncompressedSplatBufferSection(
+                                    INRIAV1PlyParser.parseToUncompressedSplatBufferSection(
                                         header, 0, addedSplatCount - 1, dataToParse, 0,
                                         directLoadBufferOut, outOffset, outSphericalHarmonicsDegree
                                     );
@@ -208,7 +211,7 @@ export class PlyLoader {
                                         processedBaseSplatCount, dataToParse, standardLoadUncompressedSplatArray
                                     );
                                 } else {
-                                    inriaV1PlyParser.parseToUncompressedSplatArraySection(
+                                    INRIAV1PlyParser.parseToUncompressedSplatArraySection(
                                         header, 0, addedSplatCount - 1, dataToParse, 0,
                                         standardLoadUncompressedSplatArray, outSphericalHarmonicsDegree
                                     );

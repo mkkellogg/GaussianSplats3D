@@ -549,34 +549,10 @@ export class PlayCanvasCompressedPlyParser {
 
     outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, sphericalHarmonicsDegree);
 
-    const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree];
-    const splatBufferDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
-    const splatBufferSizeBytes = splatBufferDataOffsetBytes + shDescriptor.BytesPerSplat * vertexElement.count;
-    const outBuffer = new ArrayBuffer(splatBufferSizeBytes);
-    SplatBuffer.writeHeaderToBuffer({
-      versionMajor: SplatBuffer.CurrentMajorVersion,
-      versionMinor: SplatBuffer.CurrentMinorVersion,
-      maxSectionCount: 1,
-      sectionCount: 1,
-      maxSplatCount: vertexElement.count,
-      splatCount: vertexElement.count,
-      compressionLevel: 0,
-      sceneCenter: new THREE.Vector3()
-    }, outBuffer);
-
-    SplatBuffer.writeSectionHeaderToBuffer({
-      maxSplatCount: vertexElement.count,
-      splatCount: vertexElement.count,
-      bucketSize: 0,
-      bucketCount: 0,
-      bucketBlockSize: 0,
-      compressionScaleRange: 0,
-      storageSizeBytes: 0,
-      fullBucketCount: 0,
-      partiallyFilledBucketCount: 0,
-      sphericalHarmonicsDegree: outSphericalHarmonicsDegree
-    }, 0, outBuffer, SplatBuffer.HeaderSizeBytes);
-    const splatBuffer = new SplatBuffer(outBuffer, true);
+    const {
+      splatBuffer,
+      splatBufferDataOffsetBytes
+    } = SplatBuffer.preallocateUncompressed(vertexElement.count, outSphericalHarmonicsDegree);
 
     const { positionExtremes, scaleExtremes, colorExtremes, position, rotation, scale, color } =
     PlayCanvasCompressedPlyParser.getElementStorageArrays(chunkElement, vertexElement);
@@ -602,7 +578,7 @@ export class PlayCanvasCompressedPlyParser {
       }
 
       const outBase = i * outBytesPerSplat + splatBufferDataOffsetBytes;
-      SplatBuffer.writeSplatDataToSectionBuffer(newSplat, outBuffer, outBase, 0, outSphericalHarmonicsDegree);
+      SplatBuffer.writeSplatDataToSectionBuffer(newSplat, splatBuffer.bufferData, outBase, 0, outSphericalHarmonicsDegree);
     }
 
     return splatBuffer;

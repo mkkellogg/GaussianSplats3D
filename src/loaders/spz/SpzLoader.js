@@ -378,37 +378,12 @@ export class SpzLoader {
                                                                                    blockSize, bucketSize);
             return splatBufferGenerator.generateFromUncompressedSplatArray(splatArray);
         } else {
-            const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree];
-            const splatBufferDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
-            const splatBufferSizeBytes = splatBufferDataOffsetBytes + shDescriptor.BytesPerSplat * packed.numPoints;
-            const outBuffer = new ArrayBuffer(splatBufferSizeBytes);
-            SplatBuffer.writeHeaderToBuffer({
-                versionMajor: SplatBuffer.CurrentMajorVersion,
-                versionMinor: SplatBuffer.CurrentMinorVersion,
-                maxSectionCount: 1,
-                sectionCount: 1,
-                maxSplatCount: packed.numPoints,
-                splatCount: packed.numPoints,
-                compressionLevel: 0,
-                sceneCenter: new THREE.Vector3()
-            }, outBuffer);
-
-            SplatBuffer.writeSectionHeaderToBuffer({
-                maxSplatCount: packed.numPoints,
-                splatCount: packed.numPoints,
-                bucketSize: 0,
-                bucketCount: 0,
-                bucketBlockSize: 0,
-                compressionScaleRange: 0,
-                storageSizeBytes: 0,
-                fullBucketCount: 0,
-                partiallyFilledBucketCount: 0,
-                sphericalHarmonicsDegree: outSphericalHarmonicsDegree
-            }, 0, outBuffer, SplatBuffer.HeaderSizeBytes);
-
-            unpackGaussians(packed, outSphericalHarmonicsDegree, true, outBuffer, splatBufferDataOffsetBytes);
-
-            return new SplatBuffer(outBuffer, true);
+            const {
+                splatBuffer,
+                splatBufferDataOffsetBytes
+              } = SplatBuffer.preallocateUncompressed(packed.numPoints, outSphericalHarmonicsDegree);
+            unpackGaussians(packed, outSphericalHarmonicsDegree, true, splatBuffer.bufferData, splatBufferDataOffsetBytes);
+            return splatBuffer;
         }
     }
 
