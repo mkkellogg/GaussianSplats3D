@@ -28,10 +28,7 @@ export class PlyParserUtils {
 
     static HeaderEndToken = 'end_header';
 
-    constructor() {
-    }
-
-    decodeSectionHeader(headerLines, fieldNameIdMap, headerStartLine = 0) {
+    static decodeSectionHeader(headerLines, fieldNameIdMap, headerStartLine = 0) {
 
         const extractedLines = [];
 
@@ -110,7 +107,7 @@ export class PlyParserUtils {
             bytesPerVertex += FieldSize[FieldSizeStringMap[fieldType]];
         }
 
-        const sphericalHarmonics = this.decodeSphericalHarmonicsFromSectionHeader(allFieldNames, fieldNameIdMap);
+        const sphericalHarmonics = PlyParserUtils.decodeSphericalHarmonicsFromSectionHeader(allFieldNames, fieldNameIdMap);
 
         return {
             'headerLines': extractedLines,
@@ -132,7 +129,7 @@ export class PlyParserUtils {
 
     }
 
-    decodeSphericalHarmonicsFromSectionHeader(fieldNames, fieldNameIdMap) {
+    static decodeSphericalHarmonicsFromSectionHeader(fieldNames, fieldNameIdMap) {
         let sphericalHarmonicsFieldCount = 0;
         let coefficientsPerChannel = 0;
         for (let fieldName of fieldNames) {
@@ -222,7 +219,7 @@ export class PlyParserUtils {
         return headerText;
     }
 
-    readHeaderFromBuffer(plyBuffer) {
+    static readHeaderFromBuffer(plyBuffer) {
         const decoder = new TextDecoder();
         let headerOffset = 0;
         let headerText = '';

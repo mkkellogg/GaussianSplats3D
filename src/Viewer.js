@@ -3,6 +3,7 @@ import { OrbitControls } from './OrbitControls.js';
 import { PlyLoader } from './loaders/ply/PlyLoader.js';
 import { SplatLoader } from './loaders/splat/SplatLoader.js';
 import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
+import { SpzLoader } from './loaders/spz/SpzLoader.js';
 import { sceneFormatFromPath } from './loaders/Utils.js';
 import { LoadingSpinner } from './ui/LoadingSpinner.js';
 import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
@@ -857,8 +858,7 @@ export class Viewer {
             if (onException) onException();
             this.clearSplatSceneDownloadAndBuildPromise();
             this.removeSplatSceneDownloadPromise(downloadPromise);
-            const error = (e instanceof AbortedPromiseError) ? e : new Error(`Viewer::addSplatScene -> Could not load file ${path}`);
-            downloadAndBuildPromise.reject(error);
+            downloadAndBuildPromise.reject(this.updateError(e, `Viewer::addSplatScene -> Could not load file ${path}`));
         });
 
         this.addSplatSceneDownloadPromise(downloadPromise);
@@ -938,7 +938,7 @@ export class Viewer {
         .catch((e) => {
             this.clearSplatSceneDownloadAndBuildPromise();
             this.removeSplatSceneDownloadPromise(splatSceneDownloadPromise);
-            const error = (e instanceof AbortedPromiseError) ? e : new Error(`Viewer::addSplatScene -> Could not load one or more scenes`);
+            const error = this.updateError(e, `Viewer::addSplatScene -> Could not load one or more scenes`);
             progressiveLoadFirstSectionBuildPromise.reject(error);
             if (onDownloadException) onDownloadException(error);
         });
@@ -1030,9 +1030,7 @@ export class Viewer {
             .catch((e) => {
                 if (showLoadingUI) this.loadingSpinner.removeTask(loadingUITaskId);
                 this.clearSplatSceneDownloadAndBuildPromise();
-                const error = (e instanceof AbortedPromiseError) ? e :
-                               new Error(`Viewer::addSplatScenes -> Could not load one or more splat scenes.`);
-                reject(error);
+                reject(this.updateError(e, `Viewer::addSplatScenes -> Could not load one or more splat scenes.`));
             })
             .finally(() => {
                 this.removeSplatSceneDownloadPromise(downloadAndBuildPromise);
@@ -1062,24 +1060,24 @@ export class Viewer {
      */
     downloadSplatSceneToSplatBuffer(path, splatAlphaRemovalThreshold = 1, onProgress = undefined,
                                     progressiveBuild = false, onSectionBuilt = undefined, format, headers) {
-
-        const optimizeSplatData = progressiveBuild ? false : this.optimizeSplatData;
         try {
-            if (format === SceneFormat.Splat) {
-                return SplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, splatAlphaRemovalThreshold,
-                                               this.inMemoryCompressionLevel, optimizeSplatData, headers);
-            } else if (format === SceneFormat.KSplat) {
-                return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, headers);
-            } else if (format === SceneFormat.Ply) {
-                return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, splatAlphaRemovalThreshold,
-                                             this.inMemoryCompressionLevel, optimizeSplatData, this.sphericalHarmonicsDegree, headers);
+            if (format === SceneFormat.Splat || format === SceneFormat.KSplat || format === SceneFormat.Ply) {
+                const optimizeSplatData = progressiveBuild ? false : this.optimizeSplatData;
+                if (format === SceneFormat.Splat) {
+                    return SplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, splatAlphaRemovalThreshold,
+                                                   this.inMemoryCompressionLevel, optimizeSplatData, headers);
+                } else if (format === SceneFormat.KSplat) {
+                    return KSplatLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, headers);
+                } else if (format === SceneFormat.Ply) {
+                    return PlyLoader.loadFromURL(path, onProgress, progressiveBuild, onSectionBuilt, splatAlphaRemovalThreshold,
+                                                 this.inMemoryCompressionLevel, optimizeSplatData, this.sphericalHarmonicsDegree, headers);
+                }
+            } else if (format === SceneFormat.Spz) {
+                return SpzLoader.loadFromURL(path, onProgress, splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
+                                             this.optimizeSplatData, this.sphericalHarmonicsDegree, headers);
             }
         } catch (e) {
-            if (e instanceof DirectLoadError) {
-                throw new Error('File type or server does not support progressive loading.');
-            } else {
-                throw e;
-            }
+            throw this.updateError(e, null);
         }
 
         throw new Error(`Viewer::downloadSplatSceneToSplatBuffer -> File format not supported: ${path}`);
@@ -1299,6 +1297,14 @@ export class Viewer {
                 }
             };
         });
+    }
+
+    updateError(error, defaultMessage) {
+        if (error instanceof AbortedPromiseError) return error;
+        if (error instanceof DirectLoadError) {
+            return new Error('File type or server does not support progressive loading.');
+        }
+        return defaultMessage ? new Error(defaultMessage) : error;
     }
 
     disposeSortWorker() {

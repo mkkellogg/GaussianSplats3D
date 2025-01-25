@@ -790,7 +790,7 @@ export class SplatMesh extends THREE.Mesh {
 
             let paddedSHComponentCount = shComponentCount;
             if (paddedSHComponentCount % 2 !== 0) paddedSHComponentCount++;
-            const shElementsPerTexel = this.minSphericalHarmonicsDegree === 2 ? 4 : 2;
+            const shElementsPerTexel = 4;
             const texelFormat = shElementsPerTexel === 4 ? THREE.RGBAFormat : THREE.RGFormat;
             let shTexSize = computeDataTextureSize(shElementsPerTexel, paddedSHComponentCount);
 
