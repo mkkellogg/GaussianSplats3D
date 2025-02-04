@@ -54,7 +54,7 @@ export const rgbaArrayToInteger = function(arr, offset) {
     return arr[offset] + (arr[offset + 1] << 8) + (arr[offset + 2] << 16) + (arr[offset + 3] << 24);
 };
 
-export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
+export const fetchWithProgress = function(path, onProgress, saveChunks = true, headers) {
 
     const abortController = new AbortController();
     const signal = abortController.signal;
@@ -64,8 +64,20 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
         aborted = true;
     };
 
+    let onProgressCalledAtComplete = false;
+    const localOnProgress = (percent, percentLabel, chunk, fileSize) => {
+        if (onProgress && !onProgressCalledAtComplete) {
+            onProgress(percent, percentLabel, chunk, fileSize);
+            if (percent === 100) {
+                onProgressCalledAtComplete = true;
+            }
+        }
+    };
+
     return new AbortablePromise((resolve, reject) => {
-        fetch(path, { signal })
+        const fetchOptions = { signal };
+        if (headers) fetchOptions.headers = headers;
+         fetch(path, fetchOptions)
         .then(async (data) => {
             // Handle error conditions where data is still returned
             if (!data.ok) {
@@ -85,9 +97,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
                 try {
                     const { value: chunk, done } = await reader.read();
                     if (done) {
-                        if (onProgress) {
-                            onProgress(100, '100%', chunk, fileSize);
-                        }
+                        localOnProgress(100, '100%', chunk, fileSize);
                         if (saveChunks) {
                             const buffer = new Blob(chunks).arrayBuffer();
                             resolve(buffer);
@@ -106,9 +116,7 @@ export const fetchWithProgress = function(path, onProgress, saveChunks = true) {
                     if (saveChunks) {
                         chunks.push(chunk);
                     }
-                    if (onProgress) {
-                        onProgress(percent, percentLabel, chunk, fileSize);
-                    }
+                    localOnProgress(percent, percentLabel, chunk, fileSize);
                 } catch (error) {
                     reject(error);
                     return;
@@ -149,20 +157,24 @@ export const disposeAllMeshes = (object3D) => {
 export const delayedExecute = (func, fast) => {
     return new Promise((resolve) => {
         window.setTimeout(() => {
-            resolve(func());
+            resolve(func ? func() : undefined);
         }, fast ? 1 : 50);
     });
 };
 
 
 export const getSphericalHarmonicsComponentCountForDegree = (sphericalHarmonicsDegree = 0) => {
-    switch (sphericalHarmonicsDegree) {
-        case 1:
-            return 9;
-        case 2:
-            return 24;
+    let shCoeffPerSplat = 0;
+    if (sphericalHarmonicsDegree === 1) {
+        shCoeffPerSplat = 9;
+    } else if (sphericalHarmonicsDegree === 2) {
+        shCoeffPerSplat = 24;
+    } else if (sphericalHarmonicsDegree === 3) {
+        shCoeffPerSplat = 45;
+    } else if (sphericalHarmonicsDegree > 3) {
+        throw new Error('getSphericalHarmonicsComponentCountForDegree() -> Invalid spherical harmonics degree');
     }
-    return 0;
+    return shCoeffPerSplat;
 };
 
 export const nativePromiseWithExtractedComponents = () => {

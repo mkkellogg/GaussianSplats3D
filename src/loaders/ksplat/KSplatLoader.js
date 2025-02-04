@@ -19,7 +19,7 @@ export class KSplatLoader {
         }
     };
 
-    static loadFromURL(fileName, externalOnProgress, loadDirectoToSplatBuffer, onSectionBuilt) {
+    static loadFromURL(fileName, externalOnProgress, progressiveLoadToSplatBuffer, onSectionBuilt, headers) {
         let directLoadBuffer;
         let directLoadSplatBuffer;
 
@@ -187,7 +187,7 @@ export class KSplatLoader {
                 }
                 numBytesLoaded += chunk.byteLength;
             }
-            if (loadDirectoToSplatBuffer) {
+            if (progressiveLoadToSplatBuffer) {
                 checkAndLoadHeader();
                 checkAndLoadSectionHeaders();
                 checkAndLoadSections();
@@ -196,9 +196,9 @@ export class KSplatLoader {
             }
         };
 
-        return fetchWithProgress(fileName, localOnProgress, !loadDirectoToSplatBuffer).then((fullBuffer) => {
+        return fetchWithProgress(fileName, localOnProgress, !progressiveLoadToSplatBuffer, headers).then((fullBuffer) => {
             if (externalOnProgress) externalOnProgress(0, '0%', LoaderStatus.Processing);
-            const loadPromise = loadDirectoToSplatBuffer ? directLoadPromise.promise : KSplatLoader.loadFromFileData(fullBuffer);
+            const loadPromise = progressiveLoadToSplatBuffer ? directLoadPromise.promise : KSplatLoader.loadFromFileData(fullBuffer);
             return loadPromise.then((splatBuffer) => {
                 if (externalOnProgress) externalOnProgress(100, '100%', LoaderStatus.Done);
                 return splatBuffer;

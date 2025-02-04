@@ -13,7 +13,6 @@ export class DropInViewer extends THREE.Group {
         options.selfDrivenMode = false;
         options.useBuiltInControls = false;
         options.rootElement = null;
-        options.ignoreDevicePixelRatio = false;
         options.dropInMode = true;
         options.camera = undefined;
         options.renderer = undefined;
