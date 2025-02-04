@@ -42,11 +42,7 @@ const fromHalfFloat = (hf) =>{
 
 export class INRIAV2PlyParser {
 
-    constructor() {
-        this.plyParserutils = new PlyParserUtils();
-    }
-
-    decodeSectionHeadersFromHeaderLines(headerLines) {
+    static decodeSectionHeadersFromHeaderLines(headerLines) {
         const fieldNameIdMap = FieldsToReadIndexes.reduce((acc, element) => {
             acc[FieldNamesToRead[element]] = element;
             return acc;
@@ -73,9 +69,9 @@ export class INRIAV2PlyParser {
         while (!lastSectionFound) {
             let sectionHeader;
             if (sectionIndex === codeBookSectionIndex) {
-                sectionHeader = this.plyParserutils.decodeSectionHeader(headerLines, codeBookEntriesToReadIdMap, currentStartLine);
+                sectionHeader = PlyParserUtils.decodeSectionHeader(headerLines, codeBookEntriesToReadIdMap, currentStartLine);
             } else {
-                sectionHeader = this.plyParserutils.decodeSectionHeader(headerLines, fieldNameIdMap, currentStartLine);
+                sectionHeader = PlyParserUtils.decodeSectionHeader(headerLines, fieldNameIdMap, currentStartLine);
             }
             lastSectionFound = sectionHeader.endOfHeader;
             currentStartLine = sectionHeader.headerEndLine + 1;
@@ -89,12 +85,12 @@ export class INRIAV2PlyParser {
         return sectionHeaders;
     }
 
-    decodeSectionHeadersFromHeaderText(headerText) {
+    static decodeSectionHeadersFromHeaderText(headerText) {
         const headerLines = PlyParserUtils.convertHeaderTextToLines(headerText);
-        return this.decodeSectionHeadersFromHeaderLines(headerLines);
+        return INRIAV2PlyParser.decodeSectionHeadersFromHeaderLines(headerLines);
     }
 
-    getSplatCountFromSectionHeaders(sectionHeaders) {
+    static getSplatCountFromSectionHeaders(sectionHeaders) {
         let splatCount = 0;
         for (let sectionHeader of sectionHeaders) {
             if (sectionHeader.sectionName !== 'codebook_centers') {
@@ -104,10 +100,10 @@ export class INRIAV2PlyParser {
         return splatCount;
     }
 
-    decodeHeaderFromHeaderText(headerText) {
+    static decodeHeaderFromHeaderText(headerText) {
         const headerSizeBytes = headerText.indexOf(PlyParserUtils.HeaderEndToken) + PlyParserUtils.HeaderEndToken.length + 1;
-        const sectionHeaders = this.decodeSectionHeadersFromHeaderText(headerText);
-        const splatCount = this.getSplatCountFromSectionHeaders(sectionHeaders);
+        const sectionHeaders = INRIAV2PlyParser.decodeSectionHeadersFromHeaderText(headerText);
+        const splatCount = INRIAV2PlyParser.getSplatCountFromSectionHeaders(sectionHeaders);
         return {
             'headerSizeBytes': headerSizeBytes,
             'sectionHeaders': sectionHeaders,
@@ -115,12 +111,12 @@ export class INRIAV2PlyParser {
         };
     }
 
-    decodeHeaderFromBuffer(plyBuffer) {
-        const headerText = this.plyParserutils.readHeaderFromBuffer(plyBuffer);
-        return this.decodeHeaderFromHeaderText(headerText);
+    static decodeHeaderFromBuffer(plyBuffer) {
+        const headerText = PlyParserUtils.readHeaderFromBuffer(plyBuffer);
+        return INRIAV2PlyParser.decodeHeaderFromHeaderText(headerText);
     }
 
-    findVertexData(plyBuffer, header, targetSection) {
+    static findVertexData(plyBuffer, header, targetSection) {
         let byteOffset = header.headerSizeBytes;
         for (let s = 0; s < targetSection && s < header.sectionHeaders.length; s++) {
             const sectionHeader = header.sectionHeaders[s];
@@ -129,7 +125,7 @@ export class INRIAV2PlyParser {
         return new DataView(plyBuffer, byteOffset, header.sectionHeaders[targetSection].dataSizeBytes);
     }
 
-    decodeCodeBook(codeBookData, sectionHeader) {
+    static decodeCodeBook(codeBookData, sectionHeader) {
 
         const rawVertex = [];
         const codeBook = [];
@@ -163,7 +159,7 @@ export class INRIAV2PlyParser {
         return codeBook;
     }
 
-    decodeSectionSplatData(sectionSplatData, splatCount, sectionHeader, codeBook, outSphericalHarmonicsDegree) {
+    static decodeSectionSplatData(sectionSplatData, splatCount, sectionHeader, codeBook, outSphericalHarmonicsDegree) {
         outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, sectionHeader.sphericalHarmonicsDegree);
         const splatArray = new UncompressedSplatArray(outSphericalHarmonicsDegree);
         for (let row = 0; row < splatCount; row++) {
@@ -278,24 +274,24 @@ export class INRIAV2PlyParser {
         return PlyParserUtils.readVertex(splatData, header, row, dataOffset, FieldsToReadIndexes, rawSplat, false);
     }
 
-    parseToUncompressedSplatArray(plyBuffer, outSphericalHarmonicsDegree = 0) {
+    static parseToUncompressedSplatArray(plyBuffer, outSphericalHarmonicsDegree = 0) {
         const splatArrays = [];
-        const header = this.decodeHeaderFromBuffer(plyBuffer, outSphericalHarmonicsDegree);
+        const header = INRIAV2PlyParser.decodeHeaderFromBuffer(plyBuffer, outSphericalHarmonicsDegree);
         let codeBook;
 
         for (let s = 0; s < header.sectionHeaders.length; s++) {
             const sectionHeader = header.sectionHeaders[s];
             if (sectionHeader.sectionName === 'codebook_centers') {
-                const codeBookData = this.findVertexData(plyBuffer, header, s);
-                codeBook = this.decodeCodeBook(codeBookData, sectionHeader);
+                const codeBookData = INRIAV2PlyParser.findVertexData(plyBuffer, header, s);
+                codeBook = INRIAV2PlyParser.decodeCodeBook(codeBookData, sectionHeader);
             }
         }
         for (let s = 0; s < header.sectionHeaders.length; s++) {
             const sectionHeader = header.sectionHeaders[s];
             if (sectionHeader.sectionName !== 'codebook_centers') {
                 const splatCount = sectionHeader.vertexCount;
-                const vertexData = this.findVertexData(plyBuffer, header, s);
-                const splatArray = this.decodeSectionSplatData(vertexData, splatCount, sectionHeader,
+                const vertexData = INRIAV2PlyParser.findVertexData(plyBuffer, header, s);
+                const splatArray = INRIAV2PlyParser.decodeSectionSplatData(vertexData, splatCount, sectionHeader,
                                                                codeBook, outSphericalHarmonicsDegree);
                 splatArrays.push(splatArray);
             }

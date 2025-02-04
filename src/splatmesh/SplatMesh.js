@@ -49,7 +49,7 @@ export class SplatMesh extends THREE.Mesh {
     constructor(splatRenderMode = SplatRenderMode.ThreeD, dynamicMode = false, enableOptionalEffects = false,
                 halfPrecisionCovariancesOnGPU = false, devicePixelRatio = 1, enableDistancesComputationOnGPU = true,
                 integerBasedDistancesComputation = false, antialiased = false, maxScreenSpaceSplatSize = 1024, logLevel = LogLevel.None,
-                sphericalHarmonicsDegree = 0, sceneFadeInRateMultiplier = 1.0) {
+                sphericalHarmonicsDegree = 0, sceneFadeInRateMultiplier = 1.0, kernel2DSize = 0.3) {
         super(dummyGeometry, dummyMaterial);
 
         // Reference to a Three.js renderer
@@ -87,6 +87,10 @@ export class SplatMesh extends THREE.Mesh {
         // https://github.com/nerfstudio-project/gsplat/pull/117
         // https://github.com/graphdeco-inria/gaussian-splatting/issues/294#issuecomment-1772688093
         this.antialiased = antialiased;
+
+        // The size of the 2D kernel used for splat rendering
+        // This will adjust the 2D kernel size after the projection
+        this.kernel2DSize = kernel2DSize;
 
         // Specify the maximum clip space splat size, can help deal with large splats that get too unwieldy
         this.maxScreenSpaceSplatSize = maxScreenSpaceSplatSize;
@@ -364,7 +368,7 @@ export class SplatMesh extends THREE.Mesh {
             if (this.splatRenderMode === SplatRenderMode.ThreeD) {
                 this.material = SplatMaterial3D.build(this.dynamicMode, this.enableOptionalEffects, this.antialiased,
                                                       this.maxScreenSpaceSplatSize, this.splatScale, this.pointCloudModeEnabled,
-                                                      this.minSphericalHarmonicsDegree);
+                                                      this.minSphericalHarmonicsDegree, this.kernel2DSize);
             } else {
                 this.material = SplatMaterial2D.build(this.dynamicMode, this.enableOptionalEffects,
                                                       this.splatScale, this.pointCloudModeEnabled, this.minSphericalHarmonicsDegree);
@@ -786,7 +790,7 @@ export class SplatMesh extends THREE.Mesh {
 
             let paddedSHComponentCount = shComponentCount;
             if (paddedSHComponentCount % 2 !== 0) paddedSHComponentCount++;
-            const shElementsPerTexel = this.minSphericalHarmonicsDegree === 2 ? 4 : 2;
+            const shElementsPerTexel = 4;
             const texelFormat = shElementsPerTexel === 4 ? THREE.RGBAFormat : THREE.RGFormat;
             let shTexSize = computeDataTextureSize(shElementsPerTexel, paddedSHComponentCount);
 

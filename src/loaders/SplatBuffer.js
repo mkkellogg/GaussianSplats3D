@@ -1398,4 +1398,38 @@ export class SplatBuffer {
         };
     }
 
+    static preallocateUncompressed(splatCount, sphericalHarmonicsDegrees) {
+        const shDescriptor = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[sphericalHarmonicsDegrees];
+        const splatBufferDataOffsetBytes = SplatBuffer.HeaderSizeBytes + SplatBuffer.SectionHeaderSizeBytes;
+        const splatBufferSizeBytes = splatBufferDataOffsetBytes + shDescriptor.BytesPerSplat * splatCount;
+        const outBuffer = new ArrayBuffer(splatBufferSizeBytes);
+        SplatBuffer.writeHeaderToBuffer({
+            versionMajor: SplatBuffer.CurrentMajorVersion,
+            versionMinor: SplatBuffer.CurrentMinorVersion,
+            maxSectionCount: 1,
+            sectionCount: 1,
+            maxSplatCount: splatCount,
+            splatCount: splatCount,
+            compressionLevel: 0,
+            sceneCenter: new THREE.Vector3()
+        }, outBuffer);
+
+        SplatBuffer.writeSectionHeaderToBuffer({
+            maxSplatCount: splatCount,
+            splatCount: splatCount,
+            bucketSize: 0,
+            bucketCount: 0,
+            bucketBlockSize: 0,
+            compressionScaleRange: 0,
+            storageSizeBytes: 0,
+            fullBucketCount: 0,
+            partiallyFilledBucketCount: 0,
+            sphericalHarmonicsDegree: sphericalHarmonicsDegrees
+        }, 0, outBuffer, SplatBuffer.HeaderSizeBytes);
+
+        return {
+            splatBuffer: new SplatBuffer(outBuffer, true),
+            splatBufferDataOffsetBytes
+        };
+    }
 }
