@@ -355,8 +355,11 @@ export class SpzLoader {
 
     static loadFromURL(fileName, onProgress, minimumAlpha, compressionLevel, optimizeSplatData = true,
                        outSphericalHarmonicsDegree = 0, headers, sectionSize, sceneCenter, blockSize, bucketSize) {
+        const localOnProgress = (percent, percentLabel) => {
+            onProgress(percent, percentLabel, LoaderStatus.Downloading);
+        };
         if (onProgress) onProgress(0, '0%', LoaderStatus.Downloading);
-        return fetchWithProgress(fileName, onProgress, true, headers).then((fileData) => {
+        return fetchWithProgress(fileName, localOnProgress, true, headers).then((fileData) => {
             if (onProgress) onProgress(0, '0%', LoaderStatus.Processing);
             return SpzLoader.loadFromFileData(fileData, minimumAlpha, compressionLevel, optimizeSplatData,
                                               outSphericalHarmonicsDegree, sectionSize, sceneCenter, blockSize, bucketSize);
