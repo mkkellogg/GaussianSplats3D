@@ -24,6 +24,8 @@ EXTERN EMSCRIPTEN_KEEPALIVE void sortIndexes(unsigned int* indexes, void* center
     int maxDistance = -2147483640;
     int minDistance = 2147483640;
 
+    if (distanceMapRange > sortCount) distanceMapRange = sortCount;
+
     float fMVPTRow3[4]; 
     unsigned int sortStart = renderCount - sortCount;
     if (useIntegerSort) {
