@@ -134,19 +134,22 @@ export class SplatMaterial3D {
             mat3 cov2Dm = transpose(T) * Vrk * T;
             `;
 
+        // avoid assigning integer types to float shader variables.
+        const kernel2DSizeStr = Number.isInteger(kernel2DSize) ? kernel2DSize.toFixed(1) : kernel2DSize.toString();
+        
         if (antialiased) {
             vertexShaderSource += `
                 float detOrig = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
-                cov2Dm[0][0] += ${kernel2DSize};
-                cov2Dm[1][1] += ${kernel2DSize};
+                cov2Dm[0][0] += ${kernel2DSizeStr};
+                cov2Dm[1][1] += ${kernel2DSizeStr};
                 float detBlur = cov2Dm[0][0] * cov2Dm[1][1] - cov2Dm[0][1] * cov2Dm[0][1];
                 vColor.a *= sqrt(max(detOrig / detBlur, 0.0));
                 if (vColor.a < minAlpha) return;
             `;
         } else {
             vertexShaderSource += `
-                cov2Dm[0][0] += ${kernel2DSize};
-                cov2Dm[1][1] += ${kernel2DSize};
+                cov2Dm[0][0] += ${kernel2DSizeStr};
+                cov2Dm[1][1] += ${kernel2DSizeStr};
             `;
         }
 
