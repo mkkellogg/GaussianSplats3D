@@ -307,12 +307,12 @@ export class Viewer {
                 this.rootElement.style.position = 'absolute';
                 document.body.appendChild(this.rootElement);
             } else {
-                this.rootElement = this.renderer.domElement || document.body;
+                this.rootElement = this.renderer.domElement.parentElement || document.body;
             }
         }
 
-        this.setupCamera();
         this.setupRenderer();
+        this.setupCamera();
         this.setupWebXR(this.webXRSessionInit);
         this.setupControls();
         this.setupEventHandlers();
@@ -333,7 +333,7 @@ export class Viewer {
     setupCamera() {
         if (!this.usingExternalCamera) {
             const renderDimensions = new THREE.Vector2();
-            this.getRenderDimensions(renderDimensions);
+            this.renderer.getSize(renderDimensions);
 
             this.perspectiveCamera = new THREE.PerspectiveCamera(THREE_CAMERA_FOV, renderDimensions.x / renderDimensions.y, 0.1, 1000);
             this.orthographicCamera = new THREE.OrthographicCamera(renderDimensions.x / -2, renderDimensions.x / 2,
@@ -348,7 +348,7 @@ export class Viewer {
     setupRenderer() {
         if (!this.usingExternalRenderer) {
             const renderDimensions = new THREE.Vector2();
-            this.getRenderDimensions(renderDimensions);
+            this.getRendererContainerDimensions(renderDimensions);
 
             this.renderer = new THREE.WebGLRenderer({
                 antialias: false,
@@ -360,7 +360,7 @@ export class Viewer {
             this.renderer.setSize(renderDimensions.x, renderDimensions.y);
 
             this.resizeObserver = new ResizeObserver(() => {
-                this.getRenderDimensions(renderDimensions);
+                this.getRendererContainerDimensions(renderDimensions);
                 this.renderer.setSize(renderDimensions.x, renderDimensions.y);
                 this.forceRenderNextFrame();
             });
@@ -560,7 +560,7 @@ export class Viewer {
 
         return function() {
             if (!this.transitioningCameraTarget) {
-                this.getRenderDimensions(renderDimensions);
+                this.renderer.getSize(renderDimensions);
                 outHits.length = 0;
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
@@ -580,7 +580,7 @@ export class Viewer {
 
     }();
 
-    getRenderDimensions(outDimensions) {
+    getRendererContainerDimensions(outDimensions) {
         if (this.rootElement) {
             outDimensions.x = this.rootElement.offsetWidth;
             outDimensions.y = this.rootElement.offsetHeight;
@@ -658,7 +658,7 @@ export class Viewer {
             if (splatCount > 0) {
                 this.splatMesh.updateVisibleRegionFadeDistance(this.sceneRevealMode);
                 this.splatMesh.updateTransforms();
-                this.getRenderDimensions(renderDimensions);
+                this.renderer.getSize(renderDimensions);
                 const focalLengthX = this.camera.projectionMatrix.elements[0] * 0.5 *
                                      this.devicePixelRatio * renderDimensions.x;
                 const focalLengthY = this.camera.projectionMatrix.elements[5] * 0.5 *
@@ -1749,7 +1749,7 @@ export class Viewer {
         let wasTransitioning = false;
 
         return function(timeDelta) {
-            this.getRenderDimensions(renderDimensions);
+            this.renderer.getSize(renderDimensions);
             if (this.transitioningCameraTarget) {
                 this.sceneHelper.setFocusMarkerVisibility(true);
                 const currentFocusMarkerOpacity = Math.max(this.sceneHelper.getFocusMarkerOpacity(), 0.0);
@@ -1783,7 +1783,7 @@ export class Viewer {
         return function() {
             if (this.showMeshCursor) {
                 this.forceRenderNextFrame();
-                this.getRenderDimensions(renderDimensions);
+                this.renderer.getSize(renderDimensions);
                 outHits.length = 0;
                 this.raycaster.setFromCameraAndScreenPosition(this.camera, this.mousePosition, renderDimensions);
                 this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
@@ -1808,7 +1808,7 @@ export class Viewer {
         return function() {
             if (!this.showInfo) return;
             const splatCount = this.splatMesh.getSplatCount();
-            this.getRenderDimensions(renderDimensions);
+            this.renderer.getSize(renderDimensions);
             const cameraLookAtPosition = this.controls ? this.controls.target : null;
             const meshCursorPosition = this.showMeshCursor ? this.sceneHelper.meshCursor.position : null;
             const splatRenderCountPct = splatCount > 0 ? this.splatRenderCount / splatCount * 100 : 0;
@@ -1986,7 +1986,7 @@ export class Viewer {
 
         return function(gatherAllNodes = false) {
 
-            this.getRenderDimensions(renderDimensions);
+            this.renderer.getSize(renderDimensions);
             const cameraFocalLength = (renderDimensions.y / 2.0) / Math.tan(this.camera.fov / 2.0 * THREE.MathUtils.DEG2RAD);
             const fovXOver2 = Math.atan(renderDimensions.x / 2.0 / cameraFocalLength);
             const fovYOver2 = Math.atan(renderDimensions.y / 2.0 / cameraFocalLength);
