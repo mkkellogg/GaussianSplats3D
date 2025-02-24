@@ -64,6 +64,9 @@ export class SplatMaterial {
         varying vec4 vColor;
         varying vec2 vUv;
         varying vec2 vPosition;
+        varying float vZ;
+        varying float vSplatIndex;
+        varying vec4 vVertex;
 
         mat3 quaternionToRotationMatrix(float x, float y, float z, float w) {
             float s = 1.0 / sqrt(w * w + x * x + y * y + z * z);
@@ -114,6 +117,8 @@ export class SplatMaterial {
         const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
 
         void main () {
+
+            vSplatIndex = float(splatIndex);
 
             uint oddOffset = splatIndex & uint(0x00000001);
             uint doubleOddOffset = oddOffset * uint(2);
@@ -337,7 +342,6 @@ export class SplatMaterial {
       vertexShaderSource += `
 
                 vColor.rgb = clamp(vColor.rgb, vec3(0.), vec3(1.));
-
             }
 
             `;

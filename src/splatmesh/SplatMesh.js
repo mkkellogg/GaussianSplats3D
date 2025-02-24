@@ -162,7 +162,15 @@ export class SplatMesh extends THREE.Mesh {
     this.disposed = false;
     this.lastRenderer = null;
     this.visible = false;
+
+    // This is used to define how to modify the material
+    this.setupIDMode = this.setupIDMaterialMode.bind(this);
   }
+
+  setupIDMaterialMode = (status) => {
+    this.material.uniforms.uSetID.value = Number(status);
+    this.material.transparent = !status;
+  };
 
   /**
    * Build a container for each scene managed by this splat mesh based on an instance of SplatBuffer, along with optional

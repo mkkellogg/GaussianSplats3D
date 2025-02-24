@@ -8,7 +8,6 @@ import { Viewer } from './Viewer.js';
 export class DropInViewer extends THREE.Group {
   constructor(options = {}) {
     super();
-
     options.selfDrivenMode = false;
     options.useBuiltInControls = false;
     options.rootElement = null;
@@ -28,6 +27,10 @@ export class DropInViewer extends THREE.Group {
       this.viewer,
     );
 
+    this.unprojectMousePosition = this.unprojectPositionFromSplats.bind(this);
+
+    this.setupIDMode = this.setupIDMeshMode.bind(this);
+
     this.viewer.onSplatMeshChanged(() => {
       this.updateSplatMesh();
     });
@@ -40,6 +43,12 @@ export class DropInViewer extends THREE.Group {
       }
       this.splatMesh = this.viewer.splatMesh;
       this.add(this.viewer.splatMesh);
+    }
+  }
+
+  setupIDMeshMode(status) {
+    if (this.splatMesh !== null) {
+      this.splatMesh.setupIDMode(status);
     }
   }
 
@@ -117,6 +126,16 @@ export class DropInViewer extends THREE.Group {
     this.viewer.setActiveSphericalHarmonicsDegrees(
       activeSphericalHarmonicsDegrees,
     );
+  }
+
+  /*
+  Proposed functionality for the interaction with the splats
+  The camera is the persepective camera used to render
+  The mousePosition parameter is the normalised position of the mouse
+  relative to the screen.
+  */
+  unprojectPositionFromSplats(renderer, camera, mousePosition) {
+    return this.viewer.unprojectMousePosition(renderer, camera, mousePosition);
   }
 
   async dispose() {

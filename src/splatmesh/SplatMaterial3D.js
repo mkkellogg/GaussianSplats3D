@@ -79,6 +79,11 @@ export class SplatMaterial3D {
       value: 0,
     };
 
+    uniforms['uSetID'] = {
+      type: 'f',
+      value: 0,
+    };
+
     const material = new THREE.ShaderMaterial({
       uniforms: uniforms,
       vertexShader: vertexShaderSource,
@@ -232,7 +237,9 @@ export class SplatMaterial3D {
                              basisViewport * 2.0 * inverseFocalAdjustment;
 
             vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+            vZ = ndcCenter.z;
             gl_Position = quadPos;
+            vVertex = gl_Position;
 
             // Scale the position data we send to the fragment shader
             vPosition *= sqrt8;
@@ -250,29 +257,71 @@ export class SplatMaterial3D {
             #include <common>
  
             uniform vec3 debugColor;
+            uniform float uSetID;
 
             varying vec4 vColor;
             varying vec2 vUv;
             varying vec2 vPosition;
+            varying float vZ;
+            varying float vSplatIndex;
+            varying vec4 vVertex;
         `;
 
     fragmentShaderSource += `
             void main () {
                 // Compute the positional squared distance from the center of the splat to the current fragment.
                 float A = dot(vPosition, vPosition);
+
                 // Since the positional data in vPosition has been scaled by sqrt(8), the squared result will be
                 // scaled by a factor of 8. If the squared result is larger than 8, it means it is outside the ellipse
                 // defined by the rectangle formed by vPosition. It also means it's farther
                 // away than sqrt(8) standard deviations from the mean.
                 if (A > 8.0) discard;
-                vec3 color = vColor.rgb;
 
                 // Since the rendered splat is scaled by sqrt(8), the inverse covariance matrix that is part of
                 // the gaussian formula becomes the identity matrix. We're then left with (X - mean) * (X - mean),
                 // and since 'mean' is zero, we have X * X, which is the same as A:
                 float opacity = exp(-0.5 * A) * vColor.a;
 
-                gl_FragColor = vec4(color.rgb, opacity);
+                vec3 color = vColor.rgb;
+
+                if(uSetID > 0.5) {
+                  
+                  if(opacity < 0.2) discard;
+
+                  vec2 screenData = vVertex.xy / vVertex.w;
+                  screenData = 0.5 * screenData + 0.5;
+
+                  float index = float(vSplatIndex);
+
+                  /*
+                    if(screenData.y < 0.5) {
+                      if(screenData.x < 0.5) {
+                        index = 7.;
+                      } else {
+                        index = 10903.;
+                      }
+                    } else {
+                      if(screenData.x < 0.5) {
+                        index = 1485903.;
+                      } else {
+                        index = 15892345.;
+                      }
+                    }
+                
+                    index /= pow(256., 3.);
+
+                    vec4 enc = vec4(1.0, 255.0, 65025.0, 16581375.0) * index;
+                    enc = fract(enc);
+                    enc -= enc.yzww * vec4(1.0/255.0,1.0/255.0,1.0/255.0,0.0);
+                  */
+
+                  gl_FragColor = vec4(index, 0., 0., 1.);
+                  return;
+
+                }
+
+                gl_FragColor = vec4(color, opacity);
             }
         `;
 

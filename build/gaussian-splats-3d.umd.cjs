@@ -8482,6 +8482,9 @@
         varying vec4 vColor;
         varying vec2 vUv;
         varying vec2 vPosition;
+        varying float vZ;
+        varying float vSplatIndex;
+        varying vec4 vVertex;
 
         mat3 quaternionToRotationMatrix(float x, float y, float z, float w) {
             float s = 1.0 / sqrt(w * w + x * x + y * y + z * z);
@@ -8532,6 +8535,8 @@
         const float[5] SH_C2 = float[](1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742);
 
         void main () {
+
+            vSplatIndex = float(splatIndex);
 
             uint oddOffset = splatIndex & uint(0x00000001);
             uint doubleOddOffset = oddOffset * uint(2);
@@ -8755,7 +8760,6 @@
         vertexShaderSource += `
 
                 vColor.rgb = clamp(vColor.rgb, vec3(0.), vec3(1.));
-
             }
 
             `;
@@ -9033,6 +9037,11 @@
         value: 0,
       };
 
+      uniforms["uSetID"] = {
+        type: "f",
+        value: 0
+      };
+
       const material = new THREE__namespace.ShaderMaterial({
         uniforms: uniforms,
         vertexShader: vertexShaderSource,
@@ -9186,7 +9195,9 @@
                              basisViewport * 2.0 * inverseFocalAdjustment;
 
             vec4 quadPos = vec4(ndcCenter.xy + ndcOffset, ndcCenter.z, 1.0);
+            vZ = ndcCenter.z;
             gl_Position = quadPos;
+            vVertex = gl_Position;
 
             // Scale the position data we send to the fragment shader
             vPosition *= sqrt8;
@@ -9204,29 +9215,71 @@
             #include <common>
  
             uniform vec3 debugColor;
+            uniform float uSetID;
 
             varying vec4 vColor;
             varying vec2 vUv;
             varying vec2 vPosition;
+            varying float vZ;
+            varying float vSplatIndex;
+            varying vec4 vVertex;
         `;
 
       fragmentShaderSource += `
             void main () {
                 // Compute the positional squared distance from the center of the splat to the current fragment.
                 float A = dot(vPosition, vPosition);
+
                 // Since the positional data in vPosition has been scaled by sqrt(8), the squared result will be
                 // scaled by a factor of 8. If the squared result is larger than 8, it means it is outside the ellipse
                 // defined by the rectangle formed by vPosition. It also means it's farther
                 // away than sqrt(8) standard deviations from the mean.
                 if (A > 8.0) discard;
-                vec3 color = vColor.rgb;
 
                 // Since the rendered splat is scaled by sqrt(8), the inverse covariance matrix that is part of
                 // the gaussian formula becomes the identity matrix. We're then left with (X - mean) * (X - mean),
                 // and since 'mean' is zero, we have X * X, which is the same as A:
                 float opacity = exp(-0.5 * A) * vColor.a;
 
-                gl_FragColor = vec4(color.rgb, opacity);
+                vec3 color = vColor.rgb;
+
+                if(uSetID > 0.5) {
+                  
+                  if(opacity < 0.2) discard;
+
+                  vec2 screenData = vVertex.xy / vVertex.w;
+                  screenData = 0.5 * screenData + 0.5;
+
+                  float index = float(vSplatIndex);
+
+                  /*
+                    if(screenData.y < 0.5) {
+                      if(screenData.x < 0.5) {
+                        index = 7.;
+                      } else {
+                        index = 10903.;
+                      }
+                    } else {
+                      if(screenData.x < 0.5) {
+                        index = 1485903.;
+                      } else {
+                        index = 15892345.;
+                      }
+                    }
+                
+                    index /= pow(256., 3.);
+
+                    vec4 enc = vec4(1.0, 255.0, 65025.0, 16581375.0) * index;
+                    enc = fract(enc);
+                    enc -= enc.yzww * vec4(1.0/255.0,1.0/255.0,1.0/255.0,0.0);
+                  */
+
+                  gl_FragColor = vec4(index, 0., 0., 1.);
+                  return;
+
+                }
+
+                gl_FragColor = vec4(color, opacity);
             }
         `;
 
@@ -10567,6 +10620,14 @@
       this.disposed = false;
       this.lastRenderer = null;
       this.visible = false;
+
+      //This is used to define how to modify the material
+      this.setupIDMode = this.setupIDMaterialMode.bind(this);
+    }
+
+    setupIDMaterialMode = status => {
+      this.material.uniforms.uSetID.value = Number(status);
+      this.material.transparent = !status;
     }
 
     /**
@@ -14929,6 +14990,8 @@
       this.fetch = options.fetch || ((url, opts) => fetch(url, opts));
       this.fetchWithProgress = makeProgressiveFetchFunction(this.fetch);
 
+      this.unprojectMousePosition = this.unprojectPositionFromSplats.bind(this);
+
       if (!this.dropInMode) this.init();
     }
 
@@ -15293,6 +15356,33 @@
         }
       };
     })();
+
+     /*
+    Proposed functionality for the interaction with the splats
+    The camera is the persepective camera used to render
+    The mousePosition parameter is the normalised position of the mouse
+    relative to the screen.
+
+    Uses the raycaster to traverse to the different splats to check
+    collisions with the ray and decide which one to use.
+    */
+    unprojectPositionFromSplats(renderer, camera, mousePosition) {
+      const renderDimensions = new THREE__namespace.Vector2();
+      const outHits = [];
+      renderer.getSize(renderDimensions);
+      this.raycaster.setFromCameraAndScreenPosition(
+        camera,
+        mousePosition,
+        renderDimensions,
+      );
+      this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
+      if (outHits.length > 0) {
+        const hit = outHits[0];
+        return hit;
+      }
+      return null;
+    }
+
 
     getRenderDimensions(outDimensions) {
       if (this.rootElement) {
@@ -17220,7 +17310,6 @@
   class DropInViewer extends THREE__namespace.Group {
     constructor(options = {}) {
       super();
-
       options.selfDrivenMode = false;
       options.useBuiltInControls = false;
       options.rootElement = null;
@@ -17240,6 +17329,10 @@
         this.viewer,
       );
 
+      this.unprojectMousePosition = this.unprojectPositionFromSplats.bind(this);
+
+      this.setupIDMode = this.setupIDMeshMode.bind(this);
+
       this.viewer.onSplatMeshChanged(() => {
         this.updateSplatMesh();
       });
@@ -17252,6 +17345,12 @@
         }
         this.splatMesh = this.viewer.splatMesh;
         this.add(this.viewer.splatMesh);
+      }
+    }
+
+    setupIDMeshMode(status) {
+      if(this.splatMesh !== null) {
+        this.splatMesh.setupIDMode(status);
       }
     }
 
@@ -17329,6 +17428,16 @@
       this.viewer.setActiveSphericalHarmonicsDegrees(
         activeSphericalHarmonicsDegrees,
       );
+    }
+
+     /*
+    Proposed functionality for the interaction with the splats
+    The camera is the persepective camera used to render
+    The mousePosition parameter is the normalised position of the mouse
+    relative to the screen.
+    */
+    unprojectPositionFromSplats(renderer, camera, mousePosition) {
+      return this.viewer.unprojectMousePosition(renderer, camera, mousePosition);
     }
 
     async dispose() {

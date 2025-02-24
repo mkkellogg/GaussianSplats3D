@@ -342,6 +342,8 @@ export class Viewer {
     this.fetch = options.fetch || ((url, opts) => fetch(url, opts));
     this.fetchWithProgress = makeProgressiveFetchFunction(this.fetch);
 
+    this.unprojectMousePosition = this.unprojectPositionFromSplats.bind(this);
+
     if (!this.dropInMode) this.init();
   }
 
@@ -706,6 +708,32 @@ export class Viewer {
       }
     };
   })();
+
+  /*
+  Proposed functionality for the interaction with the splats
+  The camera is the persepective camera used to render
+  The mousePosition parameter is the normalised position of the mouse
+  relative to the screen.
+
+  Uses the raycaster to traverse to the different splats to check
+  collisions with the ray and decide which one to use.
+  */
+  unprojectPositionFromSplats(renderer, camera, mousePosition) {
+    const renderDimensions = new THREE.Vector2();
+    const outHits = [];
+    renderer.getSize(renderDimensions);
+    this.raycaster.setFromCameraAndScreenPosition(
+      camera,
+      mousePosition,
+      renderDimensions,
+    );
+    this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
+    if (outHits.length > 0) {
+      const hit = outHits[0];
+      return hit;
+    }
+    return null;
+  }
 
   getRenderDimensions(outDimensions) {
     if (this.rootElement) {
