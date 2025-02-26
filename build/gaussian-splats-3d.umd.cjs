@@ -9037,9 +9037,9 @@
         value: 0,
       };
 
-      uniforms["uSetID"] = {
-        type: "f",
-        value: 0
+      uniforms['uSetID'] = {
+        type: 'f',
+        value: 0,
       };
 
       const material = new THREE__namespace.ShaderMaterial({
@@ -9245,7 +9245,7 @@
 
                 if(uSetID > 0.5) {
                   
-                  if(opacity < 0.2) discard;
+                  if(opacity < 0.1) discard;
 
                   vec2 screenData = vVertex.xy / vVertex.w;
                   screenData = 0.5 * screenData + 0.5;
@@ -10621,14 +10621,14 @@
       this.lastRenderer = null;
       this.visible = false;
 
-      //This is used to define how to modify the material
+      // This is used to define how to modify the material
       this.setupIDMode = this.setupIDMaterialMode.bind(this);
     }
 
-    setupIDMaterialMode = status => {
+    setupIDMaterialMode = (status) => {
       this.material.uniforms.uSetID.value = Number(status);
       this.material.transparent = !status;
-    }
+    };
 
     /**
      * Build a container for each scene managed by this splat mesh based on an instance of SplatBuffer, along with optional
@@ -14993,6 +14993,14 @@
       this.unprojectMousePosition = this.unprojectPositionFromSplats.bind(this);
 
       if (!this.dropInMode) this.init();
+
+      this.IDRenderTarget = new THREE__namespace.WebGLRenderTarget(1, 1, {
+        minFilter: THREE__namespace.NearestFilter,
+        magFilter: THREE__namespace.NearestFilter,
+        format: THREE__namespace.RedFormat,
+        type: THREE__namespace.FloatType
+      });
+
     }
 
     createSplatMesh() {
@@ -15047,6 +15055,10 @@
       this.infoPanel.setContainer(this.rootElement);
 
       this.initialized = true;
+
+      let mat = new THREE__namespace.MeshNormalMaterial();
+      let sphere = new THREE__namespace.SphereGeometry(0.1);
+      this.sphereMesh = new THREE__namespace.Mesh(sphere, mat);
     }
 
     setupCamera() {
@@ -15301,6 +15313,18 @@
 
     onMouseMove(mouse) {
       this.mousePosition.set(mouse.offsetX, mouse.offsetY);
+      this.splatMesh.add(this.sphereMesh);
+
+      // Read the window-space depth from the depth render target.
+      const rgba = new Float32Array(4);
+      this.renderer.readRenderTargetPixels(this.IDRenderTarget, this.mousePosition.x, this.renderer.domElement.height - this.mousePosition.y, 1, 1, rgba);
+      const ID = rgba[0];
+
+      let center = new THREE__namespace.Vector3();
+      this.splatMesh.getSplatCenter(ID, center);
+
+      this.sphereMesh.position.copy(center);
+
     }
 
     onMouseDown() {
@@ -15344,7 +15368,10 @@
           this.raycaster.intersectSplatMesh(this.splatMesh, outHits);
           if (outHits.length > 0) {
             const hit = outHits[0];
+
             const intersectionPoint = hit.origin;
+
+
             toNewFocalPoint.copy(intersectionPoint).sub(this.camera.position);
             if (toNewFocalPoint.length() > MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT) {
               this.previousCameraTarget.copy(this.controls.target);
@@ -15357,7 +15384,7 @@
       };
     })();
 
-     /*
+    /*
     Proposed functionality for the interaction with the splats
     The camera is the persepective camera used to render
     The mousePosition parameter is the normalised position of the mouse
@@ -15382,7 +15409,6 @@
       }
       return null;
     }
-
 
     getRenderDimensions(outDimensions) {
       if (this.rootElement) {
@@ -16719,6 +16745,25 @@
           return false;
         };
 
+
+        //Resize the render target to match dimensions of the screen
+        let h = this.renderer.domElement.height || 1;
+        let w = this.renderer.domElement.width || 1;
+        this.IDRenderTarget.setSize(w, h);
+
+        //Define the render target where the IDs will be saved
+        let renderTarget = this.renderer.getRenderTarget();
+        
+        //Setup the splats to render in ID mode
+        this.splatMesh.setupIDMode(true);
+        this.renderer.setRenderTarget(this.IDRenderTarget);
+        this.renderer.render(this.splatMesh, this.camera);
+
+        //Setup the splats in normal mode
+        this.splatMesh.setupIDMode(false);
+        this.renderer.setRenderTarget(renderTarget);
+
+
         const savedAuoClear = this.renderer.autoClear;
         if (hasRenderables(this.threeScene)) {
           this.renderer.render(this.threeScene, this.camera);
@@ -17349,7 +17394,7 @@
     }
 
     setupIDMeshMode(status) {
-      if(this.splatMesh !== null) {
+      if (this.splatMesh !== null) {
         this.splatMesh.setupIDMode(status);
       }
     }
@@ -17430,7 +17475,7 @@
       );
     }
 
-     /*
+    /*
     Proposed functionality for the interaction with the splats
     The camera is the persepective camera used to render
     The mousePosition parameter is the normalised position of the mouse

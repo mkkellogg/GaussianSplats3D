@@ -287,7 +287,7 @@ export class SplatMaterial3D {
 
                 if(uSetID > 0.5) {
                   
-                  if(opacity < 0.2) discard;
+                  if(opacity < 0.1) discard;
 
                   vec2 screenData = vVertex.xy / vVertex.w;
                   screenData = 0.5 * screenData + 0.5;
