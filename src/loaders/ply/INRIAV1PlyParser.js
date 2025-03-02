@@ -215,7 +215,6 @@ export class INRIAV1PlyParser {
 
     static parseToUncompressedSplatArray(plyBuffer, outSphericalHarmonicsDegree = 0) {
         const { header, splatCount, splatData } = separatePlyHeaderAndData(plyBuffer);
-        console.log('INRIAVI : ', header, splatCount, splatData)
         return INRIAV1PlyParser.decodeSectionSplatData(splatData, splatCount, header, outSphericalHarmonicsDegree, true);
     }
 

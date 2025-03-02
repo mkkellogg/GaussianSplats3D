@@ -860,7 +860,6 @@ export class Viewer {
             options.progressiveLoad = false;
         }
 
-
         // TODO: check if the file is a File
 
         const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
@@ -870,7 +869,7 @@ export class Viewer {
         let loadingUITaskId = null;
         if (showLoadingUI) {
             this.loadingSpinner.removeAllTasks();
-            loadingUITaskId = this.loadingSpinner.addTask(`Loading ${file.fileName} ...`);
+            loadingUITaskId = this.loadingSpinner.addTask(`Loading ${file.name} ...`);
         }
         const hideLoadingUI = () => {
             this.loadingProgressBar.hide();
@@ -926,14 +925,14 @@ export class Viewer {
         };
 
         // const loadFunc = progressiveLoad ? this.downloadAndBuildSingleSplatSceneProgressiveLoad.bind(this) :
-        const loadFileDataPromise = new Promise((resolve, _reject) => {
+        const loadFileDataPromise = new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (_loadEvent) => {
                 if (reader.readyState == FileReader.DONE) {
                     resolve(reader.result);
                 }
             }
-            reader.onerror = onException; // reject is not use, the exception are direclty handle by the onExpection callback
+            reader.onerror = reject;
             reader.readAsArrayBuffer(file);
         })
         return this.buildSingleSplatSceneFromArrayBuffer(loadFileDataPromise, format, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
@@ -1043,7 +1042,7 @@ export class Viewer {
             })
             return s3Client.send(command)
                 .then(response => {
-                    console.log('got s3 respond : ', response);
+                    console.log('S3 response : ', response);
 
                     const fileStream = response.Body;
                     if (!fileStream) {
@@ -1053,7 +1052,6 @@ export class Viewer {
                     fileStream.transformToByteArray()
                         .then(byteArray => {
                             const arrayBuffer = byteArray.buffer.slice(byteArray.byteOffset, byteArray.byteLength + byteArray.byteOffset);
-                            console.log(arrayBuffer);
                             resolve(arrayBuffer);
                         })
                         .catch(reject);
@@ -1126,9 +1124,7 @@ export class Viewer {
             })
             .then((splatBuffer) => {
                 // Construct a scene from the splatBuffer
-                return buildFunc(splatBuffer, true, true).then(() => {
-                    this.clearSplatSceneDownloadAndBuildPromise();
-                });
+                return buildFunc(splatBuffer, true, true)
             })
             .catch((e) => {
                 console.error(e)
