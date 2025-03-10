@@ -65,7 +65,10 @@ export class Viewer {
 
         // If 'useBuiltInControls' is true, the viewer will create its own instance of OrbitControls and attach to the camera
         if (options.useBuiltInControls === undefined) options.useBuiltInControls = true;
+        if (options.listenToKeyEvents === undefined) options.listenToKeyEvents = true;
+
         this.useBuiltInControls = options.useBuiltInControls;
+        this.listenToKeyEvents = options.listenToKeyEvents;
 
         // parent element of the Three.js renderer canvas
         this.rootElement = options.rootElement;
@@ -404,7 +407,7 @@ export class Viewer {
             }
             for (let controls of [this.orthographicControls, this.perspectiveControls,]) {
                 if (controls) {
-                    controls.listenToKeyEvents(window);
+                    this.listenToKeyEvents ?? controls.listenToKeyEvents(window);
                     controls.rotateSpeed = 0.5;
                     controls.maxPolarAngle = Math.PI * .75;
                     controls.minPolarAngle = 0.1;
@@ -427,7 +430,9 @@ export class Viewer {
             this.renderer.domElement.addEventListener('pointerdown', this.mouseDownListener, false);
             this.mouseUpListener = this.onMouseUp.bind(this);
             this.renderer.domElement.addEventListener('pointerup', this.mouseUpListener, false);
-            this.keyDownListener = this.onKeyDown.bind(this);
+            if (listenToKeyEvents) {
+                this.keyDownListener = this.onKeyDown.bind(this);
+            }
             window.addEventListener('keydown', this.keyDownListener, false);
         }
     }
@@ -440,7 +445,7 @@ export class Viewer {
             this.mouseDownListener = null;
             this.renderer.domElement.removeEventListener('pointerup', this.mouseUpListener);
             this.mouseUpListener = null;
-            window.removeEventListener('keydown', this.keyDownListener);
+            this.listenToKeyEvents ?? window.removeEventListener('keydown', this.keyDownListener);
             this.keyDownListener = null;
         }
     }

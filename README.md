@@ -282,6 +282,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'renderer': renderer,
     'camera': camera,
     'useBuiltInControls': false,
+    'listenToKeyEvents': false,
     'ignoreDevicePixelRatio': false,
     'gpuAcceleratedSort': true,
     `enableSIMDInSort`: true,
@@ -321,6 +322,7 @@ Advanced `Viewer` parameters
 | `renderer` | Pass an instance of a Three.js `Renderer` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `camera` | Pass an instance of a Three.js `Camera` to the viewer, otherwise it will create its own. Defaults to `undefined`.
 | `useBuiltInControls` | Tells the viewer to use its own camera controls. Defaults to `true`.
+| `listenToKeyEvents` | Tells the viewer to enable key controls, needs `useBuiltInControls` enabled to take effect. Defaults to `true`.
 | `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
 | `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. It is recommended that this only be set to `true` when `sharedMemoryForWorkers` is also `true`. Defaults to `false` on mobile devices, `true` otherwise.
 | `enableSIMDInSort` | Enable the usage of SIMD WebAssembly instructions for the splat sort. Default is `true`.
