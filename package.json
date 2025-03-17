@@ -72,9 +72,6 @@
     "peerDependencies": {
         "three": ">=0.160.0"
     },
-    "dependencies": {
-        "@aws-sdk/client-s3": "^3.750.0"
-    },
     "files": [
         "build/gaussian-splats-3d.umd.cjs",
         "build/gaussian-splats-3d.umd.cjs.map",

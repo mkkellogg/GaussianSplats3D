@@ -6,15 +6,13 @@ import json from '@rollup/plugin-json';
 
 const globals = {
     'three': 'THREE',
-    '@aws-sdk/client-s3': 'AWS_SDK_S3'
 };
 
 export default [{
         input: './src/index.js',
         treeshake: false,
         external: [
-            'three',
-            '@aws-sdk/client-s3'
+            'three'
         ],
         output: [{
                 name: 'Gaussian Splats 3D',

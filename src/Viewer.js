@@ -26,9 +26,6 @@ import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
 import { SplatRenderMode } from './SplatRenderMode.js';
 
-import { GetObjectCommand } from "@aws-sdk/client-s3";
-
-
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
 const MIN_SPLAT_COUNT_TO_SHOW_SPLAT_TREE_LOADING_SPINNER = 1500000;
@@ -827,7 +824,7 @@ export class Viewer {
 
     /**
      * Add a splat scene to the viewer from a file and display any loading UI if appropriate.
-     * @param {File} file File containing the splats
+     * @param {File}   file File containing the splats
      * @param {object} options {
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
      *                                     value (valid range: 0 - 255), defaults to 1
@@ -847,84 +844,6 @@ export class Viewer {
      **/
 
     addSplatSceneFromFile(file, options = {}) {
-        if (this.isLoadingOrUnloading()) {
-            throw new Error('Cannot add splat scene while another load or unload is already in progress.');
-        }
-
-        if (this.isDisposingOrDisposed()) {
-            throw new Error('Cannot add splat scene after dispose() is called.');
-        }
-
-        if (options.progressiveLoad && this.splatMesh.scenes && this.splatMesh.scenes.length > 0) {
-            console.log('addSplatScene(): "progressiveLoad" option ignore because there are multiple splat scenes');
-            options.progressiveLoad = false;
-        }
-
-        // TODO: check if the file is a File
-
-        const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
-        const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad;
-        const showLoadingUI = (options.showLoadingUI !== undefined && options.showLoadingUI !== null) ? options.showLoadingUI : true;
-
-        let loadingUITaskId = null;
-        if (showLoadingUI) {
-            this.loadingSpinner.removeAllTasks();
-            loadingUITaskId = this.loadingSpinner.addTask(`Loading ${file.name} ...`);
-        }
-        const hideLoadingUI = () => {
-            this.loadingProgressBar.hide();
-            this.loadingSpinner.removeAllTasks();
-        };
-
-        const onProgressUIUpdate = (percentComplete, percentCompleteLabel, loaderStatus) => {
-            if (showLoadingUI && loaderStatus === LoaderStatus.Processing) {
-                this.loadingSpinner.setMessageForTask(loadingUITaskId, `Processing splats : ${percentCompleteLabel}`);
-            }
-        };
-
-        let downloadDone = false;
-        let downloadedPercentage = 0;
-        const splatBuffersAddedUIUpdate = (firstBuild, finalBuild) => {
-            if (showLoadingUI) {
-                if (firstBuild && progressiveLoad || finalBuild && !progressiveLoad) {
-                    this.loadingSpinner.removeTask(loadingUITaskId);
-                    if (!finalBuild && !downloadDone) this.loadingProgressBar.show();
-                }
-                if (progressiveLoad) {
-                    if (finalBuild) {
-                        downloadDone = true;
-                        this.loadingProgressBar.hide();
-                    } else {
-                        this.loadingProgressBar.setProgress(downloadedPercentage);
-                    }
-                }
-            }
-        };
-
-        const onProgress = (percentComplete, percentCompleteLabel, loaderStatus) => {
-            downloadedPercentage = percentComplete;
-            onProgressUIUpdate(percentComplete, percentCompleteLabel, loaderStatus);
-            if (options.onProgress) options.onProgress(percentComplete, percentCompleteLabel, loaderStatus);
-        };
-
-        const buildSection = (splatBuffer, firstBuild, finalBuild) => {
-            if (!progressiveLoad && options.onProgress) options.onProgress(0, '0%', LoaderStatus.Processing);
-            const addSplatBufferOptions = {
-                'rotation': options.rotation || options.orientation,
-                'position': options.position,
-                'scale': options.scale,
-                'splatAlphaRemovalThreshold': options.splatAlphaRemovalThreshold,
-            };
-            return this.addSplatBuffers([splatBuffer], [addSplatBufferOptions],
-                finalBuild, firstBuild && showLoadingUI, showLoadingUI,
-                progressiveLoad, progressiveLoad).then(() => {
-                if (!progressiveLoad && options.onProgress) options.onProgress(100, '100%', LoaderStatus.Processing);
-                splatBuffersAddedUIUpdate(firstBuild, finalBuild);
-            });
-
-        };
-
-        // const loadFunc = progressiveLoad ? this.downloadAndBuildSingleSplatSceneProgressiveLoad.bind(this) :
         const loadFileDataPromise = new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (_loadEvent) => {
@@ -935,12 +854,12 @@ export class Viewer {
             reader.onerror = reject;
             reader.readAsArrayBuffer(file);
         })
-        return this.buildSingleSplatSceneFromArrayBuffer(loadFileDataPromise, format, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
+        return this.addSplatSceneFromPromise(loadFileDataPromise, options);
     }
 
     /**
      * Add a splat scene to the viewer from a R2 Bucket and display any loading UI if appropriate.
-     * @param {File} file File containing the splats
+     * @param {Promise<ArrayBuffer>} arrayBufferPromise Promise the splats
      * @param {object} options {
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
      *                                     value (valid range: 0 - 255), defaults to 1
@@ -959,7 +878,7 @@ export class Viewer {
      * @return {AbortablePromise}
      **/
 
-    addSplatSceneFromR2(bucketName, filename, s3Client, options = {}) {
+    addSplatSceneFromPromise(arrayBufferPromise, options = {}) {
         if (this.isLoadingOrUnloading()) {
             throw new Error('Cannot add splat scene while another load or unload is already in progress.');
         }
@@ -1035,32 +954,7 @@ export class Viewer {
 
         };
 
-        const loadR2DataPromise = new Promise((resolve, reject) => {
-            const command = new GetObjectCommand({
-                Bucket: bucketName,
-                Key: filename,
-            })
-            return s3Client.send(command)
-                .then(response => {
-                    console.log('S3 response : ', response);
-
-                    const fileStream = response.Body;
-                    if (!fileStream) {
-                        const error = new Error("Le fichier est vide ou inaccessible.");
-                        return reject(error);
-                    }
-                    fileStream.transformToByteArray()
-                        .then(byteArray => {
-                            const arrayBuffer = byteArray.buffer.slice(byteArray.byteOffset, byteArray.byteLength + byteArray.byteOffset);
-                            resolve(arrayBuffer);
-                        })
-                        .catch(reject);
-
-                })
-                .catch(reject);
-        })
-
-        return this.buildSingleSplatSceneFromArrayBuffer(loadR2DataPromise, format, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
+        return this.buildSingleSplatSceneFromArrayBufferPromise(arrayBufferPromise, format, options.splatAlphaRemovalThreshold, buildSection.bind(this), onProgress, hideLoadingUI.bind(this));
     }
 
     /**
@@ -1114,12 +1008,12 @@ export class Viewer {
      * @param {function} onException Function to be called when exception occurs
      * @return {AbortablePromise}
      */
-    buildSingleSplatSceneFromArrayBuffer(arrayBufferPromise, format, splatAlphaRemovalThreshold, buildFunc, onProgress, onException) {
+    buildSingleSplatSceneFromArrayBufferPromise(arrayBufferPromise, format, splatAlphaRemovalThreshold, buildFunc, onProgress, onException) {
         // Build a promise that read the file data, and call onException on error
         const loadAndBuildPromise = arrayBufferPromise
-            .then((fileData) => {
+            .then((arrayBuffer) => {
                 // Read the data from the file
-                let buildScenePromise = this.loadSplatSceneFromFileToSplatBuffer(fileData, splatAlphaRemovalThreshold, onProgress, false, undefined, format);
+                let buildScenePromise = this.loadSplatSceneFromFileToSplatBuffer(arrayBuffer, splatAlphaRemovalThreshold, onProgress, false, undefined, format);
                 return buildScenePromise;
             })
             .then((splatBuffer) => {
