@@ -24,7 +24,7 @@ export class PlyParser {
         } else if (plyFormat === PlyFormat.INRIAV1) {
             return INRIAV1PlyParser.parseToUncompressedSplatBuffer(plyBuffer, outSphericalHarmonicsDegree);
         } else if (plyFormat === PlyFormat.INRIAV2) {
-            // TODO: Implement!
+             // TODO: Implement!
             throw new Error('parseToUncompressedSplatBuffer() is not implemented for INRIA V2 PLY files');
         }
     }

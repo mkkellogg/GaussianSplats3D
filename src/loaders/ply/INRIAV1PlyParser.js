@@ -5,14 +5,13 @@ import { SplatBuffer } from '../SplatBuffer.js';
 import { PlyParserUtils } from './PlyParserUtils.js';
 
 const BaseFieldNamesToRead = ['scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3', 'x', 'y', 'z',
-    'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'red', 'green', 'blue', 'f_rest_0'
-];
+                              'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'red', 'green', 'blue', 'f_rest_0'];
 
 const BaseFieldsToReadIndexes = BaseFieldNamesToRead.map((e, i) => i);
 
 const [
-    SCALE_0, SCALE_1, SCALE_2, ROT_0, ROT_1, ROT_2, ROT_3, X, Y, Z, F_DC_0, F_DC_1, F_DC_2, OPACITY, RED, GREEN, BLUE, F_REST_0
-] = BaseFieldsToReadIndexes;
+        SCALE_0, SCALE_1, SCALE_2, ROT_0, ROT_1, ROT_2, ROT_3, X, Y, Z, F_DC_0, F_DC_1, F_DC_2, OPACITY, RED, GREEN, BLUE, F_REST_0
+      ] = BaseFieldsToReadIndexes;
 
 export class INRIAV1PlyParser {
 
@@ -67,24 +66,24 @@ export class INRIAV1PlyParser {
     }
 
     static parseToUncompressedSplatBufferSection(header, fromSplat, toSplat, splatData, splatDataOffset,
-        toBuffer, toOffset, outSphericalHarmonicsDegree = 0) {
+                                                 toBuffer, toOffset, outSphericalHarmonicsDegree = 0) {
         outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
         const outBytesPerSplat = SplatBuffer.CompressionLevels[0].SphericalHarmonicsDegrees[outSphericalHarmonicsDegree].BytesPerSplat;
 
         for (let i = fromSplat; i <= toSplat; i++) {
             const parsedSplat = INRIAV1PlyParser.parseToUncompressedSplat(splatData, i, header,
-                splatDataOffset, outSphericalHarmonicsDegree);
+                                                                          splatDataOffset, outSphericalHarmonicsDegree);
             const outBase = i * outBytesPerSplat + toOffset;
             SplatBuffer.writeSplatDataToSectionBuffer(parsedSplat, toBuffer, outBase, 0, outSphericalHarmonicsDegree);
         }
     }
 
     static parseToUncompressedSplatArraySection(header, fromSplat, toSplat, splatData, splatDataOffset,
-        splatArray, outSphericalHarmonicsDegree = 0) {
+                                         splatArray, outSphericalHarmonicsDegree = 0) {
         outSphericalHarmonicsDegree = Math.min(outSphericalHarmonicsDegree, header.sphericalHarmonicsDegree);
         for (let i = fromSplat; i <= toSplat; i++) {
             const parsedSplat = INRIAV1PlyParser.parseToUncompressedSplat(splatData, i, header,
-                splatDataOffset, outSphericalHarmonicsDegree);
+                                                                          splatDataOffset, outSphericalHarmonicsDegree);
             splatArray.addSplat(parsedSplat);
         }
     }
@@ -95,7 +94,7 @@ export class INRIAV1PlyParser {
             const splatArray = new UncompressedSplatArray(outSphericalHarmonicsDegree);
             for (let row = 0; row < splatCount; row++) {
                 const newSplat = INRIAV1PlyParser.parseToUncompressedSplat(sectionSplatData, row, sectionHeader,
-                    0, outSphericalHarmonicsDegree);
+                                                                           0, outSphericalHarmonicsDegree);
                 splatArray.addSplat(newSplat);
             }
             return splatArray;
@@ -103,7 +102,7 @@ export class INRIAV1PlyParser {
             const {
                 splatBuffer,
                 splatBufferDataOffsetBytes
-            } = SplatBuffer.preallocateUncompressed(splatCount, outSphericalHarmonicsDegree);
+              } = SplatBuffer.preallocateUncompressed(splatCount, outSphericalHarmonicsDegree);
             INRIAV1PlyParser.parseToUncompressedSplatBufferSection(
                 sectionHeader, 0, splatCount - 1, sectionSplatData, 0,
                 splatBuffer.bufferData, splatBufferDataOffsetBytes, outSphericalHarmonicsDegree
