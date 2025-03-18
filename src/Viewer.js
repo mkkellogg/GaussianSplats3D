@@ -905,7 +905,7 @@ export class Viewer {
         let loadingUITaskId = null;
         if (showLoadingUI) {
             this.loadingSpinner.removeAllTasks();
-            loadingUITaskId = this.loadingSpinner.addTask(`Loading ${filename} ...`);
+            loadingUITaskId = this.loadingSpinner.addTask(`Loading ...`);
         }
         const hideLoadingUI = () => {
             this.loadingProgressBar.hide();
