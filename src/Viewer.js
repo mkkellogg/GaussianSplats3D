@@ -1264,15 +1264,20 @@ export class Viewer {
      */
     loadSplatSceneFromFileToSplatBuffer(fileData, splatAlphaRemovalThreshold = 1, onProgress = undefined,
         progressiveBuild = false, onSectionBuilt = undefined, format) {
-        if (format === SceneFormat.Splat) {
-            return SplatLoader.loadFromFileData(fileData, splatAlphaRemovalThreshold, 0, false);
-        } else if (format === SceneFormat.KSplat) {
-            return KSplatLoader.loadFromFileData(fileData);
-        } else if (format === SceneFormat.Ply) {
-            return PlyLoader.loadFromFileData(fileData, splatAlphaRemovalThreshold, this.plyInMemoryCompressionLevel, this.sphericalHarmonicsDegree);
+        const optimizeSplatData = progressiveBuild ? false : this.optimizeSplatData;
+        try {
+            if (format === SceneFormat.Splat) {
+                return SplatLoader.loadFromFileData(fileData, splatAlphaRemovalThreshold, this.inMemoryCompressionLevel, optimizeSplatData);
+            } else if (format === SceneFormat.KSplat) {
+                return KSplatLoader.loadFromFileData(fileData);
+            } else if (format === SceneFormat.Ply) {
+                return PlyLoader.loadFromFileData(fileData, splatAlphaRemovalThreshold, this.inMemoryCompressionLevel, this.sphericalHarmonicsDegree);
+            }
+            throw new Error(`Viewer::LoadSplatSceneFromFileToSplatBuffer -> File format not supported`);
+        } catch (e) {
+            throw this.updateError(e, null);
         }
 
-        throw new Error(`Viewer::LoadSplatSceneFromFileToSplatBuffer -> File format not supported: ${path}`);
     }
 
     static isProgressivelyLoadable(format) {
