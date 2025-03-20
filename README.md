@@ -296,9 +296,9 @@ const viewer = new GaussianSplats3D.Viewer({
     'focalAdjustment': 1.0,
     'logLevel': GaussianSplats3D.LogLevel.None,
     'sphericalHarmonicsDegree': 0,
-    `enableOptionalEffects`: false,
-    `inMemoryCompressionLevel`: 2
-    `freeIntermediateSplatData`: false
+    'enableOptionalEffects': false,
+    'inMemoryCompressionLevel': 2,
+    'freeIntermediateSplatData': false
 });
 viewer.addSplatScene('<path to .ply, .ksplat, or .splat file>')
 .then(() => {
