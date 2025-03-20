@@ -116,6 +116,8 @@ export class DropInViewer extends THREE.Group {
     }
 
     async dispose() {
+        this.callbackMesh.geometry.dispose();
+        this.callbackMesh.material.dispose();
         return await this.viewer.dispose();
     }
 
