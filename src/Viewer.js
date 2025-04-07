@@ -430,7 +430,7 @@ export class Viewer {
             this.renderer.domElement.addEventListener('pointerdown', this.mouseDownListener, false);
             this.mouseUpListener = this.onMouseUp.bind(this);
             this.renderer.domElement.addEventListener('pointerup', this.mouseUpListener, false);
-            if (listenToKeyEvents) {
+            if (this.listenToKeyEvents) {
                 this.keyDownListener = this.onKeyDown.bind(this);
             }
             window.addEventListener('keydown', this.keyDownListener, false);
