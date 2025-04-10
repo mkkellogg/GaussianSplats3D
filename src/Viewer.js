@@ -860,11 +860,11 @@ export class Viewer {
             reader.onerror = reject;
             reader.readAsArrayBuffer(file);
         })
-        return this.addSplatSceneFromPromise(loadFileDataPromise, options);
+        return this.addSplatSceneFromPromise(file.name, loadFileDataPromise, options);
     }
 
     /**
-     * Add a splat scene to the viewer from an arraybigger promise and display any loading UI if appropriate.
+     * Add a splat scene to the viewer from an arraybuffer promise and display any loading UI if appropriate.
      * @param {Promise<ArrayBuffer>} arrayBufferPromise Promise the splats
      * @param {object} options {
      *         splatAlphaRemovalThreshold: Ignore any splats with an alpha less than the specified
@@ -884,7 +884,7 @@ export class Viewer {
      * @return {AbortablePromise}
      **/
 
-    addSplatSceneFromPromise(arrayBufferPromise, options = {}) {
+    addSplatSceneFromPromise(filename, arrayBufferPromise, options = {}) {
         if (this.isLoadingOrUnloading()) {
             throw new Error('Cannot add splat scene while another load or unload is already in progress.');
         }
@@ -898,14 +898,14 @@ export class Viewer {
             options.progressiveLoad = false;
         }
 
-        const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(path);
+        const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(filename);
         const progressiveLoad = Viewer.isProgressivelyLoadable(format) && options.progressiveLoad;
         const showLoadingUI = (options.showLoadingUI !== undefined && options.showLoadingUI !== null) ? options.showLoadingUI : true;
 
         let loadingUITaskId = null;
         if (showLoadingUI) {
             this.loadingSpinner.removeAllTasks();
-            loadingUITaskId = this.loadingSpinner.addTask(`Loading ...`);
+            loadingUITaskId = this.loadingSpinner.addTask(`Loading ${filename}...`);
         }
         const hideLoadingUI = () => {
             this.loadingProgressBar.hide();
