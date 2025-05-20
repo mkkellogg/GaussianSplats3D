@@ -284,7 +284,7 @@ const viewer = new GaussianSplats3D.Viewer({
     'useBuiltInControls': false,
     'ignoreDevicePixelRatio': false,
     'gpuAcceleratedSort': true,
-    `enableSIMDInSort`: true,
+    'enableSIMDInSort': true,
     'sharedMemoryForWorkers': true,
     'integerBasedSort': true,
     'halfPrecisionCovariancesOnGPU': true,
@@ -323,7 +323,7 @@ Advanced `Viewer` parameters
 | `useBuiltInControls` | Tells the viewer to use its own camera controls. Defaults to `true`.
 | `ignoreDevicePixelRatio` | Tells the viewer to pretend the device pixel ratio is 1, which can boost performance on devices where it is larger, at a small cost to visual quality. Defaults to `false`.
 | `gpuAcceleratedSort` | Tells the viewer to use a partially GPU-accelerated approach to sorting splats. Currently this means pre-computation of splat distances from the camera is performed on the GPU. It is recommended that this only be set to `true` when `sharedMemoryForWorkers` is also `true`. Defaults to `false` on mobile devices, `true` otherwise.
-| `enableSIMDInSort` | Enable the usage of SIMD WebAssembly instructions for the splat sort. Default is `true`.
+| 'enableSIMDInSort' | Enable the usage of SIMD WebAssembly instructions for the splat sort. Default is `true`.
 | `sharedMemoryForWorkers` | Tells the viewer to use shared memory via a `SharedArrayBuffer` to transfer data to and from the sorting web worker. If set to `false`, it is recommended that `gpuAcceleratedSort` be set to `false` as well. Defaults to `true`.
 | `integerBasedSort` | Tells the sorting web worker to use the integer versions of relevant data to compute the distance of splats from the camera. Since integer arithmetic is faster than floating point, this reduces sort time. However it can result in integer overflows in larger scenes so it should only be used for small scenes. Defaults to `true`.
 | `splatSortDistanceMapPrecision` | Specify the precision for the distance map used in the splat sort algorithm. Defaults to 16 (16-bit). A lower precision is faster, but may result in visual artifacts in larger or denser scenes.
