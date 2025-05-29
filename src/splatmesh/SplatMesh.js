@@ -233,7 +233,7 @@ export class SplatMesh extends THREE.Mesh {
             this.disposeSplatTree();
             // TODO: expose SplatTree constructor parameters (maximumDepth and maxCentersPerNode) so that they can
             // be configured on a per-scene basis
-            this.baseSplatTree = new SplatTree(8, 1000);
+            this.baseSplatTree = new SplatTree(12, 1000);
             const buildStartTime = performance.now();
             const splatColor = new THREE.Vector4();
             this.baseSplatTree.processSplatMesh(this, (splatIndex) => {
