@@ -26,6 +26,8 @@ import { RenderMode } from './RenderMode.js';
 import { LogLevel } from './LogLevel.js';
 import { SceneRevealMode } from './SceneRevealMode.js';
 import { SplatRenderMode } from './SplatRenderMode.js';
+import { SplatBuffer } from './loaders/SplatBuffer.js';
+import { openDB } from '../util/idb.js';
 
 const THREE_CAMERA_FOV = 50;
 const MINIMUM_DISTANCE_TO_NEW_FOCAL_POINT = .75;
@@ -39,8 +41,67 @@ const CONSECUTIVE_RENDERED_FRAMES_FOR_FPS_CALCULATION = 60;
  * that performs the sort for its splats.
  */
 export class Viewer {
+    // IndexedDB缓存相关私有方法
+    dbPromise = null;
+
+    async getDb() {
+        if (!this.dbPromise) {
+            this.dbPromise = openDB('SplatBufferCacheDB', 1, {
+                upgrade(db) {
+                    if (!db.objectStoreNames.contains('buffers')) {
+                        db.createObjectStore('buffers');
+                    }
+                }
+            });
+        }
+        return this.dbPromise;
+    }
+
+    async getCachedSplatBuffer(key) {
+        if (!this.cacheEnabled) return null;
+        const db = await this.getDb();
+        const bufferData = await db.get('buffers', key);
+        if (!bufferData) return null;
+        return new SplatBuffer(bufferData);
+    }
+
+    async setCachedSplatBuffer(key, buffer) {
+        if (!this.cacheEnabled) return;
+        const db = await this.getDb();
+        await db.put('buffers', buffer.bufferData, key);
+    }
+
+    async downloadOrCacheSplatBuffer(
+        path,
+        splatAlphaRemovalThreshold = 1,
+        onProgress = undefined,
+        progressiveBuild = false,
+        onSectionBuilt = undefined,
+        format,
+        headers
+    ) {
+        const key = `${path}_${format}_${splatAlphaRemovalThreshold}`;
+        let cached = null;
+        if (this.cacheEnabled) {
+            cached = await this.getCachedSplatBuffer(key);
+            if (cached) return cached;
+        }
+        const buffer = await this.downloadSplatSceneToSplatBuffer(
+            path,
+            splatAlphaRemovalThreshold,
+            onProgress,
+            progressiveBuild,
+            onSectionBuilt,
+            format,
+            headers
+        );
+        if (this.cacheEnabled) await this.setCachedSplatBuffer(key, buffer);
+        return buffer;
+    }
 
     constructor(options = {}) {
+    // 是否开启缓存，默认关闭
+    this.cacheEnabled = options.cacheEnabled === true;
 
         // The natural 'up' vector for viewing the scene (only has an effect when used with orbit controls and
         // when the viewer uses its own camera).
@@ -1009,9 +1070,11 @@ export class Viewer {
         for (let i = 0; i < sceneOptions.length; i++) {
             const options = sceneOptions[i];
             const format = (options.format !== undefined && options.format !== null) ? options.format : sceneFormatFromPath(options.path);
-            const baseDownloadPromise = this.downloadSplatSceneToSplatBuffer(options.path, options.splatAlphaRemovalThreshold,
-                                                                             onLoadProgress.bind(this, i), false, undefined,
-                                                                             format, options.headers);
+            // 使用缓存兼容方法
+            const baseDownloadPromise = {
+                promise: this.downloadOrCacheSplatBuffer(options.path, options.splatAlphaRemovalThreshold,
+                    onLoadProgress.bind(this, i), false, undefined, format, options.headers)
+            };
             baseDownloadPromises.push(baseDownloadPromise);
             nativeDownloadPromises.push(baseDownloadPromise.promise);
         }
@@ -2096,4 +2159,5 @@ export class Viewer {
     isMobile() {
         return navigator.userAgent.includes('Mobi');
     }
+
 }
