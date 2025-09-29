@@ -4,6 +4,7 @@ import { PlyLoader } from './loaders/ply/PlyLoader.js';
 import { SplatLoader } from './loaders/splat/SplatLoader.js';
 import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
 import { SpzLoader } from './loaders/spz/SpzLoader.js';
+import { SogLoader } from './loaders/sog/SogLoader.js';
 import { sceneFormatFromPath } from './loaders/Utils.js';
 import { LoadingSpinner } from './ui/LoadingSpinner.js';
 import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
@@ -1075,6 +1076,22 @@ export class Viewer {
             } else if (format === SceneFormat.Spz) {
                 return SpzLoader.loadFromURL(path, onProgress, splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
                                              this.optimizeSplatData, this.sphericalHarmonicsDegree, headers);
+            } else if (format === SceneFormat.Sog) {
+                const optimizeSplatData = this.optimizeSplatData;
+                if (path.endsWith('.sog')) {
+                    return SogLoader.loadFromZipURL(path, onProgress, splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
+                                                    optimizeSplatData, headers, this.sectionSize, this.sceneCenter,
+                                                    this.bucketBlockSize, this.bucketSize);
+                } else {
+                    let base = path;
+                    if (base.endsWith('meta.json')) {
+                        base = base.substring(0, base.lastIndexOf('/') + 1);
+                    }
+                    if (!base.endsWith('/')) base += '/';
+                    return SogLoader.loadFromDirectoryURL(base, onProgress, splatAlphaRemovalThreshold, this.inMemoryCompressionLevel,
+                                                          optimizeSplatData, headers, this.sectionSize, this.sceneCenter,
+                                                          this.bucketBlockSize, this.bucketSize);
+                }
             }
         } catch (e) {
             throw this.updateError(e, null);

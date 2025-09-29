@@ -4,6 +4,7 @@ import { PlyLoader } from './loaders/ply/PlyLoader.js';
 import { SpzLoader } from './loaders/spz/SpzLoader.js';
 import { SplatLoader } from './loaders/splat/SplatLoader.js';
 import { KSplatLoader } from './loaders/ksplat/KSplatLoader.js';
+import { SogLoader } from './loaders/sog/SogLoader.js';
 import * as LoaderUtils from './loaders/Utils.js';
 import { SplatBuffer } from './loaders/SplatBuffer.js';
 import { SplatParser } from './loaders/splat/SplatParser.js';
@@ -27,6 +28,7 @@ export {
     SpzLoader,
     SplatLoader,
     KSplatLoader,
+    SogLoader,
     LoaderUtils,
     SplatBuffer,
     SplatParser,
