@@ -183,6 +183,10 @@ export class Viewer {
         }
         this.freeIntermediateSplatData = options.freeIntermediateSplatData;
 
+        // Optional predicate to decide whether a splat should be rendered.
+        // Signature: ({ globalIndex, viewer, splatMesh }) => boolean
+        this.splatFilter = options.splatFilter || null;
+
         // It appears that for certain iOS versions, special actions need to be taken with the
         // usage of SIMD instructions and shared memory
         if (isIOS()) {
@@ -284,6 +288,11 @@ export class Viewer {
         this.disposed = false;
         this.disposePromise = null;
         if (!this.dropInMode) this.init();
+    }
+
+    setSplatFilter(filterFunc) {
+        this.splatFilter = filterFunc;
+        this.forceRenderNextFrame();
     }
 
     createSplatMesh() {
@@ -1243,11 +1252,27 @@ export class Viewer {
             this.sortWorker.onmessage = (e) => {
                 if (e.data.sortDone) {
                     this.sortRunning = false;
+                    const totalCount = e.data.splatRenderCount;
+                    let sourceIndexes;
                     if (this.sharedMemoryForWorkers) {
-                        this.splatMesh.updateRenderIndexes(this.sortWorkerSortedIndexes, e.data.splatRenderCount);
+                        sourceIndexes = this.sortWorkerSortedIndexes;
                     } else {
-                        const sortedIndexes = new Uint32Array(e.data.sortedIndexes.buffer, 0, e.data.splatRenderCount);
-                        this.splatMesh.updateRenderIndexes(sortedIndexes, e.data.splatRenderCount);
+                        sourceIndexes = new Uint32Array(e.data.sortedIndexes.buffer, 0, totalCount);
+                    }
+
+                    // Apply optional per-splat filter
+                    if (typeof this.splatFilter === 'function') {
+                        const filtered = new Uint32Array(totalCount);
+                        let w = 0;
+                        for (let i = 0; i < totalCount; i++) {
+                            const globalIndex = sourceIndexes[i];
+                            if (this.splatFilter({ globalIndex, viewer: this, splatMesh: this.splatMesh }) === true) {
+                                filtered[w++] = globalIndex;
+                            }
+                        }
+                        this.splatMesh.updateRenderIndexes(filtered.subarray(0, w), w);
+                    } else {
+                        this.splatMesh.updateRenderIndexes(sourceIndexes, totalCount);
                     }
 
                     this.lastSplatSortCount = this.splatSortCount;

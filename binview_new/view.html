@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Two-Eye Gaussian Splats — Anaglyph (Desktop) + WebXR (VR)</title>
+  <style>
+    body { margin: 0; overflow: hidden; background:#111; }
+    #overlay {
+      position: absolute; top: 10px; left: 10px;
+      background: rgba(0,0,0,0.55); color: #fff; padding: 10px 12px; border-radius: 8px;
+      z-index: 10; font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px; line-height: 1.4;
+    }
+    #overlay > label { display: block; margin-top: 6px; }
+    .file-select { margin-top: 6px; max-width: 160px; }
+    #vrHint { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 12px; opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div><strong>Gaussian Splatting VR</strong></div>
+    <div>Desktop: <em>red/cyan</em> anaglyph. VR: one scene per eye (layers).</div>
+    <div id="vrHint"><strong>VR Controls:</strong> Pinch/squeeze-drag to rotate/scale. Raise right hand above head to exit.</div>
+
+    <label>Left Eye:
+      <select id="leftFolder" class="file-select"></select>
+      <select id="leftFile" class="file-select"></select>
+      <select id="leftFilter" class="file-select"></select>
+    </label>
+    <label>Right Eye:
+      <select id="rightFolder" class="file-select"></select>
+      <select id="rightFile" class="file-select"></select>
+      <select id="rightFilter" class="file-select"></select>
+    </label>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/",
+        "@mkkellogg/gaussian-splats-3d": "../build/gaussian-splats-3d.module.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { VRButton } from 'three/addons/webxr/VRButton.js';
+    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+    import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
+    import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
+
+    // ---------------------- Data ----------------------
+    const fileData = {
+      'orig/LoD': [
+        'lod0_tile_0.ply', 'lod1_tile_0.ply', 'lod2_tile_0.ply',
+        'lod3_tile_0.ply', 'lod4_tile_0.ply', 'lod5_tile_0.ply'
+      ],
+      'orig/0_5to1_5': ['lod1_tile_0_0.5x.ply', 'lod1_tile_0_1.0x.ply', 'lod1_tile_0_1.5x.ply'],
+      'orig/0_8to1_2': ['lod1_tile_0_0.8x.ply', 'lod1_tile_0_1.0x.ply', 'lod1_tile_0_1.2x.ply']
+    };
+
+    // ---------------------- Layers (LEFT=0, RIGHT=1) ----------------------
+    const LEFT_LAYER  = 0;  // default layer
+    const RIGHT_LAYER = 1;
+
+    // ---------------------- Three.js core ----------------------
+    let scene, camera, renderer, controls;
+    const modelGroup = new THREE.Group();
+
+    // Core viewers + meshes
+    let leftViewer = null, rightViewer = null;
+    let leftMesh = null, rightMesh = null;
+    let stereoActive = false; // true when two splats are loaded
+
+    // Renderer state helpers
+    let wasAutoClear = true;
+
+    // VR hand controls instance
+    let vrHands = null;
+
+    const evenSplatFilter = ({ globalIndex }) => (globalIndex & 1) === 0;
+    const oddSplatFilter = ({ globalIndex }) => (globalIndex & 1) === 1;
+    const tmpCenter = new THREE.Vector3();
+    function computeViewerXMid(viewer) {
+      if (!viewer) return null;
+      if (viewer.__xMid !== undefined) return viewer.__xMid;
+      const sm = viewer.getSplatMesh?.() || viewer.splatMesh;
+      if (!sm) return null;
+      let minX = Infinity, maxX = -Infinity;
+      const tree = sm.getSplatTree?.();
+      if (tree && tree.subTrees && tree.subTrees.length > 0) {
+        for (const st of tree.subTrees) {
+          minX = Math.min(minX, st.sceneMin.x);
+          maxX = Math.max(maxX, st.sceneMax.x);
+        }
+        viewer.__xMid = (minX + maxX) * 0.5;
+        return viewer.__xMid;
+      }
+      const count = sm.getSplatCount?.() || 0;
+      for (let i = 0; i < count; i += 1) {
+        sm.getSplatCenter(i, tmpCenter);
+        if (tmpCenter.x < minX) minX = tmpCenter.x;
+        if (tmpCenter.x > maxX) maxX = tmpCenter.x;
+      }
+      viewer.__xMid = isFinite(minX) && isFinite(maxX) ? (minX + maxX) * 0.5 : 0;
+      return viewer.__xMid;
+    }
+    const leftHalfFilter = ({ globalIndex, viewer, splatMesh }) => {
+      const xMid = computeViewerXMid(viewer);
+      if (xMid === null) return true;
+      splatMesh.getSplatCenter(globalIndex, tmpCenter);
+      return tmpCenter.x < xMid;
+    };
+    const rightHalfFilter = ({ globalIndex, viewer, splatMesh }) => {
+      const xMid = computeViewerXMid(viewer);
+      if (xMid === null) return true;
+      splatMesh.getSplatCenter(globalIndex, tmpCenter);
+      return tmpCenter.x >= xMid;
+    };
+
+    function filterFromName(name, viewerRef) {
+      switch (name) {
+        case 'none': return null;
+        case 'even': return evenSplatFilter;
+        case 'odd': return oddSplatFilter;
+        case 'leftHalf': return (ctx) => leftHalfFilter({ ...ctx, viewer: viewerRef });
+        case 'rightHalf': return (ctx) => rightHalfFilter({ ...ctx, viewer: viewerRef });
+        default: return null;
+      }
+    }
+
+    init();
+    animate();
+
+    async function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x151518);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      renderer.xr.setReferenceSpaceType?.('local-floor');
+      document.body.appendChild(renderer.domElement);
+      document.body.appendChild(VRButton.createButton(renderer));
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.001, 10000);
+      camera.position.set(0, 0, 16);
+      camera.updateProjectionMatrix();
+      scene.add(camera);
+
+      // Let the main camera see both layers (for non-anaglyph renders)
+      camera.layers.enable(LEFT_LAYER);
+      camera.layers.enable(RIGHT_LAYER);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.9));
+      scene.add(modelGroup);
+
+      // ---------- UI ----------
+      const leftFolderSelect  = document.getElementById('leftFolder');
+      const leftFileSelect    = document.getElementById('leftFile');
+      const leftFilterSelect  = document.getElementById('leftFilter');
+      const rightFolderSelect = document.getElementById('rightFolder');
+      const rightFileSelect   = document.getElementById('rightFile');
+      const rightFilterSelect = document.getElementById('rightFilter');
+      function populateFilterDropdown(selectEl) {
+        const options = [
+          { label: 'No filter', value: 'none' },
+          { label: 'Even IDs', value: 'even' },
+          { label: 'Odd IDs', value: 'odd' },
+          { label: 'Left half (x < mid)', value: 'leftHalf' },
+          { label: 'Right half (x ≥ mid)', value: 'rightHalf' }
+        ];
+        selectEl.innerHTML = '';
+        options.forEach(o => selectEl.add(new Option(o.label, o.value)));
+      }
+
+      populateFilterDropdown(leftFilterSelect);
+      populateFilterDropdown(rightFilterSelect);
+
+
+      function updateFileDropdown(folderSelect, fileSelect) {
+        const selectedFolder = folderSelect.value;
+        fileSelect.innerHTML = '';
+        fileSelect.disabled = true;
+        if (selectedFolder && fileData[selectedFolder]) {
+          fileData[selectedFolder].forEach(file => fileSelect.add(new Option(file, file)));
+          fileSelect.disabled = false;
+        } else {
+          fileSelect.add(new Option('(None)', ''));
+        }
+      }
+
+      Object.keys(fileData).forEach(folder => {
+        leftFolderSelect.add(new Option(folder, folder));
+        rightFolderSelect.add(new Option(folder, folder));
+      });
+      rightFolderSelect.add(new Option('(None)', ''), 0);
+      rightFolderSelect.value = '';
+
+      leftFolderSelect.addEventListener('change', () => { updateFileDropdown(leftFolderSelect, leftFileSelect); reloadSplats(); });
+      rightFolderSelect.addEventListener('change', () => { updateFileDropdown(rightFolderSelect, rightFileSelect); reloadSplats(); });
+      leftFileSelect.addEventListener('change', reloadSplats);
+      rightFileSelect.addEventListener('change', reloadSplats);
+      leftFilterSelect.addEventListener('change', () => applySelectedFilters());
+      rightFilterSelect.addEventListener('change', () => applySelectedFilters());
+
+      updateFileDropdown(leftFolderSelect, leftFileSelect);
+      updateFileDropdown(rightFolderSelect, rightFileSelect);
+
+      // Default to swapped halves as requested: left eye shows right half, right eye shows left half
+      leftFilterSelect.value = 'rightHalf';
+      rightFilterSelect.value = 'leftHalf';
+      await reloadSplats();
+
+      // ---------------------- VR events (no auto-fit) ----------------------
+      renderer.xr.addEventListener('sessionstart', () => {
+        modelGroup.position.set(0, 1.0, -8);
+        controls.enabled = false;
+        configureXRCameraLayersForVR();
+
+        // === VR HAND CONTROLS: create ===
+        vrHands = setupVRHandControls({
+          renderer,
+          camera,
+          scene,
+          onApplyTransform: (yawAbs, pitchAbs, scaleAbs) => {
+            const clampedPitch = THREE.MathUtils.clamp(pitchAbs ?? 0, -Math.PI/2 + 0.01, Math.PI/2 - 0.01);
+            const clampedScale = THREE.MathUtils.clamp(scaleAbs ?? modelGroup.scale.x, 0.05, 10.0);
+            modelGroup.quaternion.setFromEuler(new THREE.Euler(clampedPitch, yawAbs ?? 0, 0, 'YXZ'));
+            modelGroup.scale.setScalar(clampedScale);
+          },
+          onExitVR: () => {
+            const session = renderer.xr.getSession();
+            if (session) session.end();
+          }
+        });
+      });
+
+      renderer.xr.addEventListener('sessionend', () => {
+        modelGroup.position.set(0, 0, 0);
+        controls.enabled = true;
+
+        // === VR HAND CONTROLS: dispose ===
+        vrHands?.dispose?.();
+        vrHands = null;
+      });
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    // ---------------------- Loading with Viewer (manual) ----------------------
+    async function reloadSplats() {
+      // Dispose old meshes
+      if (leftMesh)  { modelGroup.remove(leftMesh);  leftMesh.geometry?.dispose?.();  leftMesh.material?.dispose?.(); }
+      if (rightMesh) { modelGroup.remove(rightMesh); rightMesh.geometry?.dispose?.(); rightMesh.material?.dispose?.(); }
+      leftMesh = rightMesh = null;
+
+      // Drop viewer refs (manual mode—no start/stop)
+      leftViewer = rightViewer = null;
+      stereoActive = false;
+
+      const leftFolder  = document.getElementById("leftFolder").value;
+      const leftFile    = document.getElementById("leftFile").value;
+      const rightFolder = document.getElementById("rightFolder").value;
+      const rightFile   = document.getElementById("rightFile").value;
+      const leftFilterSelect = document.getElementById('leftFilter');
+      const rightFilterSelect = document.getElementById('rightFilter');
+
+      const leftURL  = (leftFolder  && leftFile)  ? `${leftFolder}/${leftFile}`   : null;
+      const rightURL = (rightFolder && rightFile) ? `${rightFolder}/${rightFile}` : "";
+
+      // LEFT
+      if (leftURL) {
+        leftViewer = new GaussianSplats3D.Viewer({
+          selfDrivenMode: false,      // we call update(dt) each frame
+          renderer, camera,           // camera is a reference we can override in XR
+          useBuiltInControls: false,
+          sharedMemoryForWorkers: false,
+          dynamicScene: false,
+          threeScene: scene,
+          splatFilter: null
+        });
+        await leftViewer.addSplatScene(leftURL, { showLoadingUI: false, progressiveLoad: true });
+        leftMesh = leftViewer.getSplatMesh?.() || leftViewer.splatMesh;
+        if (leftMesh) {
+          leftMesh.layers.set(LEFT_LAYER); // LEFT -> layer 0
+          leftMesh.frustumCulled = false;  // avoid over-eager culling in VR
+          modelGroup.add(leftMesh);
+        }
+        // Precompute mid after mesh exists and apply chosen filter
+        computeViewerXMid(leftViewer);
+        leftViewer.setSplatFilter(filterFromName(leftFilterSelect.value, leftViewer));
+      }
+
+      // RIGHT
+      if (rightURL) {
+        try {
+          rightViewer = new GaussianSplats3D.Viewer({
+            selfDrivenMode: false,
+            renderer, camera,
+            useBuiltInControls: false,
+            sharedMemoryForWorkers: false,
+            dynamicScene: false,
+            threeScene: scene,
+            splatFilter: null
+          });
+          await rightViewer.addSplatScene(rightURL, { showLoadingUI: false, progressiveLoad: true });
+          rightMesh = rightViewer.getSplatMesh?.() || rightViewer.splatMesh;
+          if (rightMesh) {
+            rightMesh.layers.set(RIGHT_LAYER); // RIGHT -> layer 1
+            rightMesh.frustumCulled = false;   // avoid over-eager culling in VR
+            modelGroup.add(rightMesh);
+          }
+          computeViewerXMid(rightViewer);
+          rightViewer.setSplatFilter(filterFromName(rightFilterSelect.value, rightViewer));
+          stereoActive = !!(leftMesh && rightMesh);
+        } catch (e) {
+          console.warn('Second splat load skipped:', e?.message || e);
+          stereoActive = false;
+        }
+      }
+
+      // If only one splat, keep it on layer 0 so direct (non-anaglyph) renders always show
+      if (!stereoActive) {
+        if (leftMesh)  leftMesh.layers.set(LEFT_LAYER);
+        if (rightMesh) rightMesh.layers.set(LEFT_LAYER);
+      }
+
+      applySelectedFilters();
+    }
+
+    function applySelectedFilters() {
+      const lf = filterFromName(document.getElementById('leftFilter').value, leftViewer);
+      const rf = filterFromName(document.getElementById('rightFilter').value, rightViewer);
+      leftViewer?.setSplatFilter?.(lf);
+      rightViewer?.setSplatFilter?.(rf);
+    }
+
+    // ---------------------- Camera layer routing ----------------------
+    function configureXRCameraLayersForVR() {
+      const xrCam = renderer.xr.getCamera(camera);
+      if (!xrCam?.isArrayCamera || xrCam.cameras.length < 2) return;
+      const [leftCam, rightCam] = xrCam.cameras;
+      leftCam.layers.disableAll();  leftCam.layers.enable(LEFT_LAYER);
+      rightCam.layers.disableAll(); rightCam.layers.enable(RIGHT_LAYER);
+    }
+
+    // ---------------------- Desktop anaglyph (manual two-pass) ----------------------
+    function renderAnaglyphManual() {
+      const gl = renderer.getContext();
+
+      // Preserve previous state once per entry
+      if (renderer.autoClear) {
+        wasAutoClear = true;
+        renderer.autoClear = false;
+      }
+
+      // clear frame
+      renderer.setClearColor(0x151518, 1);
+      renderer.clear(true, true, true);
+
+      // LEFT eye: render only LEFT_LAYER into red channel
+      camera.layers.disableAll(); camera.layers.enable(LEFT_LAYER);
+      gl.colorMask(true, false, false, true);   // R only (A ok)
+      renderer.render(scene, camera);
+
+      // keep depth, draw RIGHT over it
+      renderer.clearDepth();
+
+      // RIGHT eye: render only RIGHT_LAYER into G+B channels (cyan)
+      camera.layers.disableAll(); camera.layers.enable(RIGHT_LAYER);
+      gl.colorMask(false, true, true, true);    // G+B
+      renderer.render(scene, camera);
+
+      // restore
+      gl.colorMask(true, true, true, true);
+    }
+
+    // ---------------------- Resize & render ----------------------
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      const clock = new THREE.Clock();
+
+      renderer.setAnimationLoop(() => {
+        const dt = clock.getDelta();
+        controls.update();
+
+        if (renderer.xr.isPresenting) {
+          // Assert per-eye layers in XR every frame (ArrayCamera may be recreated)
+          configureXRCameraLayersForVR();
+
+          // Hand controls update
+          vrHands?.update?.(dt);
+
+          // Make each viewer "see" the correct XR eye camera to avoid culling issues.
+          const xrCam = renderer.xr.getCamera(camera);
+          if (xrCam?.isArrayCamera) {
+            const [eyeL, eyeR] = xrCam.cameras;
+
+            // Preferred: if viewer offers setCamera(), use it:
+            leftViewer?.setCamera?.(eyeL);
+            rightViewer?.setCamera?.(eyeR);
+
+            // Fallback (works because viewer holds a reference to `camera` we passed in):
+            if (!leftViewer?.setCamera) {
+              camera.projectionMatrix.copy(eyeL.projectionMatrix);
+              camera.matrixWorld.copy(eyeL.matrixWorld);
+              camera.matrixWorldInverse.copy(eyeL.matrixWorldInverse);
+              leftViewer?.update?.(dt);
+            } else {
+              leftViewer?.update?.(dt);
+            }
+
+            if (!rightViewer?.setCamera) {
+              camera.projectionMatrix.copy(eyeR.projectionMatrix);
+              camera.matrixWorld.copy(eyeR.matrixWorld);
+              camera.matrixWorldInverse.copy(eyeR.matrixWorldInverse);
+              rightViewer?.update?.(dt);
+            } else {
+              rightViewer?.update?.(dt);
+            }
+          } else {
+            // Non-array fallback (unlikely): just update both with main camera
+            leftViewer?.update?.(dt);
+            rightViewer?.update?.(dt);
+          }
+
+          // Render the XR frame (Three handles both eyes)
+          renderer.render(scene, camera);
+          return;
+        }
+
+        // Desktop: keep splat internals updated (LOD/sort/buffers)
+        leftViewer?.update?.(dt);
+        rightViewer?.update?.(dt);
+
+        if (stereoActive && leftMesh && rightMesh) {
+          renderAnaglyphManual();
+        } else {
+          // restore autoclear if we disabled it for anaglyph
+          if (!renderer.autoClear && wasAutoClear) {
+            renderer.autoClear = true;
+            wasAutoClear = false;
+          }
+          renderer.render(scene, camera);
+        }
+      });
+    }
+
+    // =========================== VR HAND CONTROLS ===========================
+    function setupVRHandControls({ renderer, camera, scene, onApplyTransform, onExitVR }) {
+      const controllerFactory = new XRControllerModelFactory();
+      const handFactory = new XRHandModelFactory();
+
+      // Visual helpers (optional)
+      const controllerGrips = [renderer.xr.getControllerGrip(0), renderer.xr.getControllerGrip(1)];
+      controllerGrips.forEach((grip, i) => {
+        const model = controllerFactory.createControllerModel(grip);
+        grip.add(model);
+        scene.add(grip);
+      });
+
+      const hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
+      hands.forEach((hand, i) => {
+        const handModel = handFactory.createHandModel(hand, 'mesh'); // simple skinned mesh
+        hand.add(handModel);
+        scene.add(hand);
+      });
+
+      // Raw controllers for squeeze fallback + events
+      const controllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
+      controllers.forEach((c) => {
+        c.userData.squeezing = false;
+        c.addEventListener('squeezestart', () => c.userData.squeezing = true);
+        c.addEventListener('squeezeend', () => c.userData.squeezing = false);
+        scene.add(c);
+      });
+
+      // State
+      let havePinchL = false, havePinchR = false;
+      let startTwoHandDist = 0;
+      let baseScale = modelGroup.scale.x || 1;
+      let currentScale = baseScale;
+
+      // keep absolute yaw/pitch (use last valid when only scaling)
+      let yawAbs = 0, pitchAbs = 0;
+
+      // Exit gesture state
+      let exitAccum = 0;            // seconds above threshold
+      const EXIT_HOLD = 0.6;        // seconds
+      const EXIT_Y_OFFSET = 0.25;   // meters above head
+
+      // tmp objects
+      const vA = new THREE.Vector3();
+      const vB = new THREE.Vector3();
+      const qTemp = new THREE.Quaternion();
+      const eTemp = new THREE.Euler(0,0,0,'YXZ');
+
+      const getJoint = (hand, name) => hand?.joints?.[name] ?? null;
+      const getWrist = (hand) => getJoint(hand, 'wrist');
+
+      const pinchActive = (hand, controller) => {
+        // Prefer hand pinch if joints present
+        const iTip = getJoint(hand, 'index-finger-tip');
+        const tTip = getJoint(hand, 'thumb-tip');
+        if (iTip && tTip && iTip.visible && tTip.visible) {
+          iTip.getWorldPosition(vA);
+          tTip.getWorldPosition(vB);
+          return vA.distanceTo(vB) < 0.03; // 3 cm
+        }
+        // Fallback: controller squeeze
+        return controller?.userData?.squeezing === true;
+      };
+
+      const poseOf = (hand, grip, controller) => {
+        // Prefer wrist joint (closest to device pose)
+        const wrist = getWrist(hand);
+        if (wrist && wrist.visible) {
+          wrist.getWorldPosition(vA);
+          wrist.getWorldQuaternion(qTemp);
+          return { position: vA.clone(), quaternion: qTemp.clone() };
+        }
+        // Then controller grip
+        if (grip) {
+          grip.getWorldPosition(vA);
+          grip.getWorldQuaternion(qTemp);
+          return { position: vA.clone(), quaternion: qTemp.clone() };
+        }
+        // Finally controller object
+        if (controller) {
+          controller.getWorldPosition(vA);
+          controller.getWorldQuaternion(qTemp);
+          return { position: vA.clone(), quaternion: qTemp.clone() };
+        }
+        return null;
+      };
+
+      const twoHandDistance = () => {
+        const pL = poseOf(hands[0], controllerGrips[0], controllers[0]);
+        const pR = poseOf(hands[1], controllerGrips[1], controllers[1]);
+        if (!pL || !pR) return null;
+        return pL.position.distanceTo(pR.position);
+      };
+
+      const updateAnglesFromPose = (pose) => {
+        if (!pose) return;
+        // Use world quaternion for yaw/pitch
+        eTemp.setFromQuaternion(pose.quaternion, 'YXZ');
+        pitchAbs = eTemp.x;
+        yawAbs   = eTemp.y;
+      };
+
+      const updateExitGesture = (dt) => {
+        const head = renderer.xr.getCamera(camera);
+        head.getWorldPosition(vA);
+        // right wrist (hand 1)
+        const wristR = getWrist(hands[1]);
+        if (wristR && wristR.visible) {
+          wristR.getWorldPosition(vB);
+          if ((vB.y - vA.y) > EXIT_Y_OFFSET) {
+            exitAccum += dt;
+            if (exitAccum >= EXIT_HOLD) {
+              onExitVR?.();
+              exitAccum = 0; // prevent repeats if session lingers
+            }
+          } else {
+            exitAccum = 0;
+          }
+        } else {
+          exitAccum = 0;
+        }
+      };
+
+      const update = (dt) => {
+        // Detect pinches/squeezes
+        const pinchL = pinchActive(hands[0], controllers[0]);
+        const pinchR = pinchActive(hands[1], controllers[1]);
+
+        // Two-hand scale
+        if (pinchL && pinchR) {
+          if (!(havePinchL && havePinchR)) {
+            // starting two-hand gesture
+            startTwoHandDist = twoHandDistance() ?? startTwoHandDist;
+            baseScale = currentScale;
+          }
+          const dist = twoHandDistance();
+          if (startTwoHandDist && dist) {
+            const ratio = THREE.MathUtils.clamp(dist / startTwoHandDist, 0.05, 20);
+            currentScale = baseScale * ratio;
+          }
+          // while two-hand, also update orientation from the right hand (stable)
+          const pR = poseOf(hands[1], controllerGrips[1], controllers[1]);
+          updateAnglesFromPose(pR);
+        } else {
+          // One-hand rotate (prefer whichever is active)
+          if (pinchR) {
+            const pR = poseOf(hands[1], controllerGrips[1], controllers[1]);
+            updateAnglesFromPose(pR);
+          } else if (pinchL) {
+            const pL = poseOf(hands[0], controllerGrips[0], controllers[0]);
+            updateAnglesFromPose(pL);
+          }
+          // no two-hand scale: maintain currentScale
+        }
+
+        havePinchL = pinchL;
+        havePinchR = pinchR;
+
+        // Apply transform
+        onApplyTransform?.(yawAbs, pitchAbs, currentScale);
+
+        // Exit gesture
+        updateExitGesture(dt);
+      };
+
+      const dispose = () => {
+        // nothing heavy to dispose – remove helpers if needed
+        controllers.forEach(c => {
+          c.removeFromParent();
+          c.removeEventListener('squeezestart', () => {});
+          c.removeEventListener('squeezeend', () => {});
+        });
+        controllerGrips.forEach(g => g.removeFromParent());
+        hands.forEach(h => h.removeFromParent());
+      };
+
+      return { update, dispose };
+    }
+    // ======================= END VR HAND CONTROLS =======================
+  </script>
+</body>
+</html>
