@@ -163,7 +163,7 @@ export class SogParser {
             const aByte = sh0Img.data[idx + 3];
 
             if (degree === 0) {
-                splats.addSplatFromComonents(px, py, pz, sx, sy, sz, q.x, q.y, q.z, q.w, r * 255, g * 255, b * 255, aByte);
+                splats.addSplatFromComponents(px, py, pz, sx, sy, sz, q.x, q.y, q.z, q.w, r * 255, g * 255, b * 255, aByte);
             } else {
                 const restCount = splats.sphericalHarmonicsCount;
                 const rest = new Array(restCount).fill(0);
@@ -183,7 +183,7 @@ export class SogParser {
                         }
                     }
                 }
-                splats.addSplatFromComonents(px, py, pz, sx, sy, sz, q.x, q.y, q.z, q.w, r * 255, g * 255, b * 255, aByte, ...rest);
+                splats.addSplatFromComponents(px, py, pz, sx, sy, sz, q.x, q.y, q.z, q.w, r * 255, g * 255, b * 255, aByte, ...rest);
             }
         }
 

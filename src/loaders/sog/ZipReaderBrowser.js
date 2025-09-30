@@ -45,11 +45,10 @@ export function unzipStoredEntries(arrayBuffer) {
             entries.set(name, u8.slice(dataStart, dataEnd));
             cursor = dataEnd;
         } else {
-            const sigBytes = [0x50, 0x4b, 0x07, 0x08];
             let pos = headerEnd;
             let found = false;
             while (pos + 16 <= size) {
-                if (u8[pos] === sigBytes[0] && u8[pos + 1] === sigBytes[1] && u8[pos + 2] === sigBytes[2] && u8[pos + 3] === sigBytes[3]) {
+                if (getUint32(pos) === SIG_DD) {
                     const crc = getUint32(pos + 4); // eslint-disable-line
                     const sizeUncomp = getUint32(pos + 8);
                     const sizeComp = getUint32(pos + 12); // eslint-disable-line

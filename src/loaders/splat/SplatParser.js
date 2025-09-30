@@ -69,7 +69,7 @@ export class SplatParser {
                                               (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
             quat.normalize();
 
-            splatArray.addSplatFromComonents(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
+            splatArray.addSplatFromComponents(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
                                              quat.w, quat.x, quat.y, quat.z, inColor[0], inColor[1], inColor[2], inColor[3]);
         }
     }
@@ -97,7 +97,7 @@ export class SplatParser {
                                               (inRotation[3] - 128) / 128, (inRotation[0] - 128) / 128);
             quat.normalize();
 
-            splatArray.addSplatFromComonents(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
+            splatArray.addSplatFromComponents(inCenter[0], inCenter[1], inCenter[2], inScale[0], inScale[1], inScale[2],
                                              quat.w, quat.x, quat.y, quat.z, inColor[0], inColor[1], inColor[2], inColor[3]);
         }
 
