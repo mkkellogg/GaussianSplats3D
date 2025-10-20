@@ -209,6 +209,8 @@ export class Viewer {
         const maxPrecision = this.integerBasedSort ? 20 : 24;
         this.splatSortDistanceMapPrecision = clamp(this.splatSortDistanceMapPrecision, 10, maxPrecision);
 
+        this.isUpdatedForDropInMode = false;
+
         this.onSplatMeshChangedCallback = null;
         this.createSplatMesh();
 
@@ -1623,7 +1625,7 @@ export class Viewer {
     }();
 
     update(renderer, camera) {
-        if (this.dropInMode) this.updateForDropInMode(renderer, camera);
+        if (this.dropInMode && !this.isUpdatedForDropInMode) this.updateForDropInMode(renderer, camera);
 
         if (!this.initialized || !this.splatRenderReady || this.isDisposingOrDisposed()) return;
 
@@ -1649,6 +1651,7 @@ export class Viewer {
         this.camera = camera;
         if (this.controls) this.controls.object = camera;
         this.init();
+        this.isUpdatedForDropInMode = true;
     }
 
     updateFPS = function() {
