@@ -76,10 +76,11 @@ export class UncompressedSplatArray {
         return newSplat;
     }
 
-    addSplatFromComonents(x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity, ...rest) {
+    addSplatFromComponents(x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity, ...rest) {
         const newSplat = [x, y, z, scale0, scale1, scale2, rot0, rot1, rot2, rot3, r, g, b, opacity, ...this.defaultSphericalHarmonics];
+        const baseOffset = BASE_COMPONENT_COUNT;
         for (let i = 0; i < rest.length && i < this.sphericalHarmonicsCount; i++) {
-            newSplat[i] = rest[i];
+            newSplat[baseOffset + i] = rest[i];
         }
         this.addSplat(newSplat);
         return newSplat;
