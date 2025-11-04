@@ -407,8 +407,6 @@
           setConversionCheckIconVisibility(false);
           const conversionFileName = conversionFile.files[0].name.trim();
           const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(conversionFileName);
-          console.log("conversionFileName: " + conversionFileName);
-          console.log("format: " + format);
           const fileData = {data: fileReader.result};
           window.setTimeout(() => {
             try {
@@ -517,9 +515,6 @@
 
       const viewFileName = viewFile.files[0].name.trim();
       const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(viewFileName);
-
-      console.log("viewFileName: " + viewFileName);
-      console.log("format: " + format);
 
       currentAlphaRemovalThreshold = alphaRemovalThreshold;
       currentCameraUpArray = cameraUpArray;
