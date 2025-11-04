@@ -295,6 +295,9 @@
     function fileBufferToSplatBuffer(fileBufferData, format, alphaRemovalThreshold, compressionLevel, sectionSize, sceneCenter, blockSize, bucketSize, outSphericalHarmonicsDegree = 0) {
       if (format === GaussianSplats3D.SceneFormat.Ply) {
         return GaussianSplats3D.PlyLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, true, outSphericalHarmonicsDegree, sectionSize, sceneCenter, blockSize, bucketSize);
+      }
+      else if (format === GaussianSplats3D.SceneFormat.Sog) {
+        return GaussianSplats3D.SogLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, true, sectionSize, sceneCenter, blockSize, bucketSize);
       } else {
         if (format === GaussianSplats3D.SceneFormat.Splat) {
           return GaussianSplats3D.SplatLoader.loadFromFileData(fileBufferData.data, alphaRemovalThreshold, compressionLevel, true, sectionSize, sceneCenter, blockSize, bucketSize);
@@ -404,6 +407,8 @@
           setConversionCheckIconVisibility(false);
           const conversionFileName = conversionFile.files[0].name.trim();
           const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(conversionFileName);
+          console.log("conversionFileName: " + conversionFileName);
+          console.log("format: " + format);
           const fileData = {data: fileReader.result};
           window.setTimeout(() => {
             try {
@@ -512,6 +517,9 @@
 
       const viewFileName = viewFile.files[0].name.trim();
       const format = GaussianSplats3D.LoaderUtils.sceneFormatFromPath(viewFileName);
+
+      console.log("viewFileName: " + viewFileName);
+      console.log("format: " + format);
 
       currentAlphaRemovalThreshold = alphaRemovalThreshold;
       currentCameraUpArray = cameraUpArray;
@@ -693,7 +701,7 @@
         <div class="content-row">
             <div id ="view-panel" class="splat-panel" style="height:400px;">
                 <br>
-                <div class="small-title">View a <span class="file-ext">.ply</span>, <span class="file-ext">.ksplat</span>, or <span class="file-ext-small">.splat</span> file</div>
+                <div class="small-title">View a <span class="file-ext">.ply</span>, <span class="file-ext">.ksplat</span>, <span class="file-ext-small">.splat</span>, or <span class="file-ext-small">.sog</span> file</div>
                 <br>
                 <table style="text-align: left;">
                     <tr>

@@ -5,7 +5,7 @@ import { SplatBufferGenerator } from '../SplatBufferGenerator.js';
 // Note: progress utilities available, but not used here to keep loader minimal
 import { unzipStoredEntries } from './ZipReaderBrowser.js';
 import { LoaderStatus } from '../LoaderStatus.js';
-
+import { delayedExecute } from '../../Util.js';
 async function fetchJSON(url, headers) {
     const resp = await fetch(url, { headers });
     if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status} ${resp.statusText}`);
@@ -80,5 +80,29 @@ export class SogLoader {
         );
         if (onProgress) onProgress(100, '100%', LoaderStatus.Done);
         return buffer;
+    }
+
+    static  loadFromFileData(fileData, minimumAlpha, compressionLevel, optimizeSplatData,
+        sectionSize, sceneCenter, blockSize, bucketSize) 
+    {
+        return delayedExecute( async () => {
+            const arrayBuffer = fileData;
+            const entries = unzipStoredEntries(arrayBuffer);
+            const metaBytes = entries.get('meta.json');
+            if (!metaBytes) throw new Error('SOG archive missing meta.json at root');
+            const meta = JSON.parse(new TextDecoder().decode(metaBytes));
+
+            const resolver = (name) => {
+                const bytes = entries.get(name);
+                if (!bytes) throw new Error(`SOG archive missing file: ${name}`);
+                return new Blob([bytes], { type: 'image/webp' });
+            };
+            const splatArray = await SogParser.parse(meta, resolver);
+            const buffer = finalize(
+                splatArray, optimizeSplatData, minimumAlpha, compressionLevel,
+                sectionSize, sceneCenter, blockSize, bucketSize
+            );
+            return buffer;
+        });
     }
 }
