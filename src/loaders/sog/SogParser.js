@@ -169,17 +169,26 @@ export class SogParser {
                 const rest = new Array(restCount).fill(0);
                 const label = labelsImg.data[idx + 0] | (labelsImg.data[idx + 1] << 8);
                 if (label < (meta.shN.count || 0) && shNCodebook) {
-                    for (let j = 0; j < shNCoeffsWanted; j++) {
-                        const u = (label % 64) * shNCoeffsTotal + j;
-                        const v = Math.floor(label / 64);
-                        if (u < centroidsImg.width && v < centroidsImg.height) {
-                            const cidx = (v * centroidsImg.width + u) * 4;
-                            const rIdx = centroidsImg.data[cidx + 0];
-                            const gIdx = centroidsImg.data[cidx + 1];
-                            const bIdx = centroidsImg.data[cidx + 2];
-                            rest[j + 0 * shNCoeffsWanted] = shNCodebook[rIdx] ?? 0;
-                            rest[j + 1 * shNCoeffsWanted] = shNCodebook[gIdx] ?? 0;
-                            rest[j + 2 * shNCoeffsWanted] = shNCodebook[bIdx] ?? 0;
+                    // SH coefficients are stored in interleaved format: [R0, R1, R2, G0, G1, G2, B0, B1, B2, ...]
+                    // For degree 1: 3 coeffs per channel → indices [0,1,2, 3,4,5, 6,7,8]
+                    // For degree 2: 8 coeffs per channel → indices [0,1,2, 3,4,5, 6,7,8, 9,10,11, 12,13,14, 15,16,17, 18,19,20, 21,22,23]
+                    const shIndexMap = [
+                        0, 1, 2, 9, 10, 11, 12, 13, 24, 25, 26, 27, 28, 29, 30,  // R channel indices
+                        3, 4, 5, 14, 15, 16, 17, 18, 31, 32, 33, 34, 35, 36, 37,  // G channel indices
+                        6, 7, 8, 19, 20, 21, 22, 23, 38, 39, 40, 41, 42, 43, 44   // B channel indices
+                    ];
+                    for (let j = 0; j < 3; j++) {
+                        for (let k = 0; k < shNCoeffsWanted; k++) {
+                            const u = (label % 64) * shNCoeffsTotal + k;
+                            const v = Math.floor(label / 64);
+                            if (u < centroidsImg.width && v < centroidsImg.height) {
+                                const cidx = (v * centroidsImg.width + u) * 4;
+                                const codebookIdx = centroidsImg.data[cidx + j];
+                                const outIndex = shIndexMap[j * 15 + k];
+                                if (outIndex < restCount) {
+                                    rest[outIndex] = shNCodebook[codebookIdx] ?? 0;
+                                }
+                            }
                         }
                     }
                 }
