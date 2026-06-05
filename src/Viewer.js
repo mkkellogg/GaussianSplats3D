@@ -87,7 +87,10 @@ export class Viewer {
 
         // If 'gpuAcceleratedSort' is true, a partially GPU-accelerated approach to sorting splats will be used.
         // Currently this means pre-computing splat distances from the camera on the GPU
-        this.gpuAcceleratedSort = options.gpuAcceleratedSort || false;
+        if (options.gpuAcceleratedSort === undefined || options.gpuAcceleratedSort === null) {
+            options.gpuAcceleratedSort = !this.isMobile();
+        }
+        this.gpuAcceleratedSort = options.gpuAcceleratedSort;
 
         // if 'integerBasedSort' is true, the integer version of splat centers as well as other values used to calculate
         // splat distances are used instead of the float version. This speeds up computation, but introduces the possibility of
