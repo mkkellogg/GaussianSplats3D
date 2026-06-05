@@ -8,6 +8,7 @@ import { sceneFormatFromPath } from './loaders/Utils.js';
 import { LoadingSpinner } from './ui/LoadingSpinner.js';
 import { LoadingProgressBar } from './ui/LoadingProgressBar.js';
 import { InfoPanel } from './ui/InfoPanel.js';
+import { ControlPanel } from './ui/ControlPanel.js';
 import { SceneHelper } from './SceneHelper.js';
 import { Raycaster } from './raycaster/Raycaster.js';
 import { SplatMesh } from './splatmesh/SplatMesh.js';
@@ -275,6 +276,7 @@ export class Viewer {
         this.loadingProgressBar.hide();
         this.infoPanel = new InfoPanel(this.rootElement || document.body);
         this.infoPanel.hide();
+        this.controlPanel = new ControlPanel(this, this.rootElement || document.body);
 
         this.usingExternalCamera = (this.dropInMode || this.camera) ? true : false;
         this.usingExternalRenderer = (this.dropInMode || this.renderer) ? true : false;
@@ -1509,6 +1511,10 @@ export class Viewer {
             this.loadingProgressBar.hide();
             this.loadingProgressBar.setContainer(null);
             this.infoPanel.setContainer(null);
+            if (this.controlPanel) {
+                this.controlPanel.setContainer(null);
+                this.controlPanel = null;
+            }
 
             this.camera = null;
             this.threeScene = null;
@@ -1806,6 +1812,12 @@ export class Viewer {
         const renderDimensions = new THREE.Vector2();
 
         return function() {
+            if (this.controlPanel) {
+                this.controlPanel.update(this.currentFPS || 'N/A', this.lastSortTime,
+                                         this.splatMesh.getSplatScale(), this.focalAdjustment,
+                                         this.splatMesh.getPointCloudModeEnabled(), this.camera.isOrthographicCamera,
+                                         this.showMeshCursor, this.showControlPlane);
+            }
             if (!this.showInfo) return;
             const splatCount = this.splatMesh.getSplatCount();
             this.getRenderDimensions(renderDimensions);
